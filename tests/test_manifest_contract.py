@@ -20,13 +20,24 @@ class ManifestContractTest(unittest.TestCase):
         self.assertEqual(
             manifest["counts"],
             {
+                "article_versions": 218,
                 "bbox_records": 1388,
+                "chunks": 609,
+                "eval_fixtures": 175,
                 "evidence_records": 438,
+                "excluded_records": 6,
                 "graph_edges": 3150,
                 "graph_nodes": 2339,
+                "legal_units": 609,
+                "metadata_assertions": 1319,
+                "metadata_grounding": 5,
+                "pages": 63,
+                "retrieval_units": 438,
+                "source_conflicts": 1,
                 "source_documents": 6,
             },
         )
+        self.assertEqual(manifest["source_integrity"]["source_count"], 6)
         for source_path, expected_sha in manifest["source_files"].items():
             self.assertEqual(file_sha256(ROOT / source_path), expected_sha)
 

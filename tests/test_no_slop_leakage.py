@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import unittest
+import json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +43,42 @@ class NoSlopLeakageTest(unittest.TestCase):
         for word in FORBIDDEN:
             self.assertNotIn(word, runtime_text)
         self.assertNotIn("data/processed/constitutional/uud", runtime_text)
+
+    def test_runtime_facing_ids_are_clean(self) -> None:
+        checked_files = (
+            "evidence_registry.jsonl",
+            "legal_units.jsonl",
+            "chunks.jsonl",
+            "metadata.jsonl",
+            "article_versions.jsonl",
+            "retrieval_units.jsonl",
+        )
+        for filename in checked_files:
+            rows = [
+                json.loads(line)
+                for line in (ROOT / "data/final/uud" / filename)
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            for row in rows:
+                self._assert_id_values_clean(row, filename)
+
+    def _assert_id_values_clean(self, value, label: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in {"text", "quoted_text", "source_pdf_path", "source_pdf"}:
+                    continue
+                self._assert_id_values_clean(child, label)
+            return
+        if isinstance(value, list):
+            for child in value:
+                self._assert_id_values_clean(child, label)
+            return
+        if isinstance(value, str):
+            lowered = value.casefold()
+            for word in FORBIDDEN:
+                self.assertNotIn(word, lowered, label)
 
 
 if __name__ == "__main__":

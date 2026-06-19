@@ -22,6 +22,19 @@ class BBoxContractTest(unittest.TestCase):
             self.assertTrue(row["text"])
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())
 
+    def test_metadata_grounding_is_non_normative_and_bbox_linked(self) -> None:
+        legal_evidence_bbox_ids = {
+            row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")
+        }
+        rows = read_jsonl(FINAL / "metadata_grounding.jsonl")
+        self.assertEqual(len(rows), 5)
+        for row in rows:
+            self.assertEqual(row["status"], "accepted_metadata_grounding")
+            self.assertTrue(row["quoted_text"])
+            self.assertTrue(row["bbox_refs"])
+            self.assertTrue(set(row["bbox_refs"]).isdisjoint(legal_evidence_bbox_ids))
+            self.assertTrue((ROOT / row["source_pdf_path"]).exists())
+
 
 if __name__ == "__main__":
     unittest.main()

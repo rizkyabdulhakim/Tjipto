@@ -29,6 +29,24 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertGreater(viewer["bbox_count"], 0)
         self.assertTrue(viewer["bbox_rectangles"])
 
+    def test_retrieval_units_reference_final_evidence(self) -> None:
+        from tjipto.core.manifest import read_jsonl
+
+        evidence_ids = {
+            row["evidence_id"]
+            for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")
+        }
+        bbox_ids = {
+            row["bbox_id"]
+            for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")
+        }
+        rows = read_jsonl(ROOT / "data/final/uud/retrieval_units.jsonl")
+        self.assertEqual(len(rows), 438)
+        for row in rows:
+            self.assertIn(row["evidence_id"], evidence_ids)
+            self.assertTrue(set(row["bbox_refs"]) <= bbox_ids)
+            self.assertTrue((ROOT / row["source_pdf_path"]).exists())
+
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(
             self.service.search("unknown", "Pasal 1")["status"],

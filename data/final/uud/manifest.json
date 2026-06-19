@@ -1,30 +1,84 @@
 {
+  "article_versions": "article_versions.jsonl",
   "bbox_registry": "bbox_registry.jsonl",
+  "chunks": "chunks.jsonl",
   "corpus_id": "uud",
   "counts": {
+    "article_versions": 218,
     "bbox_records": 1388,
+    "chunks": 609,
+    "eval_fixtures": 175,
     "evidence_records": 438,
+    "excluded_records": 6,
     "graph_edges": 3150,
     "graph_nodes": 2339,
+    "legal_units": 609,
+    "metadata_assertions": 1319,
+    "metadata_grounding": 5,
+    "pages": 63,
+    "retrieval_units": 438,
+    "source_conflicts": 1,
     "source_documents": 6
   },
+  "eval_fixtures": "eval_fixtures.jsonl",
   "evidence_registry": "evidence_registry.jsonl",
+  "excluded_records": "excluded_records.jsonl",
   "files": {
+    "article_versions.jsonl": {
+      "bytes": 290641,
+      "sha256": "3f3b1b2c1ce878764a52b974c07ef43a41b80855f2ca533e9013e4d4b25e3c8a"
+    },
     "bbox_registry.jsonl": {
-      "bytes": 862388,
-      "sha256": "89b8c6459c8a18be5c08d8616cf3d13e8ce605d1d4a878c561aff76ff926b887"
+      "bytes": 863206,
+      "sha256": "0f0bff5a2051d55632d0650763e0e764eb7f1dfae8ac1c23dd9a6a079c2f25fd"
+    },
+    "chunks.jsonl": {
+      "bytes": 471802,
+      "sha256": "e4b7c6822d6e3fb66dcc7d3a2af1ac910a8162a01f09f8b43b1430321ab7a050"
+    },
+    "eval_fixtures.jsonl": {
+      "bytes": 53803,
+      "sha256": "e86c02219b9ae87f9b8eedba46f30454e096e63205216b058563df6a16ad128e"
     },
     "evidence_registry.jsonl": {
-      "bytes": 446112,
-      "sha256": "95ab82771753a693e5e83aed2ea4e68fb791e2fd6a4bd37bb2109ebd4a7794be"
+      "bytes": 442330,
+      "sha256": "258cf76647aa08ae9f81f80e72ccba9625616509f17dbb50d83e702d79552f0a"
+    },
+    "excluded_records.jsonl": {
+      "bytes": 2333,
+      "sha256": "ad8b77fd73c46374e37938aeef7727c24a6d4987df2e664c3771bebf10ce49d0"
     },
     "graph_edges.jsonl": {
-      "bytes": 763805,
-      "sha256": "d1068ddde8dd5176e9baec93cba90476cee4d148a5ae792d5dadea1d2538ca25"
+      "bytes": 765302,
+      "sha256": "e777e3935e9e8665c9966838cb7cf691830dd3f2cfced21c7baaa71f23915d07"
     },
     "graph_nodes.jsonl": {
-      "bytes": 852168,
-      "sha256": "38c941187255f8a063e764b98328c2aace17cb933d0718f933c622f3c089bd73"
+      "bytes": 850199,
+      "sha256": "d4e33915723a6956754bcdeb934aa15b0d7535fa5013a6d9f12ff681e9457e56"
+    },
+    "legal_units.jsonl": {
+      "bytes": 482363,
+      "sha256": "d8f6bef9938d5a28cd3536ee35e66dc854b4f6e8f596b30e54ae9255a1439d0e"
+    },
+    "metadata.jsonl": {
+      "bytes": 1040292,
+      "sha256": "42a1382299a964ebe1e89001a499fd4e3e961ffbc216cb3b2f7d0d8c145d109d"
+    },
+    "metadata_grounding.jsonl": {
+      "bytes": 5718,
+      "sha256": "6c5c2182c4fb8ed47c43b2198d96cef2410abea9f18722e49757de9bde36aabc"
+    },
+    "pages.jsonl": {
+      "bytes": 116643,
+      "sha256": "118eca713ab0ce256f991cc1ee7a7c5213c9a7312192bca14b5a776fb6a8bd05"
+    },
+    "retrieval_units.jsonl": {
+      "bytes": 372107,
+      "sha256": "4edee543a890a0b349221df3ed3fc36bd6c1a05fa64c50825abda371a72a5d10"
+    },
+    "source_conflicts.jsonl": {
+      "bytes": 446,
+      "sha256": "c694d699da97c0f624579bdfe25ba188b3d4b201f7febfc594e7ff8f9c3482a5"
     },
     "source_documents.jsonl": {
       "bytes": 1907,
@@ -33,7 +87,13 @@
   },
   "graph_edges": "graph_edges.jsonl",
   "graph_nodes": "graph_nodes.jsonl",
+  "legal_units": "legal_units.jsonl",
+  "metadata": "metadata.jsonl",
+  "metadata_grounding": "metadata_grounding.jsonl",
+  "pages": "pages.jsonl",
+  "retrieval_units": "retrieval_units.jsonl",
   "schema_version": 1,
+  "source_conflicts": "source_conflicts.jsonl",
   "source_documents": "source_documents.jsonl",
   "source_files": {
     "data/sources/uud/UUD45.pdf": "c59c0fee8ceff7e5a983c06ce55efca03d6b341ff54c3d0612ae87bf3cedd519",
@@ -42,6 +102,12 @@
     "data/sources/uud/UUD45_perubahan2.pdf": "e8f1669214348851b48a1efcc2daafce1a809bb0b312c8cba772459e0e02ab6f",
     "data/sources/uud/UUD45_perubahan3.pdf": "11f12075a6c51610d4ea94361ec315079b9f8f583731e4d84d47556bbfe960e6",
     "data/sources/uud/UUD45_perubahan4.pdf": "fb5f83279e9c3540c51ae6c37d9640ff66224b661e4a31e0e10974b91978e755"
+  },
+  "source_integrity": {
+    "authority": "BPK Database Peraturan",
+    "authority_status": "official_bpk_database_controlled_source",
+    "redownload_verification_status": "all_redownload_hashes_match_local",
+    "source_count": 6
   },
   "status": "final"
 }

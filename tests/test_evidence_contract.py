@@ -25,6 +25,20 @@ class EvidenceContractTest(unittest.TestCase):
             self.assertTrue(row["bbox_refs"])
             self.assertNotIn("uud_chunk_candidate_", str(row))
 
+    def test_legal_units_and_chunks_are_linked(self) -> None:
+        units = read_jsonl(FINAL / "legal_units.jsonl")
+        chunks = read_jsonl(FINAL / "chunks.jsonl")
+        self.assertEqual(len(units), 609)
+        self.assertEqual(len(chunks), 609)
+        unit_ids = {row["legal_unit_id"] for row in units}
+        for row in chunks:
+            self.assertIn(row["legal_unit_id"], unit_ids)
+            self.assertTrue(row["chunk_id"].startswith("uud_chunk_"))
+            self.assertNotIn("candidate", row["chunk_id"])
+        for row in units:
+            for parent_id in row["parent_legal_unit_ids"]:
+                self.assertIn(parent_id, unit_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

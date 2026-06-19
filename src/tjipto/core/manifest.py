@@ -42,8 +42,7 @@ def validate_manifest(final_dir: Path) -> tuple[str, ...]:
     manifest_path = final_dir / "manifest.json"
     manifest = read_json(manifest_path)
     errors: list[str] = []
-    for key in ("source_documents", "evidence_registry", "bbox_registry", "graph_nodes", "graph_edges"):
-        rel = manifest[key]
+    for rel in manifest["files"]:
         lowered = rel.casefold()
         for part in FORBIDDEN_ACTIVE_PATH_PARTS:
             if part in lowered:
