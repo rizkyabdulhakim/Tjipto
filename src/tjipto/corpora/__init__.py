@@ -1,0 +1,1 @@
+"""Corpus adapter registry."""

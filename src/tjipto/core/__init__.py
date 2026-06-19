@@ -1,0 +1,1 @@
+"""Core corpus-neutral contracts."""

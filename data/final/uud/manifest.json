@@ -1,0 +1,47 @@
+{
+  "bbox_registry": "bbox_registry.jsonl",
+  "corpus_id": "uud",
+  "counts": {
+    "bbox_records": 1388,
+    "evidence_records": 438,
+    "graph_edges": 3150,
+    "graph_nodes": 2339,
+    "source_documents": 6
+  },
+  "evidence_registry": "evidence_registry.jsonl",
+  "files": {
+    "bbox_registry.jsonl": {
+      "bytes": 862388,
+      "sha256": "89b8c6459c8a18be5c08d8616cf3d13e8ce605d1d4a878c561aff76ff926b887"
+    },
+    "evidence_registry.jsonl": {
+      "bytes": 446112,
+      "sha256": "95ab82771753a693e5e83aed2ea4e68fb791e2fd6a4bd37bb2109ebd4a7794be"
+    },
+    "graph_edges.jsonl": {
+      "bytes": 763805,
+      "sha256": "d1068ddde8dd5176e9baec93cba90476cee4d148a5ae792d5dadea1d2538ca25"
+    },
+    "graph_nodes.jsonl": {
+      "bytes": 852168,
+      "sha256": "38c941187255f8a063e764b98328c2aace17cb933d0718f933c622f3c089bd73"
+    },
+    "source_documents.jsonl": {
+      "bytes": 1907,
+      "sha256": "f692bb3507b605bdd96a141f8c8045d1166d95f0fedf28f89358f8332a12e0eb"
+    }
+  },
+  "graph_edges": "graph_edges.jsonl",
+  "graph_nodes": "graph_nodes.jsonl",
+  "schema_version": 1,
+  "source_documents": "source_documents.jsonl",
+  "source_files": {
+    "data/sources/uud/UUD45.pdf": "c59c0fee8ceff7e5a983c06ce55efca03d6b341ff54c3d0612ae87bf3cedd519",
+    "data/sources/uud/UUD45_SatuNaskah.pdf": "6d629da7bdbec439629899c30ffea9df0aba842bf2406fad8ff6cc393edd3854",
+    "data/sources/uud/UUD45_perubahan1.pdf": "7d8f3110f8d234b755678986e3584f7c1c1d8e010fe1b1ba21fc17a8d98e23b2",
+    "data/sources/uud/UUD45_perubahan2.pdf": "e8f1669214348851b48a1efcc2daafce1a809bb0b312c8cba772459e0e02ab6f",
+    "data/sources/uud/UUD45_perubahan3.pdf": "11f12075a6c51610d4ea94361ec315079b9f8f583731e4d84d47556bbfe960e6",
+    "data/sources/uud/UUD45_perubahan4.pdf": "fb5f83279e9c3540c51ae6c37d9640ff66224b661e4a31e0e10974b91978e755"
+  },
+  "status": "final"
+}
