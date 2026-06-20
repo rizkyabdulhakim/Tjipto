@@ -48,6 +48,27 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertTrue(set(row["bbox_sample_refs"]) <= bbox_ids)
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())
 
+    def test_graph_retrieval_eval_fixtures_resolve_refs(self) -> None:
+        from tjipto.core.manifest import read_jsonl
+
+        evidence_ids = {
+            row["evidence_id"]
+            for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")
+        }
+        chunk_ids = {
+            row["chunk_id"]
+            for row in read_jsonl(ROOT / "data/final/uud/chunks.jsonl")
+        }
+        cases = read_jsonl(ROOT / "tests/fixtures/uud/graph_retrieval_eval_cases.jsonl")
+        self.assertEqual(len(cases), 76)
+        for row in cases:
+            self.assertTrue(set(row.get("expected_final_evidence_ids") or []) <= evidence_ids)
+        orchestrator = read_jsonl(ROOT / "tests/fixtures/uud/orchestrator_eval_results.jsonl")
+        self.assertEqual(len(orchestrator), 175)
+        for row in orchestrator:
+            for chunk_id in row.get("observed_chunk_ids") or ():
+                self.assertIn(chunk_id, chunk_ids)
+
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(
             self.service.search("unknown", "Pasal 1")["status"],

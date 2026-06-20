@@ -13,12 +13,15 @@
     "graph_nodes": 2339,
     "legal_units": 609,
     "metadata_assertions": 1319,
+    "metadata_graph_edges": 449,
     "metadata_grounding": 5,
     "metadata_grounding_records": 5,
+    "not_promoted_amends_edges": 8,
     "pages": 63,
     "retrieval_units": 438,
     "source_conflicts": 1,
-    "source_documents": 6
+    "source_documents": 6,
+    "validation_exceptions": 17
   },
   "evidence_registry": "evidence_registry.jsonl",
   "excluded_records": "excluded_records.jsonl",
@@ -59,6 +62,10 @@
       "bytes": 1040292,
       "sha256": "42a1382299a964ebe1e89001a499fd4e3e961ffbc216cb3b2f7d0d8c145d109d"
     },
+    "metadata_graph_edges.jsonl": {
+      "bytes": 383364,
+      "sha256": "fb01c39991503b12814edd89e03df77deb24d9b86579c3baa14949da1fc0b646"
+    },
     "metadata_grounding.jsonl": {
       "bytes": 5718,
       "sha256": "6c5c2182c4fb8ed47c43b2198d96cef2410abea9f18722e49757de9bde36aabc"
@@ -80,17 +87,35 @@
       "sha256": "c796c221f8d4c27081650851d6ccf98aff084677513e5dbe2323d01a7ac34e0c"
     },
     "source_documents.jsonl": {
-      "bytes": 1907,
-      "sha256": "f692bb3507b605bdd96a141f8c8045d1166d95f0fedf28f89358f8332a12e0eb"
+      "bytes": 2555,
+      "sha256": "675d21b95c787b24518b5217908cd41699f0d954fad4903a1ceb9892c46d5904"
+    },
+    "source_integrity.json": {
+      "bytes": 1821,
+      "sha256": "6e99f85f0886aff3a8f7942ced016caedc3b2be0991115aa3f0fa2cb155ccf41"
+    },
+    "validation_exceptions.jsonl": {
+      "bytes": 17666,
+      "sha256": "2bce3e45d2fd428a35ab550c0114e3b9d5cb9806ce00c96ea2fd9a2f6799a162"
+    },
+    "validation_report.json": {
+      "bytes": 13124,
+      "sha256": "253e1d321b818450f47f35504091adb536b62b09be203647efa01f432f5c351b"
     }
   },
   "fixtures": {
-    "eval_fixtures": "tests/fixtures/uud/eval_fixtures.jsonl"
+    "eval_fixtures": "tests/fixtures/uud/eval_fixtures.jsonl",
+    "graph_retrieval_eval_cases": "tests/fixtures/uud/graph_retrieval_eval_cases.jsonl",
+    "graph_retrieval_eval_results": "tests/fixtures/uud/graph_retrieval_eval_results.jsonl",
+    "orchestrator_eval_results": "tests/fixtures/uud/orchestrator_eval_results.jsonl",
+    "orchestrator_eval_summary": "tests/fixtures/uud/orchestrator_eval_summary.json",
+    "retrieval_metrics_baseline": "tests/fixtures/uud/retrieval_metrics_baseline.json"
   },
   "graph_edges": "graph_edges.jsonl",
   "graph_nodes": "graph_nodes.jsonl",
   "legal_units": "legal_units.jsonl",
   "metadata": "metadata.jsonl",
+  "metadata_graph_edges": "metadata_graph_edges.jsonl",
   "metadata_grounding": "metadata_grounding.jsonl",
   "metadata_grounding_registry": "metadata_grounding_registry.jsonl",
   "pages": "pages.jsonl",
@@ -106,11 +131,8 @@
     "data/sources/uud/UUD45_perubahan3.pdf": "11f12075a6c51610d4ea94361ec315079b9f8f583731e4d84d47556bbfe960e6",
     "data/sources/uud/UUD45_perubahan4.pdf": "fb5f83279e9c3540c51ae6c37d9640ff66224b661e4a31e0e10974b91978e755"
   },
-  "source_integrity": {
-    "authority": "BPK Database Peraturan",
-    "authority_status": "official_bpk_database_controlled_source",
-    "redownload_verification_status": "all_redownload_hashes_match_local",
-    "source_count": 6
-  },
-  "status": "final"
+  "source_integrity": "source_integrity.json",
+  "status": "final",
+  "validation_exceptions": "validation_exceptions.jsonl",
+  "validation_report": "validation_report.json"
 }

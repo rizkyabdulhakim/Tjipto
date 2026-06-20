@@ -36,6 +36,26 @@ class GraphContractTest(unittest.TestCase):
         for row in rows:
             self.assertIn(row["source_document_id"], source_ids)
 
+    def test_metadata_graph_edges_exclude_source_role_level_amends(self) -> None:
+        edges = read_jsonl(ROOT / "data/final/uud/metadata_graph_edges.jsonl")
+        self.assertEqual(len(edges), 449)
+        self.assertFalse(
+            [edge for edge in edges if edge["edge_type"] in {"AMENDS", "AMENDED_BY"}]
+        )
+        self.assertTrue(all(edge["status"] == "accepted" for edge in edges))
+        self.assertTrue(all(edge["runtime_loadable"] is False for edge in edges))
+
+    def test_amends_edges_are_preserved_as_not_promoted_exceptions(self) -> None:
+        exceptions = read_jsonl(ROOT / "data/final/uud/validation_exceptions.jsonl")
+        amends = [
+            row for row in exceptions
+            if row.get("edge_type") in {"AMENDS", "AMENDED_BY"}
+        ]
+        self.assertEqual(len(amends), 8)
+        for row in amends:
+            self.assertEqual(row["status"], "not_promoted_source_role_level_only")
+            self.assertFalse(row["runtime_loadable"])
+
 
 if __name__ == "__main__":
     unittest.main()

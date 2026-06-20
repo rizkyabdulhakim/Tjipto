@@ -1,0 +1,96 @@
+{
+  "artifact_version": 1,
+  "baseline_commit": "6ff56c0",
+  "case_counts_by_category": {
+    "A_current_exact": 10,
+    "B_original_exact": 8,
+    "C_amendment_1_exact": 6,
+    "D_amendment_2_exact": 6,
+    "E_amendment_3_exact": 6,
+    "F_amendment_4_exact": 6,
+    "G_source_role_hint": 12,
+    "H_keyword_search": 12,
+    "I_comparison": 8,
+    "J_historical_trace": 8,
+    "K_graph_lookup": 8,
+    "L_excluded_record": 6,
+    "M_excluded_legal_unit": 4,
+    "N_ambiguous_broad": 8,
+    "O_random_no_signal": 8,
+    "P_noisy_typo": 8,
+    "Q_viewer_hint": 5,
+    "R_determinism": 5,
+    "S_constitutional_golden_keyword": 18,
+    "T_source_role_topk_quality": 15,
+    "U_historical_source_role_quality": 8
+  },
+  "deterministic_checks_count": 5,
+  "eval_case_count": 175,
+  "exact_top_1_checks_count": 34,
+  "excluded_blocking_count": 6,
+  "expected_counts": {
+    "accepted_bbox_rectangle_count": 1388,
+    "current_consolidated": {
+      "accepted_rectangle_count": 700,
+      "final_evidence_row_count": 200,
+      "rejected_rectangle_count": 8
+    },
+    "graph_edge_count": 3150,
+    "graph_node_count": 2339,
+    "historical": {
+      "accepted_rectangle_count": 688,
+      "final_evidence_row_count": 238
+    },
+    "registry_final_row_count": 438
+  },
+  "failed_case_count": 0,
+  "golden_query_cases_count": 41,
+  "graph_type_counts": {
+    "edge_counts": {
+      "BELONGS_TO_SOURCE_ROLE": 438,
+      "EXCLUDED_BECAUSE": 6,
+      "HAS_BBOX": 1388,
+      "HAS_FINAL_EVIDENCE": 438,
+      "PAGE_GROUNDED_AT": 442,
+      "USES_SOURCE_PDF": 438
+    },
+    "node_counts": {
+      "bbox": 1388,
+      "excluded_record": 6,
+      "final_evidence": 438,
+      "legal_unit": 438,
+      "page": 57,
+      "source_pdf": 6,
+      "source_role": 6
+    },
+    "status": "found"
+  },
+  "non_claims": {
+    "answer_generation_created": false,
+    "api_frontend_runtime_created": false,
+    "current_law_correctness_claim": false,
+    "embeddings_created": false,
+    "graph_db_created": false,
+    "legal_grade_verified": false,
+    "reranker_created": false,
+    "response_contract_created": false,
+    "vector_db_created": false,
+    "viewer_payload_created": false
+  },
+  "observed_status_counts": {
+    "ambiguous": 29,
+    "blocked_non_final": 7,
+    "found": 62,
+    "invalid_query": 1,
+    "multiple_results": 40,
+    "no_results": 12,
+    "out_of_scope": 10,
+    "relation_not_available": 14
+  },
+  "passed_case_count": 175,
+  "random_out_of_scope_count": 8,
+  "retrieval_quality_cases_count": 38,
+  "safety_cases_count": 137,
+  "schema_version": 1,
+  "top_k_checks_count": 95
+}

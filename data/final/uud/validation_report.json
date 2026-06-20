@@ -1,0 +1,358 @@
+{
+  "chunk_source_alignment_summary": {
+    "active_canonical_chunk_count": 444,
+    "active_canonical_exception_count": 4,
+    "aligned_active_canonical_count": 444,
+    "alignment_status_counts": {
+      "aligned_after_normalization": 439,
+      "aligned_after_recorded_chunk_hygiene": 1,
+      "aligned_source_text_but_pdf_text_layer_noisy": 2,
+      "aligned_source_text_but_pdf_text_layer_partial": 2,
+      "inactive_source_typo_reference_noncanonical_checked": 1,
+      "parent_context_metadata_checked": 165
+    },
+    "bbox_blocker_count": 1,
+    "chunk_source_alignment_version": "uud_chunk_source_alignment_audit",
+    "current_consolidated_aturan_peralihan_pasal_ii_status": "aligned_after_normalization",
+    "current_consolidated_aturan_tambahan_pasal_ii_status": "aligned_after_recorded_chunk_hygiene",
+    "dataset_diagnostics": {
+      "active_canonical_counts_by_document": {
+        "uud_1945_amendment_1": 16,
+        "uud_1945_amendment_2": 59,
+        "uud_1945_amendment_3": 68,
+        "uud_1945_amendment_4": 29,
+        "uud_1945_current_consolidated_text": 200,
+        "uud_1945_original_text": 72
+      },
+      "active_canonical_counts_by_type": {
+        "ayat_chunk_record": 372,
+        "pasal_chunk_record": 70,
+        "pembukaan_special_chunk_record": 2
+      },
+      "canonical_document_counts": {
+        "uud_1945_amendment_1": 22,
+        "uud_1945_amendment_2": 79,
+        "uud_1945_amendment_3": 87,
+        "uud_1945_amendment_4": 44,
+        "uud_1945_current_consolidated_text": 267,
+        "uud_1945_original_text": 111
+      },
+      "chunk_record_type_counts": {
+        "aturan_section_context_record": 5,
+        "ayat_chunk_record": 372,
+        "bab_structural_context_record": 38,
+        "inactive_source_typo_reference_chunk": 1,
+        "pasal_chunk_record": 70,
+        "pasal_parent_context_record": 122,
+        "pembukaan_special_chunk_record": 2
+      },
+      "chunk_status_counts": {
+        "active_canonical_record": 444,
+        "inactive_source_typo_reference": 1,
+        "parent_context_only": 165
+      },
+      "chunks_missing_source_integrity_reference_count": 0,
+      "chunks_missing_source_provenance_count": 0,
+      "chunks_with_forbidden_fields_count": 0,
+      "length_statistics_by_type": {
+        "aturan_section_context_record": {
+          "approximate_token_count": {
+            "max": 104,
+            "median": 84,
+            "min": 53
+          },
+          "character_count": {
+            "max": 662,
+            "median": 512,
+            "min": 326
+          },
+          "word_count": {
+            "max": 80,
+            "median": 65,
+            "min": 41
+          }
+        },
+        "ayat_chunk_record": {
+          "approximate_token_count": {
+            "max": 155,
+            "median": 23.0,
+            "min": 8
+          },
+          "character_count": {
+            "max": 988,
+            "median": 136.0,
+            "min": 41
+          },
+          "word_count": {
+            "max": 119,
+            "median": 18.0,
+            "min": 6
+          }
+        },
+        "bab_structural_context_record": {
+          "approximate_token_count": {
+            "max": 1505,
+            "median": 112.5,
+            "min": 9
+          },
+          "character_count": {
+            "max": 9159,
+            "median": 694.0,
+            "min": 49
+          },
+          "word_count": {
+            "max": 1158,
+            "median": 86.5,
+            "min": 7
+          }
+        },
+        "inactive_source_typo_reference_chunk": {
+          "approximate_token_count": {
+            "max": 205,
+            "median": 205,
+            "min": 205
+          },
+          "character_count": {
+            "max": 1259,
+            "median": 1259,
+            "min": 1259
+          },
+          "word_count": {
+            "max": 158,
+            "median": 158,
+            "min": 158
+          }
+        },
+        "pasal_chunk_record": {
+          "approximate_token_count": {
+            "max": 160,
+            "median": 21.5,
+            "min": 9
+          },
+          "character_count": {
+            "max": 968,
+            "median": 131.5,
+            "min": 48
+          },
+          "word_count": {
+            "max": 123,
+            "median": 16.5,
+            "min": 7
+          }
+        },
+        "pasal_parent_context_record": {
+          "approximate_token_count": {
+            "max": 424,
+            "median": 69.5,
+            "min": 16
+          },
+          "character_count": {
+            "max": 2681,
+            "median": 422.0,
+            "min": 98
+          },
+          "word_count": {
+            "max": 326,
+            "median": 53.5,
+            "min": 12
+          }
+        },
+        "pembukaan_special_chunk_record": {
+          "approximate_token_count": {
+            "max": 250,
+            "median": 249.0,
+            "min": 248
+          },
+          "character_count": {
+            "max": 1501,
+            "median": 1492.0,
+            "min": 1483
+          },
+          "word_count": {
+            "max": 192,
+            "median": 191.5,
+            "min": 191
+          }
+        }
+      },
+      "over_hard_token_budget_count": 1,
+      "over_soft_token_budget_count": 4,
+      "parent_context_counts_by_type": {
+        "aturan_section_context_record": 5,
+        "bab_structural_context_record": 38,
+        "pasal_parent_context_record": 122
+      },
+      "record_only_not_true_count": 0
+    },
+    "embedding_blocker_count": 0,
+    "exception_type_counts": {
+      "grounding_span_later_task": 1,
+      "pdf_text_layer_noise_review": 4,
+      "token_budget_review": 4
+    },
+    "grounding_blocker_count": 1,
+    "inactive_source_typo_reference_checked_count": 1,
+    "inactive_source_typo_reference_count": 1,
+    "inactive_source_typo_reference_status": "inactive_source_typo_reference_noncanonical_checked",
+    "legal_scope_mismatch_count": 0,
+    "not_legal_grade_note": "Full UUD chunk source-alignment audit record only; not legal-grade verified and not approved for vector DB/page grounding/bbox/final legal units.",
+    "not_matched_requires_review_required_count": 0,
+    "page_range_mismatch_count": 0,
+    "parent_context_checked_count": 165,
+    "parent_context_count": 165,
+    "partial_requires_review_required_count": 0,
+    "pdf_text_layer_noise_or_partial_count": 4,
+    "prior_cross_check_label_coverage_count": 8,
+    "recommended_next_action": "review_alignment_summary_before_embedding_record_experiment",
+    "record_only": true,
+    "source_chunk_record_probe_version": "uud_legal_unit_chunk_record_probe",
+    "source_cross_check_review_version": "uud_chunk_cross_check_review",
+    "source_integrity_manifest_version": "uud_bpk_source_integrity_manifest",
+    "source_legal_unit_assembly_output_version": "uud_legal_unit_assembly_record",
+    "source_mapping_mismatch_count": 0,
+    "source_review_required_packet_version": "uud_chunk_review_required_packet",
+    "total_chunk_count": 610,
+    "warnings": [
+      "source_alignment_audit_record_only",
+      "not_legal_grade_verified",
+      "no_embeddings_created",
+      "no_vector_db_created",
+      "no_page_grounding_created",
+      "no_bbox_created",
+      "no_final_legal_units_created",
+      "prior_cross_check_labels_are_supporting_evidence_only",
+      "review_alignment_summary_before_embedding_record_experiment"
+    ]
+  },
+  "corpus_id": "uud",
+  "referenced_artifacts": [
+    "source_integrity.json",
+    "source_conflicts.jsonl",
+    "validation_exceptions.jsonl",
+    "metadata_graph_edges.jsonl"
+  ],
+  "source_conflict_resolution": {
+    "affected_historical_scope": "aturan_tambahan_marker_sequence",
+    "affected_historical_source": "uud_1945_amendment_4",
+    "canonical_reference_for_current_uud": "uud_1945_current_consolidated_text_aturan_tambahan_pasal_ii",
+    "conflict_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict",
+    "decision_scope": "pipeline_policy_not_final_legal_authority",
+    "do_not_modify_source_pdf_or_raw_text": true,
+    "do_not_silently_correct": true,
+    "downstream_policy": {
+      "current_consolidated_uud_may_continue_as_active_record": true,
+      "historical_amendment_4_typo_scope_may_be_source_typo_reference": true,
+      "historical_amendment_4_typo_scope_must_not_be_active_unit_record": true,
+      "no_final_legal_authority_claim": true,
+      "no_legal_grade_verified_claim": true,
+      "source_typo_reference_use_policy": "explain_source_discrepancy_only"
+    },
+    "evidence_basis": [
+      "amendment_4_intro_mentions_aturan_tambahan_pasal_i_ii",
+      "consolidated_sequence_pasal_i_ii",
+      "consolidated_pasal_i_origin_marker_****_perubahan_keempat",
+      "consolidated_pasal_ii_origin_marker_****_perubahan_keempat",
+      "official_sources_support_consolidated_pasal_i_ii",
+      "amendment_4_pdf_shows_pasal_iii_source_typographical_anomaly"
+    ],
+    "historical_typo_reference_allowed_for_explaining_source_discrepancy": true,
+    "historical_typo_reference_not_allowed_for_canonical_answer": true,
+    "keep_historical_amendment_4_typo_scope_as_inactive_source_reference": true,
+    "not_legal_grade_note": "Source conflict resolution decision for project pipeline only; not a final legal authority determination and not legal-grade verified.",
+    "prior_conflict_status": "unresolved_review_required_required",
+    "record_only": true,
+    "retain_source_typo_trace": true,
+    "reviewer_decision": "amendment_4_pasal_iii_is_source_typographical_anomaly",
+    "reviewer_role": "project_owner_review",
+    "source_conflict_metadata_version": "uud_source_conflict_metadata",
+    "source_conflict_resolution_decision_version": "uud_source_conflict_resolution_decision",
+    "use_consolidated_pasal_ii_for_current_uud_record": true
+  },
+  "status": "valid",
+  "viewer_rectangle_normalization_summary": {
+    "artifact_version": 1,
+    "checks": {
+      "accepted_bbox_rectangles_preserved": true,
+      "excluded_record_leakage_zero": true,
+      "final_registry_rows_preserved": true,
+      "graph_has_bbox_edges_preserved": true,
+      "graph_lite_edges_preserved": true,
+      "graph_lite_nodes_preserved": true,
+      "missing_page_number_source_zero": true,
+      "missing_page_number_zero": true,
+      "normalization_errors_zero": true,
+      "source_hash_failures_zero": true,
+      "source_pdf_count_preserved": true,
+      "unreviewed_mismatches_zero": true
+    },
+    "decision": "uud_bbox_viewer_payload_normalized_and_audited",
+    "excluded_policy_record_count": 6,
+    "excluded_record_leakage_count": 0,
+    "excluded_record_leaks": [],
+    "expected_counts": {
+      "accepted_bbox_rectangles": 1388,
+      "excluded_policy_records": 6,
+      "final_registry_rows": 438,
+      "graph_lite_edges": 3150,
+      "graph_lite_nodes": 2339,
+      "source_pdfs": 6
+    },
+    "graph_final_evidence_node_count": 438,
+    "graph_has_bbox_edge_count": 1388,
+    "graph_lite_edge_count": 3150,
+    "graph_lite_node_count": 2339,
+    "non_claims": {
+      "agentic_ready": false,
+      "current_law_correctness_claim": false,
+      "deployment_ready": false,
+      "frontend_ready": false,
+      "legal_grade_verified": false,
+      "production_ready": false,
+      "retrieval_ready": false,
+      "runtime_ready": false,
+      "vector_ready": false
+    },
+    "normalization_error_count": 0,
+    "normalization_errors": [],
+    "page_number_source_counts": {
+      "direct_rectangle_page_number": 747,
+      "single_page_row_fallback": 641
+    },
+    "pymupdf_exact_matches": 998,
+    "pymupdf_reviewed_exception_count": 1,
+    "pymupdf_reviewed_exceptions": [
+      {
+        "chunk_id": "uud_chunk_00349",
+        "final_evidence_id": "uud_current_consolidated_final_citation_evidence_00349",
+        "hierarchy_path": [
+          "BAB VII",
+          "Pasal 22D",
+          "(3)"
+        ],
+        "page_number": 14,
+        "pymupdf_textbox_text": "undang­undang mengenai : otonomi daerah, pembentukan, pemekaran dan",
+        "rectangle_index": 1,
+        "reviewed_exception": true,
+        "reviewed_exception_reason": "PyMuPDF textbox includes a colon after 'mengenai' that is not present in the committed final evidence rectangle text; source artifact text is preserved and the mismatch is explicitly tracked.",
+        "reviewed_exception_unit": "Pasal 22D ayat (3)",
+        "source_pdf_path": "data/sources/constitutional/uud/bpk/UUD45_SatuNaskah.pdf",
+        "stored_text": "undang­undang mengenai otonomi daerah, pembentukan, pemekaran dan",
+        "unit_label": "(3)"
+      }
+    ],
+    "pymupdf_unreviewed_mismatch_count": 0,
+    "pymupdf_unreviewed_mismatches": [],
+    "pymupdf_whitespace_normalized_matches": 389,
+    "schema_version": 1,
+    "source_hash_failure_count": 0,
+    "source_hash_failures": [],
+    "source_pdf_count": 6,
+    "status": "valid",
+    "total_accepted_bbox_rectangles": 1388,
+    "total_final_registry_rows": 438,
+    "total_rectangles_missing_page_number": 0,
+    "total_rectangles_missing_page_number_source": 0,
+    "total_rectangles_using_single_page_row_fallback": 641,
+    "total_rectangles_with_direct_page_number": 747
+  }
+}

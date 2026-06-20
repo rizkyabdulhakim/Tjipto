@@ -42,6 +42,20 @@ class EvidenceContractTest(unittest.TestCase):
             for parent_id in row["parent_legal_unit_ids"]:
                 self.assertIn(parent_id, unit_ids)
 
+    def test_source_integrity_references_source_documents(self) -> None:
+        source_ids = {
+            row["source_document_id"]
+            for row in read_jsonl(FINAL / "source_documents.jsonl")
+        }
+        import json
+
+        source_integrity = json.loads(
+            (FINAL / "source_integrity.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(source_integrity["source_count"], 6)
+        for doc in source_integrity["source_documents"]:
+            self.assertIn(doc["source_document_id"], source_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

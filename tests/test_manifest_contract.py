@@ -31,17 +31,24 @@ class ManifestContractTest(unittest.TestCase):
                 "metadata_assertions": 1319,
                 "metadata_grounding": 5,
                 "metadata_grounding_records": 5,
+                "metadata_graph_edges": 449,
                 "pages": 63,
                 "retrieval_units": 438,
                 "source_conflicts": 1,
                 "source_documents": 6,
+                "validation_exceptions": 17,
+                "not_promoted_amends_edges": 8,
             },
         )
-        self.assertEqual(manifest["source_integrity"]["source_count"], 6)
-        self.assertFalse((FINAL / "eval_fixtures.jsonl").exists())
-        self.assertTrue((ROOT / "tests/fixtures/uud/eval_fixtures.jsonl").exists())
         for source_path, expected_sha in manifest["source_files"].items():
             self.assertEqual(file_sha256(ROOT / source_path), expected_sha)
+        self.assertFalse((FINAL / "eval_fixtures.jsonl").exists())
+        self.assertTrue((ROOT / "tests/fixtures/uud/eval_fixtures.jsonl").exists())
+
+    def test_validation_report_references_existing_artifacts(self) -> None:
+        report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
+        for name in report["referenced_artifacts"]:
+            self.assertTrue((FINAL / name).exists(), name)
 
 
 if __name__ == "__main__":
