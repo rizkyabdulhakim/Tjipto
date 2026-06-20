@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tjipto.corpora.coverage import required_missing_corpus
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
+from tjipto.retrieval.router import route_retrieval
 from tjipto.retrieval.service import RetrievalService
 from tjipto.runtime.viewer import viewer_payload
-from tjipto.evidence.citation import parse_citation
 
 
 class LegalRuntimeService:
@@ -22,17 +21,22 @@ class LegalRuntimeService:
 
     def search(self, corpus_id: str, query: str, limit: int = 10) -> dict:
         store = self._store(corpus_id)
-        if store is None:
-            return {"status": "unsupported_corpus", "matches": ()}
-        matches = RetrievalService(store).search(query, limit)
-        return {"status": "found" if matches else "no_results", "matches": tuple(matches)}
+        routed = route_retrieval(
+            corpus_id,
+            query,
+            store,
+            limit=limit,
+            allow_bm25_after_citation_miss=True,
+        )
+        return routed | {"status": "found" if routed["matches"] else routed["status"]}
 
     def citation(self, corpus_id: str, query: str, source_role: str | None = None) -> dict:
         store = self._store(corpus_id)
         if store is None:
-            return {"status": "unsupported_corpus", "matches": ()}
-        matches = RetrievalService(store).citation(query, source_role)
-        return {"status": "found" if matches else "citation_not_found", "matches": tuple(matches)}
+            return route_retrieval(corpus_id, query, None)
+        routed = route_retrieval(corpus_id, query, store)
+        matches = RetrievalService(store).citation(routed["normalized_query"], source_role)
+        return routed | {"status": "found" if matches else "citation_not_found", "matches": tuple(matches)}
 
     def viewer(self, corpus_id: str, evidence_id: str) -> dict:
         store = self._store(corpus_id)
@@ -45,23 +49,19 @@ class LegalRuntimeService:
 
     def ask(self, corpus_id: str, query: str, limit: int = 3) -> dict:
         store = self._store(corpus_id)
-        if store is None:
-            return {"status": "unsupported_corpus", "evidence": ()}
-        missing_corpus = required_missing_corpus(corpus_id, query)
-        if missing_corpus:
-            return {"status": "insufficient_corpus", "evidence": (), "required_corpus": missing_corpus}
-        pasal, _ = parse_citation(query)
-        citation = self.citation(corpus_id, query)
-        if pasal and not citation["matches"]:
-            return {"status": "citation_not_found", "reason": "citation_not_found", "evidence": ()}
-        matches = citation["matches"] or RetrievalService(store).search(query, limit)
-        if not matches:
-            return {"status": "no_results", "evidence": ()}
+        routed = route_retrieval(corpus_id, query, store, limit=limit)
+        if routed["status"] != "found":
+            return routed | {"evidence": ()}
+        matches = routed["matches"]
         evidence = tuple(self._answer_evidence(store, row) for row in matches if store.bboxes_for(row["evidence_id"]))
         if not evidence:
-            return {"status": "insufficient_evidence", "evidence": ()}
-        status = "answer_ready" if citation["matches"] else "limited_answer"
-        return {"status": status, "answer": "Evidence-grounded UUD support is available; no legal conclusion is generated.", "evidence": evidence}
+            return routed | {"status": "insufficient_evidence", "evidence": ()}
+        status = "answer_ready" if routed["route"] == "exact" else "limited_answer"
+        return routed | {
+            "status": status,
+            "answer": "Evidence-grounded UUD support is available; no legal conclusion is generated.",
+            "evidence": evidence,
+        }
 
     def _answer_evidence(self, store: EvidenceStore, row: dict) -> dict:
         bboxes = store.bboxes_for(row["evidence_id"])

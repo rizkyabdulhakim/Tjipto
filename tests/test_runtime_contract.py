@@ -9,6 +9,8 @@ import unittest
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.graph.store import GraphStore
+from tjipto.retrieval.query import classify_intent, normalize_query
+from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -92,6 +94,9 @@ class RuntimeContractTest(unittest.TestCase):
     def test_ask_contract_is_evidence_bounded(self) -> None:
         answer = self.service.ask("uud", "Pasal 1 ayat (3)")
         self.assertEqual(answer["status"], "answer_ready")
+        self.assertEqual(answer["route"], "exact")
+        self.assertEqual(answer["intent"], "exact_citation")
+        self.assertEqual(answer["normalized_query"], "Pasal 1 ayat (3)")
         self.assertTrue(answer["evidence"])
         first = answer["evidence"][0]
         self.assertTrue(first["evidence_id"])
@@ -99,16 +104,66 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(first["viewer_ref"])
 
         limited = self.service.ask("uud", "negara hukum")
-        self.assertIn(limited["status"], {"answer_ready", "limited_answer"})
+        self.assertEqual(limited["status"], "limited_answer")
+        self.assertEqual(limited["route"], "bm25")
+        self.assertEqual(limited["intent"], "natural_language")
         self.assertTrue(limited["evidence"])
 
         for query in ("Pasal 999", "Pasal 1 ayat 999", "Pasal 28E ayat (999)"):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "citation_not_found")
+            self.assertEqual(result["route"], "citation_not_found")
             self.assertEqual(result["reason"], "citation_not_found")
             self.assertFalse(result["evidence"])
-        self.assertEqual(self.service.ask("uud", "aturan KUHP tentang pencurian")["status"], "insufficient_corpus")
-        self.assertEqual(self.service.ask("unknown", "Pasal 1")["status"], "unsupported_corpus")
+
+        insufficient = self.service.ask("uud", "aturan KUHP tentang pencurian")
+        self.assertEqual(insufficient["status"], "insufficient_corpus")
+        self.assertEqual(insufficient["route"], "insufficient_corpus")
+        self.assertEqual(insufficient["required_corpus"], "non_uud")
+
+        unsupported = self.service.ask("unknown", "Pasal 1")
+        self.assertEqual(unsupported["status"], "unsupported_corpus")
+        self.assertEqual(unsupported["intent"], "unsupported_corpus")
+
+    def test_query_normalization_and_intent_classification(self) -> None:
+        self.assertEqual(normalize_query("pasal 28 e")["normalized_query"], "Pasal 28E")
+        self.assertEqual(normalize_query("pasal 1 ayat 3")["normalized_query"], "Pasal 1 ayat (3)")
+        self.assertEqual(normalize_query("uud 45")["normalized_query"], "UUD 1945")
+
+        self.assertEqual(classify_intent("uud", "Pasal 1 ayat (3)")["intent"], "exact_citation")
+        self.assertEqual(classify_intent("uud", "negara hukum")["intent"], "natural_language")
+        self.assertEqual(classify_intent("uud", "aturan KUHP tentang pencurian")["intent"], "out_of_corpus")
+        self.assertEqual(
+            classify_intent("unknown", "Pasal 1", corpus_supported=False)["intent"],
+            "unsupported_corpus",
+        )
+
+    def test_retrieval_router_envelope_routes(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        store = EvidenceStore(config)
+
+        exact = route_retrieval("uud", "pasal 1 ayat 3", store)
+        self.assertEqual(exact["status"], "found")
+        self.assertEqual(exact["route"], "exact")
+        self.assertEqual(exact["normalized_query"], "Pasal 1 ayat (3)")
+        self.assertTrue(exact["matches"])
+
+        bm25 = route_retrieval("uud", "negara hukum", store, limit=2)
+        self.assertEqual(bm25["status"], "found")
+        self.assertEqual(bm25["route"], "bm25")
+        self.assertLessEqual(len(bm25["matches"]), 2)
+
+        no_results = route_retrieval("uud", "zyxqv unsupported legal relation", store)
+        self.assertEqual(no_results["status"], "no_results")
+        self.assertEqual(no_results["intent"], "no_results")
+
+        missing = route_retrieval("uud", "aturan KUHP tentang pencurian", store)
+        self.assertEqual(missing["status"], "insufficient_corpus")
+        self.assertEqual(missing["required_corpus"], "non_uud")
+
+        unsupported = route_retrieval("unknown", "Pasal 1", None)
+        self.assertEqual(unsupported["status"], "unsupported_corpus")
+        self.assertEqual(unsupported["route"], "unsupported_corpus")
 
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(
