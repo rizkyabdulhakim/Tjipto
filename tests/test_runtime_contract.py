@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import os
 import tempfile
 import unittest
 
@@ -101,6 +102,11 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertIn(limited["status"], {"answer_ready", "limited_answer"})
         self.assertTrue(limited["evidence"])
 
+        for query in ("Pasal 999", "Pasal 1 ayat 999", "Pasal 28E ayat (999)"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "citation_not_found")
+            self.assertEqual(result["reason"], "citation_not_found")
+            self.assertFalse(result["evidence"])
         self.assertEqual(self.service.ask("uud", "aturan KUHP tentang pencurian")["status"], "insufficient_corpus")
         self.assertEqual(self.service.ask("unknown", "Pasal 1")["status"], "unsupported_corpus")
 
@@ -201,6 +207,22 @@ class RuntimeContractTest(unittest.TestCase):
             (root / "data").mkdir()
             (root / "data/corpus_registry.json").write_text("{", encoding="utf-8")
             self.assertIsNone(CorpusRegistry(root).resolve("demo"))
+
+    def test_registry_uses_env_repo_root_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data/final/demo").mkdir(parents=True)
+            (root / "data/corpus_registry.json").write_text(json.dumps({"demo": "data/final/demo/manifest.json"}), encoding="utf-8")
+            (root / "data/final/demo/manifest.json").write_text(json.dumps({"corpus_id": "demo"}), encoding="utf-8")
+            old = os.environ.get("TJIPTO_REPO_ROOT")
+            os.environ["TJIPTO_REPO_ROOT"] = str(root)
+            try:
+                self.assertEqual(CorpusRegistry().resolve("demo").corpus_id, "demo")
+            finally:
+                if old is None:
+                    os.environ.pop("TJIPTO_REPO_ROOT", None)
+                else:
+                    os.environ["TJIPTO_REPO_ROOT"] = old
 
     def test_registry_rejects_absolute_and_parent_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

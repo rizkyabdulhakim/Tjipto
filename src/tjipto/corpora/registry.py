@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+import os
 
 from tjipto.core.config import CorpusConfig
 from tjipto.core.manifest import read_json
@@ -9,7 +10,8 @@ from tjipto.core.manifest import read_json
 
 class CorpusRegistry:
     def __init__(self, repo_root: Path | None = None):
-        self.repo_root = repo_root or Path(__file__).resolve().parents[3]
+        env_root = os.environ.get("TJIPTO_REPO_ROOT")
+        self.repo_root = repo_root or (Path(env_root) if env_root else Path(__file__).resolve().parents[3])
         self.registry_path = self.repo_root / "data" / "corpus_registry.json"
 
     def resolve(self, corpus_id: str) -> CorpusConfig | None:

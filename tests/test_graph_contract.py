@@ -11,6 +11,7 @@ from tjipto.corpora.adapter import config_for
 from tjipto.core.manifest import file_sha256
 from tjipto.graph.store import GraphStore
 from tjipto.core.manifest import read_jsonl
+from tjipto.corpora.reproducibility import validate_corpus_ingestion_artifacts
 from tjipto.corpora.uud_reproducibility import validate_uud_ingestion_artifacts
 
 
@@ -224,10 +225,11 @@ class GraphContractTest(unittest.TestCase):
             self.assertIn(edge["target_id"], graph_node_ids, edge["edge_id"])
 
     def test_uud_ingestion_reproducibility_runner_passes(self) -> None:
-        result = validate_uud_ingestion_artifacts(ROOT)
+        result = validate_corpus_ingestion_artifacts("uud", ROOT)
         self.assertEqual(result["status"], "valid", result["errors"][:5])
-        self.assertEqual(result["counts"]["evidence"], 438)
-        self.assertEqual(result["counts"]["bbox"], 1388)
+        self.assertEqual(result["counts"]["evidence_records"], 438)
+        self.assertEqual(result["counts"]["bbox_records"], 1388)
+        self.assertEqual(validate_uud_ingestion_artifacts(ROOT), result)
 
     def _compact_text(self, text: str) -> str:
         text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "")

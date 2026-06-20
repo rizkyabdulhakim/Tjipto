@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tjipto.corpora.coverage import required_missing_corpus
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.service import RetrievalService
 from tjipto.runtime.viewer import viewer_payload
+from tjipto.evidence.citation import parse_citation
 
 
 class LegalRuntimeService:
@@ -45,17 +47,20 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return {"status": "unsupported_corpus", "evidence": ()}
-        lowered = query.casefold()
-        unavailable = ("kuhp", "kuhap", "uu ite", "uu pers", "ketenagakerjaan", "uu pdp", "perseroan", "pemilu")
-        if any(term in lowered for term in unavailable):
-            return {"status": "insufficient_corpus", "evidence": (), "required_corpus": "non_uud"}
-        matches = RetrievalService(store).search(query, limit)
+        missing_corpus = required_missing_corpus(corpus_id, query)
+        if missing_corpus:
+            return {"status": "insufficient_corpus", "evidence": (), "required_corpus": missing_corpus}
+        pasal, _ = parse_citation(query)
+        citation = self.citation(corpus_id, query)
+        if pasal and not citation["matches"]:
+            return {"status": "citation_not_found", "reason": "citation_not_found", "evidence": ()}
+        matches = citation["matches"] or RetrievalService(store).search(query, limit)
         if not matches:
             return {"status": "no_results", "evidence": ()}
         evidence = tuple(self._answer_evidence(store, row) for row in matches if store.bboxes_for(row["evidence_id"]))
         if not evidence:
             return {"status": "insufficient_evidence", "evidence": ()}
-        status = "answer_ready" if self.citation(corpus_id, query)["matches"] else "limited_answer"
+        status = "answer_ready" if citation["matches"] else "limited_answer"
         return {"status": status, "answer": "Evidence-grounded UUD support is available; no legal conclusion is generated.", "evidence": evidence}
 
     def _answer_evidence(self, store: EvidenceStore, row: dict) -> dict:

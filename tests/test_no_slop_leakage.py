@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 import unittest
@@ -53,7 +53,14 @@ class NoSlopLeakageTest(unittest.TestCase):
         self.assertNotIn("tjipto.runtime", core_text)
         self.assertNotIn("tjipto.retrieval", core_text)
         self.assertNotIn("tjipto.corpora", core_text)
+        self.assertNotIn("tjipto.evidence", core_text)
+        self.assertNotIn("tjipto.graph", core_text)
         self.assertNotIn("data/final/uud", core_text)
+
+    def test_generic_reproducibility_has_no_uud_final_path(self) -> None:
+        text = (ROOT / "src/tjipto/corpora/reproducibility.py").read_text(encoding="utf-8").casefold()
+        self.assertNotIn("data/final/uud", text)
+        self.assertNotIn(r"data\\final\\uud", text)
 
     def test_runtime_facing_ids_are_clean(self) -> None:
         checked_files = (
