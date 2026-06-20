@@ -16,6 +16,7 @@ from tjipto.retrieval.metadata import filter_evidence, normalize_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.router import route_retrieval
 from tjipto.retrieval.structured import structured_lookup
+from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candidate
 from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
 
@@ -413,7 +414,14 @@ class RuntimeContractTest(unittest.TestCase):
 
         exact = self.service.ask("uud", "Pasal 1 ayat (3)", limit=5)
         self.assertEqual(exact["status"], "answer_ready")
+        self.assertEqual(exact["answer_type"], "quoted_evidence")
+        self.assertIn("context_pack", exact)
+        self.assertEqual(exact["context_pack"]["answer_evidence"], exact["evidence"])
+        self.assertTrue(exact["citations"])
+        self.assertTrue(exact["viewer_refs"])
         self.assertTrue(any(row["route_sources"] == ("graph",) for row in exact["matches"]))
+        self.assertTrue(any(row["route_sources"] == ("graph",) for row in exact["context_pack"]["supporting_context"]))
+        self.assertTrue(any(row["reason"] == "graph_only" for row in exact["context_pack"]["excluded_candidates"]))
         self.assertTrue(
             all(direct_routes & set(row["route_sources"]) for row in exact["matches"] if row["evidence_id"] in {
                 evidence["evidence_id"] for evidence in exact["evidence"]
@@ -423,12 +431,44 @@ class RuntimeContractTest(unittest.TestCase):
 
         structured = self.service.ask("uud", "Pembukaan", limit=5)
         self.assertEqual(structured["status"], "limited_answer")
+        self.assertEqual(structured["answer_type"], "limited_evidence_summary")
         self.assertTrue(any(row["route_sources"] == ("graph",) for row in structured["matches"]))
         evidence_ids = {evidence["evidence_id"] for evidence in structured["evidence"]}
         self.assertTrue(all(direct_routes & set(row["route_sources"]) for row in structured["matches"] if row["evidence_id"] in evidence_ids))
 
         search = self.service.search("uud", "Pasal 1 ayat (3)", limit=5)
         self.assertTrue(any(row["route_sources"] == ("graph",) for row in search["matches"]))
+
+    def test_answer_context_validator_explains_inclusion_and_exclusion(self) -> None:
+        class Store:
+            def bboxes_for(self, evidence_id):
+                return [] if evidence_id == "missing_bbox" else [{"bbox_id": evidence_id}]
+
+        store = Store()
+        base = {
+            "evidence_id": "direct",
+            "status": "final",
+            "citation": "Pasal 1",
+            "quoted_text": "quoted",
+            "source_pdf_path": "source.pdf",
+            "source_sha256": "sha",
+            "source_role": "current_consolidated",
+            "temporal_context": "current_consolidated",
+            "page_numbers": (1,),
+            "route_sources": ("exact",),
+        }
+        graph = base | {"evidence_id": "graph", "route_sources": ("graph",)}
+        missing_bbox = base | {"evidence_id": "missing_bbox"}
+
+        self.assertEqual(validate_answer_candidate(store, base), (True, "answer_evidence"))
+        self.assertEqual(validate_answer_candidate(store, graph), (False, "graph_only"))
+        self.assertEqual(validate_answer_candidate(store, missing_bbox), (False, "missing_bbox"))
+
+        pack = assemble_context_pack(store, (base, graph, missing_bbox))
+        self.assertEqual([row["evidence_id"] for row in pack["answer_evidence"]], ["direct"])
+        self.assertEqual([row["evidence_id"] for row in pack["supporting_context"]], ["graph"])
+        self.assertEqual(pack["validation_reasons"]["graph"], "graph_only")
+        self.assertEqual(pack["validation_reasons"]["missing_bbox"], "missing_bbox")
 
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(
@@ -488,6 +528,11 @@ class RuntimeContractTest(unittest.TestCase):
                     "citation": "Rule 1",
                     "quoted_text": "generic corpus resolution",
                     "hierarchy": [],
+                    "source_pdf_path": "source.pdf",
+                    "source_sha256": "sha",
+                    "source_role": "current_consolidated",
+                    "temporal_context": "current_consolidated",
+                    "page_numbers": [1],
                     "status": "final",
                 })
                 + "\n",

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
+from tjipto.retrieval.answer import assemble_context_pack
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.viewer import viewer_payload
 
@@ -66,35 +67,29 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         if routed["status"] != "found":
-            return routed | {"evidence": ()}
-        matches = routed["matches"]
-        evidence = tuple(
-            self._answer_evidence(store, row)
-            for row in matches
-            if self._has_direct_route(row) and store.bboxes_for(row["evidence_id"])
-        )
+            return routed | {"answer_type": "none", "context_pack": {}, "evidence": ()}
+        context_pack = assemble_context_pack(store, routed["matches"])
+        evidence = context_pack["answer_evidence"]
         if not evidence:
-            return routed | {"status": "insufficient_evidence", "evidence": ()}
+            return routed | {
+                "status": "insufficient_evidence",
+                "answer_type": "none",
+                "context_pack": context_pack,
+                "evidence": (),
+            }
         status = "answer_ready" if routed["route"] == "exact" else "limited_answer"
         return routed | {
             "status": status,
-            "answer": "Evidence-grounded UUD support is available; no legal conclusion is generated.",
+            "answer_type": "quoted_evidence" if status == "answer_ready" else "limited_evidence_summary",
+            "answer": self._answer_text(status, evidence),
+            "context_pack": context_pack,
             "evidence": evidence,
+            "citations": context_pack["citation_payloads"],
+            "viewer_refs": context_pack["viewer_refs"],
         }
 
-    def _has_direct_route(self, row: dict) -> bool:
-        return bool({"exact", "structured", "bm25"} & set(row.get("route_sources") or ()))
-
-    def _answer_evidence(self, store: EvidenceStore, row: dict) -> dict:
-        bboxes = store.bboxes_for(row["evidence_id"])
-        return {
-            "evidence_id": row["evidence_id"],
-            "citation": row.get("citation"),
-            "source_role": row.get("source_role"),
-            "source_pdf_path": row.get("source_pdf_path"),
-            "source_sha256": row.get("source_sha256"),
-            "page_numbers": tuple(row.get("page_numbers") or ()),
-            "bbox_count": len(bboxes),
-            "quoted_text": row.get("quoted_text"),
-            "viewer_ref": {"action": "viewer", "evidence_id": row["evidence_id"]},
-        }
+    def _answer_text(self, status: str, evidence: tuple[dict, ...]) -> str:
+        citation = evidence[0].get("citation") or "evidence"
+        if status == "answer_ready":
+            return f"Evidence-grounded citation support is available for {citation}; no legal conclusion is generated."
+        return "Limited evidence-grounded support is available; no legal conclusion is generated."
