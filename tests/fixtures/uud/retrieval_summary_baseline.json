@@ -1,0 +1,119 @@
+{
+  "accepted_graph_support_edge_types": [
+    "HAS_CHUNK",
+    "HAS_EVIDENCE"
+  ],
+  "activity_id": "uud_graph_grounded_retrieval_gate_4",
+  "article_version_map_accepted_equivalence_count": 0,
+  "artifact_version": 1,
+  "baseline_commit": "7f69f87",
+  "created_at_utc": "not_recorded",
+  "eval_case_count": 76,
+  "eval_fail_count": 0,
+  "eval_pass_count": 76,
+  "eval_result_count": 76,
+  "manual_review_leakage_into_accepted_support": 0,
+  "manual_review_relation_edges": 666,
+  "metrics": {
+    "bbox_payload_coverage": 1.0,
+    "case_categories": {
+      "ambiguous_source_role": 2,
+      "bm25_lexical": 12,
+      "dense_mock": 1,
+      "exact_citation": 36,
+      "graph_expansion_review_candidates": 6,
+      "hybrid_mock": 1,
+      "metadata_filter": 6,
+      "negative_or_invalid": 9,
+      "opening": 2,
+      "rerank_mock": 1
+    },
+    "eval_case_count": 76,
+    "evidence_validation_pass_rate": 1.0,
+    "exact_top_1_rate": 0.969231,
+    "fail_count": 0,
+    "manual_review_leakage_count": 0,
+    "mrr_mean": 0.984615,
+    "non_claims": {
+      "answer_generation_created": false,
+      "external_trace_write_performed": false,
+      "production_reranker_created": false,
+      "production_vector_db_created": false
+    },
+    "pass_count": 76,
+    "recall_at_k_mean": 1.0,
+    "retrieval_modes": {
+      "None": 4,
+      "bm25_lexical": 22,
+      "dense_mock": 1,
+      "exact_citation": 47,
+      "hybrid_bm25_dense": 1,
+      "rerank_mock": 1
+    },
+    "route_counts": {
+      "None": 4,
+      "bm25_lexical": 22,
+      "exact_citation": 47,
+      "hybrid_bm25_dense": 3
+    },
+    "schema_version": 1,
+    "status_counts": {
+      "answerable_with_evidence": 65,
+      "citation_not_found": 5,
+      "clarification_needed": 2,
+      "insufficient_evidence": 2,
+      "invalid_query": 2
+    }
+  },
+  "non_claims": {
+    "answer_generation_created": false,
+    "frontend_created": false,
+    "graph_db_created": false,
+    "legal_grade_verified": false,
+    "production_ready": false,
+    "reranker_created": false,
+    "vector_db_created": false
+  },
+  "preservation_counts": {
+    "accepted_bbox_rectangles": 1388,
+    "excluded_policy_records": 6,
+    "final_registry_rows": 438,
+    "graph_lite_edges": 3150,
+    "graph_lite_nodes": 2339,
+    "retrieval_eval_cases": 175,
+    "source_pdfs": 6
+  },
+  "retrieval_unit_count": 438,
+  "retrieval_units_by_source_role": {
+    "amendment_1_historical": 14,
+    "amendment_2_historical": 57,
+    "amendment_3_historical": 66,
+    "amendment_4_historical": 29,
+    "current_consolidated": 200,
+    "original_historical": 72
+  },
+  "retrieval_units_by_temporal_context": {
+    "amendment_1_historical": 14,
+    "amendment_2_historical": 57,
+    "amendment_3_historical": 66,
+    "amendment_4_historical": 29,
+    "current_consolidated": 200,
+    "original_historical": 72
+  },
+  "retrieval_units_with_bbox_payload": 438,
+  "retrieval_units_with_chunk_reference": 438,
+  "run_metadata_source": "existing_manifest",
+  "schema_version": 1,
+  "semantic_graph_edge_status_counts": {
+    "accepted": 876,
+    "manual_review": 666
+  },
+  "semantic_graph_edge_type_counts": {
+    "CURRENT_VERSION_OF": 222,
+    "HAS_CHUNK": 438,
+    "HAS_EVIDENCE": 438,
+    "HISTORICAL_VERSION_OF": 222,
+    "SAME_ARTICLE_AS": 222
+  },
+  "status": "valid"
+}

@@ -68,6 +68,11 @@ class RuntimeContractTest(unittest.TestCase):
         for row in orchestrator:
             for chunk_id in row.get("observed_chunk_ids") or ():
                 self.assertIn(chunk_id, chunk_ids)
+        traces = read_jsonl(ROOT / "tests/fixtures/uud/graph_retrieval_traces.jsonl")
+        self.assertEqual(len(traces), 76)
+        for row in traces:
+            for evidence_id in row.get("outputs", {}).get("ranked_final_evidence_ids") or ():
+                self.assertIn(evidence_id, evidence_ids)
 
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(

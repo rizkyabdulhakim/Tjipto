@@ -23,6 +23,7 @@ class ManifestContractTest(unittest.TestCase):
                 "article_versions": 218,
                 "bbox_records": 1388,
                 "chunks": 609,
+                "document_metadata": 6,
                 "evidence_records": 438,
                 "excluded_records": 6,
                 "graph_edges": 3150,
@@ -36,7 +37,9 @@ class ManifestContractTest(unittest.TestCase):
                 "retrieval_units": 438,
                 "source_conflicts": 1,
                 "source_documents": 6,
-                "validation_exceptions": 17,
+                "validation_alignment_results": 610,
+                "validation_exception_review_labels": 9,
+                "validation_exceptions": 19,
                 "not_promoted_amends_edges": 8,
             },
         )

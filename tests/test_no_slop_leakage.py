@@ -53,6 +53,7 @@ class NoSlopLeakageTest(unittest.TestCase):
             "metadata_grounding.jsonl",
             "metadata_grounding_registry.jsonl",
             "metadata_graph_edges.jsonl",
+            "document_metadata.jsonl",
             "article_versions.jsonl",
             "retrieval_units.jsonl",
         )

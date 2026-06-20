@@ -1,4 +1,51 @@
 {
+  "alignment_exception_review_summary": {
+    "accepted_manual_only_grounding_bbox_later_task_count": 1,
+    "accepted_not_embedding_blocker_count": 8,
+    "active_canonical_exception_reviewed_count": 4,
+    "alignment_exception_review_version": "uud_chunk_source_alignment_exception_review_v1",
+    "bbox_blocker_count": 1,
+    "blocked_insufficient_evidence_count": 0,
+    "blocked_requires_fix_count": 0,
+    "blocked_requires_visual_review_count": 0,
+    "candidate_only": true,
+    "embedding_blocker_count": 0,
+    "grounding_blocker_count": 1,
+    "grounding_span_later_task_count": 1,
+    "inactive_source_typo_exception_reviewed_count": 1,
+    "labeled_exception_count": 9,
+    "not_legal_grade_note": "UUD source-alignment exception review candidate only; not legal-grade verified and not approved for vector DB/page grounding/bbox/final legal units.",
+    "parent_context_exception_reviewed_count": 4,
+    "pdf_text_layer_noise_review_count": 4,
+    "primary_exception_review_label_counts": {
+      "accepted_parent_context_token_budget_not_embedding_blocker": 4,
+      "accepted_pdf_text_layer_noise_not_embedding_blocker": 4,
+      "accepted_source_typo_reference_grounding_bbox_later_task": 1
+    },
+    "recommended_next_action": "prepare_uud_embedding_candidate_experiment_plan",
+    "review_decision_counts": {
+      "accepted_manual_only_grounding_bbox_later_task": 1,
+      "accepted_not_embedding_blocker": 8
+    },
+    "source_chunk_source_alignment_version": "uud_chunk_source_alignment_audit_v1",
+    "source_exception_type_counts": {
+      "grounding_span_later_task": 1,
+      "pdf_text_layer_noise_review": 4,
+      "token_budget_review": 4
+    },
+    "token_budget_review_count": 4,
+    "total_exception_count": 9,
+    "warnings": [
+      "alignment_exception_review_candidate_only",
+      "not_legal_grade_verified",
+      "no_embeddings_created",
+      "no_vector_db_created",
+      "no_page_grounding_created",
+      "no_bbox_created",
+      "no_final_legal_units_created",
+      "review_exception_labels_before_embedding_candidate_experiment_plan"
+    ]
+  },
   "chunk_source_alignment_summary": {
     "active_canonical_chunk_count": 444,
     "active_canonical_exception_count": 4,
@@ -12,7 +59,8 @@
       "parent_context_metadata_checked": 165
     },
     "bbox_blocker_count": 1,
-    "chunk_source_alignment_version": "uud_chunk_source_alignment_audit",
+    "candidate_only": true,
+    "chunk_source_alignment_version": "uud_chunk_source_alignment_audit_v1",
     "current_consolidated_aturan_peralihan_pasal_ii_status": "aligned_after_normalization",
     "current_consolidated_aturan_tambahan_pasal_ii_status": "aligned_after_recorded_chunk_hygiene",
     "dataset_diagnostics": {
@@ -25,10 +73,11 @@
         "uud_1945_original_text": 72
       },
       "active_canonical_counts_by_type": {
-        "ayat_chunk_record": 372,
-        "pasal_chunk_record": 70,
-        "pembukaan_special_chunk_record": 2
+        "ayat_chunk_candidate": 372,
+        "pasal_chunk_candidate": 70,
+        "pembukaan_special_chunk_candidate": 2
       },
+      "candidate_only_not_true_count": 0,
       "canonical_document_counts": {
         "uud_1945_amendment_1": 22,
         "uud_1945_amendment_2": 79,
@@ -37,17 +86,17 @@
         "uud_1945_current_consolidated_text": 267,
         "uud_1945_original_text": 111
       },
-      "chunk_record_type_counts": {
-        "aturan_section_context_record": 5,
-        "ayat_chunk_record": 372,
-        "bab_structural_context_record": 38,
+      "chunk_candidate_type_counts": {
+        "aturan_section_context_candidate": 5,
+        "ayat_chunk_candidate": 372,
+        "bab_structural_context_candidate": 38,
         "inactive_source_typo_reference_chunk": 1,
-        "pasal_chunk_record": 70,
-        "pasal_parent_context_record": 122,
-        "pembukaan_special_chunk_record": 2
+        "pasal_chunk_candidate": 70,
+        "pasal_parent_context_candidate": 122,
+        "pembukaan_special_chunk_candidate": 2
       },
       "chunk_status_counts": {
-        "active_canonical_record": 444,
+        "active_canonical_candidate": 444,
         "inactive_source_typo_reference": 1,
         "parent_context_only": 165
       },
@@ -55,7 +104,7 @@
       "chunks_missing_source_provenance_count": 0,
       "chunks_with_forbidden_fields_count": 0,
       "length_statistics_by_type": {
-        "aturan_section_context_record": {
+        "aturan_section_context_candidate": {
           "approximate_token_count": {
             "max": 104,
             "median": 84,
@@ -72,7 +121,7 @@
             "min": 41
           }
         },
-        "ayat_chunk_record": {
+        "ayat_chunk_candidate": {
           "approximate_token_count": {
             "max": 155,
             "median": 23.0,
@@ -89,7 +138,7 @@
             "min": 6
           }
         },
-        "bab_structural_context_record": {
+        "bab_structural_context_candidate": {
           "approximate_token_count": {
             "max": 1505,
             "median": 112.5,
@@ -123,7 +172,7 @@
             "min": 158
           }
         },
-        "pasal_chunk_record": {
+        "pasal_chunk_candidate": {
           "approximate_token_count": {
             "max": 160,
             "median": 21.5,
@@ -140,7 +189,7 @@
             "min": 7
           }
         },
-        "pasal_parent_context_record": {
+        "pasal_parent_context_candidate": {
           "approximate_token_count": {
             "max": 424,
             "median": 69.5,
@@ -157,7 +206,7 @@
             "min": 12
           }
         },
-        "pembukaan_special_chunk_record": {
+        "pembukaan_special_chunk_candidate": {
           "approximate_token_count": {
             "max": 250,
             "median": 249.0,
@@ -178,11 +227,10 @@
       "over_hard_token_budget_count": 1,
       "over_soft_token_budget_count": 4,
       "parent_context_counts_by_type": {
-        "aturan_section_context_record": 5,
-        "bab_structural_context_record": 38,
-        "pasal_parent_context_record": 122
-      },
-      "record_only_not_true_count": 0
+        "aturan_section_context_candidate": 5,
+        "bab_structural_context_candidate": 38,
+        "pasal_parent_context_candidate": 122
+      }
     },
     "embedding_blocker_count": 0,
     "exception_type_counts": {
@@ -195,25 +243,24 @@
     "inactive_source_typo_reference_count": 1,
     "inactive_source_typo_reference_status": "inactive_source_typo_reference_noncanonical_checked",
     "legal_scope_mismatch_count": 0,
-    "not_legal_grade_note": "Full UUD chunk source-alignment audit record only; not legal-grade verified and not approved for vector DB/page grounding/bbox/final legal units.",
-    "not_matched_requires_review_required_count": 0,
+    "not_legal_grade_note": "Full UUD chunk source-alignment audit candidate only; not legal-grade verified and not approved for vector DB/page grounding/bbox/final legal units.",
+    "not_matched_requires_manual_review_count": 0,
     "page_range_mismatch_count": 0,
     "parent_context_checked_count": 165,
     "parent_context_count": 165,
-    "partial_requires_review_required_count": 0,
+    "partial_requires_manual_review_count": 0,
     "pdf_text_layer_noise_or_partial_count": 4,
     "prior_cross_check_label_coverage_count": 8,
-    "recommended_next_action": "review_alignment_summary_before_embedding_record_experiment",
-    "record_only": true,
-    "source_chunk_record_probe_version": "uud_legal_unit_chunk_record_probe",
-    "source_cross_check_review_version": "uud_chunk_cross_check_review",
-    "source_integrity_manifest_version": "uud_bpk_source_integrity_manifest",
-    "source_legal_unit_assembly_output_version": "uud_legal_unit_assembly_record",
+    "recommended_next_action": "review_alignment_summary_before_embedding_candidate_experiment",
+    "source_chunk_candidate_probe_version": "uud_legal_unit_chunk_candidate_probe_v1",
+    "source_cross_check_review_version": "uud_chunk_candidate_cross_check_review_v1",
+    "source_integrity_manifest_version": "uud_bpk_source_integrity_manifest_v1",
+    "source_legal_unit_assembly_output_version": "uud_legal_unit_assembly_candidate_v1",
+    "source_manual_review_packet_version": "uud_chunk_candidate_manual_review_packet_v1",
     "source_mapping_mismatch_count": 0,
-    "source_review_required_packet_version": "uud_chunk_review_required_packet",
     "total_chunk_count": 610,
     "warnings": [
-      "source_alignment_audit_record_only",
+      "source_alignment_audit_candidate_only",
       "not_legal_grade_verified",
       "no_embeddings_created",
       "no_vector_db_created",
@@ -221,15 +268,22 @@
       "no_bbox_created",
       "no_final_legal_units_created",
       "prior_cross_check_labels_are_supporting_evidence_only",
-      "review_alignment_summary_before_embedding_record_experiment"
+      "review_alignment_summary_before_embedding_candidate_experiment"
     ]
   },
   "corpus_id": "uud",
+  "graph_retrieval_summary_fixture": "tests/fixtures/uud/retrieval_summary_baseline.json",
+  "graph_retrieval_traces_fixture": "tests/fixtures/uud/graph_retrieval_traces.jsonl",
   "referenced_artifacts": [
-    "source_integrity.json",
+    "document_metadata.jsonl",
+    "metadata_graph_edges.jsonl",
+    "metadata_grounding.jsonl",
+    "metadata_grounding_registry.jsonl",
     "source_conflicts.jsonl",
-    "validation_exceptions.jsonl",
-    "metadata_graph_edges.jsonl"
+    "source_integrity.json",
+    "validation_alignment_results.jsonl",
+    "validation_exception_review_labels.jsonl",
+    "validation_exceptions.jsonl"
   ],
   "source_conflict_resolution": {
     "affected_historical_scope": "aturan_tambahan_marker_sequence",
@@ -267,6 +321,43 @@
     "source_conflict_metadata_version": "uud_source_conflict_metadata",
     "source_conflict_resolution_decision_version": "uud_source_conflict_resolution_decision",
     "use_consolidated_pasal_ii_for_current_uud_record": true
+  },
+  "source_conflict_resolution_decision": {
+    "affected_historical_scope": "aturan_tambahan_marker_sequence",
+    "affected_historical_source": "uud_1945_amendment_4",
+    "candidate_only": true,
+    "canonical_reference_for_current_uud": "uud_1945_current_consolidated_text_aturan_tambahan_pasal_ii",
+    "conflict_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict_v1",
+    "decision_scope": "pipeline_policy_not_final_legal_authority",
+    "do_not_modify_source_pdf_or_raw_text": true,
+    "do_not_silently_correct": true,
+    "downstream_policy": {
+      "current_consolidated_uud_may_continue_as_active_candidate": true,
+      "historical_amendment_4_typo_scope_may_be_source_typo_reference": true,
+      "historical_amendment_4_typo_scope_must_not_be_active_unit_candidate": true,
+      "no_final_legal_authority_claim": true,
+      "no_legal_grade_verified_claim": true,
+      "source_typo_reference_use_policy": "explain_source_discrepancy_only"
+    },
+    "evidence_basis": [
+      "amendment_4_intro_mentions_aturan_tambahan_pasal_i_ii",
+      "consolidated_sequence_pasal_i_ii",
+      "consolidated_pasal_i_origin_marker_****_perubahan_keempat",
+      "consolidated_pasal_ii_origin_marker_****_perubahan_keempat",
+      "official_sources_support_consolidated_pasal_i_ii",
+      "amendment_4_pdf_shows_pasal_iii_source_typographical_anomaly"
+    ],
+    "historical_typo_reference_allowed_for_explaining_source_discrepancy": true,
+    "historical_typo_reference_not_allowed_for_canonical_answer": true,
+    "keep_historical_amendment_4_typo_scope_as_inactive_source_reference": true,
+    "not_legal_grade_note": "Source conflict resolution decision for project pipeline only; not a final legal authority determination and not legal-grade verified.",
+    "prior_conflict_status": "unresolved_manual_review_required",
+    "retain_source_typo_trace": true,
+    "reviewer_decision": "amendment_4_pasal_iii_is_source_typographical_anomaly",
+    "reviewer_role": "project_owner_review",
+    "source_conflict_metadata_version": "uud_source_conflict_metadata_v1",
+    "source_conflict_resolution_decision_version": "uud_source_conflict_resolution_decision_v1",
+    "use_consolidated_pasal_ii_for_current_uud_candidate": true
   },
   "status": "valid",
   "viewer_rectangle_normalization_summary": {

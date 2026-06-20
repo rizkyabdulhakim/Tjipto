@@ -1,0 +1,126 @@
+{
+  "legal_research_orchestrator_policy_version": "legal_research_orchestrator_policy_v1",
+  "policy_identity": {
+    "policy_name": "Legal Research Orchestrator",
+    "rigid_legal_query_router_rejected": true,
+    "user_may_ask_anything": true,
+    "system_must_answer_only_from_verified_corpus_evidence": true,
+    "missing_required_corpus_must_be_declared": true,
+    "no_final_answer_may_rely_on_unverified_or_missing_corpus": true,
+    "no_complete_corpus_coverage_claim": true
+  },
+  "natural_query_understanding_policy": {
+    "multi_hypothesis_interpretation_required": true,
+    "single_rigid_category_forbidden": true,
+    "required_fields": [
+      "normalized_question",
+      "detected_legal_references",
+      "detected_facts",
+      "detected_entities",
+      "detected_issues",
+      "possible_query_interpretations",
+      "needed_corpora",
+      "available_verified_corpora",
+      "missing_corpora",
+      "jurisdiction",
+      "time_context",
+      "answer_permission",
+      "evidence_requirement",
+      "uncertainty_level"
+    ],
+    "interpretation_hypotheses": [
+      "direct_citation_lookup",
+      "constitutional_basis_question",
+      "fact_pattern_issue_spotting",
+      "criminal_law_question",
+      "civil_law_question",
+      "employment_law_question",
+      "digital_law_question",
+      "source_discrepancy_question",
+      "historical_law_question",
+      "out_of_corpus_question",
+      "general_legal_research_question"
+    ],
+    "hypotheses_are_internal_not_user_facing_modes": true
+  },
+  "answer_behavior_patterns": [
+    {
+      "pattern": "direct_citation_lookup",
+      "example": "Berikan Pasal 28E ayat (1).",
+      "behavior": "retrieve_exact_legal_unit_if_available_and_answer_with_source_metadata"
+    },
+    {
+      "pattern": "constitutional_general_basis",
+      "example": "Apa dasar bahwa Indonesia adalah negara hukum?",
+      "behavior": "answer_from_current_consolidated_uud_with_source_citation"
+    },
+    {
+      "pattern": "fact_pattern_issue_spotting_with_missing_corpus",
+      "example": "Wartawan dibungkam polisi saat meliput pungli, pelanggaran apa?",
+      "behavior": "state_issue_hypotheses_and_limit_answer_to_available_uud_evidence"
+    },
+    {
+      "pattern": "criminal_law_query_with_missing_kuhp",
+      "example": "Hukuman pembunuhan berapa?",
+      "behavior": "refuse_final_pasal_or_penalty_due_missing_verified_kuhp_corpus"
+    },
+    {
+      "pattern": "source_discrepancy",
+      "example": "Kenapa Amandemen 4 Aturan Tambahan ada Pasal III, tapi Satu Naskah Pasal II?",
+      "behavior": "use_current_pasal_ii_as_canonical_and_typo_reference_as_discrepancy_evidence_only"
+    },
+    {
+      "pattern": "historical_amendment_query",
+      "example": "Apa isi Aturan Tambahan dalam Perubahan Keempat?",
+      "behavior": "allow_explicit_historical_source_and_distinguish_it_from_current_law"
+    }
+  ],
+  "retrieval_orchestration_policy": {
+    "strategy_candidates": [
+      "exact_citation_lookup",
+      "lexical_or_sparse_retrieval",
+      "dense_semantic_retrieval",
+      "metadata_filtered_retrieval",
+      "legal_graph_traversal",
+      "source_discrepancy_lookup",
+      "current_vs_historical_filtering",
+      "evidence_support_verification"
+    ],
+    "principles": {
+      "prefer_exact_lookup_for_explicit_pasal_ayat_query": true,
+      "prefer_current_consolidated_law_for_default_query": true,
+      "historical_source_requires_explicit_request_or_discrepancy_need": true,
+      "parent_context_only_not_default_answer_evidence": true,
+      "inactive_source_typo_reference_not_canonical_answer_evidence": true,
+      "retrieved_evidence_must_preserve_source_url_pdf_url_page_line_sha256_hierarchy": true
+    },
+    "implementation_status": "policy_only_not_implemented"
+  },
+  "evidence_sufficiency_gate": {
+    "required_checks": [
+      "verified_legal_unit_supports_each_legal_claim",
+      "citation_metadata_exists",
+      "source_provenance_exists",
+      "current_vs_historical_status_known",
+      "no_source_typo_canonical_leakage",
+      "no_parent_context_leakage_as_default_answer",
+      "no_unsupported_final_conclusion",
+      "missing_corpus_explicitly_declared"
+    ],
+    "insufficient_evidence_behavior": "answer_limited_to_available_corpus_or_refuse_final_legal_conclusion",
+    "implementation_status": "future_pre_answer_gate_policy_only"
+  },
+  "pdf_grounding_bbox_readiness_policy": {
+    "pdf_grounding_requires_successful_retrieval_evaluation_first": true,
+    "page_grounding_must_validate_page_range_and_source_pdf": true,
+    "bbox_highlight_requires_page_grounding_and_coordinate_extraction": true,
+    "source_typo_reference_requires_separate_span_grounding_task_before_bbox": true,
+    "no_bbox_from_unverified_retrieval": true,
+    "ui_highlight_must_not_imply_legal_validity_beyond_source_evidence": true,
+    "implementation_status": "future_stage_policy_only"
+  },
+  "external_research_status": "not_performed_not_required_repo_evidence_sufficient",
+  "candidate_only": true,
+  "policy_only": true,
+  "not_legal_grade_note": "Legal Research Orchestrator policy candidate only; not legal-grade verified and not approved for runtime retrieval, embeddings, vector DB, graph DB, page grounding, bbox, or final legal units."
+}

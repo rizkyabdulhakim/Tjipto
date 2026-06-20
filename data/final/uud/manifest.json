@@ -7,6 +7,7 @@
     "article_versions": 218,
     "bbox_records": 1388,
     "chunks": 609,
+    "document_metadata": 6,
     "evidence_records": 438,
     "excluded_records": 6,
     "graph_edges": 3150,
@@ -21,8 +22,11 @@
     "retrieval_units": 438,
     "source_conflicts": 1,
     "source_documents": 6,
-    "validation_exceptions": 17
+    "validation_alignment_results": 610,
+    "validation_exception_review_labels": 9,
+    "validation_exceptions": 19
   },
+  "document_metadata": "document_metadata.jsonl",
   "evidence_registry": "evidence_registry.jsonl",
   "excluded_records": "excluded_records.jsonl",
   "files": {
@@ -37,6 +41,10 @@
     "chunks.jsonl": {
       "bytes": 471802,
       "sha256": "e4b7c6822d6e3fb66dcc7d3a2af1ac910a8162a01f09f8b43b1430321ab7a050"
+    },
+    "document_metadata.jsonl": {
+      "bytes": 5160,
+      "sha256": "a9bd357d13a885947eec2e8a213262beacd2a42e78d3a71874ababacab745f50"
     },
     "evidence_registry.jsonl": {
       "bytes": 442330,
@@ -67,12 +75,12 @@
       "sha256": "fb01c39991503b12814edd89e03df77deb24d9b86579c3baa14949da1fc0b646"
     },
     "metadata_grounding.jsonl": {
-      "bytes": 5718,
-      "sha256": "6c5c2182c4fb8ed47c43b2198d96cef2410abea9f18722e49757de9bde36aabc"
+      "bytes": 5981,
+      "sha256": "364045a78ac2202f2d23dc4eef7f0de5a0737fceb672b7eb14928ee6f5044297"
     },
     "metadata_grounding_registry.jsonl": {
-      "bytes": 4623,
-      "sha256": "6b1f49bb99acef83b15337e78c4347a0c8ebf1cb879ecf49b3fee01d9d637c2c"
+      "bytes": 4886,
+      "sha256": "d6a6c1ef5a2a536ae9b3cc3e527000225533d87d36f20417855195c0d7e24b13"
     },
     "pages.jsonl": {
       "bytes": 116591,
@@ -83,33 +91,43 @@
       "sha256": "8dfb6af105cbda3b17ce87ae48629dfd7ac904b5fbf835bea7b3f394dcc5fd63"
     },
     "source_conflicts.jsonl": {
-      "bytes": 453,
-      "sha256": "c796c221f8d4c27081650851d6ccf98aff084677513e5dbe2323d01a7ac34e0c"
+      "bytes": 1135,
+      "sha256": "eb680876ca2cef2c26f7f2972ecd61c70718da15c2faf1369906bf33f4a6d437"
     },
     "source_documents.jsonl": {
-      "bytes": 2555,
-      "sha256": "675d21b95c787b24518b5217908cd41699f0d954fad4903a1ceb9892c46d5904"
+      "bytes": 8555,
+      "sha256": "44436549821a3abe20497e28bfeec6e6b6d259121d0cb818fbcef3868c2977bc"
     },
     "source_integrity.json": {
-      "bytes": 1821,
-      "sha256": "6e99f85f0886aff3a8f7942ced016caedc3b2be0991115aa3f0fa2cb155ccf41"
+      "bytes": 9739,
+      "sha256": "0d84e8cbc8ba64ee1d052bcfc92c6dbf96c088f8a873d301d69e97081e83f319"
+    },
+    "validation_alignment_results.jsonl": {
+      "bytes": 346978,
+      "sha256": "6697a05f466eda20377f1409e499d7078bd86340626ef84c50713481de841c4d"
+    },
+    "validation_exception_review_labels.jsonl": {
+      "bytes": 5112,
+      "sha256": "1291c7f22e727868541eae52d0b447076d8126c9b50498236cf8d32fcaaa2515"
     },
     "validation_exceptions.jsonl": {
-      "bytes": 17666,
-      "sha256": "2bce3e45d2fd428a35ab550c0114e3b9d5cb9806ce00c96ea2fd9a2f6799a162"
+      "bytes": 18622,
+      "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 13124,
-      "sha256": "253e1d321b818450f47f35504091adb536b62b09be203647efa01f432f5c351b"
+      "bytes": 17949,
+      "sha256": "801c49e3f0515bbca10d42bbb1475dee79170180292dd136e496ddd4c27751f9"
     }
   },
   "fixtures": {
     "eval_fixtures": "tests/fixtures/uud/eval_fixtures.jsonl",
     "graph_retrieval_eval_cases": "tests/fixtures/uud/graph_retrieval_eval_cases.jsonl",
     "graph_retrieval_eval_results": "tests/fixtures/uud/graph_retrieval_eval_results.jsonl",
+    "graph_retrieval_traces": "tests/fixtures/uud/graph_retrieval_traces.jsonl",
     "orchestrator_eval_results": "tests/fixtures/uud/orchestrator_eval_results.jsonl",
     "orchestrator_eval_summary": "tests/fixtures/uud/orchestrator_eval_summary.json",
-    "retrieval_metrics_baseline": "tests/fixtures/uud/retrieval_metrics_baseline.json"
+    "retrieval_metrics_baseline": "tests/fixtures/uud/retrieval_metrics_baseline.json",
+    "retrieval_summary_baseline": "tests/fixtures/uud/retrieval_summary_baseline.json"
   },
   "graph_edges": "graph_edges.jsonl",
   "graph_nodes": "graph_nodes.jsonl",
@@ -133,6 +151,8 @@
   },
   "source_integrity": "source_integrity.json",
   "status": "final",
+  "validation_alignment_results": "validation_alignment_results.jsonl",
+  "validation_exception_review_labels": "validation_exception_review_labels.jsonl",
   "validation_exceptions": "validation_exceptions.jsonl",
   "validation_report": "validation_report.json"
 }

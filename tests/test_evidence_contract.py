@@ -43,10 +43,8 @@ class EvidenceContractTest(unittest.TestCase):
                 self.assertIn(parent_id, unit_ids)
 
     def test_source_integrity_references_source_documents(self) -> None:
-        source_ids = {
-            row["source_document_id"]
-            for row in read_jsonl(FINAL / "source_documents.jsonl")
-        }
+        source_docs = read_jsonl(FINAL / "source_documents.jsonl")
+        source_ids = {row["source_document_id"] for row in source_docs}
         import json
 
         source_integrity = json.loads(
@@ -55,6 +53,31 @@ class EvidenceContractTest(unittest.TestCase):
         self.assertEqual(source_integrity["source_count"], 6)
         for doc in source_integrity["source_documents"]:
             self.assertIn(doc["source_document_id"], source_ids)
+            self.assertTrue((ROOT / doc["path"]).exists())
+            self.assertTrue(doc["sha256_match"])
+            self.assertTrue(doc["page_count_match"])
+            self.assertTrue(doc["file_size_match"])
+            self.assertEqual(doc["reproducibility_status"], "passed")
+            self.assertTrue(doc["source_page_url"])
+            self.assertTrue(doc["download_url"])
+        for doc in source_docs:
+            self.assertIn("source_page_url", doc)
+            self.assertIn("content_fingerprint", doc)
+
+    def test_metadata_grounding_and_document_metadata_reference_sources(self) -> None:
+        source_ids = {
+            row["source_document_id"]
+            for row in read_jsonl(FINAL / "source_documents.jsonl")
+        }
+        for filename in (
+            "metadata_grounding.jsonl",
+            "metadata_grounding_registry.jsonl",
+            "document_metadata.jsonl",
+        ):
+            rows = read_jsonl(FINAL / filename)
+            self.assertTrue(rows)
+            for row in rows:
+                self.assertIn(row["source_document_id"], source_ids)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,70 @@
+{
+  "legal_research_orchestrator_policy_version": "legal_research_orchestrator_policy_v1",
+  "coverage_states": [
+    "corpus_sufficient_for_direct_answer",
+    "corpus_sufficient_for_limited_answer",
+    "corpus_insufficient_for_final_answer",
+    "corpus_missing_required_law",
+    "corpus_contains_only_general_constitutional_basis",
+    "corpus_contains_current_law",
+    "corpus_contains_historical_law_only",
+    "corpus_contains_source_discrepancy_evidence_only"
+  ],
+  "answer_permissions": [
+    "answer_directly_with_citations",
+    "answer_limited_to_available_corpus",
+    "ask_for_more_facts",
+    "refuse_final_legal_conclusion_due_missing_corpus",
+    "explain_source_discrepancy_only",
+    "provide_general_research_path_without_final_pasals"
+  ],
+  "corpus_map": [
+    {
+      "corpus_family": "UUD",
+      "availability": "available_candidate_stage_source_aligned_embedding_plan_ready",
+      "verified_for_runtime_final_answer": false,
+      "answer_scope": "candidate_stage_policy_evaluation_only"
+    },
+    {
+      "corpus_family": "TAP_MPR",
+      "availability": "future_corpus_not_yet_available",
+      "verified_for_runtime_final_answer": false,
+      "roadmap_order": 2
+    },
+    {
+      "corpus_family": "UU_Priority",
+      "availability": "future_corpus_not_yet_available",
+      "verified_for_runtime_final_answer": false,
+      "roadmap_order": 3,
+      "known_future_items_not_available": [
+        "KUHP",
+        "KUHAP",
+        "UU_ITE",
+        "UU_Pers",
+        "UU_Tipikor",
+        "UU_Ketenagakerjaan",
+        "UU_PDP",
+        "UU_Cipta_Kerja"
+      ]
+    }
+  ],
+  "roadmap": [
+    "UUD_first",
+    "TAP_MPR_next",
+    "UU_Priority_after_UUD_and_TAP_MPR",
+    "legal_graph_grows_gradually_from_verified_corpus",
+    "pdf_grounding_and_bbox_after_retrieval_page_grounding_gates"
+  ],
+  "missing_corpus_policy": {
+    "required_law_missing_means_no_final_legal_conclusion": true,
+    "state_available_general_basis_only_when_supported": true,
+    "declare_missing_required_corpora": true,
+    "provide_general_research_path_without_final_pasals_when_useful": true,
+    "never_pretend_corpus_coverage_is_complete": true
+  },
+  "supported_current_corpus_count": 1,
+  "future_corpus_family_count": 2,
+  "candidate_only": true,
+  "policy_only": true,
+  "not_legal_grade_note": "Legal Research Orchestrator policy candidate only; not legal-grade verified and not approved for runtime retrieval, embeddings, vector DB, graph DB, page grounding, bbox, or final legal units."
+}

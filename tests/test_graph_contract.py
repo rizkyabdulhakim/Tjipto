@@ -35,6 +35,37 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         for row in rows:
             self.assertIn(row["source_document_id"], source_ids)
+            self.assertNotEqual(row["status"], "unresolved_review_required_required")
+
+    def test_validation_artifacts_resolve_refs(self) -> None:
+        source_ids = {
+            row["source_document_id"]
+            for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")
+        }
+        chunk_ids = {
+            row["chunk_id"]
+            for row in read_jsonl(ROOT / "data/final/uud/chunks.jsonl")
+        }
+        unit_ids = {
+            row["legal_unit_id"]
+            for row in read_jsonl(ROOT / "data/final/uud/legal_units.jsonl")
+        }
+        alignment = read_jsonl(ROOT / "data/final/uud/validation_alignment_results.jsonl")
+        self.assertEqual(len(alignment), 610)
+        for row in alignment:
+            if row.get("chunk_id"):
+                self.assertIn(row["chunk_id"], chunk_ids)
+            if row.get("legal_unit_id"):
+                self.assertIn(row["legal_unit_id"], unit_ids)
+            if row.get("source_document_id"):
+                self.assertIn(row["source_document_id"], source_ids)
+        exceptions = read_jsonl(ROOT / "data/final/uud/validation_exceptions.jsonl")
+        self.assertEqual(len(exceptions), 19)
+        for row in exceptions:
+            if row.get("source_document_id"):
+                self.assertIn(row["source_document_id"], source_ids)
+            if row.get("chunk_id"):
+                self.assertIn(row["chunk_id"], chunk_ids)
 
     def test_metadata_graph_edges_exclude_source_role_level_amends(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/metadata_graph_edges.jsonl")
