@@ -9,6 +9,7 @@ import unittest
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.graph.store import GraphStore
+from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.service import LegalRuntimeService
@@ -24,12 +25,19 @@ class RuntimeContractTest(unittest.TestCase):
     def test_search_citation_and_viewer_work(self) -> None:
         search = self.service.search("uud", "negara hukum", limit=3)
         self.assertEqual(search["status"], "found")
+        self.assertEqual(search["route"], "bm25")
         self.assertTrue(search["matches"])
 
         citation = self.service.citation("uud", "Pasal 1 ayat (3)")
         self.assertEqual(citation["status"], "found")
+        self.assertEqual(citation["route"], "exact")
         evidence = citation["matches"][0]
         self.assertEqual(evidence["source_role"], "current_consolidated")
+
+        non_citation = self.service.citation("uud", "negara hukum")
+        self.assertEqual(non_citation["status"], "citation_not_found")
+        self.assertEqual(non_citation["route"], "citation_not_found")
+        self.assertFalse(non_citation["matches"])
 
         viewer = self.service.viewer("uud", evidence["evidence_id"])
         self.assertEqual(viewer["status"], "viewer_payload_ready")
@@ -151,7 +159,14 @@ class RuntimeContractTest(unittest.TestCase):
         bm25 = route_retrieval("uud", "negara hukum", store, limit=2)
         self.assertEqual(bm25["status"], "found")
         self.assertEqual(bm25["route"], "bm25")
+        self.assertEqual(bm25["reason"], None)
         self.assertLessEqual(len(bm25["matches"]), 2)
+
+        dense = route_retrieval("uud", "negara hukum", store, route="dense")
+        self.assertEqual(dense["status"], "dense_unavailable")
+        self.assertEqual(dense["route"], "dense_unavailable")
+        self.assertEqual(dense["reason"], "not_configured")
+        self.assertEqual(dense["matches"], ())
 
         no_results = route_retrieval("uud", "zyxqv unsupported legal relation", store)
         self.assertEqual(no_results["status"], "no_results")
@@ -164,6 +179,15 @@ class RuntimeContractTest(unittest.TestCase):
         unsupported = route_retrieval("unknown", "Pasal 1", None)
         self.assertEqual(unsupported["status"], "unsupported_corpus")
         self.assertEqual(unsupported["route"], "unsupported_corpus")
+
+    def test_dense_readiness_does_not_fake_matches(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        store = EvidenceStore(config)
+        result = dense_search(store, "negara hukum")
+        self.assertEqual(result["status"], "dense_unavailable")
+        self.assertEqual(result["route"], "dense_unavailable")
+        self.assertEqual(result["reason"], "not_configured")
+        self.assertEqual(result["matches"], ())
 
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(

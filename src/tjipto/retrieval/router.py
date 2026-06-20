@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tjipto.evidence.store import EvidenceStore
+from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.service import RetrievalService
 
@@ -12,6 +13,7 @@ def route_retrieval(
     *,
     limit: int = 10,
     allow_bm25_after_citation_miss: bool = False,
+    route: str = "auto",
 ) -> dict:
     normalized = normalize_query(query)
     corpus_supported = store is not None
@@ -43,6 +45,8 @@ def route_retrieval(
             "route": "insufficient_corpus",
             "reason": "out_of_corpus",
         }
+    if route == "dense":
+        return envelope | dense_search(store, normalized["normalized_query"], limit)
 
     service = RetrievalService(store)
     if intent["intent"] == "exact_citation":

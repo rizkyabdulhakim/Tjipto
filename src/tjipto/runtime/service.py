@@ -35,6 +35,13 @@ class LegalRuntimeService:
         if store is None:
             return route_retrieval(corpus_id, query, None)
         routed = route_retrieval(corpus_id, query, store)
+        if routed["intent"] != "exact_citation":
+            return routed | {
+                "status": "citation_not_found",
+                "route": "citation_not_found",
+                "matches": (),
+                "reason": "not_a_citation",
+            }
         matches = RetrievalService(store).citation(routed["normalized_query"], source_role)
         return routed | {"status": "found" if matches else "citation_not_found", "matches": tuple(matches)}
 
