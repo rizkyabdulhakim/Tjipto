@@ -131,10 +131,10 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["reason"], "citation_not_found")
             self.assertFalse(result["evidence"])
 
-        insufficient = self.service.ask("uud", "aturan KUHP tentang pencurian")
-        self.assertEqual(insufficient["status"], "insufficient_corpus")
-        self.assertEqual(insufficient["route"], "insufficient_corpus")
-        self.assertEqual(insufficient["required_corpus"], "KUHP")
+        domain_query = self.service.ask("uud", "aturan KUHP tentang pencurian")
+        self.assertEqual(domain_query["status"], "limited_answer")
+        self.assertEqual(domain_query["route"], "bm25")
+        self.assertIsNone(domain_query["required_corpus"])
 
         unsupported = self.service.ask("unknown", "Pasal 1")
         self.assertEqual(unsupported["status"], "unsupported_corpus")
@@ -147,39 +147,45 @@ class RuntimeContractTest(unittest.TestCase):
 
         self.assertEqual(classify_intent("uud", "Pasal 1 ayat (3)")["intent"], "exact_citation")
         self.assertEqual(classify_intent("uud", "negara hukum")["intent"], "natural_language")
-        self.assertEqual(classify_intent("uud", "aturan KUHP tentang pencurian")["intent"], "out_of_corpus")
+        self.assertEqual(classify_intent("uud", "aturan KUHP tentang pencurian")["intent"], "natural_language")
         self.assertEqual(
             classify_intent("unknown", "Pasal 1", corpus_supported=False)["intent"],
             "unsupported_corpus",
         )
 
-    def test_runtime_coverage_classifies_non_uud_domains_safely(self) -> None:
+    def test_runtime_coverage_searches_uud_before_missing_corpus_fallback(self) -> None:
         for query in (
             "aturan KUHP tentang pencurian",
+            "UU Pers tentang wartawan",
+            "Permen tentang pendidikan",
+            "hukum adat",
+            "hak pendidikan",
+            "lingkungan hidup",
+            "persatuan Indonesia",
+            "hak asasi manusia",
+            "makna negara hukum",
+            "Majelis Permusyawaratan Rakyat",
+            "hak untuk bekerja",
+            "pekerjaan dan penghidupan yang layak",
             "hak data pribadi warga",
-            "wartawan meliput demonstrasi",
-            "penangkapan polisi",
             "aturan pemilu untuk caleg",
             "PHK dan upah buruh",
             "sengketa waris keluarga",
         ):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "insufficient_corpus", query)
-            self.assertTrue(result["required_corpus"], query)
-            self.assertFalse(result["evidence"])
+            self.assertEqual(result["status"], "limited_answer", query)
+            self.assertEqual(result["route"], "bm25", query)
+            self.assertIsNone(result["required_corpus"], query)
+            self.assertTrue(result["evidence"], query)
 
-        limited = self.service.ask("uud", "dasar konstitusional hak privasi data pribadi")
-        self.assertEqual(limited["status"], "limited_answer")
-        self.assertTrue(limited["coverage_warning"])
-        self.assertEqual(limited["missing_corpus"], "UU PDP")
-        self.assertEqual(limited["answer_scope"], "limited_to_uud_constitutional_basis")
-        self.assertTrue(limited["no_final_sectoral_legal_conclusion"])
-        self.assertTrue(limited["evidence"])
+        for query in ("wartawan meliput demonstrasi", "penangkapan polisi"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "no_results", query)
+            self.assertEqual(result["route"], "no_results", query)
+            self.assertIsNone(result["required_corpus"], query)
+            self.assertFalse(result["evidence"], query)
 
-        self.assertEqual(
-            classify_coverage("uud", "aturan izin usaha")["required_corpus"],
-            "unknown_non_uud_legal_domain",
-        )
+        self.assertIsNone(classify_coverage("uud", "aturan izin usaha")["required_corpus"])
 
     def test_retrieval_router_envelope_routes(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -207,9 +213,10 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(no_results["status"], "no_results")
         self.assertEqual(no_results["intent"], "no_results")
 
-        missing = route_retrieval("uud", "aturan KUHP tentang pencurian", store)
-        self.assertEqual(missing["status"], "insufficient_corpus")
-        self.assertEqual(missing["required_corpus"], "KUHP")
+        domain_query = route_retrieval("uud", "aturan KUHP tentang pencurian", store)
+        self.assertEqual(domain_query["status"], "found")
+        self.assertEqual(domain_query["route"], "bm25")
+        self.assertIsNone(domain_query["required_corpus"])
 
         unsupported = route_retrieval("unknown", "Pasal 1", None)
         self.assertEqual(unsupported["status"], "unsupported_corpus")
@@ -551,7 +558,7 @@ class RuntimeContractTest(unittest.TestCase):
     def test_failure_ask_context_pack_has_no_final_payloads(self) -> None:
         for result in (
             self.service.ask("uud", "Pasal 999"),
-            self.service.ask("uud", "aturan KUHP tentang pencurian"),
+            self.service.ask("uud", "wartawan meliput demonstrasi"),
             self.service.ask("unknown", "Pasal 1"),
         ):
             self.assertEqual(result["answer_type"], "none")

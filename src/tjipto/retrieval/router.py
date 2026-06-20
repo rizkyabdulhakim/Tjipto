@@ -53,12 +53,6 @@ def route_retrieval(
             "route": "unsupported_corpus",
             "reason": "unsupported_corpus",
         }
-    if intent["intent"] == "out_of_corpus":
-        return envelope | {
-            "status": "insufficient_corpus",
-            "route": "insufficient_corpus",
-            "reason": "out_of_corpus",
-        }
     if filters.get("_error"):
         return envelope | {
             "status": "invalid_filter",

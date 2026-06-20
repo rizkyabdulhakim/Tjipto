@@ -14,7 +14,7 @@
     "answer_directly_with_citations",
     "answer_limited_to_available_corpus",
     "ask_for_more_facts",
-    "refuse_final_legal_conclusion_due_missing_corpus",
+    "fallback_after_retrieval_when_evidence_or_database_unavailable",
     "explain_source_discrepancy_only",
     "provide_general_research_path_without_final_pasals"
   ],
@@ -56,9 +56,9 @@
     "pdf_grounding_and_bbox_after_retrieval_page_grounding_gates"
   ],
   "missing_corpus_policy": {
-    "required_law_missing_means_no_final_legal_conclusion": true,
+    "retrieval_must_check_verified_uud_before_missing_corpus_fallback": true,
     "state_available_general_basis_only_when_supported": true,
-    "declare_missing_required_corpora": true,
+    "declare_missing_required_corpora_only_after_no_verified_evidence": true,
     "provide_general_research_path_without_final_pasals_when_useful": true,
     "never_pretend_corpus_coverage_is_complete": true
   },

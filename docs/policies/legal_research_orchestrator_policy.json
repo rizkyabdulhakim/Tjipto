@@ -5,7 +5,7 @@
     "rigid_legal_query_router_rejected": true,
     "user_may_ask_anything": true,
     "system_must_answer_only_from_verified_corpus_evidence": true,
-    "missing_required_corpus_must_be_declared": true,
+    "missing_required_corpus_must_be_declared_only_after_retrieval_fails": true,
     "no_final_answer_may_rely_on_unverified_or_missing_corpus": true,
     "no_complete_corpus_coverage_claim": true
   },
@@ -38,7 +38,7 @@
       "digital_law_question",
       "source_discrepancy_question",
       "historical_law_question",
-      "out_of_corpus_question",
+      "evidence_insufficient_question",
       "general_legal_research_question"
     ],
     "hypotheses_are_internal_not_user_facing_modes": true
@@ -55,14 +55,14 @@
       "behavior": "answer_from_current_consolidated_uud_with_source_citation"
     },
     {
-      "pattern": "fact_pattern_issue_spotting_with_missing_corpus",
+      "pattern": "fact_pattern_issue_spotting_with_evidence_first_fallback",
       "example": "Wartawan dibungkam polisi saat meliput pungli, pelanggaran apa?",
       "behavior": "state_issue_hypotheses_and_limit_answer_to_available_uud_evidence"
     },
     {
-      "pattern": "criminal_law_query_with_missing_kuhp",
+      "pattern": "criminal_law_query_after_no_verified_uud_evidence",
       "example": "Hukuman pembunuhan berapa?",
-      "behavior": "refuse_final_pasal_or_penalty_due_missing_verified_kuhp_corpus"
+      "behavior": "search_verified_uud_first_then_refuse_final_pasal_or_penalty_if_no_verified_evidence_supports_it"
     },
     {
       "pattern": "source_discrepancy",
@@ -105,7 +105,7 @@
       "no_source_typo_canonical_leakage",
       "no_parent_context_leakage_as_default_answer",
       "no_unsupported_final_conclusion",
-      "missing_corpus_explicitly_declared"
+      "missing_corpus_declared_only_after_retrieval_fails"
     ],
     "insufficient_evidence_behavior": "answer_limited_to_available_corpus_or_refuse_final_legal_conclusion",
     "implementation_status": "implemented_for_uud_runtime_baseline"

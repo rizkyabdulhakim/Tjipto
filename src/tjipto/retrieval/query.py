@@ -30,9 +30,6 @@ def classify_intent(corpus_id: str, query: str, *, corpus_supported: bool = True
     if not corpus_supported:
         return {"intent": "unsupported_corpus", "required_corpus": None}
     coverage = classify_coverage(corpus_id, query)
-    missing = coverage["required_corpus"] if not coverage["coverage_warning"] else None
-    if missing:
-        return {"intent": "out_of_corpus", "required_corpus": missing, "coverage": coverage}
     pasal, _ = parse_citation(query)
     return {
         "intent": "exact_citation" if pasal else "natural_language",

@@ -79,6 +79,7 @@ class LegalRuntimeService:
             context_pack = empty_context_pack(routed.get("reason") or routed["status"])
             return routed | {
                 "answer_type": "none",
+                "answer": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
                 "context_pack": context_pack,
                 "evidence": (),
                 "citations": (),
@@ -90,6 +91,7 @@ class LegalRuntimeService:
             return routed | {
                 "status": "insufficient_evidence",
                 "answer_type": "none",
+                "answer": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
                 "context_pack": context_pack,
                 "evidence": (),
                 "citations": (),
