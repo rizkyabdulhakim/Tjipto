@@ -426,7 +426,7 @@
         "reviewed_exception": true,
         "reviewed_exception_reason": "PyMuPDF textbox includes a colon after 'mengenai' that is not present in the committed final evidence rectangle text; source artifact text is preserved and the mismatch is explicitly tracked.",
         "reviewed_exception_unit": "Pasal 22D ayat (3)",
-        "source_pdf_path": "data/sources/constitutional/uud/bpk/UUD45_SatuNaskah.pdf",
+        "source_pdf_path": "data/sources/uud/UUD45_SatuNaskah.pdf",
         "stored_text": "undang­undang mengenai otonomi daerah, pembentukan, pemekaran dan",
         "unit_label": "(3)"
       }

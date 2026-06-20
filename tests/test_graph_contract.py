@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
+import re
+import unicodedata
 import unittest
 
 from tjipto.corpora.adapter import config_for
+from tjipto.core.manifest import file_sha256
 from tjipto.graph.store import GraphStore
 from tjipto.core.manifest import read_jsonl
 
@@ -88,6 +93,137 @@ class GraphContractTest(unittest.TestCase):
         for row in amends:
             self.assertEqual(row["status"], "not_promoted_source_role_level_only")
             self.assertFalse(row["runtime_loadable"])
+
+    def test_uud_ingestion_artifacts_are_consistent(self) -> None:
+        import fitz
+
+        final = ROOT / "data/final/uud"
+        stale_path = "data/sources/constitutional/uud/bpk"
+
+        for path in final.iterdir():
+            if path.is_file():
+                self.assertNotIn(stale_path, path.read_text(encoding="utf-8"), path.name)
+
+        manifest = json.loads((final / "manifest.json").read_text(encoding="utf-8"))
+        for rel, expected in manifest["files"].items():
+            path = final / rel
+            self.assertEqual(path.stat().st_size, expected["bytes"], rel)
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected["sha256"], rel)
+
+        source_docs = {
+            row["source_document_id"]: row
+            for row in read_jsonl(final / "source_documents.jsonl")
+        }
+        pdfs = {}
+        pdf_text = {}
+        for source_id, row in source_docs.items():
+            pdf_path = ROOT / row["path"]
+            self.assertTrue(pdf_path.exists(), row["path"])
+            self.assertEqual(file_sha256(pdf_path), row["sha256"])
+            self.assertEqual(pdf_path.stat().st_size, row["file_size"])
+            pdf = fitz.open(pdf_path)
+            pdfs[source_id] = pdf
+            self.assertEqual(pdf.page_count, row["page_count"])
+            pdf_text[source_id] = {
+                page_number: self._compact_text(pdf[page_number - 1].get_text())
+                for page_number in range(1, pdf.page_count + 1)
+            }
+
+        pages = read_jsonl(final / "pages.jsonl")
+        page_keys = {(row["source_document_id"], row["page_number"]) for row in pages}
+        page_text = {}
+        for row in pages:
+            key = (row["source_document_id"], row["page_number"])
+            self.assertIn(row["source_document_id"], source_docs)
+            self.assertLessEqual(row["page_number"], pdfs[row["source_document_id"]].page_count)
+            page_text[key] = self._compact_text(row["text"])
+            self.assertIn(page_text[key], pdf_text[row["source_document_id"]][row["page_number"]])
+
+        legal_units = {
+            row["legal_unit_id"]: row
+            for row in read_jsonl(final / "legal_units.jsonl")
+        }
+        for row in legal_units.values():
+            self.assertIn(row["source_document_id"], source_docs)
+            for parent_id in row["parent_legal_unit_ids"]:
+                self.assertIn(parent_id, legal_units)
+
+        chunks = read_jsonl(final / "chunks.jsonl")
+        exception_chunk_ids = {
+            row["chunk_id"]
+            for row in read_jsonl(final / "validation_exceptions.jsonl")
+            if row.get("type") == "pdf_text_layer_noise_review"
+        }
+        chunk_by_legal_unit = {}
+        for row in chunks:
+            self.assertIn(row["legal_unit_id"], legal_units)
+            unit_text = self._compact_text(legal_units[row["legal_unit_id"]]["text"])
+            chunk_text = self._compact_text(row["text"])
+            self.assertTrue(chunk_text in unit_text or row["status"] == "parent_context_only")
+            chunk_by_legal_unit.setdefault(row["legal_unit_id"], set()).add(row["chunk_id"])
+
+        bboxes = {
+            row["bbox_id"]: row
+            for row in read_jsonl(final / "bbox_registry.jsonl")
+        }
+        evidence = {
+            row["evidence_id"]: row
+            for row in read_jsonl(final / "evidence_registry.jsonl")
+        }
+        for row in bboxes.values():
+            self.assertEqual(row["status"], "accepted")
+            self.assertIn(row["evidence_id"], evidence)
+            self.assertIn(row["source_document_id"], source_docs)
+            self.assertIn((row["source_document_id"], row["page_number"]), page_keys)
+            rect = pdfs[row["source_document_id"]][row["page_number"] - 1].rect
+            self.assertLessEqual(0, row["x0"])
+            self.assertLessEqual(0, row["y0"])
+            self.assertLessEqual(row["x1"], rect.width)
+            self.assertLessEqual(row["y1"], rect.height)
+
+        for row in evidence.values():
+            self.assertEqual(row["status"], "final")
+            self.assertIn(row["source_document_id"], source_docs)
+            self.assertIn(row["legal_unit_id"], legal_units)
+            for page_number in row["page_numbers"]:
+                self.assertIn((row["source_document_id"], page_number), page_keys)
+            self.assertTrue(set(row["bbox_refs"]) <= bboxes.keys())
+            quote = self._compact_text(row["quoted_text"])
+            pages_text = "".join(
+                page_text[(row["source_document_id"], page_number)]
+                for page_number in row["page_numbers"]
+            )
+            exception_ids = chunk_by_legal_unit.get(row["legal_unit_id"], set()) & exception_chunk_ids
+            self.assertTrue(quote in pages_text or exception_ids, row["evidence_id"])
+
+        metadata_bbox_ids = {
+            row["bbox_id"]
+            for row in read_jsonl(final / "metadata_grounding_registry.jsonl")
+        }
+        for row in read_jsonl(final / "metadata_grounding.jsonl"):
+            self.assertIn(row["source_document_id"], source_docs)
+            for page_number in row["page_numbers"]:
+                self.assertIn((row["source_document_id"], page_number), page_keys)
+            self.assertTrue(set(row["bbox_refs"]) <= metadata_bbox_ids)
+            quote = self._compact_text(row["quoted_text"])
+            pages_text = "".join(
+                page_text[(row["source_document_id"], page_number)]
+                for page_number in row["page_numbers"]
+            )
+            self.assertIn(quote, pages_text)
+
+        graph_nodes = read_jsonl(final / "graph_nodes.jsonl")
+        graph_node_ids = {row["node_id"] for row in graph_nodes}
+        for row in graph_nodes:
+            if row.get("source_pdf_path"):
+                self.assertTrue((ROOT / row["source_pdf_path"]).exists(), row["node_id"])
+        for edge in read_jsonl(final / "graph_edges.jsonl"):
+            self.assertIn(edge["source_id"], graph_node_ids, edge["edge_id"])
+            self.assertIn(edge["target_id"], graph_node_ids, edge["edge_id"])
+
+    def _compact_text(self, text: str) -> str:
+        text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "")
+        return "".join(re.findall(r"\w+", text.casefold()))
 
 
 if __name__ == "__main__":

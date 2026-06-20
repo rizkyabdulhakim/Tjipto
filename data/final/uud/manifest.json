@@ -59,8 +59,8 @@
       "sha256": "e777e3935e9e8665c9966838cb7cf691830dd3f2cfced21c7baaa71f23915d07"
     },
     "graph_nodes.jsonl": {
-      "bytes": 850199,
-      "sha256": "d4e33915723a6956754bcdeb934aa15b0d7535fa5013a6d9f12ff681e9457e56"
+      "bytes": 849002,
+      "sha256": "1f0d7f7b3e232d37d51218fe58948e88e4368484e051133a5cdfe7e80e04ce9a"
     },
     "legal_units.jsonl": {
       "bytes": 481799,
@@ -115,8 +115,8 @@
       "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 17949,
-      "sha256": "801c49e3f0515bbca10d42bbb1475dee79170180292dd136e496ddd4c27751f9"
+      "bytes": 17930,
+      "sha256": "717b3035c04be4377e99d8868eb53d92fa2815ce84dea1d69d1e2ff9fbc65115"
     }
   },
   "fixtures": {
