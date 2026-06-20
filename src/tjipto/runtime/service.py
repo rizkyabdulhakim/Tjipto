@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tjipto.corpora.adapter import config_for
+from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.service import RetrievalService
 from tjipto.runtime.viewer import viewer_payload
@@ -10,10 +10,10 @@ from tjipto.runtime.viewer import viewer_payload
 
 class LegalRuntimeService:
     def __init__(self, repo_root: Path | None = None):
-        self.repo_root = repo_root
+        self.registry = CorpusRegistry(repo_root)
 
     def _store(self, corpus_id: str):
-        config = config_for(corpus_id, self.repo_root)
+        config = self.registry.resolve(corpus_id)
         if config is None:
             return None
         return EvidenceStore(config)

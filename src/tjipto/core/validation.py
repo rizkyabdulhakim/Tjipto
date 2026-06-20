@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from .manifest import read_jsonl
+from .config import CorpusConfig
+from .manifest import read_json
 
 
 def validate_counts(final_dir) -> dict[str, int]:
+    manifest_path = final_dir / "manifest.json"
+    manifest = read_json(manifest_path)
+    config = CorpusConfig(manifest["corpus_id"], manifest_path, manifest)
     return {
-        "source_documents": len(read_jsonl(final_dir / "source_documents.jsonl")),
-        "evidence_records": len(read_jsonl(final_dir / "evidence_registry.jsonl")),
-        "bbox_records": len(read_jsonl(final_dir / "bbox_registry.jsonl")),
-        "graph_nodes": len(read_jsonl(final_dir / "graph_nodes.jsonl")),
-        "graph_edges": len(read_jsonl(final_dir / "graph_edges.jsonl")),
+        "source_documents": len(config.jsonl("source_documents")),
+        "evidence_records": len(config.jsonl("evidence")),
+        "bbox_records": len(config.jsonl("bbox")),
+        "graph_nodes": len(config.jsonl("graph_nodes")),
+        "graph_edges": len(config.jsonl("graph_edges")),
     }

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
+from tjipto.corpora.registry import CorpusRegistry
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -79,6 +80,39 @@ class RuntimeContractTest(unittest.TestCase):
             self.service.search("unknown", "Pasal 1")["status"],
             "unsupported_corpus",
         )
+
+    def test_corpus_id_resolves_through_registry(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        self.assertIsNotNone(config)
+        self.assertEqual(config.corpus_id, "uud")
+
+    def test_artifact_paths_resolve_through_manifest_keys(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        self.assertEqual(len(config.jsonl("evidence")), 438)
+        self.assertEqual(len(config.jsonl("bbox")), 1388)
+        self.assertEqual(len(config.jsonl("graph_nodes")), 2339)
+
+    def test_runtime_services_and_stores_do_not_hardcode_artifacts(self) -> None:
+        checked_roots = (
+            ROOT / "src/tjipto/runtime",
+            ROOT / "src/tjipto/retrieval",
+            ROOT / "src/tjipto/evidence",
+            ROOT / "src/tjipto/graph",
+        )
+        text = "\n".join(
+            path.read_text(encoding="utf-8").casefold()
+            for root in checked_roots
+            for path in root.rglob("*.py")
+        )
+        for forbidden in (
+            "data/final/uud",
+            "data\\final\\uud",
+            "evidence_registry.jsonl",
+            "bbox_registry.jsonl",
+            "graph_nodes.jsonl",
+            "graph_edges.jsonl",
+        ):
+            self.assertNotIn(forbidden, text)
 
 
 if __name__ == "__main__":

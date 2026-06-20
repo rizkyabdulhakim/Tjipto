@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from tjipto.core.manifest import read_jsonl
-
-
 class EvidenceStore:
     def __init__(self, config):
         self.config = config
@@ -12,7 +9,7 @@ class EvidenceStore:
     @property
     def evidence(self) -> list[dict]:
         if self._evidence is None:
-            self._evidence = read_jsonl(self.config.evidence_registry_path)
+            self._evidence = self.config.jsonl("evidence")
         return self._evidence
 
     def get(self, evidence_id: str) -> dict | None:
@@ -21,7 +18,7 @@ class EvidenceStore:
     def bboxes_for(self, evidence_id: str) -> list[dict]:
         if self._bbox_by_evidence is None:
             grouped: dict[str, list[dict]] = {}
-            for row in read_jsonl(self.config.bbox_registry_path):
+            for row in self.config.jsonl("bbox"):
                 grouped.setdefault(row["evidence_id"], []).append(row)
             self._bbox_by_evidence = grouped
         return self._bbox_by_evidence.get(evidence_id, [])
