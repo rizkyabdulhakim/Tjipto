@@ -53,6 +53,8 @@ class GraphContractTest(unittest.TestCase):
         alignment = read_jsonl(ROOT / "data/final/uud/validation_alignment_results.jsonl")
         self.assertEqual(len(alignment), 610)
         for row in alignment:
+            if row.get("legal_unit_id"):
+                self.assertIsNotNone(row.get("source_document_id"))
             if row.get("chunk_id"):
                 self.assertIn(row["chunk_id"], chunk_ids)
             if row.get("legal_unit_id"):

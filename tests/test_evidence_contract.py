@@ -78,6 +78,37 @@ class EvidenceContractTest(unittest.TestCase):
             self.assertTrue(rows)
             for row in rows:
                 self.assertIn(row["source_document_id"], source_ids)
+        grounding = {
+            row["metadata_grounding_id"]: row
+            for row in read_jsonl(FINAL / "metadata_grounding.jsonl")
+        }
+        docs = read_jsonl(FINAL / "document_metadata.jsonl")
+        self.assertEqual(len(docs), 6)
+        for row in docs:
+            for refs in row["grounded_fields"].values():
+                for ref in refs:
+                    self.assertIn(ref, grounding)
+            if row["source_role"].startswith("amendment_"):
+                if row["source_role"] == "amendment_1_historical":
+                    self.assertEqual(row["date"], "19 Oktober 1999")
+                if row["source_role"] == "amendment_2_historical":
+                    self.assertEqual(row["date"], "18 Agustus 2000")
+                if row["source_role"] == "amendment_3_historical":
+                    self.assertEqual(row["date"], "9 November 2001")
+                if row["source_role"] == "amendment_4_historical":
+                    self.assertEqual(row["date"], "10 Agustus 2002")
+                if row["date"]:
+                    quote = grounding[row["grounded_fields"]["date"][0]]["quoted_text"]
+                    self.assertIn(row["date"], quote)
+                    self.assertIn(row["place"], quote)
+                    self.assertIn(row["institution"], quote)
+            if row["source_role"] == "original_historical":
+                self.assertEqual(row["status"], "not_found_in_source")
+                self.assertIsNone(row["official_title"])
+            self.assertIn(
+                row["field_statuses"].get("ln_tln"),
+                {"not_found_in_source", None},
+            )
 
 
 if __name__ == "__main__":

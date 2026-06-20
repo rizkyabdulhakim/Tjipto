@@ -43,6 +43,17 @@ class NoSlopLeakageTest(unittest.TestCase):
         for word in FORBIDDEN:
             self.assertNotIn(word, runtime_text)
         self.assertNotIn("data/processed/constitutional/uud", runtime_text)
+        self.assertNotIn("data/final/uud", runtime_text)
+
+    def test_core_boundary_has_no_runtime_or_corpus_dependency(self) -> None:
+        core_text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (ROOT / "src/tjipto/core").rglob("*.py")
+        ).casefold()
+        self.assertNotIn("tjipto.runtime", core_text)
+        self.assertNotIn("tjipto.retrieval", core_text)
+        self.assertNotIn("tjipto.corpora", core_text)
+        self.assertNotIn("data/final/uud", core_text)
 
     def test_runtime_facing_ids_are_clean(self) -> None:
         checked_files = (
