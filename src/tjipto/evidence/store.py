@@ -4,6 +4,8 @@ class EvidenceStore:
     def __init__(self, config):
         self.config = config
         self._evidence: list[dict] | None = None
+        self._legal_units: list[dict] | None = None
+        self._chunks: list[dict] | None = None
         self._bbox_by_evidence: dict[str, list[dict]] | None = None
 
     @property
@@ -11,6 +13,18 @@ class EvidenceStore:
         if self._evidence is None:
             self._evidence = self.config.jsonl("evidence")
         return self._evidence
+
+    @property
+    def legal_units(self) -> list[dict]:
+        if self._legal_units is None:
+            self._legal_units = self.config.jsonl("legal_units")
+        return self._legal_units
+
+    @property
+    def chunks(self) -> list[dict]:
+        if self._chunks is None:
+            self._chunks = self.config.jsonl("chunks")
+        return self._chunks
 
     def get(self, evidence_id: str) -> dict | None:
         return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)

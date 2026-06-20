@@ -7,12 +7,14 @@ import tempfile
 import unittest
 
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.provenance import validate_corpus_provenance
 from tjipto.evidence.store import EvidenceStore
 from tjipto.graph.store import GraphStore
 from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.metadata import filter_evidence, normalize_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.router import route_retrieval
+from tjipto.retrieval.structured import structured_lookup
 from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
 
@@ -289,6 +291,68 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["route"], "dense_unavailable")
         self.assertEqual(result["reason"], "not_configured")
         self.assertEqual(result["matches"], ())
+
+    def test_provenance_validation_reports_header_stripped_uud_matches(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        report = validate_corpus_provenance(config)
+        self.assertEqual(report["status"], "pass")
+        for key in ("legal_units", "chunks"):
+            self.assertEqual(report[key]["total"], 609)
+            self.assertEqual(report[key]["raw_pdf_match"], 584)
+            self.assertEqual(report[key]["normalized_pdf_match"], 584)
+            self.assertEqual(report[key]["header_stripped_pdf_match"], 609)
+            self.assertEqual(report[key]["needs_review"], 0)
+
+    def test_structured_lookup_is_evidence_and_bbox_backed(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        store = EvidenceStore(config)
+        cases = (
+            ("Pembukaan", "PEMBUKAAN"),
+            ("BAB I", "BAB I"),
+            ("Pasal 1 ayat (3)", "Pasal 1"),
+            ("Aturan Peralihan", "ATURAN PERALIHAN"),
+            ("Aturan Tambahan", "ATURAN TAMBAHAN"),
+        )
+        for query, expected in cases:
+            rows = structured_lookup(store, query, limit=3)
+            self.assertTrue(rows, query)
+            self.assertTrue(all(row["status"] == "final" for row in rows))
+            self.assertTrue(all(store.bboxes_for(row["evidence_id"]) for row in rows))
+            self.assertTrue(any(expected in " ".join(row.get("hierarchy") or row.get("citation", "")) for row in rows))
+
+        filtered = self.service.search(
+            "uud",
+            "Pembukaan",
+            filters={"source_role": "current_consolidated", "temporal_context": "current_consolidated"},
+        )
+        self.assertEqual(filtered["status"], "found")
+        self.assertEqual(filtered["route"], "structured")
+        self.assertTrue(all(row["source_role"] == "current_consolidated" for row in filtered["matches"]))
+
+        class NoBBoxStore:
+            evidence = (
+                {
+                    "evidence_id": "e1",
+                    "status": "final",
+                    "citation": "(1)",
+                    "hierarchy": ["BAB I", "Pasal 1", "(1)"],
+                },
+            )
+
+            def bboxes_for(self, evidence_id):
+                return []
+
+        self.assertEqual(structured_lookup(NoBBoxStore(), "Pasal 1 ayat (1)"), ())
+
+        class UnitBackedStore:
+            evidence = ({"evidence_id": "e2", "legal_unit_id": "lu2", "status": "final", "hierarchy": []},)
+            legal_units = ({"legal_unit_id": "lu2", "unit_label": "Pasal 9", "hierarchy": []},)
+            chunks = ()
+
+            def bboxes_for(self, evidence_id):
+                return [{"bbox_id": "b2"}]
+
+        self.assertEqual(structured_lookup(UnitBackedStore(), "Pasal 9")[0]["evidence_id"], "e2")
 
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(
