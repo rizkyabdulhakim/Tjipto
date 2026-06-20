@@ -21,7 +21,16 @@ class CorpusConfig:
     def artifact_path(self, logical_key: str) -> Path:
         key = ARTIFACT_ALIASES.get(logical_key, logical_key)
         rel = self.manifest[key]
-        return self.manifest_path.parent / rel
+        if not isinstance(rel, str):
+            raise ValueError(f"invalid artifact path:{logical_key}")
+        path = Path(rel)
+        if path.is_absolute():
+            raise ValueError(f"invalid artifact path:{logical_key}")
+        base = self.manifest_path.parent.resolve()
+        resolved = (base / path).resolve()
+        if not resolved.is_relative_to(base):
+            raise ValueError(f"invalid artifact path:{logical_key}")
+        return resolved
 
     def json(self, logical_key: str) -> dict:
         return read_json(self.artifact_path(logical_key))

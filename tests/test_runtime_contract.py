@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import tempfile
 import unittest
 
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.evidence.store import EvidenceStore
+from tjipto.graph.store import GraphStore
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -107,12 +111,110 @@ class RuntimeContractTest(unittest.TestCase):
         for forbidden in (
             "data/final/uud",
             "data\\final\\uud",
+            "data/final/<corpus_id>",
             "evidence_registry.jsonl",
             "bbox_registry.jsonl",
             "graph_nodes.jsonl",
             "graph_edges.jsonl",
+            '"uud"',
         ):
             self.assertNotIn(forbidden, text)
+
+    def test_non_uud_corpus_uses_registry_and_renamed_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data = root / "data"
+            corpus = root / "corpus"
+            data.mkdir()
+            corpus.mkdir()
+            (data / "corpus_registry.json").write_text(
+                json.dumps({"demo": "corpus/manifest.json"}),
+                encoding="utf-8",
+            )
+            (corpus / "proof.rows").write_text(
+                json.dumps({
+                    "evidence_id": "demo_evidence_1",
+                    "citation": "Rule 1",
+                    "quoted_text": "generic corpus resolution",
+                    "hierarchy": [],
+                })
+                + "\n",
+                encoding="utf-8",
+            )
+            (corpus / "boxes.rows").write_text(
+                json.dumps({"evidence_id": "demo_evidence_1", "bbox_id": "box_1"}) + "\n",
+                encoding="utf-8",
+            )
+            (corpus / "nodes.rows").write_text("{}\n{}\n", encoding="utf-8")
+            (corpus / "edges.rows").write_text("{}\n", encoding="utf-8")
+            (corpus / "manifest.json").write_text(
+                json.dumps({
+                    "corpus_id": "demo",
+                    "evidence_registry": "proof.rows",
+                    "bbox_registry": "boxes.rows",
+                    "graph_nodes": "nodes.rows",
+                    "graph_edges": "edges.rows",
+                }),
+                encoding="utf-8",
+            )
+
+            config = CorpusRegistry(root).resolve("demo")
+            self.assertIsNotNone(config)
+            store = EvidenceStore(config)
+            self.assertEqual(store.evidence[0]["evidence_id"], "demo_evidence_1")
+            self.assertEqual(store.bboxes_for("demo_evidence_1")[0]["bbox_id"], "box_1")
+            self.assertEqual(GraphStore(config).counts(), {"nodes": 2, "edges": 1})
+
+    def test_missing_or_invalid_registry_fails_safely(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(
+                LegalRuntimeService(root).search("demo", "x")["status"],
+                "unsupported_corpus",
+            )
+            (root / "data").mkdir()
+            (root / "data/corpus_registry.json").write_text("{", encoding="utf-8")
+            self.assertIsNone(CorpusRegistry(root).resolve("demo"))
+
+    def test_registry_rejects_absolute_and_parent_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            registry = root / "data/corpus_registry.json"
+
+            registry.write_text(
+                json.dumps({"demo": str((root / "manifest.json").resolve())}),
+                encoding="utf-8",
+            )
+            self.assertIsNone(CorpusRegistry(root).resolve("demo"))
+
+            registry.write_text(
+                json.dumps({"demo": "../manifest.json"}),
+                encoding="utf-8",
+            )
+            self.assertIsNone(CorpusRegistry(root).resolve("demo"))
+
+    def test_manifest_rejects_absolute_and_parent_artifact_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data = root / "data"
+            corpus = root / "corpus"
+            data.mkdir()
+            corpus.mkdir()
+            (data / "corpus_registry.json").write_text(
+                json.dumps({"demo": "corpus/manifest.json"}),
+                encoding="utf-8",
+            )
+
+            for artifact_path in (str((root / "outside.rows").resolve()), "../outside.rows"):
+                (corpus / "manifest.json").write_text(
+                    json.dumps({"corpus_id": "demo", "evidence_registry": artifact_path}),
+                    encoding="utf-8",
+                )
+                config = CorpusRegistry(root).resolve("demo")
+                self.assertIsNotNone(config)
+                with self.assertRaises(ValueError):
+                    config.artifact_path("evidence")
 
 
 if __name__ == "__main__":

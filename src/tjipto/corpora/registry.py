@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 from tjipto.core.config import CorpusConfig
 from tjipto.core.manifest import read_json
@@ -12,17 +13,39 @@ class CorpusRegistry:
         self.registry_path = self.repo_root / "data" / "corpus_registry.json"
 
     def resolve(self, corpus_id: str) -> CorpusConfig | None:
-        registry = read_json(self.registry_path)
-        rel = registry.get(corpus_id)
-        if rel is None:
+        try:
+            registry = read_json(self.registry_path)
+        except (OSError, json.JSONDecodeError):
             return None
-        manifest_path = self.repo_root / rel
+        if not isinstance(registry, dict):
+            return None
+        rel = registry.get(corpus_id)
+        if not isinstance(rel, str):
+            return None
+        manifest_path = self._safe_registry_path(rel)
+        if manifest_path is None:
+            return None
         if not manifest_path.exists():
             return None
-        manifest = read_json(manifest_path)
+        try:
+            manifest = read_json(manifest_path)
+        except (OSError, json.JSONDecodeError):
+            return None
+        if not isinstance(manifest, dict):
+            return None
         if manifest.get("corpus_id") != corpus_id:
             return None
         return CorpusConfig(corpus_id, manifest_path, manifest)
+
+    def _safe_registry_path(self, rel: str) -> Path | None:
+        path = Path(rel)
+        if path.is_absolute():
+            return None
+        root = self.repo_root.resolve()
+        resolved = (root / path).resolve()
+        if not resolved.is_relative_to(root):
+            return None
+        return resolved
 
 
 def require_corpus(corpus_id: str, repo_root: Path | None = None):
