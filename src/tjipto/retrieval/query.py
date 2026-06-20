@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from tjipto.corpora.coverage import required_missing_corpus
+from tjipto.corpora.coverage import classify_coverage
 from tjipto.evidence.citation import parse_citation
 
 
@@ -29,11 +29,13 @@ def normalize_query(query: str) -> dict:
 def classify_intent(corpus_id: str, query: str, *, corpus_supported: bool = True) -> dict:
     if not corpus_supported:
         return {"intent": "unsupported_corpus", "required_corpus": None}
-    missing = required_missing_corpus(corpus_id, query)
+    coverage = classify_coverage(corpus_id, query)
+    missing = coverage["required_corpus"] if not coverage["coverage_warning"] else None
     if missing:
-        return {"intent": "out_of_corpus", "required_corpus": missing}
+        return {"intent": "out_of_corpus", "required_corpus": missing, "coverage": coverage}
     pasal, _ = parse_citation(query)
     return {
         "intent": "exact_citation" if pasal else "natural_language",
         "required_corpus": None,
+        "coverage": coverage,
     }

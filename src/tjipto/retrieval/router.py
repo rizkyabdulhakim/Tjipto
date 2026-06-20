@@ -40,6 +40,12 @@ def route_retrieval(
         "required_corpus": intent["required_corpus"],
         "metadata_filters": applied_filters,
         "applied_filters": applied_filters,
+        "coverage_warning": intent.get("coverage", {}).get("coverage_warning"),
+        "missing_corpus": intent.get("coverage", {}).get("missing_corpus"),
+        "answer_scope": intent.get("coverage", {}).get("answer_scope"),
+        "no_final_sectoral_legal_conclusion": intent.get("coverage", {}).get(
+            "no_final_sectoral_legal_conclusion"
+        ),
     }
     if store is None:
         return envelope | {

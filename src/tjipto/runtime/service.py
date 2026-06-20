@@ -52,7 +52,16 @@ class LegalRuntimeService:
                 "matches": (),
                 "reason": "not_a_citation",
             }
-        return routed | {"status": "found" if routed["matches"] else routed["status"]}
+        if not routed["matches"]:
+            return routed | {"status": routed["status"]}
+        context_pack = assemble_context_pack(store, routed["matches"])
+        return routed | {
+            "status": "found",
+            "context_pack": context_pack,
+            "citation_payloads": context_pack["citation_payloads"],
+            "viewer_refs": context_pack["viewer_refs"],
+            "validation_reasons": context_pack["validation_reasons"],
+        }
 
     def viewer(self, corpus_id: str, evidence_id: str) -> dict:
         store = self._store(corpus_id)

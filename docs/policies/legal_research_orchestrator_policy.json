@@ -94,7 +94,7 @@
       "inactive_source_typo_reference_not_canonical_answer_evidence": true,
       "retrieved_evidence_must_preserve_source_url_pdf_url_page_line_sha256_hierarchy": true
     },
-    "implementation_status": "policy_only_not_implemented"
+    "implementation_status": "implemented_for_uud_runtime_baseline"
   },
   "evidence_sufficiency_gate": {
     "required_checks": [
@@ -108,7 +108,7 @@
       "missing_corpus_explicitly_declared"
     ],
     "insufficient_evidence_behavior": "answer_limited_to_available_corpus_or_refuse_final_legal_conclusion",
-    "implementation_status": "future_pre_answer_gate_policy_only"
+    "implementation_status": "implemented_for_uud_runtime_baseline"
   },
   "pdf_grounding_bbox_readiness_policy": {
     "pdf_grounding_requires_successful_retrieval_evaluation_first": true,
@@ -117,10 +117,10 @@
     "source_typo_reference_requires_separate_span_grounding_task_before_bbox": true,
     "no_bbox_from_unverified_retrieval": true,
     "ui_highlight_must_not_imply_legal_validity_beyond_source_evidence": true,
-    "implementation_status": "future_stage_policy_only"
+    "implementation_status": "implemented_for_uud_runtime_baseline"
   },
   "external_research_status": "not_performed_not_required_repo_evidence_sufficient",
-  "candidate_only": true,
-  "policy_only": true,
-  "not_legal_grade_note": "Legal Research Orchestrator policy candidate only; not legal-grade verified and not approved for runtime retrieval, embeddings, vector DB, graph DB, page grounding, bbox, or final legal units."
+  "runtime_policy_status": "implemented_for_uud_runtime_baseline",
+  "non_uud_corpora_available": false,
+  "not_legal_grade_note": "UUD is verified for the current runtime baseline. Non-UUD corpora are not yet available. This does not claim full legal-grade production coverage."
 }

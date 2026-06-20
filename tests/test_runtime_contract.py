@@ -6,6 +6,7 @@ import os
 import tempfile
 import unittest
 
+from tjipto.corpora.coverage import classify_coverage
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.provenance import validate_corpus_provenance
 from tjipto.evidence.store import EvidenceStore
@@ -133,7 +134,7 @@ class RuntimeContractTest(unittest.TestCase):
         insufficient = self.service.ask("uud", "aturan KUHP tentang pencurian")
         self.assertEqual(insufficient["status"], "insufficient_corpus")
         self.assertEqual(insufficient["route"], "insufficient_corpus")
-        self.assertEqual(insufficient["required_corpus"], "non_uud")
+        self.assertEqual(insufficient["required_corpus"], "KUHP")
 
         unsupported = self.service.ask("unknown", "Pasal 1")
         self.assertEqual(unsupported["status"], "unsupported_corpus")
@@ -150,6 +151,34 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(
             classify_intent("unknown", "Pasal 1", corpus_supported=False)["intent"],
             "unsupported_corpus",
+        )
+
+    def test_runtime_coverage_classifies_non_uud_domains_safely(self) -> None:
+        for query in (
+            "aturan KUHP tentang pencurian",
+            "hak data pribadi warga",
+            "wartawan meliput demonstrasi",
+            "penangkapan polisi",
+            "aturan pemilu untuk caleg",
+            "PHK dan upah buruh",
+            "sengketa waris keluarga",
+        ):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "insufficient_corpus", query)
+            self.assertTrue(result["required_corpus"], query)
+            self.assertFalse(result["evidence"])
+
+        limited = self.service.ask("uud", "dasar konstitusional hak privasi data pribadi")
+        self.assertEqual(limited["status"], "limited_answer")
+        self.assertTrue(limited["coverage_warning"])
+        self.assertEqual(limited["missing_corpus"], "UU PDP")
+        self.assertEqual(limited["answer_scope"], "limited_to_uud_constitutional_basis")
+        self.assertTrue(limited["no_final_sectoral_legal_conclusion"])
+        self.assertTrue(limited["evidence"])
+
+        self.assertEqual(
+            classify_coverage("uud", "aturan izin usaha")["required_corpus"],
+            "unknown_non_uud_legal_domain",
         )
 
     def test_retrieval_router_envelope_routes(self) -> None:
@@ -180,7 +209,7 @@ class RuntimeContractTest(unittest.TestCase):
 
         missing = route_retrieval("uud", "aturan KUHP tentang pencurian", store)
         self.assertEqual(missing["status"], "insufficient_corpus")
-        self.assertEqual(missing["required_corpus"], "non_uud")
+        self.assertEqual(missing["required_corpus"], "KUHP")
 
         unsupported = route_retrieval("unknown", "Pasal 1", None)
         self.assertEqual(unsupported["status"], "unsupported_corpus")
@@ -458,6 +487,31 @@ class RuntimeContractTest(unittest.TestCase):
 
         search = self.service.search("uud", "Pasal 1 ayat (3)", limit=5)
         self.assertTrue(any(row["route_sources"] == ("graph",) for row in search["matches"]))
+
+    def test_citation_response_exposes_public_payloads(self) -> None:
+        result = self.service.citation("uud", "Pasal 1 ayat (3)")
+        self.assertEqual(result["status"], "found")
+        self.assertTrue(result["matches"])
+        self.assertTrue(result["citation_payloads"])
+        self.assertTrue(result["viewer_refs"])
+        self.assertTrue(result["validation_reasons"])
+        self.assertEqual(result["citation_payloads"][0]["evidence_status"], "final")
+        self.assertTrue(result["viewer_refs"][0]["can_resolve"])
+        self.assertEqual(result["matches"][0]["evidence_id"], result["citation_payloads"][0]["evidence_id"])
+
+    def test_policy_docs_match_runtime_truth(self) -> None:
+        policy_paths = (
+            ROOT / "docs/policies/corpus_coverage_policy.json",
+            ROOT / "docs/policies/legal_research_orchestrator_policy.json",
+        )
+        for path in policy_paths:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            text = json.dumps(data).casefold()
+            self.assertNotIn("candidate only", text)
+            self.assertNotIn("policy_only", text)
+            self.assertEqual(data["runtime_policy_status"], "implemented_for_uud_runtime_baseline")
+            self.assertFalse(data["non_uud_corpora_available"])
+            self.assertIn("not claim full legal-grade production", data["not_legal_grade_note"])
 
     def test_answer_context_validator_explains_inclusion_and_exclusion(self) -> None:
         class Store:

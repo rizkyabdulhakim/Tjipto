@@ -21,9 +21,9 @@
   "corpus_map": [
     {
       "corpus_family": "UUD",
-      "availability": "available_candidate_stage_source_aligned_embedding_plan_ready",
-      "verified_for_runtime_final_answer": false,
-      "answer_scope": "candidate_stage_policy_evaluation_only"
+      "availability": "verified_runtime_baseline_available",
+      "verified_for_runtime_final_answer": true,
+      "answer_scope": "uud_evidence_grounded_runtime_baseline"
     },
     {
       "corpus_family": "TAP_MPR",
@@ -64,7 +64,7 @@
   },
   "supported_current_corpus_count": 1,
   "future_corpus_family_count": 2,
-  "candidate_only": true,
-  "policy_only": true,
-  "not_legal_grade_note": "Legal Research Orchestrator policy candidate only; not legal-grade verified and not approved for runtime retrieval, embeddings, vector DB, graph DB, page grounding, bbox, or final legal units."
+  "runtime_policy_status": "implemented_for_uud_runtime_baseline",
+  "non_uud_corpora_available": false,
+  "not_legal_grade_note": "UUD is verified for the current runtime baseline. Non-UUD corpora are not yet available. This does not claim full legal-grade production coverage."
 }
