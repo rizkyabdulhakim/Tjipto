@@ -22,6 +22,9 @@ class GraphContractTest(unittest.TestCase):
         for row in rows:
             self.assertIn("not_accepted_legal_equivalence", row["cross_source_equivalence_status"])
             self.assertTrue(row["members"])
+            for member in row["members"]:
+                self.assertIn("chunk_id", member)
+                self.assertNotIn("chunk_candidate_id", member)
 
 
 if __name__ == "__main__":

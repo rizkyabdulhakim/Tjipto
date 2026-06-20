@@ -28,14 +28,17 @@ class EvidenceContractTest(unittest.TestCase):
     def test_legal_units_and_chunks_are_linked(self) -> None:
         units = read_jsonl(FINAL / "legal_units.jsonl")
         chunks = read_jsonl(FINAL / "chunks.jsonl")
+        source_docs = read_jsonl(FINAL / "source_documents.jsonl")
         self.assertEqual(len(units), 609)
         self.assertEqual(len(chunks), 609)
         unit_ids = {row["legal_unit_id"] for row in units}
+        source_doc_ids = {row["source_document_id"] for row in source_docs}
         for row in chunks:
             self.assertIn(row["legal_unit_id"], unit_ids)
             self.assertTrue(row["chunk_id"].startswith("uud_chunk_"))
             self.assertNotIn("candidate", row["chunk_id"])
         for row in units:
+            self.assertIn(row["source_document_id"], source_doc_ids)
             for parent_id in row["parent_legal_unit_ids"]:
                 self.assertIn(parent_id, unit_ids)
 

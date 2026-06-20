@@ -44,7 +44,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(len(rows), 438)
         for row in rows:
             self.assertIn(row["evidence_id"], evidence_ids)
-            self.assertTrue(set(row["bbox_refs"]) <= bbox_ids)
+            self.assertGreaterEqual(row["bbox_total_count"], len(row["bbox_sample_refs"]))
+            self.assertTrue(set(row["bbox_sample_refs"]) <= bbox_ids)
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())
 
     def test_unsupported_corpus_fails_safely(self) -> None:

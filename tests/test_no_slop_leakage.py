@@ -50,6 +50,8 @@ class NoSlopLeakageTest(unittest.TestCase):
             "legal_units.jsonl",
             "chunks.jsonl",
             "metadata.jsonl",
+            "metadata_grounding.jsonl",
+            "metadata_bbox_registry.jsonl",
             "article_versions.jsonl",
             "retrieval_units.jsonl",
         )
@@ -63,6 +65,21 @@ class NoSlopLeakageTest(unittest.TestCase):
             ]
             for row in rows:
                 self._assert_id_values_clean(row, filename)
+
+    def test_eval_fixture_fields_are_clean_and_not_final_artifacts(self) -> None:
+        self.assertFalse((ROOT / "data/final/uud/eval_fixtures.jsonl").exists())
+        rows = [
+            json.loads(line)
+            for line in (ROOT / "tests/fixtures/uud/eval_fixtures.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(len(rows), 175)
+        text = "\n".join(json.dumps(row, sort_keys=True) for row in rows)
+        self.assertNotIn("expected_candidate_id", text)
+        self.assertNotIn("expected_top_candidate_id", text)
+        self.assertNotIn("must_include_candidate_ids", text)
 
     def _assert_id_values_clean(self, value, label: str) -> None:
         if isinstance(value, dict):
