@@ -51,7 +51,7 @@ class NoSlopLeakageTest(unittest.TestCase):
             "chunks.jsonl",
             "metadata.jsonl",
             "metadata_grounding.jsonl",
-            "metadata_bbox_registry.jsonl",
+            "metadata_grounding_registry.jsonl",
             "article_versions.jsonl",
             "retrieval_units.jsonl",
         )
@@ -80,6 +80,7 @@ class NoSlopLeakageTest(unittest.TestCase):
         self.assertNotIn("expected_candidate_id", text)
         self.assertNotIn("expected_top_candidate_id", text)
         self.assertNotIn("must_include_candidate_ids", text)
+        self.assertNotIn("candidate_id", text)
 
     def _assert_id_values_clean(self, value, label: str) -> None:
         if isinstance(value, dict):

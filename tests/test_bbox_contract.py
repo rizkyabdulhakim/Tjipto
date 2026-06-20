@@ -26,18 +26,18 @@ class BBoxContractTest(unittest.TestCase):
         legal_evidence_bbox_ids = {
             row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")
         }
-        metadata_bbox_ids = {
-            row["bbox_id"] for row in read_jsonl(FINAL / "metadata_bbox_registry.jsonl")
+        metadata_grounding_ids = {
+            row["bbox_id"] for row in read_jsonl(FINAL / "metadata_grounding_registry.jsonl")
         }
         rows = read_jsonl(FINAL / "metadata_grounding.jsonl")
         self.assertEqual(len(rows), 5)
-        self.assertEqual(len(metadata_bbox_ids), 5)
+        self.assertEqual(len(metadata_grounding_ids), 5)
         for row in rows:
             self.assertEqual(row["status"], "accepted_metadata_grounding")
             self.assertTrue(row["quoted_text"])
             self.assertTrue(row["bbox_refs"])
             self.assertTrue(set(row["bbox_refs"]).isdisjoint(legal_evidence_bbox_ids))
-            self.assertTrue(set(row["bbox_refs"]) <= metadata_bbox_ids)
+            self.assertTrue(set(row["bbox_refs"]) <= metadata_grounding_ids)
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())
 
 

@@ -26,6 +26,16 @@ class GraphContractTest(unittest.TestCase):
                 self.assertIn("chunk_id", member)
                 self.assertNotIn("chunk_candidate_id", member)
 
+    def test_source_conflicts_reference_source_documents(self) -> None:
+        source_ids = {
+            row["source_document_id"]
+            for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")
+        }
+        rows = read_jsonl(ROOT / "data/final/uud/source_conflicts.jsonl")
+        self.assertEqual(len(rows), 1)
+        for row in rows:
+            self.assertIn(row["source_document_id"], source_ids)
+
 
 if __name__ == "__main__":
     unittest.main()
