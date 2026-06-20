@@ -13,6 +13,7 @@ from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.metadata import filter_evidence, normalize_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.router import route_retrieval
+from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -223,13 +224,62 @@ class RuntimeContractTest(unittest.TestCase):
             all(row["source_role"] == "amendment_1_historical" for row in historical["matches"])
         )
 
-        missing = self.service.search(
+        historical_search = self.service.search(
             "uud",
             "negara hukum",
             filters={"source_role": "amendment_1_historical"},
         )
-        self.assertEqual(missing["status"], "no_results")
-        self.assertEqual(missing["reason"], "filters_removed_all")
+        self.assertEqual(historical_search["status"], "found")
+        self.assertTrue(
+            all(row["source_role"] == "amendment_1_historical" for row in historical_search["matches"])
+        )
+
+        temporal = self.service.search(
+            "uud",
+            "presiden",
+            limit=1,
+            filters={"temporal_context": "amendment_1_historical"},
+        )
+        self.assertEqual(temporal["status"], "found")
+        self.assertEqual(temporal["applied_filters"]["temporal_context"], "amendment_1_historical")
+        self.assertEqual(len(temporal["matches"]), 1)
+        self.assertEqual(temporal["matches"][0]["temporal_context"], "amendment_1_historical")
+
+        conflicting = self.service.search(
+            "uud",
+            "presiden",
+            filters={
+                "source_role": "current_consolidated",
+                "temporal_context": "amendment_1_historical",
+            },
+        )
+        self.assertEqual(conflicting["status"], "invalid_filter")
+        self.assertEqual(conflicting["reason"], "conflicting_filters")
+        self.assertFalse(conflicting["matches"])
+
+        invalid = self.service.search(
+            "uud",
+            "presiden",
+            filters={"source_role": "not_a_source_role"},
+        )
+        self.assertEqual(invalid["status"], "invalid_filter")
+        self.assertEqual(invalid["reason"], "invalid_filter")
+        self.assertEqual(invalid["invalid_filters"], ("source_role",))
+
+        api_result = handle_request(
+            "uud",
+            "ask",
+            {
+                "query": "Pasal 5 ayat (1)",
+                "filters": {
+                    "source_role": "amendment_1_historical",
+                    "temporal_context": "amendment_1_historical",
+                },
+            },
+            ROOT,
+        )
+        self.assertEqual(api_result["status"], "answer_ready")
+        self.assertEqual(api_result["applied_filters"]["temporal_context"], "amendment_1_historical")
 
     def test_dense_readiness_does_not_fake_matches(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")

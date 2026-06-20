@@ -15,7 +15,12 @@ def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path |
             payload.get("filters"),
         )
     if action == "citation":
-        return service.citation(corpus_id, str(payload.get("query", "")), payload.get("source_role"))
+        return service.citation(
+            corpus_id,
+            str(payload.get("query", "")),
+            payload.get("source_role"),
+            payload.get("filters"),
+        )
     if action == "viewer":
         return service.viewer(corpus_id, str(payload.get("evidence_id", "")))
     if action == "ask":

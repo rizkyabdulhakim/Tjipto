@@ -30,11 +30,20 @@ class LegalRuntimeService:
         )
         return routed | {"status": "found" if routed["matches"] else routed["status"]}
 
-    def citation(self, corpus_id: str, query: str, source_role: str | None = None) -> dict:
+    def citation(
+        self,
+        corpus_id: str,
+        query: str,
+        source_role: str | None = None,
+        filters: dict | None = None,
+    ) -> dict:
         store = self._store(corpus_id)
         if store is None:
             return route_retrieval(corpus_id, query, None)
-        routed = route_retrieval(corpus_id, query, store, metadata_filters={"source_role": source_role})
+        metadata_filters = dict(filters or {})
+        if source_role is not None:
+            metadata_filters["source_role"] = source_role
+        routed = route_retrieval(corpus_id, query, store, metadata_filters=metadata_filters)
         if routed["intent"] != "exact_citation":
             return routed | {
                 "status": "citation_not_found",

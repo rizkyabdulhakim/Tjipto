@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.dense import dense_search
-from tjipto.retrieval.metadata import filter_evidence, normalize_filters
+from tjipto.retrieval.metadata import filter_evidence, normalize_filters, public_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.service import RetrievalService
 
@@ -19,6 +19,7 @@ def route_retrieval(
 ) -> dict:
     normalized = normalize_query(query)
     filters = normalize_filters(metadata_filters)
+    applied_filters = public_filters(filters)
     corpus_supported = store is not None
     intent = classify_intent(
         corpus_id,
@@ -35,8 +36,8 @@ def route_retrieval(
         "matches": (),
         "reason": None,
         "required_corpus": intent["required_corpus"],
-        "metadata_filters": filters,
-        "applied_filters": filters,
+        "metadata_filters": applied_filters,
+        "applied_filters": applied_filters,
     }
     if store is None:
         return envelope | {
@@ -50,15 +51,22 @@ def route_retrieval(
             "route": "insufficient_corpus",
             "reason": "out_of_corpus",
         }
+    if filters.get("_error"):
+        return envelope | {
+            "status": "invalid_filter",
+            "route": "no_results",
+            "reason": filters["_error"],
+            "invalid_filters": filters.get("_invalid_filters", ()),
+        }
     if route == "dense":
         return envelope | dense_search(store, normalized["normalized_query"], limit)
 
     service = RetrievalService(store)
     if intent["intent"] == "exact_citation":
-        matches = tuple(service.citation(normalized["normalized_query"]))[:limit]
+        matches = tuple(service.citation(normalized["normalized_query"]))
         filtered = filter_evidence(matches, filters)
         if filtered:
-            return envelope | {"status": "found", "route": "exact", "matches": filtered}
+            return envelope | {"status": "found", "route": "exact", "matches": filtered[:limit]}
         if matches:
             return envelope | {
                 "status": "no_results",
@@ -72,14 +80,14 @@ def route_retrieval(
                 "reason": "citation_not_found",
             }
 
-    matches = tuple(service.search(normalized["normalized_query"], limit))
+    matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))
     filtered = filter_evidence(matches, filters)
     if filtered:
         return envelope | {
             "status": "found",
             "route": "bm25",
             "intent": "natural_language",
-            "matches": filtered,
+            "matches": filtered[:limit],
         }
     if matches:
         return envelope | {
