@@ -40,3 +40,34 @@ class LegalRuntimeService:
         if evidence is None:
             return {"status": "not_found"}
         return viewer_payload(evidence, store.bboxes_for(evidence_id))
+
+    def ask(self, corpus_id: str, query: str, limit: int = 3) -> dict:
+        store = self._store(corpus_id)
+        if store is None:
+            return {"status": "unsupported_corpus", "evidence": ()}
+        lowered = query.casefold()
+        unavailable = ("kuhp", "kuhap", "uu ite", "uu pers", "ketenagakerjaan", "uu pdp", "perseroan", "pemilu")
+        if any(term in lowered for term in unavailable):
+            return {"status": "insufficient_corpus", "evidence": (), "required_corpus": "non_uud"}
+        matches = RetrievalService(store).search(query, limit)
+        if not matches:
+            return {"status": "no_results", "evidence": ()}
+        evidence = tuple(self._answer_evidence(store, row) for row in matches if store.bboxes_for(row["evidence_id"]))
+        if not evidence:
+            return {"status": "insufficient_evidence", "evidence": ()}
+        status = "answer_ready" if self.citation(corpus_id, query)["matches"] else "limited_answer"
+        return {"status": status, "answer": "Evidence-grounded UUD support is available; no legal conclusion is generated.", "evidence": evidence}
+
+    def _answer_evidence(self, store: EvidenceStore, row: dict) -> dict:
+        bboxes = store.bboxes_for(row["evidence_id"])
+        return {
+            "evidence_id": row["evidence_id"],
+            "citation": row.get("citation"),
+            "source_role": row.get("source_role"),
+            "source_pdf_path": row.get("source_pdf_path"),
+            "source_sha256": row.get("source_sha256"),
+            "page_numbers": tuple(row.get("page_numbers") or ()),
+            "bbox_count": len(bboxes),
+            "quoted_text": row.get("quoted_text"),
+            "viewer_ref": {"action": "viewer", "evidence_id": row["evidence_id"]},
+        }

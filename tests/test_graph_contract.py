@@ -11,6 +11,7 @@ from tjipto.corpora.adapter import config_for
 from tjipto.core.manifest import file_sha256
 from tjipto.graph.store import GraphStore
 from tjipto.core.manifest import read_jsonl
+from tjipto.corpora.uud_reproducibility import validate_uud_ingestion_artifacts
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -217,9 +218,16 @@ class GraphContractTest(unittest.TestCase):
         for row in graph_nodes:
             if row.get("source_pdf_path"):
                 self.assertTrue((ROOT / row["source_pdf_path"]).exists(), row["node_id"])
+                self.assertEqual(file_sha256(ROOT / row["source_pdf_path"]), row.get("source_sha256"), row["node_id"])
         for edge in read_jsonl(final / "graph_edges.jsonl"):
             self.assertIn(edge["source_id"], graph_node_ids, edge["edge_id"])
             self.assertIn(edge["target_id"], graph_node_ids, edge["edge_id"])
+
+    def test_uud_ingestion_reproducibility_runner_passes(self) -> None:
+        result = validate_uud_ingestion_artifacts(ROOT)
+        self.assertEqual(result["status"], "valid", result["errors"][:5])
+        self.assertEqual(result["counts"]["evidence"], 438)
+        self.assertEqual(result["counts"]["bbox"], 1388)
 
     def _compact_text(self, text: str) -> str:
         text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "")

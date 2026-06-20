@@ -79,6 +79,31 @@ class RuntimeContractTest(unittest.TestCase):
             for evidence_id in row.get("outputs", {}).get("ranked_final_evidence_ids") or ():
                 self.assertIn(evidence_id, evidence_ids)
 
+    def test_bm25_prioritizes_term_frequency_without_breaking_exact_citation(self) -> None:
+        citation = self.service.citation("uud", "Pasal 1 ayat (3)")
+        search = self.service.search("uud", "Pasal 1 ayat (3)", limit=1)
+        self.assertEqual(search["matches"][0]["evidence_id"], citation["matches"][0]["evidence_id"])
+
+        results = self.service.search("uud", "negara negara negara hukum", limit=3)
+        self.assertEqual(results["status"], "found")
+        self.assertTrue(any("negara" in row["quoted_text"].casefold() for row in results["matches"]))
+
+    def test_ask_contract_is_evidence_bounded(self) -> None:
+        answer = self.service.ask("uud", "Pasal 1 ayat (3)")
+        self.assertEqual(answer["status"], "answer_ready")
+        self.assertTrue(answer["evidence"])
+        first = answer["evidence"][0]
+        self.assertTrue(first["evidence_id"])
+        self.assertGreater(first["bbox_count"], 0)
+        self.assertTrue(first["viewer_ref"])
+
+        limited = self.service.ask("uud", "negara hukum")
+        self.assertIn(limited["status"], {"answer_ready", "limited_answer"})
+        self.assertTrue(limited["evidence"])
+
+        self.assertEqual(self.service.ask("uud", "aturan KUHP tentang pencurian")["status"], "insufficient_corpus")
+        self.assertEqual(self.service.ask("unknown", "Pasal 1")["status"], "unsupported_corpus")
+
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(
             self.service.search("unknown", "Pasal 1")["status"],
@@ -164,6 +189,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(store.evidence[0]["evidence_id"], "demo_evidence_1")
             self.assertEqual(store.bboxes_for("demo_evidence_1")[0]["bbox_id"], "box_1")
             self.assertEqual(GraphStore(config).counts(), {"nodes": 2, "edges": 1})
+            self.assertEqual(LegalRuntimeService(root).ask("demo", "generic corpus resolution")["status"], "limited_answer")
 
     def test_missing_or_invalid_registry_fails_safely(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
