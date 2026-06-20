@@ -408,6 +408,28 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertIn("rank_reasons", row)
             self.assertIn("route_score", row)
 
+    def test_ask_excludes_graph_only_answer_evidence(self) -> None:
+        direct_routes = {"exact", "structured", "bm25"}
+
+        exact = self.service.ask("uud", "Pasal 1 ayat (3)", limit=5)
+        self.assertEqual(exact["status"], "answer_ready")
+        self.assertTrue(any(row["route_sources"] == ("graph",) for row in exact["matches"]))
+        self.assertTrue(
+            all(direct_routes & set(row["route_sources"]) for row in exact["matches"] if row["evidence_id"] in {
+                evidence["evidence_id"] for evidence in exact["evidence"]
+            })
+        )
+        self.assertFalse(any(evidence["citation"] == "PEMBUKAAN/Preambule" for evidence in exact["evidence"]))
+
+        structured = self.service.ask("uud", "Pembukaan", limit=5)
+        self.assertEqual(structured["status"], "limited_answer")
+        self.assertTrue(any(row["route_sources"] == ("graph",) for row in structured["matches"]))
+        evidence_ids = {evidence["evidence_id"] for evidence in structured["evidence"]}
+        self.assertTrue(all(direct_routes & set(row["route_sources"]) for row in structured["matches"] if row["evidence_id"] in evidence_ids))
+
+        search = self.service.search("uud", "Pasal 1 ayat (3)", limit=5)
+        self.assertTrue(any(row["route_sources"] == ("graph",) for row in search["matches"]))
+
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(
             self.service.search("unknown", "Pasal 1")["status"],

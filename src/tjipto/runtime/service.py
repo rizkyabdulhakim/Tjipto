@@ -68,7 +68,11 @@ class LegalRuntimeService:
         if routed["status"] != "found":
             return routed | {"evidence": ()}
         matches = routed["matches"]
-        evidence = tuple(self._answer_evidence(store, row) for row in matches if store.bboxes_for(row["evidence_id"]))
+        evidence = tuple(
+            self._answer_evidence(store, row)
+            for row in matches
+            if self._has_direct_route(row) and store.bboxes_for(row["evidence_id"])
+        )
         if not evidence:
             return routed | {"status": "insufficient_evidence", "evidence": ()}
         status = "answer_ready" if routed["route"] == "exact" else "limited_answer"
@@ -77,6 +81,9 @@ class LegalRuntimeService:
             "answer": "Evidence-grounded UUD support is available; no legal conclusion is generated.",
             "evidence": evidence,
         }
+
+    def _has_direct_route(self, row: dict) -> bool:
+        return bool({"exact", "structured", "bm25"} & set(row.get("route_sources") or ()))
 
     def _answer_evidence(self, store: EvidenceStore, row: dict) -> dict:
         bboxes = store.bboxes_for(row["evidence_id"])
