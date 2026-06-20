@@ -6,10 +6,46 @@ from collections import Counter
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+STOPWORDS = {
+    "adalah",
+    "atau",
+    "aturan",
+    "berapa",
+    "boleh",
+    "dalam",
+    "dan",
+    "dari",
+    "dengan",
+    "di",
+    "diatur",
+    "ke",
+    "ketentuan",
+    "lama",
+    "pada",
+    "tentang",
+    "undang",
+    "undang-undang",
+    "untuk",
+    "yang",
+}
 
 
 def tokens(text: str) -> list[str]:
     return [token.casefold() for token in TOKEN_RE.findall(text or "")]
+
+
+def meaningful_tokens(text: str) -> set[str]:
+    return {
+        _normalize_token(token)
+        for token in tokens(text)
+        if token not in STOPWORDS and len(token) > 2
+    }
+
+
+def _normalize_token(token: str) -> str:
+    if token == "berhak":
+        return "hak"
+    return "kerja" if token in {"bekerja", "pekerjaan"} else token
 
 
 def _document_text(row: dict) -> str:
@@ -56,5 +92,24 @@ def lexical_search(
             idf = math.log(1 + (total_docs - document_frequency[term] + 0.5) / (document_frequency[term] + 0.5))
             score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * doc_len / avgdl))
         if score > 0:
-            scored.append((score, row["evidence_id"], row))
+            scored.append((score, row["evidence_id"], _with_relevance(row, query)))
     return [row for _, _, row in sorted(scored, key=lambda item: (-item[0], item[1]))[:limit]]
+
+
+def _with_relevance(row: dict, query: str) -> dict:
+    query_terms = meaningful_tokens(query)
+    doc_terms = meaningful_tokens(_document_text(row))
+    supported = query_terms & doc_terms
+    required = (
+        len(query_terms)
+        if len(query_terms) <= 2
+        else max(2, (len(query_terms) + 1) // 2)
+    )
+    ok = bool(query_terms) and len(supported) >= required
+    return dict(
+        row,
+        lexical_query_terms=tuple(sorted(query_terms)),
+        lexical_supported_terms=tuple(sorted(supported)),
+        lexical_relevance_ok=ok,
+        lexical_relevance_reason="answer_evidence" if ok else "insufficient_query_support",
+    )

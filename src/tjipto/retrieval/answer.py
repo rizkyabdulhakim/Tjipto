@@ -53,6 +53,11 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
         return False, "runtime_not_loadable"
     if not (DIRECT_ROUTES & set(row.get("route_sources") or ())):
         return False, "graph_only"
+    if (
+        "bm25" in set(row.get("route_sources") or ())
+        and row.get("lexical_relevance_ok") is False
+    ):
+        return False, row.get("lexical_relevance_reason") or "weak_lexical_match"
     if row.get("status") != "final":
         return False, "not_final"
     if not store.bboxes_for(row["evidence_id"]):

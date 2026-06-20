@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-from tjipto.corpora.coverage import classify_coverage
 from tjipto.evidence.citation import parse_citation
 
 
@@ -28,11 +27,6 @@ def normalize_query(query: str) -> dict:
 
 def classify_intent(corpus_id: str, query: str, *, corpus_supported: bool = True) -> dict:
     if not corpus_supported:
-        return {"intent": "unsupported_corpus", "required_corpus": None}
-    coverage = classify_coverage(corpus_id, query)
+        return {"intent": "unsupported_corpus"}
     pasal, _ = parse_citation(query)
-    return {
-        "intent": "exact_citation" if pasal else "natural_language",
-        "required_corpus": None,
-        "coverage": coverage,
-    }
+    return {"intent": "exact_citation" if pasal else "natural_language"}

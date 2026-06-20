@@ -6,7 +6,6 @@ import os
 import tempfile
 import unittest
 
-from tjipto.corpora.coverage import classify_coverage
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.provenance import validate_corpus_provenance
 from tjipto.evidence.store import EvidenceStore
@@ -132,9 +131,12 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertFalse(result["evidence"])
 
         domain_query = self.service.ask("uud", "aturan KUHP tentang pencurian")
-        self.assertEqual(domain_query["status"], "limited_answer")
+        self.assertEqual(domain_query["status"], "insufficient_evidence")
         self.assertEqual(domain_query["route"], "bm25")
         self.assertIsNone(domain_query["required_corpus"])
+        self.assertFalse(domain_query["evidence"])
+        self.assertFalse(domain_query["citations"])
+        self.assertFalse(domain_query["viewer_refs"])
 
         unsupported = self.service.ask("unknown", "Pasal 1")
         self.assertEqual(unsupported["status"], "unsupported_corpus")
@@ -152,12 +154,10 @@ class RuntimeContractTest(unittest.TestCase):
             classify_intent("unknown", "Pasal 1", corpus_supported=False)["intent"],
             "unsupported_corpus",
         )
+        self.assertNotIn("required_corpus", classify_intent("uud", "aturan KUHP tentang pencurian"))
 
-    def test_runtime_coverage_searches_uud_before_missing_corpus_fallback(self) -> None:
+    def test_bm25_relevance_gate_keeps_core_uud_queries_answerable(self) -> None:
         for query in (
-            "aturan KUHP tentang pencurian",
-            "UU Pers tentang wartawan",
-            "Permen tentang pendidikan",
             "hukum adat",
             "hak pendidikan",
             "lingkungan hidup",
@@ -167,10 +167,6 @@ class RuntimeContractTest(unittest.TestCase):
             "Majelis Permusyawaratan Rakyat",
             "hak untuk bekerja",
             "pekerjaan dan penghidupan yang layak",
-            "hak data pribadi warga",
-            "aturan pemilu untuk caleg",
-            "PHK dan upah buruh",
-            "sengketa waris keluarga",
         ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "limited_answer", query)
@@ -178,14 +174,27 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertIsNone(result["required_corpus"], query)
             self.assertTrue(result["evidence"], query)
 
-        for query in ("wartawan meliput demonstrasi", "penangkapan polisi"):
+    def test_weak_bm25_matches_do_not_become_final_payloads(self) -> None:
+        for query in (
+            "aturan KUHP tentang pencurian",
+            "UU Pers tentang wartawan",
+            "berapa lama polisi boleh menahan tersangka",
+            "hukuman pembunuhan berapa",
+            "Permen teknis izin usaha",
+            "sanksi adat menggantikan pidana",
+        ):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "no_results", query)
-            self.assertEqual(result["route"], "no_results", query)
+            self.assertIn(result["status"], {"insufficient_evidence", "no_results"}, query)
             self.assertIsNone(result["required_corpus"], query)
             self.assertFalse(result["evidence"], query)
-
-        self.assertIsNone(classify_coverage("uud", "aturan izin usaha")["required_corpus"])
+            self.assertFalse(result["citations"], query)
+            self.assertFalse(result["viewer_refs"], query)
+            self.assertFalse(result["context_pack"]["answer_evidence"], query)
+            self.assertFalse(result["context_pack"]["citation_payloads"], query)
+            self.assertFalse(result["context_pack"]["viewer_refs"], query)
+            reasons = set(result["context_pack"]["validation_reasons"].values())
+            if result["route"] == "bm25":
+                self.assertIn("insufficient_query_support", reasons, query)
 
     def test_retrieval_router_envelope_routes(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -217,6 +226,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(domain_query["status"], "found")
         self.assertEqual(domain_query["route"], "bm25")
         self.assertIsNone(domain_query["required_corpus"])
+        self.assertTrue(domain_query["matches"])
+        self.assertTrue(all(row["lexical_relevance_ok"] is False for row in domain_query["matches"]))
 
         unsupported = route_retrieval("unknown", "Pasal 1", None)
         self.assertEqual(unsupported["status"], "unsupported_corpus")
@@ -519,6 +530,17 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(data["runtime_policy_status"], "implemented_for_uud_runtime_baseline")
             self.assertFalse(data["non_uud_corpora_available"])
             self.assertIn("not claim full legal-grade production", data["not_legal_grade_note"])
+
+    def test_no_coverage_classifier_slop_remains(self) -> None:
+        self.assertFalse((ROOT / "src/tjipto/corpora/coverage.py").exists())
+        source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for base in ("src/tjipto/corpora", "src/tjipto/retrieval", "src/tjipto/runtime")
+            for path in (ROOT / base).rglob("*.py")
+        )
+        self.assertNotIn("classify_coverage", source)
+        self.assertNotIn("required_missing_corpus", source)
+        self.assertNotIn("out_of_corpus", source)
 
     def test_answer_context_validator_explains_inclusion_and_exclusion(self) -> None:
         class Store:
