@@ -4,7 +4,7 @@ from pathlib import Path
 
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
-from tjipto.retrieval.answer import assemble_context_pack
+from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.viewer import viewer_payload
 
@@ -67,7 +67,14 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         if routed["status"] != "found":
-            return routed | {"answer_type": "none", "context_pack": {}, "evidence": ()}
+            context_pack = empty_context_pack(routed.get("reason") or routed["status"])
+            return routed | {
+                "answer_type": "none",
+                "context_pack": context_pack,
+                "evidence": (),
+                "citations": (),
+                "viewer_refs": (),
+            }
         context_pack = assemble_context_pack(store, routed["matches"])
         evidence = context_pack["answer_evidence"]
         if not evidence:
@@ -76,6 +83,8 @@ class LegalRuntimeService:
                 "answer_type": "none",
                 "context_pack": context_pack,
                 "evidence": (),
+                "citations": (),
+                "viewer_refs": (),
             }
         status = "answer_ready" if routed["route"] == "exact" else "limited_answer"
         return routed | {

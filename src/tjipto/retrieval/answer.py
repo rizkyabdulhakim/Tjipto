@@ -30,17 +30,27 @@ def assemble_context_pack(store, matches: tuple[dict, ...]) -> dict:
     return {
         "answer_evidence": tuple(answer_evidence),
         "supporting_context": tuple(supporting_context),
-        "excluded_candidates": tuple(excluded),
-        "citation_payloads": tuple(
-            {"citation": row.get("citation"), "evidence_id": row["evidence_id"]}
-            for row in answer_evidence
-        ),
+        "excluded_results": tuple(excluded),
+        "citation_payloads": tuple(_citation_payload(row) for row in answer_evidence),
         "viewer_refs": tuple(row["viewer_ref"] for row in answer_evidence),
         "validation_reasons": reasons,
     }
 
 
+def empty_context_pack(reason: str | None) -> dict:
+    return {
+        "answer_evidence": (),
+        "supporting_context": (),
+        "excluded_results": (),
+        "citation_payloads": (),
+        "viewer_refs": (),
+        "validation_reasons": {"request": reason or "no_final_evidence"},
+    }
+
+
 def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
+    if row.get("runtime_loadable") is False:
+        return False, "runtime_not_loadable"
     if not (DIRECT_ROUTES & set(row.get("route_sources") or ())):
         return False, "graph_only"
     if row.get("status") != "final":
@@ -68,5 +78,30 @@ def _payload(store, row: dict) -> dict:
         "bbox_count": len(bboxes),
         "quoted_text": row.get("quoted_text"),
         "route_sources": tuple(row.get("route_sources") or ()),
-        "viewer_ref": {"action": "viewer", "evidence_id": row["evidence_id"]},
+        "evidence_status": row.get("status"),
+        "viewer_ref": {
+            "action": "viewer",
+            "evidence_id": row["evidence_id"],
+            "page_numbers": tuple(row.get("page_numbers") or ()),
+            "bbox_count": len(bboxes),
+            "source_pdf_path": row.get("source_pdf_path"),
+            "source_sha256": row.get("source_sha256"),
+            "can_resolve": row.get("status") == "final" and bool(bboxes),
+        },
+    }
+
+
+def _citation_payload(row: dict) -> dict:
+    return {
+        "evidence_id": row["evidence_id"],
+        "citation": row.get("citation"),
+        "quoted_text": row.get("quoted_text"),
+        "source_role": row.get("source_role"),
+        "temporal_context": row.get("temporal_context"),
+        "source_pdf_path": row.get("source_pdf_path"),
+        "source_sha256": row.get("source_sha256"),
+        "page_numbers": row.get("page_numbers"),
+        "bbox_count": row.get("bbox_count"),
+        "viewer_ref": row.get("viewer_ref"),
+        "evidence_status": row.get("evidence_status"),
     }

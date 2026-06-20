@@ -419,9 +419,29 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(exact["context_pack"]["answer_evidence"], exact["evidence"])
         self.assertTrue(exact["citations"])
         self.assertTrue(exact["viewer_refs"])
+        citation_payload = exact["citations"][0]
+        for field in (
+            "evidence_id",
+            "citation",
+            "quoted_text",
+            "source_role",
+            "temporal_context",
+            "source_pdf_path",
+            "source_sha256",
+            "page_numbers",
+            "bbox_count",
+            "viewer_ref",
+            "evidence_status",
+        ):
+            self.assertIn(field, citation_payload)
+        viewer_ref = exact["viewer_refs"][0]
+        self.assertTrue(viewer_ref["can_resolve"])
+        self.assertGreater(viewer_ref["bbox_count"], 0)
+        self.assertTrue(viewer_ref["page_numbers"])
+        self.assertTrue(self.service.viewer("uud", viewer_ref["evidence_id"])["bbox_rectangles"])
         self.assertTrue(any(row["route_sources"] == ("graph",) for row in exact["matches"]))
         self.assertTrue(any(row["route_sources"] == ("graph",) for row in exact["context_pack"]["supporting_context"]))
-        self.assertTrue(any(row["reason"] == "graph_only" for row in exact["context_pack"]["excluded_candidates"]))
+        self.assertTrue(any(row["reason"] == "graph_only" for row in exact["context_pack"]["excluded_results"]))
         self.assertTrue(
             all(direct_routes & set(row["route_sources"]) for row in exact["matches"] if row["evidence_id"] in {
                 evidence["evidence_id"] for evidence in exact["evidence"]
@@ -459,16 +479,35 @@ class RuntimeContractTest(unittest.TestCase):
         }
         graph = base | {"evidence_id": "graph", "route_sources": ("graph",)}
         missing_bbox = base | {"evidence_id": "missing_bbox"}
+        not_loadable = base | {"evidence_id": "not_loadable", "runtime_loadable": False}
 
         self.assertEqual(validate_answer_candidate(store, base), (True, "answer_evidence"))
         self.assertEqual(validate_answer_candidate(store, graph), (False, "graph_only"))
         self.assertEqual(validate_answer_candidate(store, missing_bbox), (False, "missing_bbox"))
+        self.assertEqual(validate_answer_candidate(store, not_loadable), (False, "runtime_not_loadable"))
 
-        pack = assemble_context_pack(store, (base, graph, missing_bbox))
+        pack = assemble_context_pack(store, (base, graph, missing_bbox, not_loadable))
         self.assertEqual([row["evidence_id"] for row in pack["answer_evidence"]], ["direct"])
         self.assertEqual([row["evidence_id"] for row in pack["supporting_context"]], ["graph"])
         self.assertEqual(pack["validation_reasons"]["graph"], "graph_only")
         self.assertEqual(pack["validation_reasons"]["missing_bbox"], "missing_bbox")
+        self.assertEqual(pack["validation_reasons"]["not_loadable"], "runtime_not_loadable")
+        self.assertFalse(any(row["evidence_id"] == "not_loadable" for row in pack["citation_payloads"]))
+
+    def test_failure_ask_context_pack_has_no_final_payloads(self) -> None:
+        for result in (
+            self.service.ask("uud", "Pasal 999"),
+            self.service.ask("uud", "aturan KUHP tentang pencurian"),
+            self.service.ask("unknown", "Pasal 1"),
+        ):
+            self.assertEqual(result["answer_type"], "none")
+            self.assertEqual(result["evidence"], ())
+            self.assertEqual(result["citations"], ())
+            self.assertEqual(result["viewer_refs"], ())
+            self.assertEqual(result["context_pack"]["answer_evidence"], ())
+            self.assertEqual(result["context_pack"]["citation_payloads"], ())
+            self.assertEqual(result["context_pack"]["viewer_refs"], ())
+            self.assertIn("request", result["context_pack"]["validation_reasons"])
 
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(
