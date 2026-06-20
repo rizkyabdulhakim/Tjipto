@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tjipto.evidence.store import EvidenceStore
+from tjipto.retrieval.candidates import merge_ranked
 from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.metadata import filter_evidence, normalize_filters, public_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
@@ -67,7 +68,13 @@ def route_retrieval(
         matches = tuple(service.citation(normalized["normalized_query"]))
         filtered = filter_evidence(matches, filters)
         if filtered:
-            return envelope | {"status": "found", "route": "exact", "matches": filtered[:limit]}
+            ranked, trace = merge_ranked(store, {"exact": filtered}, filters)
+            return envelope | {
+                "status": "found",
+                "route": "exact",
+                "matches": ranked[:limit],
+                "expansion_trace": trace,
+            }
         if matches:
             return envelope | {
                 "status": "no_results",
@@ -81,26 +88,35 @@ def route_retrieval(
                 "reason": "citation_not_found",
             }
 
-    structured = filter_evidence(
-        structured_lookup(store, normalized["normalized_query"], len(store.evidence)),
-        filters,
-    )
+    structured_all = tuple(structured_lookup(store, normalized["normalized_query"], len(store.evidence)))
+    structured = filter_evidence(structured_all, filters)
     if structured:
+        ranked, trace = merge_ranked(store, {"structured": structured}, filters)
         return envelope | {
             "status": "found",
             "route": "structured",
             "intent": "structured_lookup",
-            "matches": structured[:limit],
+            "matches": ranked[:limit],
+            "expansion_trace": trace,
+        }
+    if structured_all:
+        return envelope | {
+            "status": "no_results",
+            "route": "no_results",
+            "intent": "no_results",
+            "reason": "filters_removed_all",
         }
 
     matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))
     filtered = filter_evidence(matches, filters)
     if filtered:
+        ranked, trace = merge_ranked(store, {"bm25": filtered}, filters)
         return envelope | {
             "status": "found",
             "route": "bm25",
             "intent": "natural_language",
-            "matches": filtered[:limit],
+            "matches": ranked[:limit],
+            "expansion_trace": trace,
         }
     if matches:
         return envelope | {

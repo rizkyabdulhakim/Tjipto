@@ -10,6 +10,7 @@ from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.provenance import validate_corpus_provenance
 from tjipto.evidence.store import EvidenceStore
 from tjipto.graph.store import GraphStore
+from tjipto.retrieval.candidates import merge_ranked
 from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.metadata import filter_evidence, normalize_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
@@ -353,6 +354,59 @@ class RuntimeContractTest(unittest.TestCase):
                 return [{"bbox_id": "b2"}]
 
         self.assertEqual(structured_lookup(UnitBackedStore(), "Pasal 9")[0]["evidence_id"], "e2")
+
+    def test_graph_candidate_pipeline_merges_dedups_and_ranks_stably(self) -> None:
+        class Store:
+            evidence = [
+                {"evidence_id": "e1", "legal_unit_id": "lu1", "status": "final", "source_role": "current_consolidated"},
+                {"evidence_id": "e2", "legal_unit_id": "lu2", "status": "final", "source_role": "current_consolidated"},
+                {"evidence_id": "e3", "legal_unit_id": "lu3", "status": "final", "source_role": "amendment_1_historical"},
+                {"evidence_id": "e4", "legal_unit_id": "lu1", "status": "final", "source_role": "current_consolidated"},
+                {"evidence_id": "no_box", "legal_unit_id": "lu4", "status": "final", "source_role": "current_consolidated"},
+            ]
+            graph_edges = [
+                {"edge_type": "HAS_FINAL_EVIDENCE", "source_id": "legal_unit::lu1", "target_id": "final_evidence::e1"},
+                {"edge_type": "HAS_FINAL_EVIDENCE", "source_id": "legal_unit::lu1", "target_id": "final_evidence::e2"},
+                {"edge_type": "HAS_FINAL_EVIDENCE", "source_id": "legal_unit::lu1", "target_id": "final_evidence::e4"},
+                {"edge_type": "HAS_FINAL_EVIDENCE", "source_id": "legal_unit::lu1", "target_id": "final_evidence::no_box"},
+                {"edge_type": "HAS_FINAL_EVIDENCE", "source_id": "legal_unit::lu3", "target_id": "final_evidence::e3"},
+            ]
+
+            def get(self, evidence_id):
+                return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)
+
+            def bboxes_for(self, evidence_id):
+                return [] if evidence_id == "no_box" else [{"bbox_id": evidence_id}]
+
+        store = Store()
+        ranked, trace = merge_ranked(
+            store,
+            {
+                "bm25": (store.evidence[1], store.evidence[0]),
+                "structured": (store.evidence[0],),
+            },
+            {"status": "final", "source_role": "current_consolidated"},
+        )
+        self.assertEqual([row["evidence_id"] for row in ranked], ["e1", "e2", "e4"])
+        self.assertEqual(ranked[0]["route_sources"], ("bm25", "structured"))
+        self.assertIn("pass", ranked[0]["rank_reasons"])
+        self.assertTrue(trace)
+        self.assertTrue(all(item["evidence_id"] != "no_box" for item in trace))
+
+        empty, empty_trace = merge_ranked(store, {}, {"status": "final"})
+        self.assertEqual(empty, ())
+        self.assertEqual(empty_trace, ())
+
+    def test_runtime_bm25_exposes_ranked_route_signals(self) -> None:
+        result = self.service.search("uud", "negara hukum", limit=3)
+        self.assertEqual(result["status"], "found")
+        self.assertEqual(result["route"], "bm25")
+        self.assertTrue(result["expansion_trace"])
+        for row in result["matches"]:
+            self.assertTrue(row["bbox_count"])
+            self.assertIn("route_sources", row)
+            self.assertIn("rank_reasons", row)
+            self.assertIn("route_score", row)
 
     def test_unsupported_corpus_fails_safely(self) -> None:
         self.assertEqual(
