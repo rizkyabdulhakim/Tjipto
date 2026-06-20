@@ -5,7 +5,6 @@ from pathlib import Path
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.router import route_retrieval
-from tjipto.retrieval.service import RetrievalService
 from tjipto.runtime.viewer import viewer_payload
 
 
@@ -19,7 +18,7 @@ class LegalRuntimeService:
             return None
         return EvidenceStore(config)
 
-    def search(self, corpus_id: str, query: str, limit: int = 10) -> dict:
+    def search(self, corpus_id: str, query: str, limit: int = 10, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
         routed = route_retrieval(
             corpus_id,
@@ -27,6 +26,7 @@ class LegalRuntimeService:
             store,
             limit=limit,
             allow_bm25_after_citation_miss=True,
+            metadata_filters=filters,
         )
         return routed | {"status": "found" if routed["matches"] else routed["status"]}
 
@@ -34,7 +34,7 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return route_retrieval(corpus_id, query, None)
-        routed = route_retrieval(corpus_id, query, store)
+        routed = route_retrieval(corpus_id, query, store, metadata_filters={"source_role": source_role})
         if routed["intent"] != "exact_citation":
             return routed | {
                 "status": "citation_not_found",
@@ -42,8 +42,7 @@ class LegalRuntimeService:
                 "matches": (),
                 "reason": "not_a_citation",
             }
-        matches = RetrievalService(store).citation(routed["normalized_query"], source_role)
-        return routed | {"status": "found" if matches else "citation_not_found", "matches": tuple(matches)}
+        return routed | {"status": "found" if routed["matches"] else routed["status"]}
 
     def viewer(self, corpus_id: str, evidence_id: str) -> dict:
         store = self._store(corpus_id)
@@ -54,9 +53,9 @@ class LegalRuntimeService:
             return {"status": "not_found"}
         return viewer_payload(evidence, store.bboxes_for(evidence_id))
 
-    def ask(self, corpus_id: str, query: str, limit: int = 3) -> dict:
+    def ask(self, corpus_id: str, query: str, limit: int = 3, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
-        routed = route_retrieval(corpus_id, query, store, limit=limit)
+        routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         if routed["status"] != "found":
             return routed | {"evidence": ()}
         matches = routed["matches"]

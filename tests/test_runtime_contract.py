@@ -10,6 +10,7 @@ from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.graph.store import GraphStore
 from tjipto.retrieval.dense import dense_search
+from tjipto.retrieval.metadata import filter_evidence, normalize_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.service import LegalRuntimeService
@@ -180,6 +181,56 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(unsupported["status"], "unsupported_corpus")
         self.assertEqual(unsupported["route"], "unsupported_corpus")
 
+    def test_metadata_filtering_limits_retrieval_safely(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        store = EvidenceStore(config)
+
+        filters = normalize_filters({"source_role": "current_consolidated"})
+        self.assertEqual(filters, {"source_role": "current_consolidated", "status": "final"})
+        rows = filter_evidence(tuple(store.evidence), filters)
+        self.assertTrue(rows)
+        self.assertTrue(all(row["status"] == "final" for row in rows))
+        self.assertTrue(all(row["source_role"] == "current_consolidated" for row in rows))
+
+        current = self.service.ask(
+            "uud",
+            "Pasal 1 ayat (3)",
+            filters={"source_role": "current_consolidated"},
+        )
+        self.assertEqual(current["status"], "answer_ready")
+        self.assertEqual(current["applied_filters"]["source_role"], "current_consolidated")
+        self.assertTrue(all(row["bbox_count"] > 0 for row in current["evidence"]))
+
+        removed = self.service.ask(
+            "uud",
+            "Pasal 1 ayat (3)",
+            filters={"source_role": "amendment_1_historical"},
+        )
+        self.assertEqual(removed["status"], "no_results")
+        self.assertEqual(removed["reason"], "filters_removed_all")
+        self.assertFalse(removed["matches"])
+        self.assertFalse(removed["evidence"])
+
+        historical = self.service.citation(
+            "uud",
+            "Pasal 5 ayat (1)",
+            source_role="amendment_1_historical",
+        )
+        self.assertEqual(historical["status"], "found")
+        self.assertEqual(historical["route"], "exact")
+        self.assertTrue(historical["matches"])
+        self.assertTrue(
+            all(row["source_role"] == "amendment_1_historical" for row in historical["matches"])
+        )
+
+        missing = self.service.search(
+            "uud",
+            "negara hukum",
+            filters={"source_role": "amendment_1_historical"},
+        )
+        self.assertEqual(missing["status"], "no_results")
+        self.assertEqual(missing["reason"], "filters_removed_all")
+
     def test_dense_readiness_does_not_fake_matches(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
         store = EvidenceStore(config)
@@ -247,6 +298,7 @@ class RuntimeContractTest(unittest.TestCase):
                     "citation": "Rule 1",
                     "quoted_text": "generic corpus resolution",
                     "hierarchy": [],
+                    "status": "final",
                 })
                 + "\n",
                 encoding="utf-8",

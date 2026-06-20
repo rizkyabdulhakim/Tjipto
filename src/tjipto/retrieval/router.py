@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.dense import dense_search
+from tjipto.retrieval.metadata import filter_evidence, normalize_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.service import RetrievalService
 
@@ -14,8 +15,10 @@ def route_retrieval(
     limit: int = 10,
     allow_bm25_after_citation_miss: bool = False,
     route: str = "auto",
+    metadata_filters: dict | None = None,
 ) -> dict:
     normalized = normalize_query(query)
+    filters = normalize_filters(metadata_filters)
     corpus_supported = store is not None
     intent = classify_intent(
         corpus_id,
@@ -32,6 +35,8 @@ def route_retrieval(
         "matches": (),
         "reason": None,
         "required_corpus": intent["required_corpus"],
+        "metadata_filters": filters,
+        "applied_filters": filters,
     }
     if store is None:
         return envelope | {
@@ -51,8 +56,15 @@ def route_retrieval(
     service = RetrievalService(store)
     if intent["intent"] == "exact_citation":
         matches = tuple(service.citation(normalized["normalized_query"]))[:limit]
+        filtered = filter_evidence(matches, filters)
+        if filtered:
+            return envelope | {"status": "found", "route": "exact", "matches": filtered}
         if matches:
-            return envelope | {"status": "found", "route": "exact", "matches": matches}
+            return envelope | {
+                "status": "no_results",
+                "route": "no_results",
+                "reason": "filters_removed_all",
+            }
         if not allow_bm25_after_citation_miss:
             return envelope | {
                 "status": "citation_not_found",
@@ -61,6 +73,19 @@ def route_retrieval(
             }
 
     matches = tuple(service.search(normalized["normalized_query"], limit))
+    filtered = filter_evidence(matches, filters)
+    if filtered:
+        return envelope | {
+            "status": "found",
+            "route": "bm25",
+            "intent": "natural_language",
+            "matches": filtered,
+        }
     if matches:
-        return envelope | {"status": "found", "route": "bm25", "intent": "natural_language", "matches": matches}
+        return envelope | {
+            "status": "no_results",
+            "route": "no_results",
+            "intent": "no_results",
+            "reason": "filters_removed_all",
+        }
     return envelope | {"status": "no_results", "route": "no_results", "intent": "no_results", "reason": "no_results"}
