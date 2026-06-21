@@ -102,7 +102,13 @@ class LegalRuntimeService:
             for row in _BOOKMARKS.values()
             if row["corpus_id"] == corpus_id
         )
-        return {"status": "ok", "corpus_id": corpus_id, "persistence": "memory", "bookmarks": bookmarks}
+        return {
+            "status": "ok",
+            "corpus_id": corpus_id,
+            "persistence": "memory",
+            "persistence_label": "temporary_process_memory",
+            "bookmarks": bookmarks,
+        }
 
     def bookmark(
         self,
@@ -175,10 +181,10 @@ class LegalRuntimeService:
         }
 
     def _answer_text(self, status: str, evidence: tuple[dict, ...]) -> str:
-        citation = evidence[0].get("citation") or "evidence"
+        citation = evidence[0].get("label") or evidence[0].get("citation") or "evidence"
         if status == "answer_ready":
-            return f"Evidence-grounded citation support is available for {citation}; no legal conclusion is generated."
-        return "Limited evidence-grounded support is available; no legal conclusion is generated."
+            return f"Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum."
+        return "Dukungan bukti terbatas tersedia; sistem tidak menghasilkan kesimpulan hukum."
 
 
 def _empty_citation_fields() -> dict:

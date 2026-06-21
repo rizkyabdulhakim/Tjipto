@@ -58,6 +58,7 @@ export interface CitationPayload {
   citation?: string;
   label?: string;
   hierarchy?: string[];
+  document_title?: string;
   quoted_text: string;
   source_role?: string;
   temporal_context?: string;
@@ -110,6 +111,12 @@ export interface BookmarkPointer {
   status: string;
 }
 
+export interface BookmarksResponse {
+  persistence?: "memory" | string;
+  persistence_label?: string;
+  bookmarks: BookmarkPointer[];
+}
+
 export async function askUud(query: string): Promise<TjiptoAskResponse> {
   const response = await fetch(`${API_BASE}/uud/ask`, {
     method: "POST",
@@ -131,11 +138,15 @@ export async function searchUud(query: string): Promise<SearchResult[]> {
   return Array.isArray(body.results) ? body.results : [];
 }
 
-export async function listBookmarks(): Promise<BookmarkPointer[]> {
+export async function listBookmarks(): Promise<BookmarksResponse> {
   const response = await fetch(`${API_BASE}/uud/bookmarks`);
   if (!response.ok) throw new Error(`UUD bookmarks returned ${response.status}`);
   const body = await response.json();
-  return Array.isArray(body.bookmarks) ? body.bookmarks : [];
+  return {
+    persistence: body.persistence,
+    persistence_label: body.persistence_label,
+    bookmarks: Array.isArray(body.bookmarks) ? body.bookmarks : [],
+  };
 }
 
 export async function saveBookmark(evidenceId: string): Promise<BookmarkPointer | null> {
@@ -180,15 +191,21 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       documentId: String(item.evidence_id),
       legalUnitId: item.legal_unit_id,
       sourceDocumentId: item.source_document_id,
-      viewerRefId: viewer.evidence_id,
-      documentTitle: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
+      viewerRefId: viewer?.evidence_id,
+      documentTitle: item.document_title ?? fallbackDocumentTitle(item.corpus_id),
       regulationType: "UUD",
       article: String(item.label ?? item.citation ?? "UUD"),
       pageNumber: Number.isFinite(pageNumber) ? pageNumber : 1,
       excerpt: String(item.quoted_text),
       sourceUrl: "",
-      sourceDomain: "UUD runtime",
+      sourceDomain: item.source_role ?? item.corpus_id ?? "runtime",
       fileHash: item.source_sha256 ? `sha256:${String(item.source_sha256)}` : undefined,
     };
   });
+}
+
+function fallbackDocumentTitle(corpusId?: string) {
+  return corpusId === "uud"
+    ? "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945"
+    : corpusId ?? "Dokumen hukum";
 }

@@ -60,7 +60,10 @@ class RuntimeHttpContractTest(unittest.TestCase):
         saved = self._post("/uud/bookmarks", {"evidence_id": evidence_id, "note": "cek lagi"})
         self.assertEqual(saved["status"], "saved")
         self.assertNotIn("quoted_text", saved["bookmark"])
-        self.assertTrue(self._get("/uud/bookmarks")["bookmarks"])
+        bookmarks = self._get("/uud/bookmarks")
+        self.assertEqual(bookmarks["persistence"], "memory")
+        self.assertEqual(bookmarks["persistence_label"], "temporary_process_memory")
+        self.assertTrue(bookmarks["bookmarks"])
 
         self.assertEqual(self._post("/unknown/search", {"query": "Pasal 1"})["status"], "unsupported_corpus")
 

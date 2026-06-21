@@ -103,13 +103,15 @@ export function SearchRoute() {
 
 export function LibraryRoute() {
   const [bookmarks, setBookmarks] = useState<BookmarkPointer[]>([]);
+  const [persistence, setPersistence] = useState("temporary_process_memory");
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
     listBookmarks()
-      .then((rows) => {
-        setBookmarks(rows);
-        setStatus(rows.length ? "ready" : "empty");
+      .then((body) => {
+        setBookmarks(body.bookmarks);
+        setPersistence(body.persistence_label ?? body.persistence ?? "temporary_process_memory");
+        setStatus(body.bookmarks.length ? "ready" : "empty");
       })
       .catch(() => setStatus("unavailable"));
   }, []);
@@ -127,7 +129,7 @@ export function LibraryRoute() {
           className="mt-1.5"
           style={{ fontSize: 14, color: "var(--tj-text-secondary)" }}
         >
-          Korpus runtime terverifikasi saat ini: UUD-only.
+          Korpus runtime terverifikasi saat ini: UUD-only. Bookmark bersifat sementara di memori proses.
         </p>
 
         <div className="mt-7 flex items-center gap-2">
@@ -136,6 +138,9 @@ export function LibraryRoute() {
             style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}
           >
             LIBRARY STATUS
+          </span>
+          <span style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
+            {persistence}
           </span>
         </div>
 
@@ -146,7 +151,7 @@ export function LibraryRoute() {
                 <FileText size={15} className="text-[var(--tj-text-secondary)]" />
               </div>
               <p style={{ fontSize: 14, color: "var(--tj-text-secondary)", lineHeight: "22px" }}>
-                {status === "loading" ? "Memeriksa bookmark backend..." : "Belum ada bookmark evidence tersimpan."}
+                {status === "loading" ? "Memeriksa bookmark backend..." : "Belum ada bookmark evidence sementara tersimpan."}
               </p>
             </div>
           ) : (

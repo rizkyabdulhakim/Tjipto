@@ -8,6 +8,7 @@ from tjipto.evidence.store import EvidenceStore
 AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
 BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s*([a-z]?)\b", re.IGNORECASE)
 PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?|[ivxlcdm]+)\b", re.IGNORECASE)
+BAB_XA_PASAL_RE = re.compile(r"\bpasal\s+28[a-j]\b", re.IGNORECASE)
 
 
 def structured_lookup(store: EvidenceStore, query: str, limit: int = 10) -> tuple[dict, ...]:
@@ -23,7 +24,7 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10) -> tupl
         row for row in store.evidence
         if row.get("status") == "final"
         and store.bboxes_for(row["evidence_id"])
-        and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets))
+        and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets) or _matches_bab_xa(row, targets))
     ]
     return tuple(rows[:limit])
 
@@ -69,6 +70,13 @@ def _matches_unit(row: dict, targets: tuple[str, ...]) -> bool:
     values = [row.get("unit_label", ""), *(row.get("hierarchy") or ())]
     haystack = {key for value in values for key in _label_keys(value)}
     return all(target in haystack for target in targets)
+
+
+def _matches_bab_xa(row: dict, targets: tuple[str, ...]) -> bool:
+    if targets != ("bab xa",):
+        return False
+    values = [row.get("citation", ""), *(row.get("hierarchy") or ())]
+    return any(BAB_XA_PASAL_RE.search(str(value)) for value in values)
 
 
 def _label_keys(value: object) -> set[str]:

@@ -100,6 +100,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertNotIn("quoted_text", bookmark)
         self.assertNotIn("source_sha256", bookmark)
         self.assertTrue(self.service.bookmarks("uud")["bookmarks"])
+        self.assertEqual(self.service.bookmarks("uud")["persistence"], "memory")
+        self.assertEqual(self.service.bookmarks("uud")["persistence_label"], "temporary_process_memory")
         self.assertEqual(self.service.bookmark("uud", "missing")["status"], "unavailable")
 
     def test_retrieval_units_reference_final_evidence(self) -> None:
@@ -162,6 +164,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(answer["route"], "exact")
         self.assertEqual(answer["intent"], "exact_citation")
         self.assertEqual(answer["normalized_query"], "Pasal 1 ayat (3)")
+        self.assertIn("Dukungan sitasi berbasis bukti", answer["answer"])
+        self.assertNotIn("Evidence-grounded", answer["answer"])
         self.assertTrue(answer["evidence"])
         first = answer["evidence"][0]
         self.assertTrue(first["evidence_id"])
@@ -427,11 +431,15 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertTrue(any(expected in " ".join(row.get("hierarchy") or row.get("citation", "")) for row in rows))
 
         bab_xa = self.service.search("uud", "BAB XA", limit=3)
-        self.assertEqual(bab_xa["status"], "no_results")
-        self.assertEqual(bab_xa["route"], "structured_not_found")
+        self.assertEqual(bab_xa["status"], "found")
+        self.assertEqual(bab_xa["route"], "structured")
         self.assertEqual(bab_xa["intent"], "structured_lookup")
-        self.assertEqual(bab_xa["reason"], "structured_not_found")
-        self.assertFalse(bab_xa["results"])
+        self.assertTrue(bab_xa["results"])
+        self.assertTrue(all(row["title"].startswith("BAB XA") for row in bab_xa["results"]))
+
+        pasal_28a = self.service.search("uud", "Pasal 28A", limit=1)
+        self.assertEqual(pasal_28a["status"], "found")
+        self.assertTrue(pasal_28a["results"][0]["title"].startswith("BAB XA"))
 
         filtered = self.service.search(
             "uud",

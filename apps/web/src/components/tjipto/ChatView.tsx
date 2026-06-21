@@ -34,12 +34,13 @@ function renderContent(
     let last = 0;
     const regex = /\[(\d+)\]/g;
     let m: RegExpExecArray | null;
-    while ((m = regex.exec(para))) {
-      if (m.index > last) parts.push(para.slice(last, m.index));
-      const c = citations?.find((x) => x.id === Number(m[1]));
+    while ((m = regex.exec(para)) !== null) {
+      const match = m;
+      if (match.index > last) parts.push(para.slice(last, match.index));
+      const c = citations?.find((x) => x.id === Number(match[1]));
       if (c) parts.push({ citation: c });
-      else parts.push(m[0]);
-      last = m.index + m[0].length;
+      else parts.push(match[0]);
+      last = match.index + match[0].length;
     }
     if (last < para.length) parts.push(para.slice(last));
 

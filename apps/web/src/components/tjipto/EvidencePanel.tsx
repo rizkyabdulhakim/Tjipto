@@ -286,7 +286,8 @@ function EvidenceContent({
         <ToolbarBtn
           onClick={savePointer}
           className="w-9 h-9 rounded-xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] shadow-sm"
-          aria-label="Simpan bookmark"
+          aria-label="Simpan bookmark sementara"
+          title="Simpan bookmark sementara"
         >
           {saved ? <Check size={15} /> : <Bookmark size={15} />}
         </ToolbarBtn>

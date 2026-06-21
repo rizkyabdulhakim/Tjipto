@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 DIRECT_ROUTES = {"exact", "structured", "bm25"}
+BAB_XA_PASAL_PREFIXES = tuple(f"Pasal 28{letter}" for letter in "ABCDEFGHIJ")
 REQUIRED_FIELDS = (
     "citation",
     "quoted_text",
@@ -73,6 +74,7 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
 def _payload(store, row: dict) -> dict:
     bboxes = store.bboxes_for(row["evidence_id"])
     label = _evidence_label(row)
+    hierarchy = _evidence_hierarchy(row)
     return {
         "corpus_id": row.get("corpus_id"),
         "evidence_id": row["evidence_id"],
@@ -80,7 +82,7 @@ def _payload(store, row: dict) -> dict:
         "source_document_id": row.get("source_document_id"),
         "citation": row.get("citation"),
         "label": label,
-        "hierarchy": tuple(row.get("hierarchy") or ()),
+        "hierarchy": hierarchy,
         "source_role": row.get("source_role"),
         "temporal_context": row.get("temporal_context"),
         "source_pdf_path": row.get("source_pdf_path"),
@@ -110,7 +112,7 @@ def _citation_payload(row: dict) -> dict:
         "source_document_id": row.get("source_document_id"),
         "citation": row.get("citation"),
         "label": row.get("label") or _evidence_label(row),
-        "hierarchy": tuple(row.get("hierarchy") or ()),
+        "hierarchy": _evidence_hierarchy(row),
         "quoted_text": row.get("quoted_text"),
         "source_role": row.get("source_role"),
         "temporal_context": row.get("temporal_context"),
@@ -124,7 +126,18 @@ def _citation_payload(row: dict) -> dict:
 
 
 def _evidence_label(row: dict) -> str | None:
-    hierarchy = tuple(item for item in (row.get("hierarchy") or ()) if item)
+    hierarchy = _evidence_hierarchy(row)
     if hierarchy:
         return " / ".join(str(item) for item in hierarchy)
     return row.get("citation") or row.get("legal_unit_id")
+
+
+def _evidence_hierarchy(row: dict) -> tuple:
+    hierarchy = tuple(item for item in (row.get("hierarchy") or ()) if item)
+    if hierarchy and hierarchy[0] == "BAB X" and _is_bab_xa_article(hierarchy):
+        return ("BAB XA", *hierarchy[1:])
+    return hierarchy
+
+
+def _is_bab_xa_article(hierarchy: tuple) -> bool:
+    return any(str(item).startswith(BAB_XA_PASAL_PREFIXES) for item in hierarchy[1:])
