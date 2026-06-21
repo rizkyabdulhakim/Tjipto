@@ -44,6 +44,15 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(non_citation["status"], "citation_not_found")
         self.assertEqual(non_citation["route"], "citation_not_found")
         self.assertFalse(non_citation["matches"])
+        self.assertEqual(non_citation["citation_payloads"], ())
+        self.assertEqual(non_citation["viewer_refs"], ())
+        self.assertEqual(non_citation["validation_reasons"], {})
+
+        missing_citation = self.service.citation("uud", "Pasal 999")
+        self.assertEqual(missing_citation["status"], "citation_not_found")
+        self.assertEqual(missing_citation["citation_payloads"], ())
+        self.assertEqual(missing_citation["viewer_refs"], ())
+        self.assertEqual(missing_citation["validation_reasons"], {})
 
         viewer = self.service.viewer("uud", evidence["evidence_id"])
         self.assertEqual(viewer["status"], "viewer_payload_ready")

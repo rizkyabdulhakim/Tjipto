@@ -40,7 +40,7 @@ class LegalRuntimeService:
     ) -> dict:
         store = self._store(corpus_id)
         if store is None:
-            return route_retrieval(corpus_id, query, None)
+            return route_retrieval(corpus_id, query, None) | _empty_citation_fields()
         metadata_filters = dict(filters or {})
         if source_role is not None:
             metadata_filters["source_role"] = source_role
@@ -51,9 +51,10 @@ class LegalRuntimeService:
                 "route": "citation_not_found",
                 "matches": (),
                 "reason": "not_a_citation",
+                **_empty_citation_fields(),
             }
         if not routed["matches"]:
-            return routed | {"status": routed["status"]}
+            return routed | {"status": routed["status"], **_empty_citation_fields()}
         context_pack = assemble_context_pack(store, routed["matches"])
         return routed | {
             "status": "found",
@@ -113,3 +114,7 @@ class LegalRuntimeService:
         if status == "answer_ready":
             return f"Evidence-grounded citation support is available for {citation}; no legal conclusion is generated."
         return "Limited evidence-grounded support is available; no legal conclusion is generated."
+
+
+def _empty_citation_fields() -> dict:
+    return {"citation_payloads": (), "viewer_refs": (), "validation_reasons": {}}
