@@ -83,6 +83,7 @@ class RuntimeContractTest(unittest.TestCase):
             ):
                 self.assertIn(field, row)
             self.assertEqual(row["status"], "evidence")
+            self.assertNotRegex(row["title"], r"^\([0-9]+\)$")
 
         weak = self.service.search("uud", "aturan KUHP tentang pencurian")
         self.assertEqual(weak["status"], "found")
@@ -425,6 +426,13 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertTrue(all(store.bboxes_for(row["evidence_id"]) for row in rows))
             self.assertTrue(any(expected in " ".join(row.get("hierarchy") or row.get("citation", "")) for row in rows))
 
+        bab_xa = self.service.search("uud", "BAB XA", limit=3)
+        self.assertEqual(bab_xa["status"], "no_results")
+        self.assertEqual(bab_xa["route"], "structured_not_found")
+        self.assertEqual(bab_xa["intent"], "structured_lookup")
+        self.assertEqual(bab_xa["reason"], "structured_not_found")
+        self.assertFalse(bab_xa["results"])
+
         filtered = self.service.search(
             "uud",
             "Pembukaan",
@@ -450,14 +458,21 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(structured_lookup(NoBBoxStore(), "Pasal 1 ayat (1)"), ())
 
         class UnitBackedStore:
-            evidence = ({"evidence_id": "e2", "legal_unit_id": "lu2", "status": "final", "hierarchy": []},)
-            legal_units = ({"legal_unit_id": "lu2", "unit_label": "Pasal 9", "hierarchy": []},)
+            evidence = (
+                {"evidence_id": "e2", "legal_unit_id": "lu2", "status": "final", "hierarchy": []},
+                {"evidence_id": "e3", "legal_unit_id": "lu3", "status": "final", "hierarchy": ["BAB X A"]},
+            )
+            legal_units = (
+                {"legal_unit_id": "lu2", "unit_label": "Pasal 9", "hierarchy": []},
+                {"legal_unit_id": "lu3", "unit_label": "BAB X A", "hierarchy": []},
+            )
             chunks = ()
 
             def bboxes_for(self, evidence_id):
                 return [{"bbox_id": "b2"}]
 
         self.assertEqual(structured_lookup(UnitBackedStore(), "Pasal 9")[0]["evidence_id"], "e2")
+        self.assertEqual(structured_lookup(UnitBackedStore(), "BAB XA")[0]["evidence_id"], "e3")
 
     def test_graph_candidate_pipeline_merges_dedups_and_ranks_stably(self) -> None:
         class Store:
@@ -526,6 +541,8 @@ class RuntimeContractTest(unittest.TestCase):
         for field in (
             "evidence_id",
             "citation",
+            "label",
+            "hierarchy",
             "quoted_text",
             "source_role",
             "temporal_context",

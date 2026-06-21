@@ -6,7 +6,7 @@ from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.metadata import filter_evidence, normalize_filters, public_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.service import RetrievalService
-from tjipto.retrieval.structured import structured_lookup
+from tjipto.retrieval.structured import has_structured_target, structured_lookup
 
 
 def route_retrieval(
@@ -99,6 +99,13 @@ def route_retrieval(
             "route": "no_results",
             "intent": "no_results",
             "reason": "filters_removed_all",
+        }
+    if has_structured_target(normalized["normalized_query"]):
+        return envelope | {
+            "status": "no_results",
+            "route": "structured_not_found",
+            "intent": "structured_lookup",
+            "reason": "structured_not_found",
         }
 
     matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))

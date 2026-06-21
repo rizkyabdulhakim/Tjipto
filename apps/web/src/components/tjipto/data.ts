@@ -7,7 +7,7 @@ export const suggestedPrompts = [
   { title: "Majelis Permusyawaratan Rakyat", subtitle: "ketentuan UUD" },
 ];
 
-export const chatHistory: ChatThread[] = [
+export const quickQueries: ChatThread[] = [
   { id: "t1", title: "Pasal 1 ayat (3)", group: "Today", active: true },
   { id: "t2", title: "Pembukaan UUD 1945", group: "Today" },
   { id: "t3", title: "Negara hukum", group: "Today" },

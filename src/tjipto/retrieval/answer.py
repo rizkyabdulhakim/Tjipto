@@ -72,12 +72,15 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
 
 def _payload(store, row: dict) -> dict:
     bboxes = store.bboxes_for(row["evidence_id"])
+    label = _evidence_label(row)
     return {
         "corpus_id": row.get("corpus_id"),
         "evidence_id": row["evidence_id"],
         "legal_unit_id": row.get("legal_unit_id"),
         "source_document_id": row.get("source_document_id"),
         "citation": row.get("citation"),
+        "label": label,
+        "hierarchy": tuple(row.get("hierarchy") or ()),
         "source_role": row.get("source_role"),
         "temporal_context": row.get("temporal_context"),
         "source_pdf_path": row.get("source_pdf_path"),
@@ -106,6 +109,8 @@ def _citation_payload(row: dict) -> dict:
         "legal_unit_id": row.get("legal_unit_id"),
         "source_document_id": row.get("source_document_id"),
         "citation": row.get("citation"),
+        "label": row.get("label") or _evidence_label(row),
+        "hierarchy": tuple(row.get("hierarchy") or ()),
         "quoted_text": row.get("quoted_text"),
         "source_role": row.get("source_role"),
         "temporal_context": row.get("temporal_context"),
@@ -116,3 +121,10 @@ def _citation_payload(row: dict) -> dict:
         "viewer_ref": row.get("viewer_ref"),
         "evidence_status": row.get("evidence_status"),
     }
+
+
+def _evidence_label(row: dict) -> str | None:
+    hierarchy = tuple(item for item in (row.get("hierarchy") or ()) if item)
+    if hierarchy:
+        return " / ".join(str(item) for item in hierarchy)
+    return row.get("citation") or row.get("legal_unit_id")

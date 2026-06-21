@@ -1,3 +1,4 @@
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -15,7 +16,7 @@ import {
   Bookmark,
 } from "lucide-react";
 import type { Citation } from "../../lib/types";
-import { saveBookmark } from "../../lib/api";
+import { getViewerPayload, saveBookmark, type ViewerPayload } from "../../lib/api";
 
 interface EvidencePanelProps {
   citation: Citation | null;
@@ -99,9 +100,31 @@ function EvidenceContent({
   const [zoom, setZoom] = useState(100);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [viewer, setViewer] = useState<ViewerPayload | null>(null);
+  const [viewerError, setViewerError] = useState(false);
   const location = legalUnitLabel(citation.article, citation.paragraph);
+  const pageNumber = viewer?.page_numbers?.[0] ?? citation.pageNumber;
+  const sourceHash = viewer?.source_sha256
+    ? `sha256:${viewer.source_sha256}`
+    : citation.fileHash;
 
   useEffect(() => setSaved(false), [citation.documentId]);
+
+  useEffect(() => {
+    let stale = false;
+    setViewer(null);
+    setViewerError(false);
+    getViewerPayload(citation.documentId)
+      .then((payload) => {
+        if (!stale) setViewer(payload);
+      })
+      .catch(() => {
+        if (!stale) setViewerError(true);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [citation.documentId]);
 
   const copyExcerpt = () => {
     try {
@@ -193,7 +216,7 @@ function EvidenceContent({
           <span style={{ color: "var(--tj-text-muted)" }} className="opacity-40">·</span>
           <div className="flex items-center gap-1.5">
             <FileText size={14} className="opacity-60" />
-            <span>Halaman {citation.pageNumber}</span>
+            <span>Halaman {pageNumber}</span>
           </div>
         </div>
       </header>
@@ -280,7 +303,12 @@ function EvidenceContent({
             transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
           }}
         >
-          <UnavailableViewer citation={citation} location={location} />
+          <UnavailableViewer
+            location={location}
+            pageNumber={pageNumber}
+            viewer={viewer}
+            viewerError={viewerError}
+          />
         </div>
         
         {/* EXCERPT CARD */}
@@ -336,10 +364,10 @@ function EvidenceContent({
           </h3>
           <div className="rounded-2xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm divide-y divide-[var(--tj-border-subtle)]">
             <MetaRow label="Lokasi">{location}</MetaRow>
-            <MetaRow label="Halaman">Hal. {citation.pageNumber}</MetaRow>
+            <MetaRow label="Halaman">Hal. {pageNumber}</MetaRow>
             <MetaRow label="Yurisdiksi">Republik Indonesia</MetaRow>
             <MetaRow label="Domain">{citation.sourceDomain ?? "Tidak tersedia"}</MetaRow>
-            <MetaRow label="Hash File" mono>{citation.fileHash ?? "Tidak tersedia"}</MetaRow>
+            <MetaRow label="Hash File" mono>{sourceHash ?? "Tidak tersedia"}</MetaRow>
           </div>
         </section>
       </div>
@@ -364,12 +392,11 @@ function ToolbarBtn({
   className = "",
   ...rest
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   className?: string;
-  [k: string]: any;
-}) {
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       onClick={onClick}
@@ -388,7 +415,7 @@ function MetaRow({
   mono,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
   mono?: boolean;
 }) {
   return (
@@ -409,17 +436,31 @@ function MetaRow({
   );
 }
 
-function UnavailableViewer({ citation, location }: { citation: Citation; location: string }) {
+function UnavailableViewer({
+  location,
+  pageNumber,
+  viewer,
+  viewerError,
+}: {
+  location: string;
+  pageNumber: number;
+  viewer: ViewerPayload | null;
+  viewerError: boolean;
+}) {
+  const loading = !viewer && !viewerError;
+  const backendReady = viewer?.status === "viewer_payload_ready";
   return (
     <div
       className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 py-10 text-center"
     >
       <FileText size={28} className="text-[var(--tj-text-muted)]" />
       <div style={{ fontSize: 14, fontWeight: 700, color: "var(--tj-text-primary)" }}>
-        Rendering PDF/BBox belum tersedia
+        {loading ? "Memuat metadata viewer" : "Rendering PDF/BBox belum tersedia"}
       </div>
       <div style={{ fontSize: 13, color: "var(--tj-text-secondary)", lineHeight: "20px" }}>
-        Evidence backend tersedia untuk {location} pada halaman {citation.pageNumber}, tetapi panel ini tidak menampilkan halaman PDF atau overlay BBox.
+        {backendReady
+          ? `Evidence backend tersedia untuk ${location} pada halaman ${pageNumber}, tetapi runtime menyatakan rendering_available=false sehingga panel ini tidak menampilkan halaman PDF atau overlay BBox.`
+          : "Viewer runtime belum mengembalikan payload siap render untuk evidence ini."}
       </div>
     </div>
   );
@@ -427,6 +468,7 @@ function UnavailableViewer({ citation, location }: { citation: Citation; locatio
 
 function legalUnitLabel(article?: string, paragraph?: string) {
   const base = article || "UUD";
-  const label = /^pasal\b/i.test(base) ? base : `Pasal ${base}`;
+  const knownLabel = /^(pasal|bab|aturan|pembukaan)\b/i.test(base) || base.includes(" / ");
+  const label = knownLabel ? base : `Pasal ${base}`;
   return paragraph ? `${label} ayat (${paragraph})` : label;
 }

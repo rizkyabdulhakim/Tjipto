@@ -4,22 +4,26 @@ const API_BASE =
   import.meta.env.VITE_TJIPTO_API_BASE ??
   "http://localhost:8000";
 
+export interface ValidationReasons {
+  [evidenceId: string]: string;
+}
+
 export interface TjiptoAskResponse {
   status: string;
   answer_type?: string;
   answer?: string;
   route?: string;
   intent?: string;
-  evidence?: Array<Record<string, any>>;
-  citations?: Array<Record<string, any>>;
-  viewer_refs?: Array<Record<string, any>>;
+  evidence?: EvidencePayload[];
+  citations?: CitationPayload[];
+  viewer_refs?: ViewerRefPayload[];
   context_pack?: {
-    answer_evidence?: Array<Record<string, any>>;
-    supporting_context?: Array<Record<string, any>>;
-    excluded_results?: Array<Record<string, any>>;
-    citation_payloads?: Array<Record<string, any>>;
-    viewer_refs?: Array<Record<string, any>>;
-    validation_reasons?: Record<string, string>;
+    answer_evidence?: EvidencePayload[];
+    supporting_context?: EvidencePayload[];
+    excluded_results?: EvidencePayload[];
+    citation_payloads?: CitationPayload[];
+    viewer_refs?: ViewerRefPayload[];
+    validation_reasons?: ValidationReasons;
   };
 }
 
@@ -34,6 +38,64 @@ export interface SearchResult {
   retrieval_method?: string;
   reasons?: string;
   status: string;
+}
+
+export interface ViewerRefPayload {
+  action?: string;
+  evidence_id: string;
+  page_numbers?: number[];
+  bbox_count?: number;
+  source_pdf_path?: string;
+  source_sha256?: string;
+  can_resolve?: boolean;
+}
+
+export interface CitationPayload {
+  corpus_id?: string;
+  evidence_id: string;
+  legal_unit_id?: string;
+  source_document_id?: string;
+  citation?: string;
+  label?: string;
+  hierarchy?: string[];
+  quoted_text: string;
+  source_role?: string;
+  temporal_context?: string;
+  source_pdf_path?: string;
+  source_sha256?: string;
+  page_numbers?: number[];
+  bbox_count?: number;
+  viewer_ref?: ViewerRefPayload;
+  evidence_status?: string;
+}
+
+export interface EvidencePayload extends CitationPayload {
+  route_sources?: string[];
+}
+
+export interface ViewerPayload {
+  status: string;
+  corpus_id?: string;
+  evidence_id?: string;
+  legal_unit_id?: string;
+  source_document_id?: string;
+  citation?: string;
+  quoted_text?: string;
+  source_pdf_path?: string;
+  source_sha256?: string;
+  page_numbers?: number[];
+  bbox_count?: number;
+  bbox_rectangles?: Array<{
+    bbox_id?: string;
+    page_number?: number;
+    x0?: number;
+    y0?: number;
+    x1?: number;
+    y1?: number;
+    width?: number;
+    height?: number;
+  }>;
+  rendering_available?: boolean;
 }
 
 export interface BookmarkPointer {
@@ -87,6 +149,16 @@ export async function saveBookmark(evidenceId: string): Promise<BookmarkPointer 
   return body.bookmark ?? null;
 }
 
+export async function getViewerPayload(evidenceId: string): Promise<ViewerPayload> {
+  const response = await fetch(`${API_BASE}/uud/viewer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ evidence_id: evidenceId }),
+  });
+  if (!response.ok) throw new Error(`UUD viewer returned ${response.status}`);
+  return response.json();
+}
+
 export function fallbackAnswer() {
   return "Bukti tidak cukup / database belum tersedia dalam korpus UUD terverifikasi saat ini.";
 }
@@ -96,7 +168,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
   const viewerRefs = Array.isArray(response.viewer_refs) ? response.viewer_refs : [];
   return citations.flatMap((item, index) => {
     if (!item?.evidence_id || !item?.quoted_text) return [];
-    const viewer = viewerRefs[index] ?? item.viewer_ref ?? {};
+    const viewer = viewerRefs[index] ?? item.viewer_ref;
     const pages = Array.isArray(item.page_numbers)
       ? item.page_numbers
       : Array.isArray(viewer.page_numbers)
@@ -106,9 +178,12 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
     return {
       id: index + 1,
       documentId: String(item.evidence_id),
+      legalUnitId: item.legal_unit_id,
+      sourceDocumentId: item.source_document_id,
+      viewerRefId: viewer.evidence_id,
       documentTitle: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
       regulationType: "UUD",
-      article: String(item.citation ?? "UUD"),
+      article: String(item.label ?? item.citation ?? "UUD"),
       pageNumber: Number.isFinite(pageNumber) ? pageNumber : 1,
       excerpt: String(item.quoted_text),
       sourceUrl: "",

@@ -1,7 +1,7 @@
 /* Tjipto — iOS 26 "Liquid Glass" theme, scoped to the app root */
 .tj-root {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Geist", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   font-feature-settings: "ss01", "cv11", "calt";
   letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;

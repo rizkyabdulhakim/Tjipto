@@ -6,7 +6,7 @@ from tjipto.evidence.store import EvidenceStore
 
 
 AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
-BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\b", re.IGNORECASE)
+BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s*([a-z]?)\b", re.IGNORECASE)
 PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?|[ivxlcdm]+)\b", re.IGNORECASE)
 
 
@@ -28,6 +28,10 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10) -> tupl
     return tuple(rows[:limit])
 
 
+def has_structured_target(query: str) -> bool:
+    return bool(_targets(query))
+
+
 def _targets(query: str) -> tuple[str, ...]:
     text = query or ""
     folded = text.casefold()
@@ -39,7 +43,7 @@ def _targets(query: str) -> tuple[str, ...]:
         return _with_pasal("aturan tambahan", text)
     bab = BAB_RE.search(text)
     if bab:
-        return (f"bab {bab.group(1)}".casefold(),)
+        return (f"bab {bab.group(1)}{bab.group(2)}".casefold(),)
     pasal = PASAL_RE.search(text)
     if pasal:
         targets = [f"pasal {pasal.group(1).upper()}".casefold()]
@@ -57,11 +61,17 @@ def _with_pasal(section: str, text: str) -> tuple[str, ...]:
 
 def _matches(row: dict, targets: tuple[str, ...]) -> bool:
     values = [row.get("citation", ""), *(row.get("hierarchy") or ())]
-    haystack = {str(value).casefold() for value in values}
+    haystack = {key for value in values for key in _label_keys(value)}
     return all(target in haystack for target in targets)
 
 
 def _matches_unit(row: dict, targets: tuple[str, ...]) -> bool:
     values = [row.get("unit_label", ""), *(row.get("hierarchy") or ())]
-    haystack = {str(value).casefold() for value in values}
+    haystack = {key for value in values for key in _label_keys(value)}
     return all(target in haystack for target in targets)
+
+
+def _label_keys(value: object) -> set[str]:
+    label = str(value).casefold()
+    compact_bab = re.sub(r"\bbab\s+([ivxlcdm]+)\s+([a-z])\b", r"bab \1\2", label)
+    return {label, compact_bab}

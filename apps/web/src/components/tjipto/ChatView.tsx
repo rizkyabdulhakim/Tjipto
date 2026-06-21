@@ -345,7 +345,8 @@ function CitationFooter({
 
 function legalUnitLabel(article?: string, paragraph?: string) {
   const base = article || "UUD";
-  const label = /^pasal\b/i.test(base) ? base : `Pasal ${base}`;
+  const knownLabel = /^(pasal|bab|aturan|pembukaan)\b/i.test(base) || base.includes(" / ");
+  const label = knownLabel ? base : `Pasal ${base}`;
   return paragraph ? `${label} ayat (${paragraph})` : label;
 }
 

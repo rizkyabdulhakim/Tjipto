@@ -12,7 +12,7 @@ import {
   Moon,
   PanelLeftClose,
 } from "lucide-react";
-import { chatHistory } from "./data";
+import { quickQueries } from "./data";
 import { AnimatePresence, motion } from "motion/react";
 
 export type Route = "chat" | "search" | "library";
@@ -59,8 +59,8 @@ export function Sidebar({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return chatHistory;
-    return chatHistory.filter((t) => t.title.toLowerCase().includes(q));
+    if (!q) return quickQueries;
+    return quickQueries.filter((t) => t.title.toLowerCase().includes(q));
   }, [query]);
 
   if (collapsed) {
@@ -137,7 +137,7 @@ export function Sidebar({
         />
       </nav>
 
-      {/* Chat search + Recent */}
+      {/* Quick query search */}
       <div className="flex-1 flex flex-col min-h-0 px-3 pb-4">
         <div className="relative mb-3 px-1">
           <Search
@@ -147,13 +147,13 @@ export function Sidebar({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari percakapan..."
+            placeholder="Cari contoh pertanyaan..."
             className="w-full h-8.5 pl-8 pr-8 rounded-xl bg-[var(--tj-surface-glass)] border border-[var(--tj-border-glass)] hover:bg-[var(--tj-surface-hover)] focus:border-[var(--tj-accent-primary)] focus:bg-[var(--tj-surface)] outline-none transition-all text-[var(--tj-text-primary)] placeholder:text-[var(--tj-text-muted)] placeholder:opacity-60 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)]"
             style={{ 
               fontSize: 13.5,
               backgroundColor: 'color-mix(in srgb, var(--tj-surface-glass), var(--tj-text-primary) 3%)'
             }}
-            aria-label="Search chats"
+            aria-label="Search sample prompts"
           />
           {query && (
             <button
@@ -174,7 +174,7 @@ export function Sidebar({
             fontWeight: 700,
           }}
         >
-          <span>Recent Activity</span>
+          <span>Sample Prompts</span>
         </div>
 
         <div className="flex-1 overflow-y-auto tj-scroll flex flex-col gap-[2px]">

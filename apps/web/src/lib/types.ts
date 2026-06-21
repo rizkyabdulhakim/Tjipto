@@ -13,6 +13,9 @@ export interface Citation {
   documentId: string;
   documentTitle: string;
   regulationType: RegulationType;
+  legalUnitId?: string;
+  sourceDocumentId?: string;
+  viewerRefId?: string;
   article?: string;
   paragraph?: string;
   pageNumber: number;

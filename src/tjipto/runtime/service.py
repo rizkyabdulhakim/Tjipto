@@ -193,7 +193,7 @@ def _search_result(row: dict, routed: dict, context_pack: dict) -> dict:
         "evidence_id": row["evidence_id"],
         "citation_id": row["evidence_id"],
         "viewer_ref_id": viewer_ref.get("evidence_id"),
-        "title": row.get("citation") or row.get("legal_unit_id") or routed["corpus_id"].upper(),
+        "title": row.get("label") or row.get("citation") or row.get("legal_unit_id") or routed["corpus_id"].upper(),
         "snippet": row.get("quoted_text"),
         "retrieval_method": routed["route"],
         "reasons": context_pack["validation_reasons"].get(row["evidence_id"]),
