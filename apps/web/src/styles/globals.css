@@ -1,0 +1,407 @@
+/* Tjipto — iOS 26 "Liquid Glass" theme, scoped to the app root */
+.tj-root {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Geist", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  font-feature-settings: "ss01", "cv11", "calt";
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* ——— Light ——— */
+  --tj-bg: #F8F9FA;
+  --tj-app-bg: #F8F9FA;
+
+  /* glass surfaces: translucent fills (apply with backdrop-blur via .tj-glass) */
+  --tj-glass-fill: rgba(255, 255, 255, 0.55);
+  --tj-glass-fill-strong: rgba(255, 255, 255, 0.78);
+  --tj-glass-fill-soft: rgba(255, 255, 255, 0.34);
+  --tj-glass-border: rgba(15, 23, 42, 0.10);
+  --tj-glass-stroke: rgba(15, 23, 42, 0.10);
+  --tj-glass-shine: rgba(255, 255, 255, 1);
+  --tj-glass-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 -1px 0 rgba(15, 23, 42, 0.05) inset,
+    0 22px 56px -18px rgba(15, 23, 42, 0.22),
+    0 6px 18px -6px rgba(15, 23, 42, 0.12),
+    0 0 0 0.5px rgba(15, 23, 42, 0.06);
+
+  --tj-surface: rgba(255, 255, 255, 0.7);
+  --tj-surface-subtle: rgba(255, 255, 255, 0.45);
+  --tj-surface-hover: rgba(15, 23, 42, 0.04);
+  --tj-border: rgba(15, 23, 42, 0.08);
+  --tj-border-subtle: rgba(15, 23, 42, 0.05);
+
+  --tj-text-primary: #1a1a1a;
+  --tj-text-secondary: #4b5363;
+  --tj-text-muted: #7a8294;
+
+  /* iOS-26 vivid accent: signature azure with violet specular */
+  --tj-accent: #1a1a1a;
+  --tj-accent-hover: #000000;
+  --tj-accent-soft: rgba(26, 26, 26, 0.06);
+  --tj-accent-ring: rgba(26, 26, 26, 0.15);
+  --tj-accent-glow: 0 0 0 1px rgba(26, 26, 26, 0.1), 0 8px 24px -6px rgba(26, 26, 26, 0.15);
+
+  --tj-success: #34c759;
+  --tj-warning: #ff9f0a;
+  --tj-error: #ff3b30;
+
+  --tj-citation-highlight: rgba(10, 132, 255, 0.16);
+  --tj-pdf-highlight: rgba(10, 132, 255, 0.22);
+  --tj-user-bubble: rgba(255, 255, 255, 0.7);
+
+  --tj-shadow-composer:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 0 0 0.5px rgba(15, 23, 42, 0.08),
+    0 18px 40px -16px rgba(15, 23, 42, 0.22),
+    0 2px 6px rgba(15, 23, 42, 0.08);
+  --tj-shadow-panel: var(--tj-glass-shadow);
+
+  /* Ambient mesh background — calm, warm off-white base with whisper-soft cool/warm bleeds.
+     Easy on the eyes for long reading sessions; still recognisably iOS 26 glass. */
+  --tj-mesh:
+    linear-gradient(180deg, #F8F9FA 0%, #F8F9FA 100%);
+
+  color: var(--tj-text-primary);
+  background: var(--tj-mesh);
+  background-attachment: fixed;
+}
+
+.tj-root.tj-dark {
+  --tj-bg: #1A1A1A;
+  --tj-app-bg: #1A1A1A;
+
+  --tj-glass-fill: rgba(40, 40, 40, 0.45);
+  --tj-glass-fill-strong: rgba(40, 40, 40, 0.78);
+  --tj-glass-fill-soft: rgba(40, 40, 40, 0.30);
+  --tj-glass-border: rgba(255, 255, 255, 0.12);
+  --tj-glass-stroke: rgba(255, 255, 255, 0.10);
+  --tj-glass-shine: rgba(255, 255, 255, 0.22);
+  --tj-glass-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.28) inset,
+    0 28px 64px -18px rgba(0, 0, 0, 0.6),
+    0 8px 20px -4px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px rgba(255, 255, 255, 0.06);
+
+  --tj-surface: rgba(40, 40, 40, 0.4);
+  --tj-surface-subtle: rgba(30, 30, 30, 0.3);
+  --tj-surface-hover: rgba(60, 60, 60, 0.5);
+  --tj-border: rgba(255, 255, 255, 0.08);
+  --tj-border-subtle: rgba(255, 255, 255, 0.05);
+
+  --tj-text-primary: #ffffff;
+  --tj-text-secondary: rgba(255, 255, 255, 0.75);
+  --tj-text-muted: rgba(255, 255, 255, 0.45);
+
+  --tj-accent: #ffffff;
+  --tj-accent-hover: #ffffff;
+  --tj-accent-soft: rgba(255, 255, 255, 0.1);
+  --tj-accent-ring: rgba(255, 255, 255, 0.2);
+  --tj-accent-glow:
+    0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 10px 36px -8px rgba(255, 255, 255, 0.15);
+
+  --tj-citation-highlight: rgba(255, 255, 255, 0.1);
+  --tj-pdf-highlight: rgba(255, 255, 255, 0.15);
+  --tj-user-bubble: rgba(255, 255, 255, 0.04);
+
+  --tj-shadow-composer:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    0 24px 60px -16px rgba(0, 0, 0, 0.6),
+    0 4px 12px rgba(0, 0, 0, 0.4);
+
+  --tj-mesh:
+    linear-gradient(180deg, #1A1A1A 0%, #1A1A1A 100%);
+}
+
+/* ——— Liquid Glass primitive — iOS 26 specular glass ——— */
+.tj-root .tj-glass {
+  background: var(--tj-glass-fill);
+  backdrop-filter: blur(40px) saturate(240%) brightness(1.04);
+  -webkit-backdrop-filter: blur(40px) saturate(240%) brightness(1.04);
+  border: 1px solid var(--tj-glass-border);
+  box-shadow: var(--tj-glass-shadow);
+  position: relative;
+  isolation: isolate;
+  transition: background 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+.tj-root .tj-glass-strong {
+  background: var(--tj-glass-fill-strong);
+  backdrop-filter: blur(56px) saturate(260%) brightness(1.06);
+  -webkit-backdrop-filter: blur(56px) saturate(260%) brightness(1.06);
+}
+.tj-root .tj-glass-soft {
+  background: var(--tj-glass-fill-soft);
+  backdrop-filter: blur(28px) saturate(200%) brightness(1.02);
+  -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(1.02);
+}
+
+/* Specular highlight — diagonal "wet" sheen (top-left bright, bottom-right rim light) */
+.tj-root .tj-glass-shine {
+  position: relative;
+  overflow: hidden;
+}
+.tj-root .tj-glass-shine::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      135deg,
+      var(--tj-glass-shine) 0%,
+      rgba(255, 255, 255, 0.18) 8%,
+      rgba(255, 255, 255, 0.04) 28%,
+      transparent 45%,
+      transparent 78%,
+      rgba(255, 255, 255, 0.16) 96%,
+      rgba(255, 255, 255, 0.28) 100%
+    );
+  mix-blend-mode: overlay;
+  opacity: 0.9;
+  z-index: 1;
+}
+/* Inner rim highlight — gives the edge that liquid bevel */
+.tj-root .tj-glass-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.06),
+    inset 1px 0 0 rgba(255, 255, 255, 0.18),
+    inset -1px 0 0 rgba(15, 23, 42, 0.04);
+  z-index: 2;
+}
+.tj-root.tj-dark .tj-glass-shine::before {
+  opacity: 0.55;
+}
+.tj-root.tj-dark .tj-glass-shine::after {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    inset 1px 0 0 rgba(255, 255, 255, 0.05),
+    inset -1px 0 0 rgba(0, 0, 0, 0.22);
+}
+
+/* iOS squircle radii helpers */
+/* Custom scrollbar for glass surfaces */
+.tj-root ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.tj-root ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tj-root ::-webkit-scrollbar-thumb {
+  background: var(--tj-border);
+  border-radius: 10px;
+}
+.tj-root ::-webkit-scrollbar-thumb:hover {
+  background: var(--tj-text-muted);
+}
+
+.tj-root .overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tj-border) transparent;
+}
+
+.tj-root .tj-r-sq-lg { border-radius: 26px; }
+.tj-root .tj-r-sq-xl { border-radius: 34px; }
+
+/* Thinner lucide-react icon strokes for iOS feel */
+/* Thinner lucide-react icon strokes for iOS feel */
+.tj-root .lucide,
+.tj-root svg.lucide {
+  stroke-width: 1.6;
+  color: var(--tj-text-primary);
+}
+
+.tj-root.tj-dark .lucide,
+.tj-root.tj-dark svg.lucide {
+  color: #ffffff;
+}
+
+/* Custom scrollbar for glass surfaces */
+.tj-root .tj-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.tj-root .tj-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tj-root .tj-scroll::-webkit-scrollbar-thumb {
+  background: var(--tj-border);
+  border-radius: 10px;
+}
+.tj-root .tj-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--tj-text-muted);
+}
+
+.tj-root .tj-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tj-border) transparent;
+}
+
+/* Icon tile — rounded squircle with subtle gradient (iOS app icon vibe) */
+.tj-root .tj-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0.35)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.06),
+    0 1px 3px rgba(15, 23, 42, 0.1);
+}
+.tj-root.tj-dark .tj-icon-tile {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.02)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Accent icon tile — vivid azure */
+.tj-root .tj-icon-tile-accent {
+  background: linear-gradient(160deg, #4aa6ff 0%, #0a84ff 55%, #5e5ce6 100%);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 6px 16px -4px rgba(10, 132, 255, 0.55);
+}
+
+/* Auto-glass: any element already using our translucent surface tokens
+   gets the iOS blur+saturate treatment automatically. */
+.tj-root .bg-\[var\(--tj-surface\)\],
+.tj-root .bg-\[var\(--tj-surface-subtle\)\],
+.tj-root .bg-\[var\(--tj-surface-hover\)\],
+.tj-root .bg-\[var\(--tj-user-bubble\)\] {
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* Main app shell — keep transparent so the ambient mesh shows through */
+.tj-root .bg-\[var\(--tj-bg\)\],
+.tj-root .bg-\[var\(--tj-app-bg\)\] {
+  background-color: var(--tj-bg) !important;
+}
+
+/* Refined scrollbar */
+.tj-root .tj-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.tj-root .tj-scroll::-webkit-scrollbar-track { background: transparent; }
+.tj-root .tj-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+.tj-root .tj-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+}
+.tj-root.tj-dark .tj-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Streaming cursor */
+.tj-root .tj-cursor {
+  animation: tj-blink 1s steps(1) infinite;
+  border-radius: 1px;
+}
+@keyframes tj-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+@keyframes tj-pulse {
+  0% { opacity: 0; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Slow ambient drift on mesh (very subtle) */
+.tj-root::before {
+  content: "";
+  position: fixed;
+  inset: -10%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 40% at 50% 30%, rgba(255, 255, 255, 0.04), transparent 70%);
+  animation: tj-drift 42s ease-in-out infinite alternate;
+}
+@keyframes tj-drift {
+  0% { transform: translate3d(-2%, -1%, 0) scale(1); }
+  100% { transform: translate3d(2%, 1%, 0) scale(1.04); }
+}
+
+/* Responsive hero heading */
+.tj-root .tj-h-hero {
+  font-size: 26px;
+  line-height: 32px;
+  display: inline-block;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+@media (min-width: 640px) {
+  .tj-root .tj-h-hero {
+    font-size: 34px;
+    line-height: 40px;
+  }
+}
+
+/* Force show sidebar inside mobile drawer */
+.tj-root .tj-mobile-sidebar-wrap > aside {
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@keyframes tj-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Selection */
+.tj-root ::selection {
+  background: var(--tj-accent-soft);
+  color: var(--tj-text-primary);
+}
+
+/* Document editor — headings, lists, blockquotes inside contentEditable */
+.tj-doc-editor h1 { font-size: 22px; font-weight: 700; line-height: 1.3; margin: 0.6em 0 0.4em; letter-spacing: -0.01em; }
+.tj-doc-editor h2 { font-size: 17px; font-weight: 700; line-height: 1.35; margin: 0.8em 0 0.3em; }
+.tj-doc-editor p  { margin: 0.5em 0; }
+.tj-doc-editor ul, .tj-doc-editor ol { padding-left: 1.4em; margin: 0.5em 0; }
+.tj-doc-editor ul li { list-style: disc; }
+.tj-doc-editor ol li { list-style: decimal; }
+.tj-doc-editor blockquote {
+  border-left: 3px solid var(--tj-accent);
+  padding: 0.2em 0 0.2em 0.9em;
+  color: var(--tj-text-secondary);
+  font-style: italic;
+  margin: 0.6em 0;
+}
+.tj-doc-editor:focus { outline: none; }
+.tj-doc-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--tj-text-muted);
+  opacity: 0.6;
+}
+
+/* Monochrome inverse: text color when placed on top of accent (which flips light/dark) */
+.tj-on-accent { color: var(--tj-bg); }

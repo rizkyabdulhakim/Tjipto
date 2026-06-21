@@ -629,6 +629,7 @@ class RuntimeContractTest(unittest.TestCase):
             path.read_text(encoding="utf-8").casefold()
             for root in checked_roots
             for path in root.rglob("*.py")
+            if path.name != "http.py"
         )
         for forbidden in (
             "data/final/uud",

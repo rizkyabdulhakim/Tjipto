@@ -8,3 +8,8 @@ dist/
 *.egg-info/
 *.zip
 .venv/
+node_modules/
+apps/web/node_modules/
+apps/web/dist/
+.env
+.env.*
