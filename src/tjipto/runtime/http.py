@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from tjipto.runtime.api import handle_request
+from tjipto.runtime.api import BadRequest, handle_request
 
 
 LOCAL_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
@@ -37,18 +37,30 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._json(200, {"status": "ok"})
             return
+        route = self._route()
+        if route and len(route) == 2 and route[1] == "capabilities":
+            self._json(200, handle_request(route[0], "capabilities", {}, self.root))
+            return
+        if route and len(route) == 2 and route[1] == "bookmarks":
+            self._json(200, handle_request(route[0], "bookmarks", {}, self.root))
+            return
         self._json(404, {"status": "not_found"})
 
     def do_POST(self) -> None:
-        if self.path != "/uud/ask":
+        route = self._route()
+        actions = {"ask", "search", "citation", "viewer", "bookmarks"}
+        if not route or len(route) != 2 or route[1] not in actions:
             self._json(404, {"status": "not_found"})
             return
         try:
             payload = self._read_json()
-            response = handle_request("uud", "ask", payload, self.root)
+            action = "bookmark" if route[1] == "bookmarks" else route[1]
+            response = handle_request(route[0], action, payload, self.root)
             self._json(200, response)
         except PayloadTooLarge:
             self._json(413, {"status": "payload_too_large", "reason": "request_body_too_large"})
+        except BadRequest as error:
+            self._json(400, {"status": "bad_request", "reason": error.reason})
         except json.JSONDecodeError:
             self._json(400, {"status": "bad_request", "reason": "invalid_json"})
         except ValueError:
@@ -62,7 +74,13 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
             return {}
         data = self.rfile.read(size)
         payload = json.loads(data.decode("utf-8"))
-        return payload if isinstance(payload, dict) else {}
+        if not isinstance(payload, dict):
+            raise BadRequest("invalid_json_object")
+        return payload
+
+    def _route(self) -> list[str] | None:
+        parts = [part for part in self.path.split("?", 1)[0].split("/") if part]
+        return parts or None
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = b"" if status == 204 else json.dumps(payload).encode("utf-8")

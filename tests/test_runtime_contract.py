@@ -56,9 +56,50 @@ class RuntimeContractTest(unittest.TestCase):
 
         viewer = self.service.viewer("uud", evidence["evidence_id"])
         self.assertEqual(viewer["status"], "viewer_payload_ready")
+        self.assertEqual(viewer["corpus_id"], "uud")
+        self.assertEqual(viewer["legal_unit_id"], evidence["legal_unit_id"])
+        self.assertEqual(viewer["source_document_id"], evidence["source_document_id"])
+        self.assertFalse(viewer["rendering_available"])
         self.assertTrue(viewer["page_numbers"])
         self.assertGreater(viewer["bbox_count"], 0)
         self.assertTrue(viewer["bbox_rectangles"])
+
+    def test_search_results_are_public_evidence_payloads(self) -> None:
+        result = self.service.search("uud", "negara hukum", limit=2)
+        self.assertEqual(result["status"], "found")
+        self.assertTrue(result["results"])
+        for row in result["results"]:
+            for field in (
+                "corpus_id",
+                "legal_unit_id",
+                "evidence_id",
+                "citation_id",
+                "viewer_ref_id",
+                "title",
+                "snippet",
+                "retrieval_method",
+                "reasons",
+                "status",
+            ):
+                self.assertIn(field, row)
+            self.assertEqual(row["status"], "evidence")
+
+        weak = self.service.search("uud", "aturan KUHP tentang pencurian")
+        self.assertEqual(weak["status"], "found")
+        self.assertEqual(weak["public_status"], "no_results")
+        self.assertFalse(weak["results"])
+
+    def test_bookmarks_store_pointers_only(self) -> None:
+        evidence_id = self.service.citation("uud", "Pasal 1 ayat (3)")["matches"][0]["evidence_id"]
+        saved = self.service.bookmark("uud", evidence_id, note="cek lagi")
+        self.assertEqual(saved["status"], "saved")
+        bookmark = saved["bookmark"]
+        self.assertEqual(bookmark["evidence_id"], evidence_id)
+        self.assertEqual(bookmark["status"], "active")
+        self.assertNotIn("quoted_text", bookmark)
+        self.assertNotIn("source_sha256", bookmark)
+        self.assertTrue(self.service.bookmarks("uud")["bookmarks"])
+        self.assertEqual(self.service.bookmark("uud", "missing")["status"], "unavailable")
 
     def test_retrieval_units_reference_final_evidence(self) -> None:
         from tjipto.core.manifest import read_jsonl

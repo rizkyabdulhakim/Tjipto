@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -12,8 +12,10 @@ import {
   FileText,
   Hash,
   Scale,
+  Bookmark,
 } from "lucide-react";
 import type { Citation } from "../../lib/types";
+import { saveBookmark } from "../../lib/api";
 
 interface EvidencePanelProps {
   citation: Citation | null;
@@ -96,7 +98,10 @@ function EvidenceContent({
   const next = allCitations[idx + 1];
   const [zoom, setZoom] = useState(100);
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
   const location = legalUnitLabel(citation.article, citation.paragraph);
+
+  useEffect(() => setSaved(false), [citation.documentId]);
 
   const copyExcerpt = () => {
     try {
@@ -110,6 +115,15 @@ function EvidenceContent({
       setTimeout(() => setCopied(false), 1500);
     } catch (err) {
       console.error("Fallback copy failed", err);
+    }
+  };
+
+  const savePointer = async () => {
+    try {
+      const bookmark = await saveBookmark(citation.documentId);
+      if (bookmark) setSaved(true);
+    } catch {
+      setSaved(false);
     }
   };
 
@@ -246,20 +260,27 @@ function EvidenceContent({
         <ToolbarBtn className="w-9 h-9 rounded-xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] shadow-sm">
           <Maximize2 size={15} />
         </ToolbarBtn>
+        <ToolbarBtn
+          onClick={savePointer}
+          className="w-9 h-9 rounded-xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] shadow-sm"
+          aria-label="Simpan bookmark"
+        >
+          {saved ? <Check size={15} /> : <Bookmark size={15} />}
+        </ToolbarBtn>
       </div>
 
       {/* PDF VIEW */}
       <div className="flex-1 overflow-y-auto bg-[var(--tj-app-bg)]/40 tj-scroll p-6">
         <div
-          className="relative mx-auto bg-white rounded-xl overflow-hidden shadow-2xl"
+          className="relative mx-auto rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm"
           style={{
             width: `${zoom}%`,
             maxWidth: "100%",
-            aspectRatio: "1 / 1.414",
+            minHeight: 260,
             transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
           }}
         >
-          <PlaceholderPdfPage citation={citation} location={location} />
+          <UnavailableViewer citation={citation} location={location} />
         </div>
         
         {/* EXCERPT CARD */}
@@ -388,49 +409,17 @@ function MetaRow({
   );
 }
 
-function PlaceholderPdfPage({ citation, location }: { citation: Citation; location: string }) {
+function UnavailableViewer({ citation, location }: { citation: Citation; location: string }) {
   return (
     <div
-      className="absolute inset-0 px-10 py-12 text-[#1a1a1a] select-none"
-      style={{ fontFamily: "'Times New Roman', serif" }}
+      className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 py-10 text-center"
     >
-      <div className="text-center mb-1 text-[8px] tracking-[0.2em] font-bold opacity-60">REPUBLIK INDONESIA</div>
-      <div className="text-center mb-8 text-[10px] font-bold leading-tight">
-        {citation.documentTitle.toUpperCase()}
+      <FileText size={28} className="text-[var(--tj-text-muted)]" />
+      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--tj-text-primary)" }}>
+        Rendering PDF/BBox belum tersedia
       </div>
-
-      <div className="space-y-2 opacity-30">
-        <div className="h-[2px] w-full bg-current" />
-        <div className="h-[2px] w-[95%] bg-current" />
-        <div className="h-[2px] w-[98%] bg-current" />
-        <div className="h-[2px] w-[88%] bg-current" />
-      </div>
-
-      <div className="mt-6 mb-3 text-[11px] font-bold">{location}</div>
-
-      <div className="relative">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.25 }}
-          className="absolute -inset-1 bg-yellow-400 rounded-sm"
-        />
-        <div className="space-y-2 relative">
-          <div className="h-[2px] w-full bg-current" />
-          <div className="h-[2px] w-full bg-current" />
-          <div className="h-[2px] w-[94%] bg-current" />
-        </div>
-      </div>
-
-      <div className="space-y-2 mt-6 opacity-30">
-        <div className="h-[2px] w-full bg-current" />
-        <div className="h-[2px] w-[97%] bg-current" />
-        <div className="h-[2px] w-[92%] bg-current" />
-        <div className="h-[2px] w-[99%] bg-current" />
-      </div>
-
-      <div className="absolute bottom-10 left-10 right-10 flex justify-between text-[7px] font-bold opacity-40">
-        <span>PLACEHOLDER PDF/BBOX</span>
-        <span>HALAMAN {citation.pageNumber}</span>
+      <div style={{ fontSize: 13, color: "var(--tj-text-secondary)", lineHeight: "20px" }}>
+        Evidence backend tersedia untuk {location} pada halaman {citation.pageNumber}, tetapi panel ini tidak menampilkan halaman PDF atau overlay BBox.
       </div>
     </div>
   );

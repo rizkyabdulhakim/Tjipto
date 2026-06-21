@@ -23,6 +23,31 @@ export interface TjiptoAskResponse {
   };
 }
 
+export interface SearchResult {
+  corpus_id: string;
+  legal_unit_id: string;
+  evidence_id: string;
+  citation_id?: string;
+  viewer_ref_id?: string;
+  title?: string;
+  snippet?: string;
+  retrieval_method?: string;
+  reasons?: string;
+  status: string;
+}
+
+export interface BookmarkPointer {
+  bookmark_id: string;
+  corpus_id: string;
+  legal_unit_id: string;
+  evidence_id: string;
+  citation_id?: string;
+  viewer_ref_id?: string;
+  note?: string;
+  created_at: string;
+  status: string;
+}
+
 export async function askUud(query: string): Promise<TjiptoAskResponse> {
   const response = await fetch(`${API_BASE}/uud/ask`, {
     method: "POST",
@@ -31,6 +56,35 @@ export async function askUud(query: string): Promise<TjiptoAskResponse> {
   });
   if (!response.ok) throw new Error(`UUD runtime returned ${response.status}`);
   return response.json();
+}
+
+export async function searchUud(query: string): Promise<SearchResult[]> {
+  const response = await fetch(`${API_BASE}/uud/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, limit: 5 }),
+  });
+  if (!response.ok) throw new Error(`UUD search returned ${response.status}`);
+  const body = await response.json();
+  return Array.isArray(body.results) ? body.results : [];
+}
+
+export async function listBookmarks(): Promise<BookmarkPointer[]> {
+  const response = await fetch(`${API_BASE}/uud/bookmarks`);
+  if (!response.ok) throw new Error(`UUD bookmarks returned ${response.status}`);
+  const body = await response.json();
+  return Array.isArray(body.bookmarks) ? body.bookmarks : [];
+}
+
+export async function saveBookmark(evidenceId: string): Promise<BookmarkPointer | null> {
+  const response = await fetch(`${API_BASE}/uud/bookmarks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ evidence_id: evidenceId }),
+  });
+  if (!response.ok) throw new Error(`UUD bookmark returned ${response.status}`);
+  const body = await response.json();
+  return body.bookmark ?? null;
 }
 
 export function fallbackAnswer() {

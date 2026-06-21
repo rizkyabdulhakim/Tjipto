@@ -31,6 +31,39 @@ class RuntimeHttpContractTest(unittest.TestCase):
     def test_health(self) -> None:
         self.assertEqual(self._get("/health")["status"], "ok")
 
+    def test_exposed_runtime_endpoints(self) -> None:
+        capabilities = self._get("/uud/capabilities")
+        self.assertEqual(capabilities["status"], "ok")
+        self.assertIn("search", capabilities["capabilities"])
+
+        search = self._post("/uud/search", {"query": "negara hukum", "limit": 2})
+        self.assertEqual(search["status"], "found")
+        self.assertTrue(search["results"])
+        first = search["results"][0]
+        self.assertTrue(first["evidence_id"])
+        self.assertTrue(first["legal_unit_id"])
+
+        weak = self._post("/uud/search", {"query": "aturan KUHP tentang pencurian"})
+        self.assertEqual(weak["public_status"], "no_results")
+        self.assertEqual(weak["results"], [])
+
+        citation = self._post("/uud/citation", {"query": "Pasal 1 ayat (3)"})
+        self.assertEqual(citation["status"], "found")
+        evidence_id = citation["citation_payloads"][0]["evidence_id"]
+
+        viewer = self._post("/uud/viewer", {"evidence_id": evidence_id})
+        self.assertEqual(viewer["status"], "viewer_payload_ready")
+        self.assertEqual(viewer["evidence_id"], evidence_id)
+        self.assertFalse(viewer["rendering_available"])
+        self.assertTrue(viewer["bbox_rectangles"])
+
+        saved = self._post("/uud/bookmarks", {"evidence_id": evidence_id, "note": "cek lagi"})
+        self.assertEqual(saved["status"], "saved")
+        self.assertNotIn("quoted_text", saved["bookmark"])
+        self.assertTrue(self._get("/uud/bookmarks")["bookmarks"])
+
+        self.assertEqual(self._post("/unknown/search", {"query": "Pasal 1"})["status"], "unsupported_corpus")
+
     def test_uud_ask_examples(self) -> None:
         ready = self._post("/uud/ask", {"query": "Pasal 1 ayat (3)"})
         self.assertEqual(ready["status"], "answer_ready")
@@ -98,6 +131,17 @@ class RuntimeHttpContractTest(unittest.TestCase):
             urlopen(request, timeout=10)
         self.assertEqual(error.exception.code, 413)
         self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "request_body_too_large")
+
+        request = Request(
+            self.base_url + "/uud/search",
+            data=json.dumps({"query": "x", "limit": 0}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with self.assertRaises(HTTPError) as error:
+            urlopen(request, timeout=10)
+        self.assertEqual(error.exception.code, 400)
+        self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "invalid_limit")
 
     def _get(self, path: str) -> dict:
         with urlopen(self.base_url + path, timeout=10) as response:

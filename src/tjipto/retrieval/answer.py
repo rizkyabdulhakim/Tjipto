@@ -73,7 +73,10 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
 def _payload(store, row: dict) -> dict:
     bboxes = store.bboxes_for(row["evidence_id"])
     return {
+        "corpus_id": row.get("corpus_id"),
         "evidence_id": row["evidence_id"],
+        "legal_unit_id": row.get("legal_unit_id"),
+        "source_document_id": row.get("source_document_id"),
         "citation": row.get("citation"),
         "source_role": row.get("source_role"),
         "temporal_context": row.get("temporal_context"),
@@ -98,7 +101,10 @@ def _payload(store, row: dict) -> dict:
 
 def _citation_payload(row: dict) -> dict:
     return {
+        "corpus_id": row.get("corpus_id"),
         "evidence_id": row["evidence_id"],
+        "legal_unit_id": row.get("legal_unit_id"),
+        "source_document_id": row.get("source_document_id"),
         "citation": row.get("citation"),
         "quoted_text": row.get("quoted_text"),
         "source_role": row.get("source_role"),

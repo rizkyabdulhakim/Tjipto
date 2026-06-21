@@ -1,10 +1,32 @@
 import { Search, FileText, Clock, Filter } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { listBookmarks, searchUud, type BookmarkPointer, type SearchResult } from "../../lib/api";
 
 const filters = ["Sumber", "Status", "Periode"];
 
 export function SearchRoute() {
   const [q, setQ] = useState("negara hukum");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [status, setStatus] = useState("loading");
+
+  useEffect(() => {
+    let ignore = false;
+    setStatus("loading");
+    searchUud(q)
+      .then((rows) => {
+        if (!ignore) {
+          setResults(rows);
+          setStatus(rows.length ? "ready" : "empty");
+        }
+      })
+      .catch(() => {
+        if (!ignore) setStatus("unavailable");
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [q]);
+
   return (
     <div className="flex-1 overflow-y-auto tj-scroll">
       <div className="max-w-[960px] mx-auto px-4 sm:px-6 pt-6 sm:pt-10 pb-12 sm:pb-16">
@@ -43,22 +65,55 @@ export function SearchRoute() {
 
         <div className="mt-6 flex items-center justify-between">
           <span style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
-            Search artifact belum disajikan oleh backend untuk <span style={{ color: "var(--tj-text-primary)", fontWeight: 500 }}>"{q}"</span>
+            Backend Search untuk <span style={{ color: "var(--tj-text-primary)", fontWeight: 500 }}>"{q}"</span>
           </span>
           <span style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>Scope: UUD-only</span>
         </div>
 
-        <div className="mt-3 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-5">
-          <p style={{ fontSize: 14, color: "var(--tj-text-secondary)", lineHeight: "22px" }}>
-            Belum ada kontrak backend untuk daftar hasil Search. Gunakan chat UUD untuk jawaban berbasis evidence.
-          </p>
-        </div>
+        {status !== "ready" ? (
+          <div className="mt-3 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-5">
+            <p style={{ fontSize: 14, color: "var(--tj-text-secondary)", lineHeight: "22px" }}>
+              {status === "loading" ? "Memeriksa evidence backend..." : "Tidak ada evidence publik untuk query ini."}
+            </p>
+          </div>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {results.map((row) => (
+              <li key={row.evidence_id} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
+                <div className="flex items-start gap-3">
+                  <span className="inline-flex items-center px-2 h-[22px] rounded-md shrink-0 mt-0.5" style={{ fontSize: 11, fontWeight: 600, background: "var(--tj-accent-soft)", color: "var(--tj-accent)" }}>
+                    {row.corpus_id.toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <div style={{ fontSize: 15, fontWeight: 600, color: "var(--tj-text-primary)" }}>{row.title}</div>
+                    <p className="mt-1.5 line-clamp-3" style={{ fontSize: 13.5, lineHeight: "20px", color: "var(--tj-text-secondary)" }}>{row.snippet}</p>
+                    <div className="mt-3" style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
+                      {row.retrieval_method} · {row.reasons} · {row.legal_unit_id}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
 }
 
 export function LibraryRoute() {
+  const [bookmarks, setBookmarks] = useState<BookmarkPointer[]>([]);
+  const [status, setStatus] = useState("loading");
+
+  useEffect(() => {
+    listBookmarks()
+      .then((rows) => {
+        setBookmarks(rows);
+        setStatus(rows.length ? "ready" : "empty");
+      })
+      .catch(() => setStatus("unavailable"));
+  }, []);
+
   return (
     <div className="flex-1 overflow-y-auto tj-scroll">
       <div className="max-w-[960px] mx-auto px-4 sm:px-6 pt-6 sm:pt-10 pb-12 sm:pb-16">
@@ -84,15 +139,29 @@ export function LibraryRoute() {
           </span>
         </div>
 
-        <div className="mt-3 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-5">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-11 rounded-md bg-[var(--tj-surface-subtle)] border border-[var(--tj-border-subtle)] flex items-center justify-center shrink-0">
-              <FileText size={15} className="text-[var(--tj-text-secondary)]" />
+        <div className="mt-3 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden">
+          {status !== "ready" ? (
+            <div className="flex items-start gap-3 p-5">
+              <div className="w-9 h-11 rounded-md bg-[var(--tj-surface-subtle)] border border-[var(--tj-border-subtle)] flex items-center justify-center shrink-0">
+                <FileText size={15} className="text-[var(--tj-text-secondary)]" />
+              </div>
+              <p style={{ fontSize: 14, color: "var(--tj-text-secondary)", lineHeight: "22px" }}>
+                {status === "loading" ? "Memeriksa bookmark backend..." : "Belum ada bookmark evidence tersimpan."}
+              </p>
             </div>
-            <p style={{ fontSize: 14, color: "var(--tj-text-secondary)", lineHeight: "22px" }}>
-              Library belum memiliki kontrak backend. Tidak ada dokumen atau bukti yang ditampilkan sebagai hasil terverifikasi di layar ini.
-            </p>
-          </div>
+          ) : (
+            bookmarks.map((row) => (
+              <div key={row.bookmark_id} className="flex items-center gap-3 px-4 py-3.5 border-b border-[var(--tj-border-subtle)] last:border-b-0">
+                <div className="w-9 h-11 rounded-md bg-[var(--tj-surface-subtle)] border border-[var(--tj-border-subtle)] flex items-center justify-center shrink-0">
+                  <FileText size={15} className="text-[var(--tj-text-secondary)]" />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "var(--tj-text-primary)" }}>{row.evidence_id}</div>
+                  <div style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>{row.status} · {row.legal_unit_id}</div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
