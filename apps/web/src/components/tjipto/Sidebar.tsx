@@ -57,6 +57,12 @@ export function Sidebar({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [userMenuOpen, onToggleUserMenu]);
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return chatHistory;
+    return chatHistory.filter((t) => t.title.toLowerCase().includes(q));
+  }, [query]);
+
   if (collapsed) {
     return (
       <CollapsedSidebar
@@ -67,12 +73,6 @@ export function Sidebar({
       />
     );
   }
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return chatHistory;
-    return chatHistory.filter((t) => t.title.toLowerCase().includes(q));
-  }, [query]);
 
   return (
     <aside
