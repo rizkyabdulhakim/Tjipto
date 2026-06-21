@@ -32,7 +32,7 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
       return;
     }
 
-    const currentFullText = placeholders[placeholderIndex];
+    const currentFullText = placeholders[placeholderIndex] ?? placeholders[0] ?? "";
     const speed = isDeleting ? 40 : 80;
     const pause = isDeleting ? 1000 : 2000;
 

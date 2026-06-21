@@ -7,6 +7,7 @@
     "build": "vite build",
     "dev": "vite --host 127.0.0.1",
     "smoke": "node smoke.mjs",
+    "smoke:install": "playwright install chromium",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

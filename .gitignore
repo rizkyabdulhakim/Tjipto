@@ -17,6 +17,9 @@ dist/
 *.zip
 *.tar
 *.tgz
+*.tmp
+tmp/
+temp/
 .venv/
 node_modules/
 apps/web/node_modules/

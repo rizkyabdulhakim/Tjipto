@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from tjipto.retrieval.structure import public_hierarchy
 
 DIRECT_ROUTES = {"exact", "structured", "bm25"}
-BAB_XA_PASAL_PREFIXES = tuple(f"Pasal 28{letter}" for letter in "ABCDEFGHIJ")
 REQUIRED_FIELDS = (
     "citation",
     "quoted_text",
@@ -133,11 +133,4 @@ def _evidence_label(row: dict) -> str | None:
 
 
 def _evidence_hierarchy(row: dict) -> tuple:
-    hierarchy = tuple(item for item in (row.get("hierarchy") or ()) if item)
-    if hierarchy and hierarchy[0] == "BAB X" and _is_bab_xa_article(hierarchy):
-        return ("BAB XA", *hierarchy[1:])
-    return hierarchy
-
-
-def _is_bab_xa_article(hierarchy: tuple) -> bool:
-    return any(str(item).startswith(BAB_XA_PASAL_PREFIXES) for item in hierarchy[1:])
+    return public_hierarchy(row)

@@ -441,6 +441,10 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(pasal_28a["status"], "found")
         self.assertTrue(pasal_28a["results"][0]["title"].startswith("BAB XA"))
 
+        pasal_28 = self.service.search("uud", "Pasal 28", limit=1)
+        self.assertEqual(pasal_28["status"], "found")
+        self.assertTrue(pasal_28["results"][0]["title"].startswith("BAB X / Pasal 28"))
+
         filtered = self.service.search(
             "uud",
             "Pembukaan",

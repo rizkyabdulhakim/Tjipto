@@ -182,7 +182,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
     const viewer = viewerRefs[index] ?? item.viewer_ref;
     const pages = Array.isArray(item.page_numbers)
       ? item.page_numbers
-      : Array.isArray(viewer.page_numbers)
+      : Array.isArray(viewer?.page_numbers)
         ? viewer.page_numbers
         : [];
     const pageNumber = Number(pages[0] ?? 1);

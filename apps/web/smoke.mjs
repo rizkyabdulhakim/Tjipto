@@ -6,6 +6,7 @@ import { chromium } from "playwright";
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webRoot, "../..");
 const started = [];
+const reuseServers = process.env.TJIPTO_SMOKE_REUSE_SERVERS === "1";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -23,37 +24,50 @@ async function waitFor(url, timeoutMs = 15000) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
-async function ensureBackend() {
+async function isRunning(url) {
   try {
-    await waitFor("http://127.0.0.1:8000/health", 1000);
-    return;
+    await waitFor(url, 1000);
+    return true;
   } catch {
-    const child = spawn("python", ["-m", "tjipto.runtime.http"], {
-      cwd: repoRoot,
-      env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") },
-      stdio: "ignore",
-      windowsHide: true,
-    });
-    started.push(child);
-    await waitFor("http://127.0.0.1:8000/health");
+    return false;
   }
 }
 
-async function ensureFrontend() {
-  try {
-    await waitFor("http://127.0.0.1:5173", 1000);
+async function ensureBackend() {
+  const url = "http://127.0.0.1:8000/health";
+  if (await isRunning(url)) {
+    if (!reuseServers) {
+      throw new Error("Backend is already running on 127.0.0.1:8000; stop it or set TJIPTO_SMOKE_REUSE_SERVERS=1.");
+    }
     return;
-  } catch {
-    const command = process.platform === "win32" ? "cmd.exe" : "npm";
-    const args = process.platform === "win32" ? ["/d", "/s", "/c", "npm run dev"] : ["run", "dev"];
-    const child = spawn(command, args, {
-      cwd: webRoot,
-      stdio: "ignore",
-      windowsHide: true,
-    });
-    started.push(child);
-    await waitFor("http://127.0.0.1:5173");
   }
+  const child = spawn("python", ["-m", "tjipto.runtime.http"], {
+    cwd: repoRoot,
+    env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") },
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  started.push(child);
+  await waitFor(url);
+}
+
+async function ensureFrontend() {
+  const url = "http://127.0.0.1:5173";
+  if (await isRunning(url)) {
+    if (!reuseServers) {
+      throw new Error("Frontend is already running on 127.0.0.1:5173; stop it or set TJIPTO_SMOKE_REUSE_SERVERS=1.");
+    }
+    return;
+  }
+  const command = process.platform === "win32" ? "cmd.exe" : "npm";
+  const args = process.platform === "win32" ? ["/d", "/s", "/c", "npm run dev"] : ["run", "dev"];
+  const child = spawn(command, args, {
+    cwd: webRoot,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  started.push(child);
+  await waitFor(url);
 }
 
 async function runSmoke() {
