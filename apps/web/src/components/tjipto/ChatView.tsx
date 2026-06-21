@@ -95,6 +95,7 @@ function CitationChip({
   onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
+  const location = legalUnitLabel(citation.article, citation.paragraph);
   return (
     <span className="relative inline-block align-baseline">
       <button
@@ -146,8 +147,7 @@ function CitationChip({
             {citation.documentTitle}
           </span>
           <span className="block" style={{ fontSize: 12, color: "var(--tj-text-secondary)" }}>
-            Pasal {citation.article}
-            {citation.paragraph ? ` ayat (${citation.paragraph})` : ""}
+            {location}
           </span>
           <span
             className="block mt-2 pt-2 border-t border-[var(--tj-border-subtle)]"
@@ -329,8 +329,8 @@ function CitationFooter({
                   className="block truncate mt-0.5"
                   style={{ fontSize: 12, color: "var(--tj-text-muted)" }}
                 >
-                  Pasal {c.article}
-                  {c.paragraph ? ` ayat (${c.paragraph})` : ""} · hal. {c.pageNumber} · {c.sourceDomain}
+                  {legalUnitLabel(c.article, c.paragraph)}
+                  {" "}· hal. {c.pageNumber} · {c.sourceDomain}
                 </span>
               </span>
               <FileText size={13} className="text-[var(--tj-text-muted)] shrink-0 mt-1" />
@@ -340,6 +340,13 @@ function CitationFooter({
       </ul>
     </div>
   );
+}
+
+
+function legalUnitLabel(article?: string, paragraph?: string) {
+  const base = article || "UUD";
+  const label = /^pasal\b/i.test(base) ? base : `Pasal ${base}`;
+  return paragraph ? `${label} ayat (${paragraph})` : label;
 }
 
 export function ChatView({

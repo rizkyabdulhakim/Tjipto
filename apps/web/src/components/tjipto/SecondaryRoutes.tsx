@@ -1,28 +1,7 @@
-import { Search, FileText, Clock, Filter, X } from "lucide-react";
+import { Search, FileText, Clock, Filter } from "lucide-react";
 import { useState } from "react";
 
 const filters = ["Sumber", "Status", "Periode"];
-
-const results = [
-  {
-    id: "uud_1945_current",
-    type: "UUD",
-    title: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
-    year: 1945,
-    status: "Terverifikasi",
-    institution: "Runtime UUD",
-    snippet: "Korpus UUD terverifikasi. Jawaban final tetap berasal dari /uud/ask.",
-  },
-  {
-    id: "uud_pembukaan",
-    type: "UUD",
-    title: "Pembukaan UUD 1945",
-    year: 1945,
-    status: "Terverifikasi",
-    institution: "Runtime UUD",
-    snippet: "Rujukan pembukaan dan dasar negara dari korpus UUD.",
-  },
-];
 
 export function SearchRoute() {
   const [q, setQ] = useState("negara hukum");
@@ -58,55 +37,28 @@ export function SearchRoute() {
               style={{ fontSize: 12.5, fontWeight: 500 }}
             >
               {f} {i === 0 && <span className="opacity-70">UUD</span>}
-              {i === 0 && <X size={11} className="inline ml-1" />}
             </button>
           ))}
         </div>
 
         <div className="mt-6 flex items-center justify-between">
           <span style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
-            {results.length} rujukan UUD untuk <span style={{ color: "var(--tj-text-primary)", fontWeight: 500 }}>"{q}"</span>
+            Search artifact belum disajikan oleh backend untuk <span style={{ color: "var(--tj-text-primary)", fontWeight: 500 }}>"{q}"</span>
           </span>
           <span style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>Scope: UUD-only</span>
         </div>
 
-        <ul className="mt-3 space-y-2">
-          {results.map((r) => (
-            <li key={r.id} className="group rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] hover:border-[var(--tj-border)] transition-all p-4">
-              <div className="flex items-start gap-3">
-                <span className="inline-flex items-center px-2 h-[22px] rounded-md shrink-0 mt-0.5" style={{ fontSize: 11, fontWeight: 600, background: "var(--tj-accent-soft)", color: "var(--tj-accent)" }}>
-                  {r.type}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span style={{ fontSize: 15, fontWeight: 600, color: "var(--tj-text-primary)" }}>{r.title}</span>
-                    <span className="inline-flex items-center px-1.5 h-[18px] rounded text-[10px]" style={{ fontWeight: 500, background: "rgba(22,163,74,0.1)", color: "#16A34A" }}>
-                      {r.status}
-                    </span>
-                  </div>
-                  <p className="mt-1.5" style={{ fontSize: 13.5, lineHeight: "20px", color: "var(--tj-text-secondary)" }}>{r.snippet}</p>
-                  <div className="flex items-center gap-3 mt-3" style={{ fontSize: 12 }}>
-                    <button className="h-7 px-3 rounded-md border border-[var(--tj-border)] text-[var(--tj-text-primary)] hover:bg-[var(--tj-surface-hover)] transition-colors" style={{ fontWeight: 500 }}>
-                      Detail UUD
-                    </button>
-                    <span className="ml-auto" style={{ color: "var(--tj-text-muted)" }}>{r.institution} · {r.year}</span>
-                  </div>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-5">
+          <p style={{ fontSize: 14, color: "var(--tj-text-secondary)", lineHeight: "22px" }}>
+            Belum ada kontrak backend untuk daftar hasil Search. Gunakan chat UUD untuk jawaban berbasis evidence.
+          </p>
+        </div>
       </div>
     </div>
   );
 }
 
 export function LibraryRoute() {
-  const docs = [
-    { title: "Undang-Undang Dasar 1945", date: "Dibuka tadi", type: "UUD" },
-    { title: "Pembukaan UUD 1945", date: "Hari ini", type: "UUD" },
-    { title: "Pasal 1 ayat (3)", date: "Hari ini", type: "UUD" },
-  ];
   return (
     <div className="flex-1 overflow-y-auto tj-scroll">
       <div className="max-w-[960px] mx-auto px-4 sm:px-6 pt-6 sm:pt-10 pb-12 sm:pb-16">
@@ -128,43 +80,20 @@ export function LibraryRoute() {
           <span
             style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}
           >
-            RECENTLY OPENED
+            LIBRARY STATUS
           </span>
         </div>
 
-        <ul className="mt-3 rounded-xl border border-[var(--tj-border-subtle)] overflow-hidden">
-          {docs.map((d, i) => (
-            <li
-              key={d.title}
-              className={`flex items-center gap-3 px-4 py-3.5 hover:bg-[var(--tj-surface-hover)] transition-colors cursor-pointer ${
-                i !== docs.length - 1 ? "border-b border-[var(--tj-border-subtle)]" : ""
-              }`}
-            >
-              <div
-                className="w-9 h-11 rounded-md bg-[var(--tj-surface-subtle)] border border-[var(--tj-border-subtle)] flex items-center justify-center"
-              >
-                <FileText size={15} className="text-[var(--tj-text-secondary)]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div
-                  className="truncate"
-                  style={{ fontSize: 14, fontWeight: 500, color: "var(--tj-text-primary)" }}
-                >
-                  {d.title}
-                </div>
-                <div style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
-                  {d.type} · {d.date}
-                </div>
-              </div>
-              <button
-                className="px-2.5 h-7 rounded-md border border-[var(--tj-border)] text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface)] transition-colors"
-                style={{ fontSize: 12, fontWeight: 500 }}
-              >
-                Open
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-5">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-11 rounded-md bg-[var(--tj-surface-subtle)] border border-[var(--tj-border-subtle)] flex items-center justify-center shrink-0">
+              <FileText size={15} className="text-[var(--tj-text-secondary)]" />
+            </div>
+            <p style={{ fontSize: 14, color: "var(--tj-text-secondary)", lineHeight: "22px" }}>
+              Library belum memiliki kontrak backend. Tidak ada dokumen atau bukti yang ditampilkan sebagai hasil terverifikasi di layar ini.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

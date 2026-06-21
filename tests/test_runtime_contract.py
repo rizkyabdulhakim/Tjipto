@@ -154,6 +154,7 @@ class RuntimeContractTest(unittest.TestCase):
     def test_query_normalization_and_intent_classification(self) -> None:
         self.assertEqual(normalize_query("pasal 28 e")["normalized_query"], "Pasal 28E")
         self.assertEqual(normalize_query("pasal 1 ayat 3")["normalized_query"], "Pasal 1 ayat (3)")
+        self.assertEqual(normalize_query("pasal 1(3)")["normalized_query"], "Pasal 1 ayat (3)")
         self.assertEqual(normalize_query("uud 45")["normalized_query"], "UUD 1945")
 
         self.assertEqual(classify_intent("uud", "Pasal 1 ayat (3)")["intent"], "exact_citation")
@@ -214,6 +215,11 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(exact["route"], "exact")
         self.assertEqual(exact["normalized_query"], "Pasal 1 ayat (3)")
         self.assertTrue(exact["matches"])
+
+        shorthand = route_retrieval("uud", "Pasal 1(3)", store)
+        self.assertEqual(shorthand["status"], "found")
+        self.assertEqual(shorthand["route"], "exact")
+        self.assertEqual(shorthand["normalized_query"], "Pasal 1 ayat (3)")
 
         bm25 = route_retrieval("uud", "negara hukum", store, limit=2)
         self.assertEqual(bm25["status"], "found")

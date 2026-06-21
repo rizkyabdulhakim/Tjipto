@@ -96,6 +96,7 @@ function EvidenceContent({
   const next = allCitations[idx + 1];
   const [zoom, setZoom] = useState(100);
   const [copied, setCopied] = useState(false);
+  const location = legalUnitLabel(citation.article, citation.paragraph);
 
   const copyExcerpt = () => {
     try {
@@ -172,8 +173,7 @@ function EvidenceContent({
           <div className="flex items-center gap-1.5">
             <Scale size={14} className="opacity-60" />
             <span style={{ fontWeight: 600, color: "var(--tj-text-primary)" }}>
-              Pasal {citation.article}
-              {citation.paragraph ? ` ayat (${citation.paragraph})` : ""}
+              {location}
             </span>
           </div>
           <span style={{ color: "var(--tj-text-muted)" }} className="opacity-40">·</span>
@@ -259,7 +259,7 @@ function EvidenceContent({
             transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
           }}
         >
-          <PlaceholderPdfPage citation={citation} />
+          <PlaceholderPdfPage citation={citation} location={location} />
         </div>
         
         {/* EXCERPT CARD */}
@@ -314,7 +314,7 @@ function EvidenceContent({
             Informasi Dokumen
           </h3>
           <div className="rounded-2xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm divide-y divide-[var(--tj-border-subtle)]">
-            <MetaRow label="Lokasi">Pasal {citation.article}{citation.paragraph ? ` ayat (${citation.paragraph})` : ""}</MetaRow>
+            <MetaRow label="Lokasi">{location}</MetaRow>
             <MetaRow label="Halaman">Hal. {citation.pageNumber}</MetaRow>
             <MetaRow label="Yurisdiksi">Republik Indonesia</MetaRow>
             <MetaRow label="Domain">{citation.sourceDomain ?? "Tidak tersedia"}</MetaRow>
@@ -388,7 +388,7 @@ function MetaRow({
   );
 }
 
-function PlaceholderPdfPage({ citation }: { citation: Citation }) {
+function PlaceholderPdfPage({ citation, location }: { citation: Citation; location: string }) {
   return (
     <div
       className="absolute inset-0 px-10 py-12 text-[#1a1a1a] select-none"
@@ -406,7 +406,7 @@ function PlaceholderPdfPage({ citation }: { citation: Citation }) {
         <div className="h-[2px] w-[88%] bg-current" />
       </div>
 
-      <div className="mt-6 mb-3 text-[11px] font-bold">Pasal {citation.article}</div>
+      <div className="mt-6 mb-3 text-[11px] font-bold">{location}</div>
 
       <div className="relative">
         <motion.div
@@ -434,4 +434,10 @@ function PlaceholderPdfPage({ citation }: { citation: Citation }) {
       </div>
     </div>
   );
+}
+
+function legalUnitLabel(article?: string, paragraph?: string) {
+  const base = article || "UUD";
+  const label = /^pasal\b/i.test(base) ? base : `Pasal ${base}`;
+  return paragraph ? `${label} ayat (${paragraph})` : label;
 }

@@ -10,7 +10,7 @@ Local web app:
 
 ```powershell
 cd apps/web
-npm install
+npm ci
 $env:VITE_TJIPTO_API_BASE='http://localhost:8000'; npm run dev
 ```
 

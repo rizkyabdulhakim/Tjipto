@@ -76,6 +76,29 @@ class RuntimeHttpContractTest(unittest.TestCase):
             self._get("/not-real")
         self.assertEqual(error.exception.code, 404)
 
+    def test_invalid_json_and_oversized_payloads_fail_safely(self) -> None:
+        request = Request(
+            self.base_url + "/uud/ask",
+            data=b"{",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with self.assertRaises(HTTPError) as error:
+            urlopen(request, timeout=10)
+        self.assertEqual(error.exception.code, 400)
+        self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "invalid_json")
+
+        request = Request(
+            self.base_url + "/uud/ask",
+            data=b"x" * (64 * 1024 + 1),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with self.assertRaises(HTTPError) as error:
+            urlopen(request, timeout=10)
+        self.assertEqual(error.exception.code, 413)
+        self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "request_body_too_large")
+
     def _get(self, path: str) -> dict:
         with urlopen(self.base_url + path, timeout=10) as response:
             return json.loads(response.read().decode("utf-8"))

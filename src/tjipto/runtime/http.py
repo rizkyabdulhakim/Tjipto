@@ -9,6 +9,11 @@ from tjipto.runtime.api import handle_request
 
 
 LOCAL_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
+MAX_REQUEST_BYTES = 64 * 1024
+
+
+class PayloadTooLarge(ValueError):
+    pass
 
 
 def make_server(
@@ -42,11 +47,17 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
             response = handle_request("uud", "ask", payload, self.root)
             self._json(200, response)
+        except PayloadTooLarge:
+            self._json(413, {"status": "payload_too_large", "reason": "request_body_too_large"})
         except json.JSONDecodeError:
             self._json(400, {"status": "bad_request", "reason": "invalid_json"})
+        except ValueError:
+            self._json(400, {"status": "bad_request", "reason": "invalid_content_length"})
 
     def _read_json(self) -> dict:
         size = int(self.headers.get("Content-Length", "0") or "0")
+        if size > MAX_REQUEST_BYTES:
+            raise PayloadTooLarge
         if size == 0:
             return {}
         data = self.rfile.read(size)
