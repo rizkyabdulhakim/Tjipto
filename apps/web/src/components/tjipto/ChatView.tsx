@@ -8,7 +8,6 @@ import {
   Share2,
   Volume2,
   FileText,
-  ExternalLink,
 } from "lucide-react";
 import type { ChatMessage, Citation } from "../../lib/types";
 import { Composer } from "./Composer";
@@ -154,7 +153,7 @@ function CitationChip({
             className="block mt-2 pt-2 border-t border-[var(--tj-border-subtle)]"
             style={{ fontSize: 11, color: "var(--tj-accent)", fontWeight: 500 }}
           >
-            Klik untuk membuka PDF →
+            Klik untuk melihat panel bukti
           </span>
         </span>
       )}
@@ -334,10 +333,7 @@ function CitationFooter({
                   {c.paragraph ? ` ayat (${c.paragraph})` : ""} · hal. {c.pageNumber} · {c.sourceDomain}
                 </span>
               </span>
-              <ExternalLink
-                size={13}
-                className="text-[var(--tj-text-muted)] shrink-0 mt-1"
-              />
+              <FileText size={13} className="text-[var(--tj-text-muted)] shrink-0 mt-1" />
             </button>
           </li>
         ))}

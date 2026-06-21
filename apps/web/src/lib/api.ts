@@ -49,12 +49,9 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       article: String(item.citation ?? "UUD"),
       pageNumber: Number(pages[0] ?? 1),
       excerpt: String(item.quoted_text ?? ""),
-      sourceUrl: String(item.source_pdf_path ?? "#"),
+      sourceUrl: "",
       sourceDomain: "UUD runtime",
       fileHash: item.source_sha256 ? `sha256:${String(item.source_sha256)}` : undefined,
-      boundingBox: viewer.bbox_count
-        ? { page: Number(pages[0] ?? 1), x: 0, y: 0, width: 0, height: 0 }
-        : undefined,
     };
   });
 }

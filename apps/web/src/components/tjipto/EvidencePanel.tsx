@@ -6,7 +6,6 @@ import {
   Plus,
   Maximize2,
   Copy,
-  ExternalLink,
   ChevronLeft,
   ChevronRight,
   Check,
@@ -318,7 +317,7 @@ function EvidenceContent({
             <MetaRow label="Lokasi">Pasal {citation.article}{citation.paragraph ? ` ayat (${citation.paragraph})` : ""}</MetaRow>
             <MetaRow label="Halaman">Hal. {citation.pageNumber}</MetaRow>
             <MetaRow label="Yurisdiksi">Republik Indonesia</MetaRow>
-            <MetaRow label="Domain">{citation.sourceDomain ?? "JDIH"}</MetaRow>
+            <MetaRow label="Domain">{citation.sourceDomain ?? "Tidak tersedia"}</MetaRow>
             <MetaRow label="Hash File" mono>{citation.fileHash ?? "Tidak tersedia"}</MetaRow>
           </div>
         </section>
@@ -326,16 +325,12 @@ function EvidenceContent({
 
       {/* FOOTER */}
       <footer className="border-t border-[var(--tj-border-subtle)] p-4 bg-[var(--tj-surface)]/60 backdrop-blur-xl shrink-0">
-        <a
-          href={citation.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2.5 h-11 rounded-xl bg-[var(--tj-text-primary)] text-[var(--tj-bg)] hover:opacity-90 transition-all active:scale-[0.98] w-full shadow-lg"
+        <div
+          className="flex items-center justify-center gap-2.5 min-h-11 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3 text-center text-[var(--tj-text-secondary)]"
           style={{ fontSize: 14, fontWeight: 700 }}
         >
-          Lihat Dokumen Asli
-          <ExternalLink size={15} />
-        </a>
+          PDF/BBox viewer belum disajikan oleh backend
+        </div>
       </footer>
     </>
   );
