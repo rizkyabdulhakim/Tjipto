@@ -202,8 +202,13 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(normalize_query("pasal 1 ayat 3")["normalized_query"], "Pasal 1 ayat (3)")
         self.assertEqual(normalize_query("pasal 1(3)")["normalized_query"], "Pasal 1 ayat (3)")
         self.assertEqual(normalize_query("uud 45")["normalized_query"], "UUD 1945")
+        self.assertEqual(
+            normalize_query("pasal 1 ayat 3", strategy="generic")["normalized_query"],
+            "pasal 1 ayat 3",
+        )
 
         self.assertEqual(classify_intent("uud", "Pasal 1 ayat (3)")["intent"], "exact_citation")
+        self.assertEqual(classify_intent("demo", "Pasal 1", strategy="generic")["intent"], "natural_language")
         self.assertEqual(classify_intent("uud", "negara hukum")["intent"], "natural_language")
         self.assertEqual(classify_intent("uud", "aturan KUHP tentang pencurian")["intent"], "natural_language")
         self.assertEqual(
@@ -255,6 +260,11 @@ class RuntimeContractTest(unittest.TestCase):
     def test_retrieval_router_envelope_routes(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
         store = EvidenceStore(config)
+        self.assertEqual(config.query_strategy, "uud_1945")
+        self.assertEqual(config.structured_strategy, "uud_1945")
+        self.assertIn("current_consolidated", config.source_roles)
+        self.assertIn("amendment_1_historical", config.temporal_contexts)
+        self.assertEqual(config.preferred_source_role, "current_consolidated")
 
         exact = route_retrieval("uud", "pasal 1 ayat 3", store)
         self.assertEqual(exact["status"], "found")
@@ -770,6 +780,35 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(store.bboxes_for("demo_evidence_1")[0]["bbox_id"], "box_1")
             self.assertEqual(GraphStore(config).counts(), {"nodes": 2, "edges": 1})
             self.assertEqual(LegalRuntimeService(root).ask("demo", "generic corpus resolution")["status"], "limited_answer")
+            self.assertEqual(config.query_strategy, "generic")
+            self.assertEqual(route_retrieval("demo", "Pasal 1", store)["intent"], "natural_language")
+            self.assertEqual(structured_lookup(store, "Pasal 1", strategy=config.structured_strategy), ())
+
+    def test_registry_supports_corpus_policy_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            (root / "corpus").mkdir()
+            (root / "corpus/manifest.json").write_text(json.dumps({"corpus_id": "demo"}), encoding="utf-8")
+            (root / "data/corpus_registry.json").write_text(
+                json.dumps({
+                    "demo": {
+                        "manifest": "corpus/manifest.json",
+                        "query_strategy": "demo_strategy",
+                        "source_roles": ["published"],
+                        "temporal_contexts": ["current"],
+                        "preferred_source_role": "published",
+                    }
+                }),
+                encoding="utf-8",
+            )
+
+            config = CorpusRegistry(root).resolve("demo")
+            self.assertIsNotNone(config)
+            self.assertEqual(config.query_strategy, "demo_strategy")
+            self.assertEqual(config.source_roles, ("published",))
+            self.assertEqual(config.temporal_contexts, ("current",))
+            self.assertEqual(config.preferred_source_role, "published")
 
     def test_missing_or_invalid_registry_fails_safely(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

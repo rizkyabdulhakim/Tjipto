@@ -19,14 +19,18 @@ def route_retrieval(
     route: str = "auto",
     metadata_filters: dict | None = None,
 ) -> dict:
-    normalized = normalize_query(query)
-    filters = normalize_filters(metadata_filters)
+    config = getattr(store, "config", None)
+    query_strategy = getattr(config, "query_strategy", "generic")
+    structured_strategy = getattr(config, "structured_strategy", "generic")
+    normalized = normalize_query(query, strategy=query_strategy)
+    filters = normalize_filters(metadata_filters, config=config)
     applied_filters = public_filters(filters)
     corpus_supported = store is not None
     intent = classify_intent(
         corpus_id,
         normalized["normalized_query"],
         corpus_supported=corpus_supported,
+        strategy=query_strategy,
     )
     envelope = {
         "status": "no_results",
@@ -82,7 +86,14 @@ def route_retrieval(
                 "reason": "citation_not_found",
             }
 
-    structured_all = tuple(structured_lookup(store, normalized["normalized_query"], len(store.evidence)))
+    structured_all = tuple(
+        structured_lookup(
+            store,
+            normalized["normalized_query"],
+            len(store.evidence),
+            strategy=structured_strategy,
+        )
+    )
     structured = filter_evidence(structured_all, filters)
     if structured:
         ranked, trace = merge_ranked(store, {"structured": structured}, filters)
@@ -100,7 +111,7 @@ def route_retrieval(
             "intent": "no_results",
             "reason": "filters_removed_all",
         }
-    if has_structured_target(normalized["normalized_query"]):
+    if has_structured_target(normalized["normalized_query"], strategy=structured_strategy):
         return envelope | {
             "status": "no_results",
             "route": "structured_not_found",

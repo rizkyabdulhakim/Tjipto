@@ -21,7 +21,8 @@ class CorpusRegistry:
             return None
         if not isinstance(registry, dict):
             return None
-        rel = registry.get(corpus_id)
+        entry = registry.get(corpus_id)
+        rel = entry.get("manifest") if isinstance(entry, dict) else entry
         if not isinstance(rel, str):
             return None
         manifest_path = self._safe_registry_path(rel)
@@ -37,7 +38,8 @@ class CorpusRegistry:
             return None
         if manifest.get("corpus_id") != corpus_id:
             return None
-        return CorpusConfig(corpus_id, manifest_path, manifest)
+        settings = {key: value for key, value in entry.items() if key != "manifest"} if isinstance(entry, dict) else {}
+        return CorpusConfig(corpus_id, manifest_path, manifest, settings)
 
     def _safe_registry_path(self, rel: str) -> Path | None:
         path = Path(rel)

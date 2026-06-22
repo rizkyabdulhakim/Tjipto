@@ -1,3 +1,24 @@
 {
-  "uud": "data/final/uud/manifest.json"
+  "uud": {
+    "manifest": "data/final/uud/manifest.json",
+    "query_strategy": "uud_1945",
+    "structured_strategy": "uud_1945",
+    "preferred_source_role": "current_consolidated",
+    "source_roles": [
+      "current_consolidated",
+      "original_historical",
+      "amendment_1_historical",
+      "amendment_2_historical",
+      "amendment_3_historical",
+      "amendment_4_historical"
+    ],
+    "temporal_contexts": [
+      "current_consolidated",
+      "original_historical",
+      "amendment_1_historical",
+      "amendment_2_historical",
+      "amendment_3_historical",
+      "amendment_4_historical"
+    ]
+  }
 }

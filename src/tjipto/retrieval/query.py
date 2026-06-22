@@ -12,9 +12,14 @@ AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
 UUD_45_RE = re.compile(r"\bu\s*u\s*d\s+45\b", re.IGNORECASE)
 
 
-def normalize_query(query: str) -> dict:
+def normalize_query(query: str, *, strategy: str = "uud_1945") -> dict:
     original = query or ""
     normalized = original.strip()
+    if strategy != "uud_1945":
+        return {
+            "original_query": original,
+            "normalized_query": re.sub(r"\s+", " ", normalized).strip(),
+        }
     normalized = UUD_45_RE.sub("UUD 1945", normalized)
     normalized = PASAL_LETTER_RE.sub(
         lambda match: f"Pasal {match.group(1)}{match.group(2).upper()}",
@@ -30,8 +35,16 @@ def normalize_query(query: str) -> dict:
     return {"original_query": original, "normalized_query": normalized}
 
 
-def classify_intent(corpus_id: str, query: str, *, corpus_supported: bool = True) -> dict:
+def classify_intent(
+    corpus_id: str,
+    query: str,
+    *,
+    corpus_supported: bool = True,
+    strategy: str = "uud_1945",
+) -> dict:
     if not corpus_supported:
         return {"intent": "unsupported_corpus"}
+    if strategy != "uud_1945":
+        return {"intent": "natural_language"}
     pasal, _ = parse_citation(query)
     return {"intent": "exact_citation" if pasal else "natural_language"}

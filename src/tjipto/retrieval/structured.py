@@ -10,7 +10,9 @@ BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s*([a-z]?)\b", re.IGNORECASE)
 PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?|[ivxlcdm]+)\b", re.IGNORECASE)
 
 
-def structured_lookup(store: EvidenceStore, query: str, limit: int = 10) -> tuple[dict, ...]:
+def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, strategy: str = "uud_1945") -> tuple[dict, ...]:
+    if strategy != "uud_1945":
+        return ()
     targets = _targets(query)
     if not targets:
         return ()
@@ -28,7 +30,9 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10) -> tupl
     return tuple(rows[:limit])
 
 
-def has_structured_target(query: str) -> bool:
+def has_structured_target(query: str, *, strategy: str = "uud_1945") -> bool:
+    if strategy != "uud_1945":
+        return False
     return bool(_targets(query))
 
 

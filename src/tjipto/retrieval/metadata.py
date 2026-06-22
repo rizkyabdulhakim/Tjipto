@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-TEMPORAL_CONTEXTS = {
+DEFAULT_TEMPORAL_CONTEXTS = {
     "current_consolidated",
     "original_historical",
     "amendment_1_historical",
@@ -10,10 +10,10 @@ TEMPORAL_CONTEXTS = {
     "amendment_4_historical",
 }
 
-SOURCE_ROLES = TEMPORAL_CONTEXTS
+DEFAULT_SOURCE_ROLES = DEFAULT_TEMPORAL_CONTEXTS
 
 
-def normalize_filters(filters: dict | None = None, **kwargs) -> dict:
+def normalize_filters(filters: dict | None = None, *, config=None, **kwargs) -> dict:
     if filters is not None and not isinstance(filters, dict):
         return {
             "status": "final",
@@ -27,16 +27,18 @@ def normalize_filters(filters: dict | None = None, **kwargs) -> dict:
     for key in raw:
         if key not in {"source_role", "temporal_context"}:
             invalid.append(key)
+    source_roles = set(getattr(config, "source_roles", ()) or DEFAULT_SOURCE_ROLES)
+    temporal_contexts = set(getattr(config, "temporal_contexts", ()) or DEFAULT_TEMPORAL_CONTEXTS)
     source_role = raw.get("source_role")
     temporal_context = raw.get("temporal_context")
 
     if source_role is not None:
-        if source_role not in SOURCE_ROLES:
+        if source_role not in source_roles:
             invalid.append("source_role")
         else:
             normalized["source_role"] = source_role
     if temporal_context is not None:
-        if temporal_context not in TEMPORAL_CONTEXTS:
+        if temporal_context not in temporal_contexts:
             invalid.append("temporal_context")
         else:
             normalized["temporal_context"] = temporal_context

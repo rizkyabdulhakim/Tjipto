@@ -100,6 +100,6 @@ def _add(rows_by_id: dict[str, dict], store, row: dict, route: str, order: int, 
     if trace:
         existing["expansion_trace"] = (*existing["expansion_trace"], trace)
     existing["route_score"] = sum(existing["route_scores"].values())
-    if existing.get("source_role") == "current_consolidated":
+    if existing.get("source_role") == getattr(getattr(store, "config", None), "preferred_source_role", None):
         existing["route_score"] += 5.0
     existing["rank_reasons"] = tuple(sorted(existing["route_sources"])) + (existing["provenance_status"],)

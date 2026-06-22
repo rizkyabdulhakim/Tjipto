@@ -1,2 +1,22 @@
 * text=auto eol=lf
 *.pdf binary
+
+.git export-ignore
+node_modules export-ignore
+apps/web/node_modules export-ignore
+dist export-ignore
+build export-ignore
+apps/web/dist export-ignore
+__pycache__ export-ignore
+*.pyc export-ignore
+.pytest_cache export-ignore
+.tjipto-http.pid export-ignore
+.env export-ignore
+.env.* export-ignore
+*.log export-ignore
+*.pid export-ignore
+*.zip export-ignore
+*.tar export-ignore
+*.tgz export-ignore
+tmp export-ignore
+temp export-ignore

@@ -17,6 +17,30 @@ class CorpusConfig:
     corpus_id: str
     manifest_path: Path
     manifest: dict
+    settings: dict | None = None
+
+    def setting(self, key: str, default=None):
+        return (self.settings or {}).get(key, default)
+
+    @property
+    def query_strategy(self) -> str:
+        return self.setting("query_strategy", "generic")
+
+    @property
+    def structured_strategy(self) -> str:
+        return self.setting("structured_strategy", "generic")
+
+    @property
+    def preferred_source_role(self) -> str | None:
+        return self.setting("preferred_source_role")
+
+    @property
+    def source_roles(self) -> tuple[str, ...]:
+        return tuple(self.setting("source_roles", ()))
+
+    @property
+    def temporal_contexts(self) -> tuple[str, ...]:
+        return tuple(self.setting("temporal_contexts", ()))
 
     def artifact_path(self, logical_key: str) -> Path:
         key = ARTIFACT_ALIASES.get(logical_key, logical_key)
