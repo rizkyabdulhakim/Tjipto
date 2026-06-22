@@ -5,8 +5,9 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
-from tjipto.runtime.api import BadRequest, handle_request
+from tjipto.runtime.api import BadRequest, handle_pdf_request, handle_request
 
 
 DEFAULT_LOCAL_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
@@ -45,6 +46,17 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         if route and len(route) == 2 and route[1] == "bookmarks":
             self._json(200, handle_request(route[0], "bookmarks", {}, self.root))
             return
+        if route and len(route) == 2 and route[1] == "pdf":
+            try:
+                result = handle_pdf_request(route[0], self._query_payload(), self.root)
+            except BadRequest as error:
+                self._json(400, {"status": "bad_request", "reason": error.reason})
+                return
+            if result.get("status") != "pdf_access_ready":
+                self._json(404, {"status": "not_found", "reason": result.get("reason") or result.get("status")})
+                return
+            self._pdf(result)
+            return
         self._json(404, {"status": "not_found"})
 
     def do_POST(self) -> None:
@@ -80,12 +92,16 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         return payload
 
     def _route(self) -> list[str] | None:
-        parts = [part for part in self.path.split("?", 1)[0].split("/") if part]
+        parts = [part for part in urlsplit(self.path).path.split("/") if part]
         if len(parts) == 3 and parts[0] == "legal":
             return parts[1:]
         if len(parts) == 2 and parts[0] == "uud" and _mode() == "development":
             return parts
         return None
+
+    def _query_payload(self) -> dict:
+        parsed = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+        return {key: values[0] for key, values in parsed.items() if values}
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = b"" if status == 204 else json.dumps(payload).encode("utf-8")
@@ -98,6 +114,22 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         self.end_headers()
         if body:
             self.wfile.write(body)
+
+    def _pdf(self, payload: dict[str, Any]) -> None:
+        try:
+            body = payload["path"].read_bytes()
+        except OSError:
+            self._json(404, {"status": "not_found", "reason": "render_failed"})
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/pdf")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Disposition", "inline")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self._cors_headers()
+        self.end_headers()
+        self.wfile.write(body)
 
     def _cors_headers(self) -> None:
         origin = self.headers.get("Origin")

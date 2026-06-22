@@ -58,6 +58,18 @@ def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path |
     return {"status": "unsupported_action"}
 
 
+def handle_pdf_request(corpus_id: str, payload: dict, repo_root: Path | None = None) -> dict:
+    return LegalRuntimeService(repo_root).pdf_access(
+        corpus_id,
+        _required_str(payload, "evidence_id"),
+        source_document_id=_required_str(payload, "source_document_id"),
+        page_number=_required_int(payload, "page_number"),
+        source_sha256=_required_str(payload, "source_sha256"),
+        bbox_id=_optional_str(payload, "bbox_id"),
+        source_pdf_path=_optional_str(payload, "source_pdf_path"),
+    )
+
+
 def _limit(payload: dict, *, default: int) -> int:
     value = payload.get("limit", default)
     try:
@@ -100,3 +112,10 @@ def _optional_int(payload: dict, field: str) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         raise BadRequest(f"invalid_{field}")
+
+
+def _required_int(payload: dict, field: str) -> int:
+    value = _optional_int(payload, field)
+    if value is None:
+        raise BadRequest(f"missing_{field}")
+    return value

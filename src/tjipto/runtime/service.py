@@ -8,7 +8,7 @@ from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack
 from tjipto.retrieval.router import route_retrieval
-from tjipto.runtime.viewer import viewer_payload
+from tjipto.runtime.viewer import resolve_pdf_access, viewer_payload
 
 
 _BOOKMARKS: dict[str, dict] = {}
@@ -100,6 +100,35 @@ class LegalRuntimeService:
             source_document_id=source_document_id,
             page_number=page_number,
             bbox_id=bbox_id,
+            source_pdf_path=source_pdf_path,
+        )
+
+    def pdf_access(
+        self,
+        corpus_id: str,
+        evidence_id: str,
+        *,
+        source_document_id: str,
+        page_number: int,
+        source_sha256: str,
+        bbox_id: str | None = None,
+        source_pdf_path: str | None = None,
+    ) -> dict:
+        store = self._store(corpus_id)
+        if store is None:
+            return {"status": "unsupported_corpus", "corpus_id": corpus_id}
+        evidence = store.get(evidence_id)
+        if evidence is None:
+            return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
+        return resolve_pdf_access(
+            store,
+            corpus_id,
+            evidence,
+            store.bboxes_for(evidence_id),
+            source_document_id=source_document_id,
+            page_number=page_number,
+            bbox_id=bbox_id,
+            source_sha256=source_sha256,
             source_pdf_path=source_pdf_path,
         )
 

@@ -88,7 +88,7 @@ async function runSmoke() {
 
     await page.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
     await page.locator('canvas[aria-label^="Halaman sumber"][data-rendered="true"]').first().waitFor();
-    await page.getByText("PDF asli dirender di frontend dari payload backend tervalidasi").first().waitFor();
+    await page.getByText("PDF asli dirender di frontend melalui akses backend tervalidasi").first().waitFor();
     await page.getByLabel("Simpan bookmark sementara").first().click();
 
     await page.getByRole("button", { name: "Cari Regulasi" }).click();

@@ -18,7 +18,7 @@ import {
   Bookmark,
 } from "lucide-react";
 import type { Citation } from "../../lib/types";
-import { getLegalViewerPayload, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
+import { getLegalViewerPayload, pdfAccessUrl, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -310,7 +310,7 @@ function EvidenceContent({
             transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
           }}
         >
-          {viewer?.pdf_access_available && viewer.pdf?.data_url && !renderFailed ? (
+          {viewer?.pdf_access_available && viewer.pdf?.access_url && !renderFailed ? (
             <RenderedViewer
               viewer={viewer}
               onRenderFailed={() => {
@@ -396,7 +396,7 @@ function EvidenceContent({
           style={{ fontSize: 14, fontWeight: 700 }}
         >
           {viewer?.pdf_access_available && !renderFailed
-            ? "PDF asli dirender di frontend dari payload backend tervalidasi"
+            ? "PDF asli dirender di frontend melalui akses backend tervalidasi"
             : "PDF/BBox viewer belum tersedia untuk evidence ini"}
         </div>
       </footer>
@@ -466,11 +466,11 @@ function RenderedViewer({ viewer, onRenderFailed }: { viewer: ViewerPayload; onR
   useEffect(() => {
     let cancelled = false;
     const canvas = canvasRef.current;
-    const dataUrl = viewer.pdf?.data_url;
-    if (!canvas || !dataUrl || !viewer.page_number) return;
+    const pdfUrl = pdfAccessUrl(viewer);
+    if (!canvas || !pdfUrl || !viewer.page_number) return;
     setRendered(false);
 
-    pdfjs.getDocument({ url: dataUrl }).promise
+    pdfjs.getDocument({ url: pdfUrl }).promise
       .then((pdf) => pdf.getPage(viewer.page_number ?? 1))
       .then((page) => {
         if (cancelled) return;
@@ -493,7 +493,7 @@ function RenderedViewer({ viewer, onRenderFailed }: { viewer: ViewerPayload; onR
     return () => {
       cancelled = true;
     };
-  }, [viewer.page_number, viewer.pdf?.data_url]);
+  }, [viewer.page_number, viewer.pdf?.access_url]);
 
   return (
     <div className="relative bg-white">

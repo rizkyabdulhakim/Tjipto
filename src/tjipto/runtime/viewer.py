@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import base64
+from urllib.parse import quote, urlencode
 
 from tjipto.core.manifest import file_sha256
 
@@ -17,42 +17,84 @@ def viewer_payload(
     source_pdf_path: str | None = None,
 ) -> dict:
     base = _base_payload(corpus_id, evidence, bboxes)
-    error = _validate_request(evidence, bboxes, source_document_id, page_number, bbox_id, source_pdf_path)
-    if error:
-        return base | _unavailable(error)
-
-    page = page_number or int((evidence.get("page_numbers") or [0])[0])
-    page_bboxes = tuple(row for row in bboxes if row.get("page_number") == page)
-    if bbox_id:
-        page_bboxes = tuple(row for row in page_bboxes if row.get("bbox_id") == bbox_id)
-    if not page_bboxes:
-        return base | _unavailable("invalid_bbox")
-
-    source = _source_document(store, evidence)
-    if source is None:
-        return base | _unavailable("invalid_source")
-    pdf_path = _safe_pdf_path(store, evidence, source)
-    if pdf_path is None:
-        return base | _unavailable("invalid_source")
-
-    try:
-        if file_sha256(pdf_path) != evidence.get("source_sha256") or source.get("sha256") != evidence.get("source_sha256"):
-            return base | _unavailable("source_hash_mismatch")
-        pdf_bytes = pdf_path.read_bytes()
-    except (OSError, ValueError):
-        return base | _unavailable("render_failed")
+    pdf = resolve_pdf_access(
+        store,
+        corpus_id,
+        evidence,
+        bboxes,
+        source_document_id=source_document_id,
+        page_number=page_number,
+        bbox_id=bbox_id,
+        source_pdf_path=source_pdf_path,
+    )
+    if pdf["status"] != "pdf_access_ready":
+        return base | _unavailable(pdf["reason"])
 
     return base | {
         "status": "viewer_payload_ready",
         "pdf_access_available": True,
         "rendering_available": False,
         "render_status": "pdf_access_available",
-        "page_number": page,
-        "bbox_rectangles": page_bboxes,
+        "page_number": pdf["page_number"],
+        "page_width": pdf.get("page_width"),
+        "page_height": pdf.get("page_height"),
+        "bbox_rectangles": pdf["bbox_rectangles"],
         "pdf": {
             "mime_type": "application/pdf",
-            "data_url": "data:application/pdf;base64," + base64.b64encode(pdf_bytes).decode("ascii"),
+            "access_url": pdf["access_url"],
         },
+    }
+
+
+def resolve_pdf_access(
+    store,
+    corpus_id: str,
+    evidence: dict,
+    bboxes: list[dict],
+    *,
+    source_document_id: str | None = None,
+    page_number: int | None = None,
+    bbox_id: str | None = None,
+    source_sha256: str | None = None,
+    source_pdf_path: str | None = None,
+) -> dict:
+    error = _validate_request(evidence, bboxes, source_document_id, page_number, bbox_id, source_pdf_path)
+    if error:
+        return _pdf_unavailable(error)
+
+    page = page_number or int((evidence.get("page_numbers") or [0])[0])
+    page_bboxes = tuple(row for row in bboxes if row.get("page_number") == page)
+    if bbox_id:
+        page_bboxes = tuple(row for row in page_bboxes if row.get("bbox_id") == bbox_id)
+    if not page_bboxes:
+        return _pdf_unavailable("invalid_bbox")
+    if source_sha256 is not None and source_sha256 != evidence.get("source_sha256"):
+        return _pdf_unavailable("source_hash_mismatch")
+
+    source = _source_document(store, evidence)
+    if source is None:
+        return _pdf_unavailable("invalid_source")
+    pdf_path = _safe_pdf_path(store, evidence, source)
+    if pdf_path is None:
+        return _pdf_unavailable("invalid_source")
+
+    try:
+        if file_sha256(pdf_path) != evidence.get("source_sha256") or source.get("sha256") != evidence.get("source_sha256"):
+            return _pdf_unavailable("source_hash_mismatch")
+    except (OSError, ValueError):
+        return _pdf_unavailable("render_failed")
+
+    first_box = page_bboxes[0]
+    return {
+        "status": "pdf_access_ready",
+        "path": pdf_path,
+        "mime_type": "application/pdf",
+        "page_number": page,
+        "page_width": first_box.get("page_width"),
+        "page_height": first_box.get("page_height"),
+        "bbox_rectangles": page_bboxes,
+        "source_sha256": evidence.get("source_sha256"),
+        "access_url": _pdf_access_url(corpus_id, evidence, page, bbox_id),
     }
 
 
@@ -126,3 +168,19 @@ def _unavailable(reason: str) -> dict:
         "render_status": "render_unavailable" if reason != "render_failed" else "render_failed_safe",
         "reason": reason,
     }
+
+
+def _pdf_unavailable(reason: str) -> dict:
+    return {"status": "pdf_access_unavailable", "reason": reason}
+
+
+def _pdf_access_url(corpus_id: str, evidence: dict, page_number: int, bbox_id: str | None) -> str:
+    query = {
+        "evidence_id": evidence["evidence_id"],
+        "source_document_id": evidence["source_document_id"],
+        "page_number": str(page_number),
+        "source_sha256": evidence["source_sha256"],
+    }
+    if bbox_id:
+        query["bbox_id"] = bbox_id
+    return f"/legal/{quote(corpus_id, safe='')}/pdf?{urlencode(query)}"

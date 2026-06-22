@@ -5,6 +5,7 @@ import os
 import threading
 import unittest
 from pathlib import Path
+from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -57,8 +58,12 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(viewer["evidence_id"], evidence_id)
         self.assertTrue(viewer["pdf_access_available"])
         self.assertEqual(viewer["render_status"], "pdf_access_available")
-        self.assertTrue(viewer["pdf"]["data_url"].startswith("data:application/pdf;base64,"))
+        self.assertTrue(viewer["pdf"]["access_url"].startswith("/legal/uud/pdf?"))
+        self.assertNotIn("data_url", viewer["pdf"])
         self.assertTrue(viewer["bbox_rectangles"])
+        pdf_body, pdf_headers = self._get_bytes(viewer["pdf"]["access_url"])
+        self.assertEqual(pdf_headers["Content-Type"], "application/pdf")
+        self.assertTrue(pdf_body.startswith(b"%PDF"))
 
         saved = self._post("/legal/uud/bookmarks", {"evidence_id": evidence_id, "note": "cek lagi"})
         self.assertEqual(saved["status"], "saved")
@@ -190,9 +195,26 @@ class RuntimeHttpContractTest(unittest.TestCase):
             "unsupported_corpus",
         )
 
+        viewer = self._post("/legal/uud/viewer", {"evidence_id": evidence_id})
+        forged = viewer["pdf"]["access_url"].replace(viewer["source_sha256"], "0" * 64)
+        with self.assertRaises(HTTPError) as error:
+            self._get(forged)
+        self.assertEqual(error.exception.code, 404)
+        body = error.exception.read().decode("utf-8")
+        self.assertNotIn(str(ROOT), body)
+        self.assertNotIn("Traceback", body)
+
+        with self.assertRaises(HTTPError) as error:
+            self._get(viewer["pdf"]["access_url"] + "&source_pdf_path=../secret.pdf")
+        self.assertEqual(error.exception.code, 404)
+
     def _get(self, path: str) -> dict:
         with urlopen(self.base_url + path, timeout=10) as response:
             return json.loads(response.read().decode("utf-8"))
+
+    def _get_bytes(self, path: str) -> tuple[bytes, Any]:
+        with urlopen(self.base_url + path, timeout=10) as response:
+            return response.read(), response.headers
 
     def _post(self, path: str, payload: dict) -> dict:
         request = Request(

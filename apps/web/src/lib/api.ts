@@ -116,11 +116,10 @@ export interface ViewerPayload {
     mime_type?: string;
     width?: number;
     height?: number;
-    data_url?: string;
   };
   pdf?: {
     mime_type?: string;
-    data_url?: string;
+    access_url?: string;
   };
 }
 
@@ -193,6 +192,12 @@ export async function getLegalViewerPayload(evidenceId: string): Promise<ViewerP
   });
   if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} viewer returned ${response.status}`);
   return response.json();
+}
+
+export function pdfAccessUrl(viewer: ViewerPayload): string | null {
+  const accessUrl = viewer.pdf?.access_url;
+  if (!accessUrl) return null;
+  return new URL(accessUrl, API_BASE).toString();
 }
 
 export const askUud = askLegal;
