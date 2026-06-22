@@ -1,6 +1,9 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
+import io
+import subprocess
+import tarfile
 import unittest
 import json
 
@@ -64,6 +67,24 @@ class NoSlopLeakageTest(unittest.TestCase):
 
     def test_stale_runtime_structure_shim_is_absent(self) -> None:
         self.assertFalse((ROOT / "src/tjipto/retrieval/structure.py").exists())
+
+    def test_git_archive_handoff_excludes_local_artifacts(self) -> None:
+        archive = subprocess.check_output(
+            ["git", "archive", "--format=tar", "--worktree-attributes", "HEAD"],
+            cwd=ROOT,
+        )
+        names = set(tarfile.open(fileobj=io.BytesIO(archive)).getnames())
+        forbidden = (
+            ".git",
+            "node_modules",
+            "apps/web/node_modules",
+            "apps/web/dist",
+            "__pycache__",
+            ".pytest_cache",
+            ".tjipto-http.pid",
+        )
+        for item in forbidden:
+            self.assertNotIn(item, names)
 
     def test_runtime_facing_ids_are_clean(self) -> None:
         checked_files = (

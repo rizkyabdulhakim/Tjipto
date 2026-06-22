@@ -3,6 +3,11 @@ import type { Citation } from "./types";
 const API_BASE =
   import.meta.env.VITE_TJIPTO_API_BASE ??
   "http://localhost:8000";
+const DEFAULT_CORPUS_ID = import.meta.env.VITE_TJIPTO_CORPUS_ID ?? "uud";
+
+function corpusEndpoint(action: string) {
+  return `${API_BASE}/${DEFAULT_CORPUS_ID}/${action}`;
+}
 
 export interface ValidationReasons {
   [evidenceId: string]: string;
@@ -118,29 +123,29 @@ export interface BookmarksResponse {
 }
 
 export async function askUud(query: string): Promise<TjiptoAskResponse> {
-  const response = await fetch(`${API_BASE}/uud/ask`, {
+  const response = await fetch(corpusEndpoint("ask"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
   });
-  if (!response.ok) throw new Error(`UUD runtime returned ${response.status}`);
+  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} runtime returned ${response.status}`);
   return response.json();
 }
 
 export async function searchUud(query: string): Promise<SearchResult[]> {
-  const response = await fetch(`${API_BASE}/uud/search`, {
+  const response = await fetch(corpusEndpoint("search"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, limit: 5 }),
   });
-  if (!response.ok) throw new Error(`UUD search returned ${response.status}`);
+  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} search returned ${response.status}`);
   const body = await response.json();
   return Array.isArray(body.results) ? body.results : [];
 }
 
 export async function listBookmarks(): Promise<BookmarksResponse> {
-  const response = await fetch(`${API_BASE}/uud/bookmarks`);
-  if (!response.ok) throw new Error(`UUD bookmarks returned ${response.status}`);
+  const response = await fetch(corpusEndpoint("bookmarks"));
+  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} bookmarks returned ${response.status}`);
   const body = await response.json();
   return {
     persistence: body.persistence,
@@ -150,23 +155,23 @@ export async function listBookmarks(): Promise<BookmarksResponse> {
 }
 
 export async function saveBookmark(evidenceId: string): Promise<BookmarkPointer | null> {
-  const response = await fetch(`${API_BASE}/uud/bookmarks`, {
+  const response = await fetch(corpusEndpoint("bookmarks"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ evidence_id: evidenceId }),
   });
-  if (!response.ok) throw new Error(`UUD bookmark returned ${response.status}`);
+  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} bookmark returned ${response.status}`);
   const body = await response.json();
   return body.bookmark ?? null;
 }
 
 export async function getViewerPayload(evidenceId: string): Promise<ViewerPayload> {
-  const response = await fetch(`${API_BASE}/uud/viewer`, {
+  const response = await fetch(corpusEndpoint("viewer"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ evidence_id: evidenceId }),
   });
-  if (!response.ok) throw new Error(`UUD viewer returned ${response.status}`);
+  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} viewer returned ${response.status}`);
   return response.json();
 }
 
