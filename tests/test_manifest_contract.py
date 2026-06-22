@@ -35,7 +35,7 @@ class ManifestContractTest(unittest.TestCase):
                 "metadata_graph_edges": 449,
                 "pages": 63,
                 "retrieval_units": 438,
-                "source_conflicts": 1,
+                "source_conflicts": 2,
                 "source_documents": 6,
                 "validation_alignment_results": 610,
                 "validation_exception_review_labels": 9,
@@ -52,6 +52,8 @@ class ManifestContractTest(unittest.TestCase):
         report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
         for name in report["referenced_artifacts"]:
             self.assertTrue((FINAL / name).exists(), name)
+        self.assertEqual(report["structure_fidelity"]["status"], "corrected")
+        self.assertEqual(report["metadata_grounding_contract"]["status"], "clarified")
 
 
 if __name__ == "__main__":

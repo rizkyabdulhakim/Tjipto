@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 
 from tjipto.evidence.store import EvidenceStore
-from tjipto.retrieval.structure import matches_bab_xa_target
 
 
 AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
@@ -24,7 +23,7 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10) -> tupl
         row for row in store.evidence
         if row.get("status") == "final"
         and store.bboxes_for(row["evidence_id"])
-        and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets) or matches_bab_xa_target(row, targets))
+        and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets))
     ]
     return tuple(rows[:limit])
 

@@ -40,6 +40,29 @@ class BBoxContractTest(unittest.TestCase):
             self.assertTrue(set(row["bbox_refs"]) <= metadata_grounding_ids)
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())
 
+    def test_inserted_bab_heading_bboxes_attach_to_matching_structure(self) -> None:
+        evidence = {
+            row["evidence_id"]: row
+            for row in read_jsonl(FINAL / "evidence_registry.jsonl")
+        }
+        expected = {
+            "BAB IXA": "BAB IXA",
+            "BAB XA": "BAB XA",
+            "BAB VIIA": "BAB VIIA",
+            "BAB VIIB": "BAB VIIB",
+            "BAB VIIIA": "BAB VIIIA",
+        }
+        heading_rows = [
+            row for row in read_jsonl(FINAL / "bbox_registry.jsonl")
+            if row["text"] in expected
+        ]
+        self.assertEqual(len(heading_rows), 5)
+        for row in heading_rows:
+            target = evidence[row["evidence_id"]]
+            self.assertEqual(target["hierarchy"][0], expected[row["text"]], row["bbox_id"])
+            self.assertIn(row["bbox_id"], target["bbox_refs"])
+            self.assertIn("heading_bab_", row["bbox_id"])
+
 
 if __name__ == "__main__":
     unittest.main()

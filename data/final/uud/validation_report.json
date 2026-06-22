@@ -124,17 +124,17 @@
         "ayat_chunk_candidate": {
           "approximate_token_count": {
             "max": 155,
-            "median": 23.0,
+            "median": 23,
             "min": 8
           },
           "character_count": {
             "max": 988,
-            "median": 136.0,
+            "median": 136,
             "min": 41
           },
           "word_count": {
             "max": 119,
-            "median": 18.0,
+            "median": 18,
             "min": 6
           }
         },
@@ -146,7 +146,7 @@
           },
           "character_count": {
             "max": 9159,
-            "median": 694.0,
+            "median": 694,
             "min": 49
           },
           "word_count": {
@@ -197,7 +197,7 @@
           },
           "character_count": {
             "max": 2681,
-            "median": 422.0,
+            "median": 422,
             "min": 98
           },
           "word_count": {
@@ -209,12 +209,12 @@
         "pembukaan_special_chunk_candidate": {
           "approximate_token_count": {
             "max": 250,
-            "median": 249.0,
+            "median": 249,
             "min": 248
           },
           "character_count": {
             "max": 1501,
-            "median": 1492.0,
+            "median": 1492,
             "min": 1483
           },
           "word_count": {
@@ -445,5 +445,49 @@
     "total_rectangles_missing_page_number_source": 0,
     "total_rectangles_using_single_page_row_fallback": 641,
     "total_rectangles_with_direct_page_number": 747
+  },
+  "structure_fidelity": {
+    "status": "corrected",
+    "inserted_bab_heading_policy": "source-visible inserted BAB headings are assigned to the following accepted structural evidence; amendment 4 rows without source-visible BAB headings do not inherit neighboring BAB context",
+    "bbox_heading_attachment_corrections": [
+      {
+        "old_bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00049::0003",
+        "bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00050::heading_bab_ixa",
+        "detached_from_evidence_id": "uud_source_role_historical_final_citation_evidence_00049",
+        "attached_to_evidence_id": "uud_source_role_historical_final_citation_evidence_00050"
+      },
+      {
+        "old_bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00056::0001",
+        "bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00057::heading_bab_xa",
+        "detached_from_evidence_id": "uud_source_role_historical_final_citation_evidence_00056",
+        "attached_to_evidence_id": "uud_source_role_historical_final_citation_evidence_00057"
+      },
+      {
+        "old_bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00134::0002",
+        "bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00136::heading_bab_viia",
+        "detached_from_evidence_id": "uud_source_role_historical_final_citation_evidence_00134",
+        "attached_to_evidence_id": "uud_source_role_historical_final_citation_evidence_00136"
+      },
+      {
+        "old_bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00144::0002",
+        "bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00146::heading_bab_viib",
+        "detached_from_evidence_id": "uud_source_role_historical_final_citation_evidence_00144",
+        "attached_to_evidence_id": "uud_source_role_historical_final_citation_evidence_00146"
+      },
+      {
+        "old_bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00157::0002",
+        "bbox_id": "uud_unified_bbox::uud_source_role_historical_final_citation_evidence_00159::heading_bab_viiia",
+        "detached_from_evidence_id": "uud_source_role_historical_final_citation_evidence_00157",
+        "attached_to_evidence_id": "uud_source_role_historical_final_citation_evidence_00159"
+      }
+    ],
+    "source_conflict_coverage": [
+      "uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict"
+    ],
+    "reading_order_observability": "validated through page text order plus heading bbox y-order; no new extraction subsystem added"
+  },
+  "metadata_grounding_contract": {
+    "status": "clarified",
+    "note": "metadata_grounding_id identifies non-normative metadata grounding rows; evidence_link.final_evidence_id remains backward-compatible when present and may point to metadata grounding records, not legal evidence_registry rows"
   }
 }

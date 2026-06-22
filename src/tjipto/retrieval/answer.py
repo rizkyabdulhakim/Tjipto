@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from tjipto.retrieval.structure import public_hierarchy
-
 DIRECT_ROUTES = {"exact", "structured", "bm25"}
 REQUIRED_FIELDS = (
     "citation",
@@ -133,4 +131,4 @@ def _evidence_label(row: dict) -> str | None:
 
 
 def _evidence_hierarchy(row: dict) -> tuple:
-    return public_hierarchy(row)
+    return tuple(item for item in (row.get("hierarchy") or ()) if item)

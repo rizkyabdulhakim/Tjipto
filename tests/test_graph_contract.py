@@ -18,6 +18,21 @@ from tjipto.corpora.uud_reproducibility import validate_uud_ingestion_artifacts
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _article_for(row: dict) -> str | None:
+    values = [
+        str(row.get("unit_label") or ""),
+        str(row.get("citation") or ""),
+        " ".join(row.get("hierarchy") or ()),
+        str(row.get("text") or ""),
+        str(row.get("quoted_text") or ""),
+    ]
+    match = re.search(
+        r"\bPasal\s+(22C|22D|22E|23E|23F|23G|25A|25E|28[A-J]|23B|23D|24|37)\b",
+        " ".join(values),
+    )
+    return f"Pasal {match.group(1)}" if match else None
+
+
 class GraphContractTest(unittest.TestCase):
     def test_graph_lite_counts_are_preserved(self) -> None:
         graph = GraphStore(config_for("uud", ROOT))
@@ -39,10 +54,87 @@ class GraphContractTest(unittest.TestCase):
             for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")
         }
         rows = read_jsonl(ROOT / "data/final/uud/source_conflicts.jsonl")
-        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(rows), 2)
+        conflict_ids = {row["source_conflict_id"] for row in rows}
+        self.assertIn(
+            "uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict",
+            conflict_ids,
+        )
         for row in rows:
             self.assertIn(row["source_document_id"], source_ids)
             self.assertNotEqual(row["status"], "unresolved_review_required_required")
+
+    def test_inserted_bab_hierarchy_is_consistent(self) -> None:
+        final = ROOT / "data/final/uud"
+        units = {
+            row["legal_unit_id"]: row
+            for row in read_jsonl(final / "legal_units.jsonl")
+        }
+        evidence = read_jsonl(final / "evidence_registry.jsonl")
+        chunks = {
+            row["chunk_id"]: row
+            for row in read_jsonl(final / "chunks.jsonl")
+        }
+        retrieval = read_jsonl(final / "retrieval_units.jsonl")
+        nodes_by_unit = {
+            row["legal_unit_id"]: row
+            for row in read_jsonl(final / "graph_nodes.jsonl")
+            if row.get("node_type") == "legal_unit"
+        }
+
+        expected = {
+            ("current_consolidated", "Pasal 22C"): "BAB VIIA",
+            ("current_consolidated", "Pasal 22D"): "BAB VIIA",
+            ("current_consolidated", "Pasal 22E"): "BAB VIIB",
+            ("current_consolidated", "Pasal 23E"): "BAB VIIIA",
+            ("current_consolidated", "Pasal 23F"): "BAB VIIIA",
+            ("current_consolidated", "Pasal 23G"): "BAB VIIIA",
+            ("current_consolidated", "Pasal 25A"): "BAB IXA",
+            ("amendment_2_historical", "Pasal 25E"): "BAB IXA",
+            ("amendment_3_historical", "Pasal 22C"): "BAB VIIA",
+            ("amendment_3_historical", "Pasal 22D"): "BAB VIIA",
+            ("amendment_3_historical", "Pasal 22E"): "BAB VIIB",
+            ("amendment_3_historical", "Pasal 23E"): "BAB VIIIA",
+            ("amendment_3_historical", "Pasal 23F"): "BAB VIIIA",
+            ("amendment_3_historical", "Pasal 23G"): "BAB VIIIA",
+        }
+        for letter in "ABCDEFGHIJ":
+            expected[("current_consolidated", f"Pasal 28{letter}")] = "BAB XA"
+            expected[("amendment_2_historical", f"Pasal 28{letter}")] = "BAB XA"
+
+        for row in units.values():
+            if row["unit_type"] == "bab_record":
+                continue
+            role = row["source_document_id"].split("::", 1)[1]
+            article = _article_for(row)
+            if (role, article) in expected:
+                self.assertEqual(row["hierarchy"][0], expected[(role, article)], row["legal_unit_id"])
+                self.assertNotIn("BAB VII", row["hierarchy"][:1], row["legal_unit_id"])
+                self.assertNotIn("BAB X", row["hierarchy"][:1], row["legal_unit_id"])
+                node = nodes_by_unit.get(row["legal_unit_id"])
+                if node:
+                    self.assertEqual(node["hierarchy_path"][0], expected[(role, article)], row["legal_unit_id"])
+
+        for row in evidence:
+            role = row["source_role"]
+            article = _article_for(row)
+            if (role, article) in expected:
+                self.assertEqual(row["hierarchy"][0], expected[(role, article)], row["evidence_id"])
+        for row in retrieval:
+            evidence_row = next(item for item in evidence if item["evidence_id"] == row["evidence_id"])
+            article = _article_for(evidence_row)
+            key = (row["source_role"], article)
+            if key in expected:
+                self.assertIn(expected[key], row["text"], row["retrieval_unit_id"])
+                self.assertEqual(chunks[row["chunk_id"]]["hierarchy"][0], expected[key], row["chunk_id"])
+
+    def test_amendment_4_does_not_invent_missing_bab_headings(self) -> None:
+        for filename in ("legal_units.jsonl", "chunks.jsonl", "evidence_registry.jsonl"):
+            for row in read_jsonl(ROOT / "data/final/uud" / filename):
+                role = row.get("source_role") or row.get("temporal_context") or row.get("source_document_id", "").split("::")[-1]
+                article = _article_for(row)
+                if role == "amendment_4_historical" and article in {"Pasal 23B", "Pasal 23D", "Pasal 24", "Pasal 37"}:
+                    self.assertFalse((row.get("hierarchy") or [""])[0].startswith("BAB"), (filename, row))
 
     def test_validation_artifacts_resolve_refs(self) -> None:
         source_ids = {
