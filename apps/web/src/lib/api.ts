@@ -100,8 +100,28 @@ export interface ViewerPayload {
     y1?: number;
     width?: number;
     height?: number;
+    x?: number;
+    y?: number;
+    page_width?: number;
+    page_height?: number;
   }>;
+  pdf_access_available?: boolean;
   rendering_available?: boolean;
+  render_status?: string;
+  page_number?: number;
+  page_width?: number;
+  page_height?: number;
+  reason?: string | null;
+  render?: {
+    mime_type?: string;
+    width?: number;
+    height?: number;
+    data_url?: string;
+  };
+  pdf?: {
+    mime_type?: string;
+    data_url?: string;
+  };
 }
 
 export interface BookmarkPointer {
@@ -122,7 +142,7 @@ export interface BookmarksResponse {
   bookmarks: BookmarkPointer[];
 }
 
-export async function askUud(query: string): Promise<TjiptoAskResponse> {
+export async function askLegal(query: string): Promise<TjiptoAskResponse> {
   const response = await fetch(corpusEndpoint("ask"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -132,7 +152,7 @@ export async function askUud(query: string): Promise<TjiptoAskResponse> {
   return response.json();
 }
 
-export async function searchUud(query: string): Promise<SearchResult[]> {
+export async function searchLegal(query: string): Promise<SearchResult[]> {
   const response = await fetch(corpusEndpoint("search"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -143,7 +163,7 @@ export async function searchUud(query: string): Promise<SearchResult[]> {
   return Array.isArray(body.results) ? body.results : [];
 }
 
-export async function listBookmarks(): Promise<BookmarksResponse> {
+export async function listLegalBookmarks(): Promise<BookmarksResponse> {
   const response = await fetch(corpusEndpoint("bookmarks"));
   if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} bookmarks returned ${response.status}`);
   const body = await response.json();
@@ -154,7 +174,7 @@ export async function listBookmarks(): Promise<BookmarksResponse> {
   };
 }
 
-export async function saveBookmark(evidenceId: string): Promise<BookmarkPointer | null> {
+export async function saveLegalBookmark(evidenceId: string): Promise<BookmarkPointer | null> {
   const response = await fetch(corpusEndpoint("bookmarks"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -165,7 +185,7 @@ export async function saveBookmark(evidenceId: string): Promise<BookmarkPointer 
   return body.bookmark ?? null;
 }
 
-export async function getViewerPayload(evidenceId: string): Promise<ViewerPayload> {
+export async function getLegalViewerPayload(evidenceId: string): Promise<ViewerPayload> {
   const response = await fetch(corpusEndpoint("viewer"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -174,6 +194,12 @@ export async function getViewerPayload(evidenceId: string): Promise<ViewerPayloa
   if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} viewer returned ${response.status}`);
   return response.json();
 }
+
+export const askUud = askLegal;
+export const searchUud = searchLegal;
+export const listBookmarks = listLegalBookmarks;
+export const saveBookmark = saveLegalBookmark;
+export const getViewerPayload = getLegalViewerPayload;
 
 export function fallbackAnswer() {
   return "Bukti tidak cukup / database belum tersedia dalam korpus UUD terverifikasi saat ini.";

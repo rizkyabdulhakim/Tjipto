@@ -1,6 +1,6 @@
 import { Search, FileText, Clock, Filter } from "lucide-react";
 import { useEffect, useState } from "react";
-import { listBookmarks, searchUud, type BookmarkPointer, type SearchResult } from "../../lib/api";
+import { listLegalBookmarks, searchLegal, type BookmarkPointer, type SearchResult } from "../../lib/api";
 
 const filters = ["Sumber", "Status", "Periode"];
 
@@ -12,7 +12,7 @@ export function SearchRoute() {
   useEffect(() => {
     let ignore = false;
     setStatus("loading");
-    searchUud(q)
+    searchLegal(q)
       .then((rows) => {
         if (!ignore) {
           setResults(rows);
@@ -107,7 +107,7 @@ export function LibraryRoute() {
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
-    listBookmarks()
+    listLegalBookmarks()
       .then((body) => {
         setBookmarks(body.bookmarks);
         setPersistence(body.persistence_label ?? body.persistence ?? "temporary_process_memory");

@@ -76,14 +76,32 @@ class LegalRuntimeService:
             "validation_reasons": context_pack["validation_reasons"],
         }
 
-    def viewer(self, corpus_id: str, evidence_id: str) -> dict:
+    def viewer(
+        self,
+        corpus_id: str,
+        evidence_id: str,
+        *,
+        source_document_id: str | None = None,
+        page_number: int | None = None,
+        bbox_id: str | None = None,
+        source_pdf_path: str | None = None,
+    ) -> dict:
         store = self._store(corpus_id)
         if store is None:
-            return {"status": "unsupported_corpus"}
+            return {"status": "unsupported_corpus", "corpus_id": corpus_id}
         evidence = store.get(evidence_id)
         if evidence is None:
-            return {"status": "not_found"}
-        return viewer_payload(corpus_id, evidence, store.bboxes_for(evidence_id))
+            return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
+        return viewer_payload(
+            store,
+            corpus_id,
+            evidence,
+            store.bboxes_for(evidence_id),
+            source_document_id=source_document_id,
+            page_number=page_number,
+            bbox_id=bbox_id,
+            source_pdf_path=source_pdf_path,
+        )
 
     def capabilities(self, corpus_id: str) -> dict:
         if self._store(corpus_id) is None:

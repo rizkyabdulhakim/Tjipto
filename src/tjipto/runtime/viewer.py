@@ -1,7 +1,62 @@
 from __future__ import annotations
 
+import base64
 
-def viewer_payload(corpus_id: str, evidence: dict, bboxes: list[dict]) -> dict:
+from tjipto.core.manifest import file_sha256
+
+
+def viewer_payload(
+    store,
+    corpus_id: str,
+    evidence: dict,
+    bboxes: list[dict],
+    *,
+    source_document_id: str | None = None,
+    page_number: int | None = None,
+    bbox_id: str | None = None,
+    source_pdf_path: str | None = None,
+) -> dict:
+    base = _base_payload(corpus_id, evidence, bboxes)
+    error = _validate_request(evidence, bboxes, source_document_id, page_number, bbox_id, source_pdf_path)
+    if error:
+        return base | _unavailable(error)
+
+    page = page_number or int((evidence.get("page_numbers") or [0])[0])
+    page_bboxes = tuple(row for row in bboxes if row.get("page_number") == page)
+    if bbox_id:
+        page_bboxes = tuple(row for row in page_bboxes if row.get("bbox_id") == bbox_id)
+    if not page_bboxes:
+        return base | _unavailable("invalid_bbox")
+
+    source = _source_document(store, evidence)
+    if source is None:
+        return base | _unavailable("invalid_source")
+    pdf_path = _safe_pdf_path(store, evidence, source)
+    if pdf_path is None:
+        return base | _unavailable("invalid_source")
+
+    try:
+        if file_sha256(pdf_path) != evidence.get("source_sha256") or source.get("sha256") != evidence.get("source_sha256"):
+            return base | _unavailable("source_hash_mismatch")
+        pdf_bytes = pdf_path.read_bytes()
+    except (OSError, ValueError):
+        return base | _unavailable("render_failed")
+
+    return base | {
+        "status": "viewer_payload_ready",
+        "pdf_access_available": True,
+        "rendering_available": False,
+        "render_status": "pdf_access_available",
+        "page_number": page,
+        "bbox_rectangles": page_bboxes,
+        "pdf": {
+            "mime_type": "application/pdf",
+            "data_url": "data:application/pdf;base64," + base64.b64encode(pdf_bytes).decode("ascii"),
+        },
+    }
+
+
+def _base_payload(corpus_id: str, evidence: dict, bboxes: list[dict]) -> dict:
     return {
         "status": "viewer_payload_ready",
         "corpus_id": corpus_id,
@@ -15,5 +70,59 @@ def viewer_payload(corpus_id: str, evidence: dict, bboxes: list[dict]) -> dict:
         "page_numbers": evidence["page_numbers"],
         "bbox_count": len(bboxes),
         "bbox_rectangles": tuple(bboxes),
+        "pdf_access_available": False,
         "rendering_available": False,
+        "render_status": "render_unavailable",
+        "reason": None,
+    }
+
+
+def _validate_request(
+    evidence: dict,
+    bboxes: list[dict],
+    source_document_id: str | None,
+    page_number: int | None,
+    bbox_id: str | None,
+    source_pdf_path: str | None,
+) -> str | None:
+    if source_pdf_path is not None:
+        return "invalid_source"
+    if source_document_id is not None and source_document_id != evidence.get("source_document_id"):
+        return "invalid_source"
+    pages = set(evidence.get("page_numbers") or ())
+    if page_number is not None and page_number not in pages:
+        return "invalid_page"
+    bbox_refs = set(evidence.get("bbox_refs") or ())
+    if bbox_id is not None and bbox_id not in bbox_refs:
+        return "invalid_bbox"
+    if any(row.get("bbox_id") not in bbox_refs for row in bboxes):
+        return "invalid_bbox"
+    return None
+
+
+def _source_document(store, evidence: dict) -> dict | None:
+    for row in store.source_documents:
+        if row.get("source_document_id") == evidence.get("source_document_id"):
+            return row
+    return None
+
+
+def _safe_pdf_path(store, evidence: dict, source: dict):
+    if source.get("path") != evidence.get("source_pdf_path"):
+        return None
+    try:
+        path = store.config.source_path(source["path"])
+    except ValueError:
+        return None
+    if not path.exists() or path.suffix.casefold() != ".pdf":
+        return None
+    return path
+
+
+def _unavailable(reason: str) -> dict:
+    return {
+        "status": "viewer_payload_ready",
+        "rendering_available": False,
+        "render_status": "render_unavailable" if reason != "render_failed" else "render_failed_safe",
+        "reason": reason,
     }

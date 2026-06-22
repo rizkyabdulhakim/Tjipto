@@ -6,6 +6,7 @@ class EvidenceStore:
         self._evidence: list[dict] | None = None
         self._legal_units: list[dict] | None = None
         self._chunks: list[dict] | None = None
+        self._source_documents: list[dict] | None = None
         self._graph_edges: list[dict] | None = None
         self._bbox_by_evidence: dict[str, list[dict]] | None = None
 
@@ -32,6 +33,12 @@ class EvidenceStore:
         if self._graph_edges is None:
             self._graph_edges = self.config.jsonl("graph_edges")
         return self._graph_edges
+
+    @property
+    def source_documents(self) -> list[dict]:
+        if self._source_documents is None:
+            self._source_documents = self.config.jsonl("source_documents")
+        return self._source_documents
 
     def get(self, evidence_id: str) -> dict | None:
         return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)

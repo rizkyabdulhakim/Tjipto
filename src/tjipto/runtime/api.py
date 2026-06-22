@@ -28,7 +28,14 @@ def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path |
             _filters(payload),
         )
     if action == "viewer":
-        return service.viewer(corpus_id, _required_str(payload, "evidence_id"))
+        return service.viewer(
+            corpus_id,
+            _required_str(payload, "evidence_id"),
+            source_document_id=_optional_str(payload, "source_document_id"),
+            page_number=_optional_int(payload, "page_number"),
+            bbox_id=_optional_str(payload, "bbox_id"),
+            source_pdf_path=_optional_str(payload, "source_pdf_path"),
+        )
     if action == "ask":
         return service.ask(
             corpus_id,
@@ -83,3 +90,13 @@ def _optional_str(payload: dict, field: str) -> str | None:
     if not isinstance(value, str):
         raise BadRequest(f"invalid_{field}")
     return value
+
+
+def _optional_int(payload: dict, field: str) -> int | None:
+    value = payload.get(field)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise BadRequest(f"invalid_{field}")

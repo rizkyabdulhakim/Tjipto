@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -8,8 +9,8 @@ from typing import Any
 from tjipto.runtime.api import BadRequest, handle_request
 
 
-LOCAL_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
-MAX_REQUEST_BYTES = 64 * 1024
+DEFAULT_LOCAL_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
+DEFAULT_MAX_REQUEST_BYTES = 64 * 1024
 
 
 class PayloadTooLarge(ValueError):
@@ -68,7 +69,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
 
     def _read_json(self) -> dict:
         size = int(self.headers.get("Content-Length", "0") or "0")
-        if size > MAX_REQUEST_BYTES:
+        if size > _max_request_bytes():
             raise PayloadTooLarge
         if size == 0:
             return {}
@@ -82,8 +83,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         parts = [part for part in self.path.split("?", 1)[0].split("/") if part]
         if len(parts) == 3 and parts[0] == "legal":
             return parts[1:]
-        # Dev alias for older local callers; canonical API is /legal/{corpus_id}/{action}.
-        if len(parts) == 2 and parts[0] == "uud":
+        if len(parts) == 2 and parts[0] == "uud" and _mode() == "development":
             return parts
         return None
 
@@ -92,6 +92,8 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
         self._cors_headers()
         self.end_headers()
         if body:
@@ -99,7 +101,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
 
     def _cors_headers(self) -> None:
         origin = self.headers.get("Origin")
-        if origin in LOCAL_ORIGINS:
+        if origin in _allowed_origins():
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -109,8 +111,26 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         return
 
 
+def _mode() -> str:
+    return os.environ.get("TJIPTO_MODE", "development").casefold()
+
+
+def _allowed_origins() -> set[str]:
+    configured = os.environ.get("TJIPTO_CORS_ORIGINS")
+    if configured:
+        return {origin.strip() for origin in configured.split(",") if origin.strip()}
+    return DEFAULT_LOCAL_ORIGINS if _mode() == "development" else set()
+
+
+def _max_request_bytes() -> int:
+    try:
+        return int(os.environ.get("TJIPTO_MAX_REQUEST_BYTES", str(DEFAULT_MAX_REQUEST_BYTES)))
+    except ValueError:
+        return DEFAULT_MAX_REQUEST_BYTES
+
+
 def main() -> None:
-    server = make_server()
+    server = make_server(host=os.environ.get("TJIPTO_HOST", "127.0.0.1"), port=int(os.environ.get("TJIPTO_PORT", "8000")))
     try:
         server.serve_forever()
     finally:

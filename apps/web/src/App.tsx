@@ -7,7 +7,7 @@ import { EvidencePanel } from "./components/tjipto/EvidencePanel";
 import { SearchRoute, LibraryRoute } from "./components/tjipto/SecondaryRoutes";
 import type { Citation, ChatMessage as TMessage } from "./lib/types";
 import { conversation } from "./components/tjipto/data";
-import { askUud, fallbackAnswer, mapAskResponseToCitations } from "./lib/api";
+import { askLegal, fallbackAnswer, mapAskResponseToCitations } from "./lib/api";
 import { Menu, SquarePen } from "lucide-react";
 
 type Route = "chat" | "search" | "library";
@@ -76,7 +76,7 @@ export default function App() {
     setIsStreaming(true);
 
     try {
-      const response = await askUud(value);
+      const response = await askLegal(value);
       const citations = mapAskResponseToCitations(response);
       const hasFinalEvidence = citations.length > 0;
       const content = hasFinalEvidence ? response.answer || fallbackAnswer() : fallbackAnswer();

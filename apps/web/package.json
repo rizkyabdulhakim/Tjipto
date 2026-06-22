@@ -17,6 +17,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "lucide-react": "^0.468.0",
     "motion": "^11.0.0",
+    "pdfjs-dist": "^6.0.227",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tailwindcss": "^4.0.0",

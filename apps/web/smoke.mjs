@@ -87,7 +87,8 @@ async function runSmoke() {
     await page.getByText(/SUMBER/).waitFor();
 
     await page.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
-    await page.getByText("Rendering PDF/BBox belum tersedia").first().waitFor();
+    await page.locator('canvas[aria-label^="Halaman sumber"][data-rendered="true"]').first().waitFor();
+    await page.getByText("PDF asli dirender di frontend dari payload backend tervalidasi").first().waitFor();
     await page.getByLabel("Simpan bookmark sementara").first().click();
 
     await page.getByRole("button", { name: "Cari Regulasi" }).click();
@@ -99,6 +100,29 @@ async function runSmoke() {
     await page.getByRole("heading", { name: "Library" }).waitFor();
     await page.getByText("temporary_process_memory").waitFor();
     await page.getByText("Sample Prompts").waitFor();
+
+    const fallbackPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+    await fallbackPage.route("**/legal/uud/viewer", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          status: "viewer_payload_ready",
+          pdf_access_available: false,
+          rendering_available: false,
+          render_status: "render_unavailable",
+          evidence_id: "uud_current_consolidated_final_citation_evidence_00237",
+          page_numbers: [3],
+          bbox_rectangles: [],
+        }),
+      }),
+    );
+    await fallbackPage.goto("http://127.0.0.1:5173", { waitUntil: "networkidle" });
+    await fallbackPage.getByPlaceholder("Tanya UUD 1945...").fill("Pasal 1 ayat (3)");
+    await fallbackPage.getByPlaceholder("Tanya UUD 1945...").press("Enter");
+    await fallbackPage.getByText("Dukungan sitasi berbasis bukti").waitFor();
+    await fallbackPage.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
+    await fallbackPage.getByText("Rendering PDF/BBox belum tersedia").first().waitFor();
   } finally {
     await browser.close();
   }

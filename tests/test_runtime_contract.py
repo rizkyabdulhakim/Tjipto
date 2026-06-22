@@ -59,10 +59,40 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(viewer["corpus_id"], "uud")
         self.assertEqual(viewer["legal_unit_id"], evidence["legal_unit_id"])
         self.assertEqual(viewer["source_document_id"], evidence["source_document_id"])
-        self.assertFalse(viewer["rendering_available"])
+        self.assertTrue(viewer["pdf_access_available"])
+        self.assertEqual(viewer["render_status"], "pdf_access_available")
+        self.assertEqual(viewer["pdf"]["mime_type"], "application/pdf")
+        self.assertTrue(viewer["pdf"]["data_url"].startswith("data:application/pdf;base64,"))
         self.assertTrue(viewer["page_numbers"])
         self.assertGreater(viewer["bbox_count"], 0)
         self.assertTrue(viewer["bbox_rectangles"])
+        for box in viewer["bbox_rectangles"]:
+            self.assertGreaterEqual(box["x0"], 0)
+            self.assertGreaterEqual(box["y0"], 0)
+            self.assertGreater(box["x1"], box["x0"])
+            self.assertGreater(box["y1"], box["y0"])
+
+    def test_viewer_rejects_invalid_render_inputs_safely(self) -> None:
+        evidence = self.service.citation("uud", "Pasal 1 ayat (3)")["matches"][0]
+        evidence_id = evidence["evidence_id"]
+        cases = (
+            ({"source_document_id": "uud::missing"}, "invalid_source"),
+            ({"page_number": 999}, "invalid_page"),
+            ({"bbox_id": "missing_bbox"}, "invalid_bbox"),
+            ({"source_pdf_path": "../secret.pdf"}, "invalid_source"),
+        )
+        for kwargs, reason in cases:
+            result = self.service.viewer("uud", evidence_id, **kwargs)
+            self.assertEqual(result["status"], "viewer_payload_ready", kwargs)
+            self.assertFalse(result["rendering_available"], kwargs)
+            self.assertIn(result["render_status"], {"render_unavailable", "render_failed_safe"}, kwargs)
+            self.assertEqual(result["reason"], reason, kwargs)
+            text = json.dumps(result)
+            self.assertNotIn(str(ROOT), text)
+            self.assertNotIn("Traceback", text)
+
+        self.assertEqual(self.service.viewer("unknown", evidence_id)["status"], "unsupported_corpus")
+        self.assertEqual(self.service.viewer("uud", "missing")["reason"], "invalid_evidence")
 
     def test_search_results_are_public_evidence_payloads(self) -> None:
         result = self.service.search("uud", "negara hukum", limit=2)

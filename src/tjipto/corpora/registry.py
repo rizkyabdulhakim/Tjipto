@@ -39,7 +39,7 @@ class CorpusRegistry:
         if manifest.get("corpus_id") != corpus_id:
             return None
         settings = {key: value for key, value in entry.items() if key != "manifest"} if isinstance(entry, dict) else {}
-        return CorpusConfig(corpus_id, manifest_path, manifest, settings)
+        return CorpusConfig(corpus_id, manifest_path, manifest, settings, self.repo_root)
 
     def _safe_registry_path(self, rel: str) -> Path | None:
         path = Path(rel)

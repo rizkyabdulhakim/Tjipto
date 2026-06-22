@@ -1,6 +1,8 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import * as pdfjs from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
   X,
   Minus,
@@ -16,7 +18,9 @@ import {
   Bookmark,
 } from "lucide-react";
 import type { Citation } from "../../lib/types";
-import { getViewerPayload, saveBookmark, type ViewerPayload } from "../../lib/api";
+import { getLegalViewerPayload, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
+
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface EvidencePanelProps {
   citation: Citation | null;
@@ -102,6 +106,7 @@ function EvidenceContent({
   const [saved, setSaved] = useState(false);
   const [viewer, setViewer] = useState<ViewerPayload | null>(null);
   const [viewerError, setViewerError] = useState(false);
+  const [renderFailed, setRenderFailed] = useState(false);
   const location = legalUnitLabel(citation.article, citation.paragraph);
   const pageNumber = viewer?.page_numbers?.[0] ?? citation.pageNumber;
   const sourceHash = viewer?.source_sha256
@@ -114,7 +119,8 @@ function EvidenceContent({
     let stale = false;
     setViewer(null);
     setViewerError(false);
-    getViewerPayload(citation.documentId)
+    setRenderFailed(false);
+    getLegalViewerPayload(citation.documentId)
       .then((payload) => {
         if (!stale) setViewer(payload);
       })
@@ -143,7 +149,7 @@ function EvidenceContent({
 
   const savePointer = async () => {
     try {
-      const bookmark = await saveBookmark(citation.documentId);
+      const bookmark = await saveLegalBookmark(citation.documentId);
       if (bookmark) setSaved(true);
     } catch {
       setSaved(false);
@@ -304,12 +310,22 @@ function EvidenceContent({
             transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
           }}
         >
-          <UnavailableViewer
-            location={location}
-            pageNumber={pageNumber}
-            viewer={viewer}
-            viewerError={viewerError}
-          />
+          {viewer?.pdf_access_available && viewer.pdf?.data_url && !renderFailed ? (
+            <RenderedViewer
+              viewer={viewer}
+              onRenderFailed={() => {
+                setRenderFailed(true);
+                setViewer((current) => current ? { ...current, rendering_available: false, render_status: "render_failed_safe" } : current);
+              }}
+            />
+          ) : (
+            <UnavailableViewer
+              location={location}
+              pageNumber={pageNumber}
+              viewer={viewer}
+              viewerError={viewerError}
+            />
+          )}
         </div>
         
         {/* EXCERPT CARD */}
@@ -379,7 +395,9 @@ function EvidenceContent({
           className="flex items-center justify-center gap-2.5 min-h-11 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3 text-center text-[var(--tj-text-secondary)]"
           style={{ fontSize: 14, fontWeight: 700 }}
         >
-          PDF/BBox viewer belum disajikan oleh backend
+          {viewer?.pdf_access_available && !renderFailed
+            ? "PDF asli dirender di frontend dari payload backend tervalidasi"
+            : "PDF/BBox viewer belum tersedia untuk evidence ini"}
         </div>
       </footer>
     </>
@@ -435,6 +453,81 @@ function MetaRow({
       </span>
     </div>
   );
+}
+
+function RenderedViewer({ viewer, onRenderFailed }: { viewer: ViewerPayload; onRenderFailed: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
+  const [rendered, setRendered] = useState(false);
+  const boxes = (viewer.bbox_rectangles ?? []).filter(
+    (box) => box.page_number === viewer.page_number,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const canvas = canvasRef.current;
+    const dataUrl = viewer.pdf?.data_url;
+    if (!canvas || !dataUrl || !viewer.page_number) return;
+    setRendered(false);
+
+    pdfjs.getDocument({ url: dataUrl }).promise
+      .then((pdf) => pdf.getPage(viewer.page_number ?? 1))
+      .then((page) => {
+        if (cancelled) return;
+        const viewport = page.getViewport({ scale: 1.5 });
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("canvas_unavailable");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const pageViewport = page.getViewport({ scale: 1 });
+        setPageSize({ width: pageViewport.width, height: pageViewport.height });
+        return page.render({ canvas, canvasContext: context, viewport }).promise;
+      })
+      .then(() => {
+        if (!cancelled) setRendered(true);
+      })
+      .catch(() => {
+        if (!cancelled) onRenderFailed();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewer.page_number, viewer.pdf?.data_url]);
+
+  return (
+    <div className="relative bg-white">
+      <canvas
+        ref={canvasRef}
+        aria-label={`Halaman sumber ${viewer.page_number ?? ""}`}
+        data-rendered={rendered ? "true" : "false"}
+        className="block w-full h-auto"
+      />
+      {!rendered && (
+        <div className="absolute inset-0 min-h-[260px] flex items-center justify-center text-sm text-[var(--tj-text-secondary)]">
+          Memuat halaman PDF
+        </div>
+      )}
+      {pageSize && rendered && <div className="absolute inset-0 pointer-events-none">
+        {boxes.map((box) => (
+          <span
+            key={box.bbox_id}
+            className="absolute border-2 border-[var(--tj-accent)] bg-[var(--tj-pdf-highlight)] shadow-[0_0_0_1px_rgba(255,255,255,0.75)]"
+            style={{
+              left: `${percent(box.x0, pageSize.width)}%`,
+              top: `${percent(box.y0, pageSize.height)}%`,
+              width: `${percent((box.x1 ?? 0) - (box.x0 ?? 0), pageSize.width)}%`,
+              height: `${percent((box.y1 ?? 0) - (box.y0 ?? 0), pageSize.height)}%`,
+            }}
+          />
+        ))}
+      </div>}
+    </div>
+  );
+}
+
+function percent(value: number | undefined, total: number) {
+  return total > 0 ? 100 * (value ?? 0) / total : 0;
 }
 
 function UnavailableViewer({

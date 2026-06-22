@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import unittest
 from pathlib import Path
@@ -54,7 +55,9 @@ class RuntimeHttpContractTest(unittest.TestCase):
         viewer = self._post("/legal/uud/viewer", {"evidence_id": evidence_id})
         self.assertEqual(viewer["status"], "viewer_payload_ready")
         self.assertEqual(viewer["evidence_id"], evidence_id)
-        self.assertFalse(viewer["rendering_available"])
+        self.assertTrue(viewer["pdf_access_available"])
+        self.assertEqual(viewer["render_status"], "pdf_access_available")
+        self.assertTrue(viewer["pdf"]["data_url"].startswith("data:application/pdf;base64,"))
         self.assertTrue(viewer["bbox_rectangles"])
 
         saved = self._post("/legal/uud/bookmarks", {"evidence_id": evidence_id, "note": "cek lagi"})
@@ -72,6 +75,19 @@ class RuntimeHttpContractTest(unittest.TestCase):
         alias = self._get("/uud/capabilities")
         self.assertEqual(alias["status"], canonical["status"])
         self.assertEqual(alias["capabilities"], canonical["capabilities"])
+
+    def test_uud_alias_is_disabled_outside_development(self) -> None:
+        old = os.environ.get("TJIPTO_MODE")
+        os.environ["TJIPTO_MODE"] = "staging"
+        try:
+            with self.assertRaises(HTTPError) as error:
+                self._get("/uud/capabilities")
+            self.assertEqual(error.exception.code, 404)
+        finally:
+            if old is None:
+                os.environ.pop("TJIPTO_MODE", None)
+            else:
+                os.environ["TJIPTO_MODE"] = old
 
     def test_uud_ask_examples(self) -> None:
         ready = self._post("/legal/uud/ask", {"query": "Pasal 1 ayat (3)"})
@@ -103,6 +119,8 @@ class RuntimeHttpContractTest(unittest.TestCase):
         )
         with urlopen(request, timeout=10) as response:
             self.assertEqual(response.headers["Access-Control-Allow-Origin"], "http://localhost:5173")
+            self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+            self.assertEqual(response.headers["Referrer-Policy"], "no-referrer")
 
         request = Request(
             self.base_url + "/legal/uud/ask",
@@ -151,6 +169,26 @@ class RuntimeHttpContractTest(unittest.TestCase):
             urlopen(request, timeout=10)
         self.assertEqual(error.exception.code, 400)
         self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "invalid_limit")
+
+    def test_viewer_invalid_inputs_do_not_leak_paths_or_traces(self) -> None:
+        citation = self._post("/legal/uud/citation", {"query": "Pasal 1 ayat (3)"})
+        evidence_id = citation["matches"][0]["evidence_id"]
+        for payload in (
+            {"evidence_id": evidence_id, "source_document_id": "uud::missing"},
+            {"evidence_id": evidence_id, "page_number": 999},
+            {"evidence_id": evidence_id, "bbox_id": "missing_bbox"},
+            {"evidence_id": evidence_id, "source_pdf_path": "../secret.pdf"},
+        ):
+            viewer = self._post("/legal/uud/viewer", payload)
+            self.assertEqual(viewer["status"], "viewer_payload_ready")
+            self.assertFalse(viewer["rendering_available"])
+            body = json.dumps(viewer)
+            self.assertNotIn(str(ROOT), body)
+            self.assertNotIn("Traceback", body)
+        self.assertEqual(
+            self._post("/legal/unknown/viewer", {"evidence_id": evidence_id})["status"],
+            "unsupported_corpus",
+        )
 
     def _get(self, path: str) -> dict:
         with urlopen(self.base_url + path, timeout=10) as response:

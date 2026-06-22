@@ -18,6 +18,7 @@ class CorpusConfig:
     manifest_path: Path
     manifest: dict
     settings: dict | None = None
+    repo_root: Path | None = None
 
     def setting(self, key: str, default=None):
         return (self.settings or {}).get(key, default)
@@ -54,6 +55,16 @@ class CorpusConfig:
         resolved = (base / path).resolve()
         if not resolved.is_relative_to(base):
             raise ValueError(f"invalid artifact path:{logical_key}")
+        return resolved
+
+    def source_path(self, rel: str) -> Path:
+        path = Path(rel)
+        if path.is_absolute():
+            raise ValueError("invalid_source_path")
+        root = (self.repo_root or self.manifest_path.parents[2]).resolve()
+        resolved = (root / path).resolve()
+        if not resolved.is_relative_to(root):
+            raise ValueError("invalid_source_path")
         return resolved
 
     def json(self, logical_key: str) -> dict:
