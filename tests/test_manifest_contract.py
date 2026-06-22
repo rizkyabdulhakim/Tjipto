@@ -54,6 +54,19 @@ class ManifestContractTest(unittest.TestCase):
             self.assertTrue((FINAL / name).exists(), name)
         self.assertEqual(report["structure_fidelity"]["status"], "corrected")
         self.assertEqual(report["metadata_grounding_contract"]["status"], "clarified")
+        self.assertEqual(report["final_artifact_counts"]["chunks"], 609)
+        self.assertEqual(
+            report["final_artifact_counts"]["chunks"],
+            len((FINAL / "chunks.jsonl").read_text(encoding="utf-8").splitlines()),
+        )
+        self.assertEqual(report["artifact_governance"]["status"], "current_final_artifacts_present")
+        self.assertIn(
+            "Pasal 22D ayat (3) bbox/text exception remains tracked",
+            report["artifact_governance"]["reviewed_exceptions_preserved"][0],
+        )
+        report_text = json.dumps(report).casefold()
+        self.assertNotIn("no_final_legal_units_created", report_text)
+        self.assertNotIn("no_bbox_created", report_text)
 
 
 if __name__ == "__main__":

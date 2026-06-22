@@ -62,6 +62,9 @@ class NoSlopLeakageTest(unittest.TestCase):
         self.assertNotIn("data/final/uud", text)
         self.assertNotIn(r"data\\final\\uud", text)
 
+    def test_stale_runtime_structure_shim_is_absent(self) -> None:
+        self.assertFalse((ROOT / "src/tjipto/retrieval/structure.py").exists())
+
     def test_runtime_facing_ids_are_clean(self) -> None:
         checked_files = (
             "evidence_registry.jsonl",

@@ -8,13 +8,12 @@
     "blocked_insufficient_evidence_count": 0,
     "blocked_requires_fix_count": 0,
     "blocked_requires_visual_review_count": 0,
-    "candidate_only": true,
     "embedding_blocker_count": 0,
     "grounding_blocker_count": 1,
     "grounding_span_later_task_count": 1,
     "inactive_source_typo_exception_reviewed_count": 1,
     "labeled_exception_count": 9,
-    "not_legal_grade_note": "UUD source-alignment exception review candidate only; not legal-grade verified and not approved for vector DB/page grounding/bbox/final legal units.",
+    "not_legal_grade_note": "UUD source-alignment exception review historical audit only; not legal-grade verified; final artifacts now include page grounding, bbox, and final legal units where accepted.",
     "parent_context_exception_reviewed_count": 4,
     "pdf_text_layer_noise_review_count": 4,
     "primary_exception_review_label_counts": {
@@ -36,15 +35,16 @@
     "token_budget_review_count": 4,
     "total_exception_count": 9,
     "warnings": [
-      "alignment_exception_review_candidate_only",
+      "alignment_exception_review_historical_audit_only",
       "not_legal_grade_verified",
       "no_embeddings_created",
       "no_vector_db_created",
-      "no_page_grounding_created",
-      "no_bbox_created",
-      "no_final_legal_units_created",
+      "historical_audit_page_grounding_not_created_at_that_time",
+      "historical_audit_bbox_not_created_at_that_time",
+      "historical_audit_final_legal_units_not_created_at_that_time",
       "review_exception_labels_before_embedding_candidate_experiment_plan"
-    ]
+    ],
+    "historical_audit_scope": "pre-final source-alignment audit retained for traceability; current final artifact counts are in final_artifact_counts"
   },
   "chunk_source_alignment_summary": {
     "active_canonical_chunk_count": 444,
@@ -59,7 +59,6 @@
       "parent_context_metadata_checked": 165
     },
     "bbox_blocker_count": 1,
-    "candidate_only": true,
     "chunk_source_alignment_version": "uud_chunk_source_alignment_audit_v1",
     "current_consolidated_aturan_peralihan_pasal_ii_status": "aligned_after_normalization",
     "current_consolidated_aturan_tambahan_pasal_ii_status": "aligned_after_recorded_chunk_hygiene",
@@ -77,7 +76,6 @@
         "pasal_chunk_candidate": 70,
         "pembukaan_special_chunk_candidate": 2
       },
-      "candidate_only_not_true_count": 0,
       "canonical_document_counts": {
         "uud_1945_amendment_1": 22,
         "uud_1945_amendment_2": 79,
@@ -230,7 +228,9 @@
         "aturan_section_context_candidate": 5,
         "bab_structural_context_candidate": 38,
         "pasal_parent_context_candidate": 122
-      }
+      },
+      "final_artifact_chunk_count": 609,
+      "historical_audit_candidate_flag_not_true_count": 0
     },
     "embedding_blocker_count": 0,
     "exception_type_counts": {
@@ -243,7 +243,7 @@
     "inactive_source_typo_reference_count": 1,
     "inactive_source_typo_reference_status": "inactive_source_typo_reference_noncanonical_checked",
     "legal_scope_mismatch_count": 0,
-    "not_legal_grade_note": "Full UUD chunk source-alignment audit candidate only; not legal-grade verified and not approved for vector DB/page grounding/bbox/final legal units.",
+    "not_legal_grade_note": "Full UUD chunk source-alignment audit historical audit only; not legal-grade verified; final artifacts now include page grounding, bbox, and final legal units where accepted.",
     "not_matched_requires_manual_review_count": 0,
     "page_range_mismatch_count": 0,
     "parent_context_checked_count": 165,
@@ -258,18 +258,19 @@
     "source_legal_unit_assembly_output_version": "uud_legal_unit_assembly_candidate_v1",
     "source_manual_review_packet_version": "uud_chunk_candidate_manual_review_packet_v1",
     "source_mapping_mismatch_count": 0,
-    "total_chunk_count": 610,
+    "total_chunk_count": 609,
     "warnings": [
-      "source_alignment_audit_candidate_only",
+      "source_alignment_audit_historical_audit_only",
       "not_legal_grade_verified",
       "no_embeddings_created",
       "no_vector_db_created",
-      "no_page_grounding_created",
-      "no_bbox_created",
-      "no_final_legal_units_created",
+      "historical_audit_page_grounding_not_created_at_that_time",
+      "historical_audit_bbox_not_created_at_that_time",
+      "historical_audit_final_legal_units_not_created_at_that_time",
       "prior_cross_check_labels_are_supporting_evidence_only",
       "review_alignment_summary_before_embedding_candidate_experiment"
-    ]
+    ],
+    "historical_audit_scope": "pre-final source-alignment audit retained for traceability; current final artifact counts are in final_artifact_counts"
   },
   "corpus_id": "uud",
   "graph_retrieval_summary_fixture": "tests/fixtures/uud/retrieval_summary_baseline.json",
@@ -325,7 +326,6 @@
   "source_conflict_resolution_decision": {
     "affected_historical_scope": "aturan_tambahan_marker_sequence",
     "affected_historical_source": "uud_1945_amendment_4",
-    "candidate_only": true,
     "canonical_reference_for_current_uud": "uud_1945_current_consolidated_text_aturan_tambahan_pasal_ii",
     "conflict_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict_v1",
     "decision_scope": "pipeline_policy_not_final_legal_authority",
@@ -357,7 +357,8 @@
     "reviewer_role": "project_owner_review",
     "source_conflict_metadata_version": "uud_source_conflict_metadata_v1",
     "source_conflict_resolution_decision_version": "uud_source_conflict_resolution_decision_v1",
-    "use_consolidated_pasal_ii_for_current_uud_candidate": true
+    "use_consolidated_pasal_ii_for_current_uud_candidate": true,
+    "historical_audit_scope": "pre-final source-conflict decision retained for traceability; current final artifact counts are in final_artifact_counts"
   },
   "status": "valid",
   "viewer_rectangle_normalization_summary": {
@@ -489,5 +490,28 @@
   "metadata_grounding_contract": {
     "status": "clarified",
     "note": "metadata_grounding_id identifies non-normative metadata grounding rows; evidence_link.final_evidence_id remains backward-compatible when present and may point to metadata grounding records, not legal evidence_registry rows"
+  },
+  "final_artifact_counts": {
+    "chunks": 609,
+    "legal_units": 609,
+    "excluded_records": 6,
+    "evidence_records": 438,
+    "bbox_records": 1388,
+    "retrieval_units": 438
+  },
+  "artifact_governance": {
+    "status": "current_final_artifacts_present",
+    "excluded_chunk_policy": "records listed in excluded_records.jsonl are not runtime-loadable, not active canonical, and not canonical-use allowed",
+    "audited_excluded_chunks": [
+      "uud_chunk_00005",
+      "uud_chunk_00022",
+      "uud_chunk_00097",
+      "uud_chunk_00101",
+      "uud_chunk_00143",
+      "uud_chunk_00188"
+    ],
+    "reviewed_exceptions_preserved": [
+      "Pasal 22D ayat (3) bbox/text exception remains tracked in structure_fidelity.reviewed_exception_unit"
+    ]
   }
 }

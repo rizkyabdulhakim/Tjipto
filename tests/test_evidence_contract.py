@@ -42,6 +42,38 @@ class EvidenceContractTest(unittest.TestCase):
             for parent_id in row["parent_legal_unit_ids"]:
                 self.assertIn(parent_id, unit_ids)
 
+    def test_excluded_chunks_are_not_active_canonical(self) -> None:
+        chunks = {
+            row["chunk_id"]: row
+            for row in read_jsonl(FINAL / "chunks.jsonl")
+        }
+        units = {
+            row["legal_unit_id"]: row
+            for row in read_jsonl(FINAL / "legal_units.jsonl")
+        }
+        excluded = read_jsonl(FINAL / "excluded_records.jsonl")
+        self.assertEqual(len(excluded), 6)
+        for row in excluded:
+            chunk = chunks[row["legacy_chunk_id"]]
+            unit = units[chunk["legal_unit_id"]]
+            self.assertFalse(chunk["canonical_use_allowed"])
+            self.assertNotEqual(chunk["status"], "active_canonical_record")
+            self.assertEqual(chunk["status"], row["status"])
+            self.assertFalse(chunk["runtime_loadable"])
+            self.assertEqual(chunk["exclusion_ref"], row["excluded_record_id"])
+            self.assertNotEqual(unit["status"], "finalizable")
+            self.assertEqual(unit["status"], row["status"])
+            self.assertFalse(unit["runtime_loadable"])
+            self.assertEqual(unit["exclusion_ref"], row["excluded_record_id"])
+
+    def test_bab_records_do_not_point_to_child_bab(self) -> None:
+        for row in read_jsonl(FINAL / "legal_units.jsonl"):
+            if row["unit_type"] == "bab_record":
+                self.assertFalse(
+                    [item for item in row.get("hierarchy", ()) if str(item).startswith("BAB")],
+                    row["legal_unit_id"],
+                )
+
     def test_source_integrity_references_source_documents(self) -> None:
         source_docs = read_jsonl(FINAL / "source_documents.jsonl")
         source_ids = {row["source_document_id"] for row in source_docs}
