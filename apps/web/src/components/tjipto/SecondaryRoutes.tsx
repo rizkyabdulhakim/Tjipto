@@ -34,7 +34,7 @@ export function SearchRoute() {
           Search UUD
         </h1>
         <p className="mt-1.5 mb-6" style={{ fontSize: 14, color: "var(--tj-text-secondary)" }}>
-          Runtime terverifikasi saat ini hanya memuat UUD. Gunakan chat untuk jawaban final dari /uud/ask.
+          Runtime terverifikasi saat ini hanya memuat UUD. Gunakan chat untuk jawaban final dari /legal/uud/ask.
         </p>
 
         <div className="relative">

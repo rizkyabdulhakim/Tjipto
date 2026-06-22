@@ -6,7 +6,7 @@ const API_BASE =
 const DEFAULT_CORPUS_ID = import.meta.env.VITE_TJIPTO_CORPUS_ID ?? "uud";
 
 function corpusEndpoint(action: string) {
-  return `${API_BASE}/${DEFAULT_CORPUS_ID}/${action}`;
+  return `${API_BASE}/legal/${DEFAULT_CORPUS_ID}/${action}`;
 }
 
 export interface ValidationReasons {

@@ -80,7 +80,12 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
 
     def _route(self) -> list[str] | None:
         parts = [part for part in self.path.split("?", 1)[0].split("/") if part]
-        return parts or None
+        if len(parts) == 3 and parts[0] == "legal":
+            return parts[1:]
+        # Dev alias for older local callers; canonical API is /legal/{corpus_id}/{action}.
+        if len(parts) == 2 and parts[0] == "uud":
+            return parts
+        return None
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = b"" if status == 204 else json.dumps(payload).encode("utf-8")

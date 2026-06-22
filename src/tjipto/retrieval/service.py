@@ -10,7 +10,12 @@ class RetrievalService:
         self.store = store
 
     def citation(self, query: str, source_role: str | None = None) -> list[dict]:
-        return exact_citation(self.store.evidence, query, source_role)
+        return exact_citation(
+            self.store.evidence,
+            query,
+            source_role,
+            preferred_source_role=getattr(self.store.config, "preferred_source_role", None),
+        )
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
         exact = self.citation(query)

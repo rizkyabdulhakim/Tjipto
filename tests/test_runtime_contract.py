@@ -308,7 +308,7 @@ class RuntimeContractTest(unittest.TestCase):
         config = CorpusRegistry(ROOT).resolve("uud")
         store = EvidenceStore(config)
 
-        filters = normalize_filters({"source_role": "current_consolidated"})
+        filters = normalize_filters({"source_role": "current_consolidated"}, config=config)
         self.assertEqual(filters, {"source_role": "current_consolidated", "status": "final"})
         rows = filter_evidence(tuple(store.evidence), filters)
         self.assertTrue(rows)
@@ -783,6 +783,14 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(config.query_strategy, "generic")
             self.assertEqual(route_retrieval("demo", "Pasal 1", store)["intent"], "natural_language")
             self.assertEqual(structured_lookup(store, "Pasal 1", strategy=config.structured_strategy), ())
+            filtered = route_retrieval(
+                "demo",
+                "generic corpus resolution",
+                store,
+                metadata_filters={"source_role": "current_consolidated"},
+            )
+            self.assertEqual(filtered["status"], "invalid_filter")
+            self.assertEqual(filtered["reason"], "invalid_filter")
 
     def test_registry_supports_corpus_policy_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
