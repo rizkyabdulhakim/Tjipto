@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-DIRECT_ROUTES = {"exact", "structured", "bm25"}
+DIRECT_ROUTES = {"exact", "metadata", "structured", "bm25"}
 REQUIRED_FIELDS = (
     "citation",
     "quoted_text",
@@ -59,7 +59,10 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
         return False, row.get("lexical_relevance_reason") or "weak_lexical_match"
     if row.get("status") != "final":
         return False, "not_final"
-    if not store.bboxes_for(row["evidence_id"]):
+    if row.get("metadata_grounding"):
+        if not row.get("bbox_refs"):
+            return False, "missing_metadata_grounding"
+    elif not store.bboxes_for(row["evidence_id"]):
         return False, "missing_bbox"
     if not row.get("page_numbers"):
         return False, "missing_page_numbers"
@@ -70,9 +73,16 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
 
 
 def _payload(store, row: dict) -> dict:
-    bboxes = store.bboxes_for(row["evidence_id"])
+    bboxes = (
+        store.metadata_bboxes_for(row["evidence_id"])
+        if row.get("metadata_grounding")
+        else store.bboxes_for(row["evidence_id"])
+    )
     label = _evidence_label(row)
     hierarchy = _evidence_hierarchy(row)
+    can_resolve = row.get("status") == "final" and bool(bboxes) and (
+        not row.get("metadata_grounding") or row.get("metadata_viewer_resolvable") is True
+    )
     return {
         "corpus_id": row.get("corpus_id"),
         "evidence_id": row["evidence_id"],
@@ -88,6 +98,8 @@ def _payload(store, row: dict) -> dict:
         "page_numbers": tuple(row.get("page_numbers") or ()),
         "bbox_count": len(bboxes),
         "quoted_text": row.get("quoted_text"),
+        "metadata_answer": row.get("metadata_answer"),
+        "metadata_field": row.get("metadata_field"),
         "route_sources": tuple(row.get("route_sources") or ()),
         "evidence_status": row.get("status"),
         "viewer_ref": {
@@ -95,9 +107,7 @@ def _payload(store, row: dict) -> dict:
             "evidence_id": row["evidence_id"],
             "page_numbers": tuple(row.get("page_numbers") or ()),
             "bbox_count": len(bboxes),
-            "source_pdf_path": row.get("source_pdf_path"),
-            "source_sha256": row.get("source_sha256"),
-            "can_resolve": row.get("status") == "final" and bool(bboxes),
+            "can_resolve": can_resolve,
         },
     }
 
@@ -112,6 +122,8 @@ def _citation_payload(row: dict) -> dict:
         "label": row.get("label") or _evidence_label(row),
         "hierarchy": _evidence_hierarchy(row),
         "quoted_text": row.get("quoted_text"),
+        "metadata_answer": row.get("metadata_answer"),
+        "metadata_field": row.get("metadata_field"),
         "source_role": row.get("source_role"),
         "temporal_context": row.get("temporal_context"),
         "source_pdf_path": row.get("source_pdf_path"),

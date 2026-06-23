@@ -110,7 +110,7 @@ class LegalRuntimeService:
         *,
         source_document_id: str,
         page_number: int,
-        source_sha256: str,
+        source_sha256: str | None = None,
         bbox_id: str | None = None,
         source_pdf_path: str | None = None,
     ) -> dict:
@@ -195,8 +195,10 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         if routed["status"] != "found":
+            public_status = "insufficient_evidence" if routed.get("route") in {"metadata_not_found", "relation_not_found"} else routed["status"]
             context_pack = empty_context_pack(routed.get("reason") or routed["status"])
             return routed | {
+                "status": public_status,
                 "answer_type": "none",
                 "answer": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
                 "context_pack": context_pack,
@@ -216,10 +218,10 @@ class LegalRuntimeService:
                 "citations": (),
                 "viewer_refs": (),
             }
-        status = "answer_ready" if routed["route"] == "exact" else "limited_answer"
+        status = "answer_ready" if routed["route"] in {"exact", "metadata"} else "limited_answer"
         return routed | {
             "status": status,
-            "answer_type": "quoted_evidence" if status == "answer_ready" else "limited_evidence_summary",
+            "answer_type": "metadata_fact" if routed["route"] == "metadata" else ("quoted_evidence" if status == "answer_ready" else "limited_evidence_summary"),
             "answer": self._answer_text(status, evidence),
             "context_pack": context_pack,
             "evidence": evidence,
@@ -228,6 +230,8 @@ class LegalRuntimeService:
         }
 
     def _answer_text(self, status: str, evidence: tuple[dict, ...]) -> str:
+        if evidence[0].get("metadata_answer"):
+            return f"{evidence[0]['metadata_answer']} (from grounded document metadata)."
         citation = evidence[0].get("label") or evidence[0].get("citation") or "evidence"
         if status == "answer_ready":
             return f"Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum."

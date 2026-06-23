@@ -21,21 +21,21 @@ def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path |
             _filters(payload),
         ))
     if action == "citation":
-        return service.citation(
+        return _public_citation_response(service.citation(
             corpus_id,
             str(payload.get("query", "")),
             _optional_str(payload, "source_role"),
             _filters(payload),
-        )
+        ))
     if action == "viewer":
-        return service.viewer(
+        return _public_viewer(service.viewer(
             corpus_id,
             _required_str(payload, "evidence_id"),
             source_document_id=_optional_str(payload, "source_document_id"),
             page_number=_optional_int(payload, "page_number"),
             bbox_id=_optional_str(payload, "bbox_id"),
             source_pdf_path=_optional_str(payload, "source_pdf_path"),
-        )
+        ))
     if action == "ask":
         return _public_ask(service.ask(
             corpus_id,
@@ -82,6 +82,58 @@ def _public_ask(result: dict) -> dict:
     }
 
 
+def _public_citation_response(result: dict) -> dict:
+    return {
+        "status": result.get("status"),
+        "public_status": result.get("public_status", result.get("status")),
+        "answer_type": result.get("answer_type"),
+        "reason": _public_reason(result.get("reason")),
+        "applied_filters": result.get("applied_filters", {}),
+        "citation_payloads": tuple(_public_citation(row) for row in result.get("citation_payloads", ())),
+        "viewer_refs": tuple(_public_viewer_ref(row) for row in result.get("viewer_refs", ())),
+        "validation_reasons": result.get("validation_reasons", {}),
+    }
+
+
+def _public_viewer(result: dict) -> dict:
+    public = {
+        "status": result.get("status"),
+        "corpus_id": result.get("corpus_id"),
+        "evidence_id": result.get("evidence_id"),
+        "legal_unit_id": result.get("legal_unit_id"),
+        "source_document_id": result.get("source_document_id"),
+        "citation": result.get("citation"),
+        "quoted_text": result.get("quoted_text"),
+        "source_role": result.get("source_role"),
+        "temporal_context": result.get("temporal_context"),
+        "source_status_label": result.get("source_status_label"),
+        "page_numbers": result.get("page_numbers", ()),
+        "bbox_count": result.get("bbox_count"),
+        "bbox_rectangles": tuple(_public_bbox(row) for row in result.get("bbox_rectangles", ())),
+        "pdf_access_available": result.get("pdf_access_available", False),
+        "rendering_available": result.get("rendering_available", False),
+        "render_status": result.get("render_status"),
+        "reason": _public_reason(result.get("reason")) or result.get("reason"),
+    }
+    if result.get("pdf"):
+        public["pdf"] = {
+            "mime_type": result["pdf"].get("mime_type"),
+            "access_url": result["pdf"].get("access_url"),
+        }
+    return public
+
+
+def _public_bbox(row: dict) -> dict:
+    return {
+        "bbox_id": row.get("bbox_id"),
+        "page_number": row.get("page_number"),
+        "x0": row.get("x0"),
+        "y0": row.get("y0"),
+        "x1": row.get("x1"),
+        "y1": row.get("y1"),
+    }
+
+
 def _public_reason(reason):
     return reason if reason in {"invalid_query", "unsupported_corpus", "citation_not_found", "insufficient_evidence"} else None
 
@@ -119,6 +171,8 @@ def _public_citation(row: dict) -> dict:
         "hierarchy": row.get("hierarchy", ()),
         "document_title": row.get("document_title"),
         "quoted_text": row.get("quoted_text"),
+        "metadata_answer": row.get("metadata_answer"),
+        "metadata_field": row.get("metadata_field"),
         "source_role": row.get("source_role"),
         "temporal_context": row.get("temporal_context"),
         "page_numbers": row.get("page_numbers", ()),
@@ -144,7 +198,7 @@ def handle_pdf_request(corpus_id: str, payload: dict, repo_root: Path | None = N
         _required_str(payload, "evidence_id"),
         source_document_id=_required_str(payload, "source_document_id"),
         page_number=_required_int(payload, "page_number"),
-        source_sha256=_required_str(payload, "source_sha256"),
+        source_sha256=_optional_str(payload, "source_sha256"),
         bbox_id=_optional_str(payload, "bbox_id"),
         source_pdf_path=_optional_str(payload, "source_pdf_path"),
     )

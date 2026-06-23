@@ -1,5 +1,25 @@
 from __future__ import annotations
 
+import re
+
+
+FIELD_PATTERNS = {
+    "date": ("tanggal", "kapan", "ditetapkan", "penetapan", "berlaku"),
+    "institution": ("lembaga", "institusi", "majelis", "mpr", "ditetapkan oleh"),
+    "place": ("tempat", "di mana", "dimana", "jakarta"),
+    "signatories": ("penanda tangan", "ditandatangani", "ketua", "wakil ketua", "amien rais", "sutjipto"),
+    "official_title": ("judul", "nama resmi", "naskah"),
+}
+
+ROLE_PATTERNS = (
+    ("amendment_1_historical", re.compile(r"\b(perubahan\s*(pertama|1|i)|amendment\s*1)\b", re.IGNORECASE)),
+    ("amendment_2_historical", re.compile(r"\b(perubahan\s*(kedua|2|ii)|amendment\s*2)\b", re.IGNORECASE)),
+    ("amendment_3_historical", re.compile(r"\b(perubahan\s*(ketiga|3|iii)|amendment\s*3)\b", re.IGNORECASE)),
+    ("amendment_4_historical", re.compile(r"\b(perubahan\s*(keempat|4|iv)|amendment\s*4)\b", re.IGNORECASE)),
+    ("current_consolidated", re.compile(r"\b(satu\s+naskah|konsolidasi|current|berlaku)\b", re.IGNORECASE)),
+    ("original_historical", re.compile(r"\b(naskah\s+asli|original)\b", re.IGNORECASE)),
+)
+
 
 def normalize_filters(filters: dict | None = None, *, config=None, **kwargs) -> dict:
     if filters is not None and not isinstance(filters, dict):
@@ -62,3 +82,111 @@ def filter_evidence(rows: tuple[dict, ...], filters: dict) -> tuple[dict, ...]:
 
 def public_filters(filters: dict) -> dict:
     return {key: value for key, value in filters.items() if not key.startswith("_")}
+
+
+def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
+    field = _metadata_field(query)
+    if field is None:
+        return ()
+    role = _source_role(query)
+    rows = []
+    grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}
+    for row in store.document_metadata:
+        if role is not None and row.get("source_role") != role:
+            continue
+        if row.get("field_statuses", {}).get(field) != "grounded":
+            continue
+        refs = tuple(row.get("grounded_fields", {}).get(field) or ())
+        if not refs:
+            continue
+        grounding = grounding_by_id.get(refs[0])
+        if grounding is None:
+            continue
+        result = _metadata_result(store, row, grounding, field)
+        if result:
+            rows.append(result)
+    return tuple(rows[:limit])
+
+
+def has_metadata_target(query: str) -> bool:
+    return _metadata_field(query) is not None
+
+
+def has_relation_target(query: str) -> bool:
+    folded = (query or "").casefold()
+    return "perubahan" in folded and any(
+        pattern in folded
+        for pattern in ("mengubah", "diubah", "amandemen", "amended", "amends")
+    )
+
+
+def _metadata_field(query: str) -> str | None:
+    folded = (query or "").casefold()
+    if not any(word in folded for word in ("u" "ud", "perubahan", "amendment", "naskah")):
+        return None
+    for field, patterns in FIELD_PATTERNS.items():
+        if any(pattern in folded for pattern in patterns):
+            return field
+    return None
+
+
+def _source_role(query: str) -> str | None:
+    for role, pattern in ROLE_PATTERNS:
+        if pattern.search(query or ""):
+            return role
+    return None
+
+
+def _metadata_result(store, row: dict, grounding: dict, field: str) -> dict | None:
+    value = _field_value(row, field)
+    if not value:
+        return None
+    bboxes = store.metadata_bboxes_for(grounding["metadata_grounding_id"])
+    return {
+        "corpus_id": row.get("corpus_id"),
+        "evidence_id": grounding["metadata_grounding_id"],
+        "legal_unit_id": None,
+        "source_document_id": grounding.get("source_document_id"),
+        "citation": _metadata_citation(row, field),
+        "hierarchy": (_metadata_citation(row, field),),
+        "quoted_text": grounding.get("quoted_text"),
+        "metadata_answer": value,
+        "metadata_field": field,
+        "source_pdf_path": grounding.get("source_pdf_path"),
+        "source_sha256": grounding.get("source_sha256"),
+        "source_role": row.get("source_role"),
+        "temporal_context": row.get("temporal_context"),
+        "page_numbers": tuple(grounding.get("page_numbers") or ()),
+        "bbox_refs": tuple(grounding.get("bbox_refs") or ()),
+        "bbox_count": len(bboxes),
+        "status": "final",
+        "route_sources": ("metadata",),
+        "route_score": 900.0,
+        "route_scores": {"metadata": 900.0},
+        "rank_reasons": ("metadata", "answer_evidence"),
+        "metadata_grounding": True,
+        "metadata_viewer_resolvable": _bboxes_have_coordinates(bboxes),
+    }
+
+
+def _field_value(row: dict, field: str) -> str | None:
+    value = row.get(field)
+    if field == "signatories":
+        signatories = row.get("signatories") or ()
+        names = [item.get("name_text") for item in signatories if item.get("name_text")]
+        return ", ".join(names) if names else None
+    if isinstance(value, dict):
+        return value.get("title_text") or value.get("date_text") or value.get("institution") or value.get("place")
+    return str(value) if value else None
+
+
+def _metadata_citation(row: dict, field: str) -> str:
+    return f"Metadata {row.get('source_role')}: {field}"
+
+
+def _bboxes_have_coordinates(bboxes: list[dict]) -> bool:
+    return bool(bboxes) and all(
+        box.get(key) is not None
+        for box in bboxes
+        for key in ("x0", "y0", "x1", "y1")
+    )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-ROUTE_WEIGHT = {"exact": 1000.0, "structured": 800.0, "bm25": 600.0, "graph": 120.0}
+ROUTE_WEIGHT = {"exact": 1000.0, "metadata": 900.0, "structured": 800.0, "bm25": 600.0, "graph": 120.0}
 
 
 def merge_ranked(store, route_rows: dict[str, tuple[dict, ...]], filters: dict) -> tuple[tuple[dict, ...], tuple[dict, ...]]:
@@ -82,7 +82,7 @@ def _add(rows_by_id: dict[str, dict], store, row: dict, route: str, order: int, 
     existing = rows_by_id.get(evidence_id)
     if existing is None:
         existing = dict(row)
-        existing["bbox_count"] = len(store.bboxes_for(evidence_id))
+        existing["bbox_count"] = row.get("bbox_count", len(store.bboxes_for(evidence_id)))
         existing["provenance_status"] = "pass" if row.get("status") == "final" and existing["bbox_count"] else "needs_review"
         existing["route_sources"] = ()
         existing["route_scores"] = {}

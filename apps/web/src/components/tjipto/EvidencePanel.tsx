@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { Citation } from "../../lib/types";
 import { getLegalViewerPayload, pdfAccessUrl, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
+import { bboxToViewportPercent } from "../../lib/pdfBBox";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -532,9 +533,10 @@ function PdfPage({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
+  const [pageViewport, setPageViewport] = useState<ReturnType<PDFPageProxy["getViewport"]> | null>(null);
   const [rendered, setRendered] = useState(false);
   const pageBoxes = boxes.filter(
-    (box) => active && box.page_number === pageNumber,
+    (box) => box.page_number === pageNumber,
   );
 
   useEffect(() => {
@@ -553,6 +555,7 @@ function PdfPage({
         canvas.height = viewport.height;
         const pageViewport = page.getViewport({ scale: 1 });
         setPageSize({ width: pageViewport.width, height: pageViewport.height });
+        setPageViewport(pageViewport);
         return renderPdfPage(page, canvas, context, viewport);
       })
       .then(() => {
@@ -583,22 +586,26 @@ function PdfPage({
           Memuat halaman PDF
         </div>
       )}
-      {pageSize && rendered && <div className="absolute inset-0 pointer-events-none">
-        {pageBoxes.map((box) => (
-          <span
-            key={box.bbox_id}
-            data-bbox-highlight="active"
-            className="absolute"
-            style={{
-              left: `${percent(box.x0, pageSize.width)}%`,
-              top: `${percent(box.y0, pageSize.height)}%`,
-              width: `${percent((box.x1 ?? 0) - (box.x0 ?? 0), pageSize.width)}%`,
-              height: `${percent((box.y1 ?? 0) - (box.y0 ?? 0), pageSize.height)}%`,
-              background: "rgba(255, 235, 59, 0.5)",
-              border: "1px solid rgba(255, 235, 59, 0.5)",
-            }}
-          />
-        ))}
+      {pageSize && pageViewport && rendered && <div className="absolute inset-0 pointer-events-none">
+        {pageBoxes.map((box) => {
+          const rect = bboxToViewportPercent(box, pageViewport);
+          return (
+            <span
+              key={box.bbox_id}
+              data-bbox-highlight={active ? "active" : "related"}
+              className="absolute"
+              style={{
+                left: `${rect.left}%`,
+                top: `${rect.top}%`,
+                width: `${rect.width}%`,
+                height: `${rect.height}%`,
+                background: "rgba(255, 235, 59, 0.28)",
+                border: "1px solid rgba(245, 211, 39, 0.42)",
+                mixBlendMode: "multiply",
+              }}
+            />
+          );
+        })}
       </div>}
     </>
   );
@@ -611,10 +618,6 @@ function renderPdfPage(
   viewport: ReturnType<PDFPageProxy["getViewport"]>,
 ) {
   return page.render({ canvas, canvasContext: context, viewport }).promise;
-}
-
-function percent(value: number | undefined, total: number) {
-  return total > 0 ? 100 * (value ?? 0) / total : 0;
 }
 
 function UnavailableViewer({

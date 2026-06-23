@@ -1,4 +1,5 @@
 import type { Citation } from "./types";
+import type { PdfBBox } from "./pdfBBox";
 
 const API_BASE =
   import.meta.env.VITE_TJIPTO_API_BASE ??
@@ -46,8 +47,6 @@ export interface ViewerRefPayload {
   evidence_id: string;
   page_numbers?: number[];
   bbox_count?: number;
-  source_role?: string;
-  temporal_context?: string;
   source_status_label?: string;
   can_resolve?: boolean;
 }
@@ -68,6 +67,8 @@ export interface CitationPayload {
   bbox_count?: number;
   viewer_ref?: ViewerRefPayload;
   evidence_status?: string;
+  metadata_answer?: string;
+  metadata_field?: string;
 }
 
 export interface ViewerPayload {
@@ -78,27 +79,12 @@ export interface ViewerPayload {
   source_document_id?: string;
   citation?: string;
   quoted_text?: string;
-  source_pdf_path?: string;
-  source_sha256?: string;
   source_role?: string;
   temporal_context?: string;
   source_status_label?: string;
   page_numbers?: number[];
   bbox_count?: number;
-  bbox_rectangles?: Array<{
-    bbox_id?: string;
-    page_number?: number;
-    x0?: number;
-    y0?: number;
-    x1?: number;
-    y1?: number;
-    width?: number;
-    height?: number;
-    x?: number;
-    y?: number;
-    page_width?: number;
-    page_height?: number;
-  }>;
+  bbox_rectangles?: PdfBBox[];
   pdf_access_available?: boolean;
   rendering_available?: boolean;
   render_status?: string;
@@ -106,11 +92,6 @@ export interface ViewerPayload {
   page_width?: number;
   page_height?: number;
   reason?: string | null;
-  render?: {
-    mime_type?: string;
-    width?: number;
-    height?: number;
-  };
   pdf?: {
     mime_type?: string;
     access_url?: string;

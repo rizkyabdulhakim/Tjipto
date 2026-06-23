@@ -230,6 +230,38 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(unsupported["status"], "unsupported_corpus")
         self.assertEqual(unsupported["intent"], "unsupported_corpus")
 
+    def test_ask_answers_grounded_document_metadata(self) -> None:
+        result = self.service.ask("uud", "tanggal perubahan kedua UUD")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["route"], "metadata")
+        self.assertEqual(result["intent"], "metadata_lookup")
+        self.assertEqual(result["answer_type"], "metadata_fact")
+        self.assertIn("18 Agustus 2000", result["answer"])
+        self.assertTrue(result["citations"])
+        self.assertEqual(result["citations"][0]["metadata_field"], "date")
+        self.assertEqual(result["citations"][0]["metadata_answer"], "18 Agustus 2000")
+        self.assertFalse(result["viewer_refs"][0]["can_resolve"])
+
+    def test_ask_does_not_promote_ungrounded_legal_relations(self) -> None:
+        result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")
+        self.assertEqual(result["status"], "insufficient_evidence")
+        self.assertEqual(result["route"], "relation_not_found")
+        self.assertEqual(result["intent"], "legal_relation_lookup")
+        self.assertFalse(result["evidence"])
+        self.assertFalse(result["citations"])
+        self.assertFalse(result["viewer_refs"])
+
+    def test_viewer_payload_is_multi_page_and_public_safe(self) -> None:
+        evidence_id = "uud_current_consolidated_final_citation_evidence_00232"
+        viewer = self.service.viewer("uud", evidence_id)
+        self.assertEqual(viewer["status"], "viewer_payload_ready")
+        self.assertEqual(set(viewer["page_numbers"]), {2, 3})
+        self.assertTrue({2, 3} <= {row["page_number"] for row in viewer["bbox_rectangles"]})
+        self.assertNotIn("source_pdf_path", viewer)
+        self.assertNotIn("source_sha256", viewer)
+        self.assertNotIn("source_sha256", viewer["pdf"]["access_url"])
+        self.assertNotIn("source_pdf_path", viewer["pdf"]["access_url"])
+
     def test_query_normalization_and_intent_classification(self) -> None:
         self.assertEqual(normalize_query("pasal 28 e")["normalized_query"], "Pasal 28E")
         self.assertEqual(normalize_query("pasal 1 ayat 3")["normalized_query"], "Pasal 1 ayat (3)")

@@ -7,6 +7,9 @@ class EvidenceStore:
         self._legal_units: list[dict] | None = None
         self._chunks: list[dict] | None = None
         self._source_documents: list[dict] | None = None
+        self._document_metadata: list[dict] | None = None
+        self._metadata_grounding: list[dict] | None = None
+        self._metadata_bbox_by_grounding: dict[str, list[dict]] | None = None
         self._graph_edges: list[dict] | None = None
         self._bbox_by_evidence: dict[str, list[dict]] | None = None
 
@@ -40,6 +43,18 @@ class EvidenceStore:
             self._source_documents = self.config.jsonl("source_documents")
         return self._source_documents
 
+    @property
+    def document_metadata(self) -> list[dict]:
+        if self._document_metadata is None:
+            self._document_metadata = _optional_jsonl(self.config, "document_metadata")
+        return self._document_metadata
+
+    @property
+    def metadata_grounding(self) -> list[dict]:
+        if self._metadata_grounding is None:
+            self._metadata_grounding = _optional_jsonl(self.config, "metadata_grounding")
+        return self._metadata_grounding
+
     def get(self, evidence_id: str) -> dict | None:
         return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)
 
@@ -50,3 +65,18 @@ class EvidenceStore:
                 grouped.setdefault(row["evidence_id"], []).append(row)
             self._bbox_by_evidence = grouped
         return self._bbox_by_evidence.get(evidence_id, [])
+
+    def metadata_bboxes_for(self, metadata_grounding_id: str) -> list[dict]:
+        if self._metadata_bbox_by_grounding is None:
+            grouped: dict[str, list[dict]] = {}
+            for row in _optional_jsonl(self.config, "metadata_grounding_registry"):
+                grouped.setdefault(row["metadata_grounding_id"], []).append(row)
+            self._metadata_bbox_by_grounding = grouped
+        return self._metadata_bbox_by_grounding.get(metadata_grounding_id, [])
+
+
+def _optional_jsonl(config, logical_key: str) -> list[dict]:
+    try:
+        return config.jsonl(logical_key)
+    except (KeyError, OSError, ValueError):
+        return []

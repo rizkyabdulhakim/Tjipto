@@ -33,12 +33,10 @@ def viewer_payload(
     return base | {
         "status": "viewer_payload_ready",
         "pdf_access_available": True,
-        "rendering_available": False,
+        "rendering_available": True,
         "render_status": "pdf_access_available",
         "page_number": pdf["page_number"],
-        "page_width": pdf.get("page_width"),
-        "page_height": pdf.get("page_height"),
-        "bbox_rectangles": pdf["bbox_rectangles"],
+        "bbox_rectangles": tuple(bboxes),
         "pdf": {
             "mime_type": "application/pdf",
             "access_url": pdf["access_url"],
@@ -107,8 +105,6 @@ def _base_payload(corpus_id: str, evidence: dict, bboxes: list[dict]) -> dict:
         "source_document_id": evidence.get("source_document_id"),
         "citation": evidence["citation"],
         "quoted_text": evidence["quoted_text"],
-        "source_pdf_path": evidence["source_pdf_path"],
-        "source_sha256": evidence["source_sha256"],
         "source_role": evidence.get("source_role"),
         "temporal_context": evidence.get("temporal_context"),
         "source_status_label": _source_status_label(evidence),
@@ -182,7 +178,6 @@ def _pdf_access_url(corpus_id: str, evidence: dict, page_number: int, bbox_id: s
         "evidence_id": evidence["evidence_id"],
         "source_document_id": evidence["source_document_id"],
         "page_number": str(page_number),
-        "source_sha256": evidence["source_sha256"],
     }
     if bbox_id:
         query["bbox_id"] = bbox_id

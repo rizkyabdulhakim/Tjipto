@@ -60,6 +60,12 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
         citation = self._post("/legal/uud/citation", {"query": "Pasal 1 ayat (3)"})
         self.assertEqual(citation["status"], "found")
+        self.assertNotIn("matches", citation)
+        self.assertNotIn("context_pack", citation)
+        self.assertNotIn("source_sha256", citation["citation_payloads"][0])
+        self.assertNotIn("source_pdf_path", citation["citation_payloads"][0])
+        self.assertNotIn("source_sha256", citation["viewer_refs"][0])
+        self.assertNotIn("source_pdf_path", citation["viewer_refs"][0])
         evidence_id = citation["citation_payloads"][0]["evidence_id"]
 
         viewer = self._post("/legal/uud/viewer", {"evidence_id": evidence_id})
@@ -68,6 +74,10 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertTrue(viewer["pdf_access_available"])
         self.assertEqual(viewer["render_status"], "pdf_access_available")
         self.assertTrue(viewer["pdf"]["access_url"].startswith("/legal/uud/pdf?"))
+        self.assertNotIn("source_sha256", viewer)
+        self.assertNotIn("source_pdf_path", viewer)
+        self.assertNotIn("source_sha256", viewer["pdf"]["access_url"])
+        self.assertNotIn("source_pdf_path", viewer["pdf"]["access_url"])
         self.assertNotIn("data_url", viewer["pdf"])
         self.assertTrue(viewer["bbox_rectangles"])
         pdf_body, pdf_headers = self._get_bytes(viewer["pdf"]["access_url"])
@@ -192,7 +202,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
     def test_viewer_invalid_inputs_do_not_leak_paths_or_traces(self) -> None:
         citation = self._post("/legal/uud/citation", {"query": "Pasal 1 ayat (3)"})
-        evidence_id = citation["matches"][0]["evidence_id"]
+        evidence_id = citation["citation_payloads"][0]["evidence_id"]
         for payload in (
             {"evidence_id": evidence_id, "source_document_id": "uud::missing"},
             {"evidence_id": evidence_id, "page_number": 999},
@@ -211,7 +221,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
         )
 
         viewer = self._post("/legal/uud/viewer", {"evidence_id": evidence_id})
-        forged = viewer["pdf"]["access_url"].replace(viewer["source_sha256"], "0" * 64)
+        forged = viewer["pdf"]["access_url"] + "&source_sha256=" + ("0" * 64)
         with self.assertRaises(HTTPError) as error:
             self._get(forged)
         self.assertEqual(error.exception.code, 404)

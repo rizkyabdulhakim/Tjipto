@@ -1,13 +1,5 @@
 export type RegulationType = "UUD";
 
-export interface BoundingBox {
-  page: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 export interface Citation {
   id: number;
   documentId: string;
@@ -25,8 +17,6 @@ export interface Citation {
   sourceRole?: string;
   temporalContext?: string;
   sourceStatusLabel?: string;
-  fileHash?: string;
-  boundingBox?: BoundingBox;
 }
 
 export interface ChatMessage {
