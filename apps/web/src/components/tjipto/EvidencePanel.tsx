@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, CSSProperties, PointerEvent, ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist/types/src/display/api";
@@ -11,11 +11,8 @@ import {
   Maximize2,
   Minimize2,
   Copy,
-  ChevronLeft,
-  ChevronRight,
   Check,
   FileText,
-  Scale,
   Bookmark,
 } from "lucide-react";
 import type { Citation } from "../../lib/types";
@@ -27,6 +24,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const SIDEBAR_MIN_WIDTH = 360;
 const SIDEBAR_DEFAULT_WIDTH = 440;
 const SIDEBAR_MAX_WIDTH = 760;
+const PDF_NORMAL_MIN_HEIGHT = 260;
+const PDF_ONLY_MIN_HEIGHT = "calc(100vh - 112px)";
+const PDF_AREA_PADDING_CLASS = "p-4 sm:p-6";
 
 interface EvidencePanelProps {
   citation: Citation | null;
@@ -37,9 +37,7 @@ interface EvidencePanelProps {
 
 export function EvidencePanel({
   citation,
-  allCitations,
   onClose,
-  onSelect,
 }: EvidencePanelProps) {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
@@ -82,13 +80,13 @@ export function EvidencePanel({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
             onClick={onClose}
-            className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+            className="lg:hidden fixed inset-0 z-40 bg-black/40"
           />
           <motion.aside
             key="ev-panel"
-            initial={pdfOnly ? { opacity: 0 } : { x: 40, opacity: 0 }}
+            initial={pdfOnly ? { opacity: 0 } : { opacity: 0 }}
             animate={pdfOnly ? { opacity: 1 } : { x: 0, opacity: 1 }}
-            exit={pdfOnly ? { opacity: 0 } : { x: 40, opacity: 0 }}
+            exit={pdfOnly ? { opacity: 0 } : { opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
             className={`${pdfOnly ? "fixed inset-0 z-50 w-full max-w-none" : "fixed lg:static inset-y-0 right-0 z-50 lg:z-10 w-full sm:w-[460px] md:w-[var(--tj-evidence-panel-width)] sm:max-w-[95vw]"} flex flex-col shrink-0 h-full bg-[var(--tj-surface)]/80 lg:bg-[var(--tj-surface)]/60 backdrop-blur-3xl border-l border-[var(--tj-glass-border)] shadow-2xl`}
             style={{ "--tj-evidence-panel-width": `${sidebarWidth}px` } as CSSProperties}
@@ -109,9 +107,7 @@ export function EvidencePanel({
             )}
             <EvidenceContent
               citation={citation}
-              allCitations={allCitations}
               onClose={onClose}
-              onSelect={onSelect}
               pdfOnly={pdfOnly}
               onTogglePdfOnly={() => setPdfOnly((value) => !value)}
             />
@@ -124,28 +120,23 @@ export function EvidencePanel({
 
 function EvidenceContent({
   citation,
-  allCitations,
   onClose,
-  onSelect,
   pdfOnly,
   onTogglePdfOnly,
 }: {
   citation: Citation;
-  allCitations: Citation[];
   onClose: () => void;
-  onSelect: (c: Citation) => void;
   pdfOnly: boolean;
   onTogglePdfOnly: () => void;
 }) {
-  const idx = allCitations.findIndex((c) => c.id === citation.id);
-  const prev = allCitations[idx - 1];
-  const next = allCitations[idx + 1];
   const [zoom, setZoom] = useState(100);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [viewer, setViewer] = useState<ViewerPayload | null>(null);
   const [viewerError, setViewerError] = useState(false);
   const [renderFailed, setRenderFailed] = useState(false);
+  const pdfScrollRef = useRef<HTMLDivElement | null>(null);
+  const zoomAnchorRef = useRef<{ top: number; scrollable: number } | null>(null);
   const location = legalUnitLabel(citation.article, citation.paragraph);
   const pageNumber = viewer?.page_numbers?.[0] ?? citation.pageNumber;
   const sourceStatus = viewer?.source_status_label ?? citation.sourceStatusLabel ?? sourceStatusLabel(citation.sourceRole, citation.temporalContext);
@@ -193,39 +184,31 @@ function EvidenceContent({
     }
   };
 
+  const changeZoom = (delta: number) => {
+    const scroller = pdfScrollRef.current;
+    zoomAnchorRef.current = scroller
+      ? { top: scroller.scrollTop, scrollable: scroller.scrollHeight - scroller.clientHeight }
+      : null;
+    setZoom((value) => clamp(value + delta, 50, 200));
+  };
+
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current;
+    const scroller = pdfScrollRef.current;
+    if (!anchor || !scroller) return;
+    const nextScrollable = scroller.scrollHeight - scroller.clientHeight;
+    scroller.scrollTop = anchor.scrollable > 0
+      ? (anchor.top / anchor.scrollable) * nextScrollable
+      : anchor.top;
+    zoomAnchorRef.current = null;
+  }, [zoom]);
+
   return (
     <>
       {/* HEADER */}
       {!pdfOnly && <header className="px-6 pt-5 pb-4 border-b border-[var(--tj-border-subtle)] shrink-0">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1.5 min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-flex items-center px-2 h-[20px] rounded-md tracking-wider shrink-0"
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  background: "var(--tj-accent-soft)",
-                  color: "var(--tj-accent)",
-                  textTransform: "uppercase",
-                }}
-              >
-                {citation.regulationType.replace("_", " ")}
-              </span>
-              <span
-                className="inline-flex items-center justify-center rounded-lg shrink-0"
-                style={{
-                  width: 20,
-                  height: 20,
-                  background: "var(--tj-accent)",
-                  color: "#fff",
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                {citation.id}
-              </span>
-            </div>
             <h2
               className="tracking-tight"
               style={{
@@ -246,59 +229,13 @@ function EvidenceContent({
           </button>
         </div>
 
-        <div
-          className="mt-2.5 flex items-center flex-wrap gap-x-3 gap-y-1"
-          style={{ fontSize: 13, color: "var(--tj-text-secondary)" }}
-        >
-          <div className="flex items-center gap-1.5">
-            <Scale size={14} className="opacity-60" />
-            <span style={{ fontWeight: 600, color: "var(--tj-text-primary)" }}>
-              {location}
-            </span>
-          </div>
-          <span style={{ color: "var(--tj-text-muted)" }} className="opacity-40">·</span>
-          <div className="flex items-center gap-1.5">
-            <FileText size={14} className="opacity-60" />
-            <span>Halaman {pageNumber}</span>
-          </div>
-        </div>
       </header>}
 
       {/* TOOLBAR */}
-      <div className="px-4 h-12 flex items-center gap-3 border-b border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)]/40 shrink-0">
-        {!pdfOnly && <div className="flex items-center bg-[var(--tj-surface)]/80 rounded-xl border border-[var(--tj-border-subtle)] p-0.5 shadow-sm">
-          <ToolbarBtn
-            disabled={!prev}
-            onClick={() => prev && onSelect(prev)}
-          >
-            <ChevronLeft size={16} />
-          </ToolbarBtn>
-          <div className="w-px h-4 bg-[var(--tj-border-subtle)]" />
-          <span
-            className="px-3 select-none flex items-center"
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: "var(--tj-text-secondary)",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {idx + 1} / {allCitations.length}
-          </span>
-          <div className="w-px h-4 bg-[var(--tj-border-subtle)]" />
-          <ToolbarBtn
-            disabled={!next}
-            onClick={() => next && onSelect(next)}
-          >
-            <ChevronRight size={16} />
-          </ToolbarBtn>
-        </div>}
-
-        <div className="flex-1" />
-
+      <div className="px-4 sm:px-6 h-12 flex items-center gap-3 border-b border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)]/40 shrink-0">
         <div className="flex items-center bg-[var(--tj-surface)]/80 rounded-xl border border-[var(--tj-border-subtle)] p-0.5 shadow-sm">
           <ToolbarBtn
-            onClick={() => setZoom((z) => Math.max(50, z - 10))}
+            onClick={() => changeZoom(-10)}
             disabled={zoom <= 50}
             aria-label="Zoom out"
             title="Zoom out"
@@ -318,7 +255,7 @@ function EvidenceContent({
             {zoom}%
           </span>
           <ToolbarBtn
-            onClick={() => setZoom((z) => Math.min(200, z + 10))}
+            onClick={() => changeZoom(10)}
             disabled={zoom >= 200}
             aria-label="Zoom in"
             title="Zoom in"
@@ -326,6 +263,8 @@ function EvidenceContent({
             <Plus size={14} />
           </ToolbarBtn>
         </div>
+
+        <div className="flex-1" />
 
         <ToolbarBtn
           onClick={onTogglePdfOnly}
@@ -345,41 +284,85 @@ function EvidenceContent({
         </ToolbarBtn>}
       </div>
 
-      {/* PDF VIEW */}
-      <div className={`flex-1 overflow-y-auto bg-[var(--tj-app-bg)]/40 tj-scroll ${pdfOnly ? "p-4 sm:p-6" : "p-6"}`} data-evidence-pdf-area={pdfOnly ? "expanded" : "normal"}>
+      <div className="flex-1 min-h-0 flex flex-col bg-[var(--tj-app-bg)]/40">
+        {/* PDF VIEW */}
         <div
-          className={`relative mx-auto rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm ${pdfOnly ? "max-w-[min(1180px,100%)]" : ""}`}
-          style={{
-            width: `${zoom}%`,
-            maxWidth: zoom <= 100 ? "100%" : "none",
-            minHeight: pdfOnly ? "calc(100vh - 112px)" : 260,
-            transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
-          }}
+          ref={pdfScrollRef}
+          className={`min-h-0 overflow-auto tj-scroll ${PDF_AREA_PADDING_CLASS} ${pdfOnly ? "flex-1" : "basis-[54%] border-b border-[var(--tj-border-subtle)]"}`}
+          data-evidence-pdf-area={pdfOnly ? "expanded" : "normal"}
         >
-          {viewer?.pdf_access_available && viewer.pdf?.access_url && !renderFailed ? (
-            <RenderedViewer
-              viewer={viewer}
-              targetPage={pageNumber}
-              onRenderFailed={() => {
-                setRenderFailed(true);
-                setViewer((current) => current ? { ...current, rendering_available: false, render_status: "render_failed_safe" } : current);
-              }}
-            />
-          ) : (
-            <UnavailableViewer
-              location={location}
-              pageNumber={pageNumber}
-              viewer={viewer}
-              viewerError={viewerError}
-            />
-          )}
+          <div
+            className={`relative mx-auto rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm ${pdfOnly ? "max-w-[min(1180px,100%)]" : ""}`}
+            style={{
+              width: `${zoom}%`,
+              maxWidth: zoom <= 100 ? "100%" : "none",
+              minHeight: pdfOnly ? PDF_ONLY_MIN_HEIGHT : PDF_NORMAL_MIN_HEIGHT,
+              transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+            }}
+          >
+            {viewer?.pdf_access_available && viewer.pdf?.access_url && !renderFailed ? (
+              <RenderedViewer
+                viewer={viewer}
+                targetPage={pageNumber}
+                onRenderFailed={() => {
+                  setRenderFailed(true);
+                  setViewer((current) => current ? { ...current, rendering_available: false, render_status: "render_failed_safe" } : current);
+                }}
+              />
+            ) : (
+              <UnavailableViewer
+                location={location}
+                pageNumber={pageNumber}
+                viewer={viewer}
+                viewerError={viewerError}
+              />
+            )}
+          </div>
         </div>
-        
-        {/* EXCERPT CARD */}
-        {!pdfOnly && <section className="mt-8 mb-6">
-          <div className="flex items-center justify-between mb-3 px-1">
+
+        {!pdfOnly && <div className="flex-1 min-h-0 overflow-y-auto tj-scroll px-6 py-6" data-evidence-detail-area="normal">
+          {/* EXCERPT CARD */}
+          <section className="mb-6">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3
+                className="uppercase"
+                style={{
+                  fontSize: 11,
+                  letterSpacing: "0.1em",
+                  fontWeight: 700,
+                  color: "var(--tj-text-muted)",
+                }}
+              >
+                Kutipan Relevan
+              </h3>
+              <button
+                onClick={copyExcerpt}
+                className={`flex items-center gap-1.5 h-7 px-3 rounded-lg transition-all active:scale-95 ${copied ? "bg-[var(--tj-success)]/10 text-[var(--tj-success)]" : "bg-[var(--tj-surface)] text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface-hover)]"}`}
+                style={{ fontSize: 12, fontWeight: 600 }}
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? "Tersalin" : "Salin"}
+              </button>
+            </div>
+            <div className="rounded-2xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] p-5 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-1 h-full bg-[var(--tj-accent)] opacity-80" />
+              <blockquote
+                style={{
+                  fontSize: 15,
+                  lineHeight: "24px",
+                  color: "var(--tj-text-primary)",
+                  fontStyle: "italic",
+                }}
+              >
+                "{citation.excerpt}"
+              </blockquote>
+            </div>
+          </section>
+
+          {/* DETAILS */}
+          <section className="mb-6">
             <h3
-              className="uppercase"
+              className="uppercase mb-3 px-1"
               style={{
                 fontSize: 11,
                 letterSpacing: "0.1em",
@@ -387,66 +370,29 @@ function EvidenceContent({
                 color: "var(--tj-text-muted)",
               }}
             >
-              Kutipan Relevan
+              Informasi Dokumen
             </h3>
-            <button
-              onClick={copyExcerpt}
-              className={`flex items-center gap-1.5 h-7 px-3 rounded-lg transition-all active:scale-95 ${copied ? "bg-[var(--tj-success)]/10 text-[var(--tj-success)]" : "bg-[var(--tj-surface)] text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface-hover)]"}`}
-              style={{ fontSize: 12, fontWeight: 600 }}
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-              {copied ? "Tersalin" : "Salin"}
-            </button>
-          </div>
-          <div className="rounded-2xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] p-5 shadow-sm relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-[var(--tj-accent)] opacity-80" />
-            <blockquote
-              style={{
-                fontSize: 15,
-                lineHeight: "24px",
-                color: "var(--tj-text-primary)",
-                fontStyle: "italic",
-              }}
-            >
-              "{citation.excerpt}"
-            </blockquote>
-          </div>
-        </section>}
+            <div className="rounded-2xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm divide-y divide-[var(--tj-border-subtle)]">
+              <MetaRow label="Halaman">{pageNumber}</MetaRow>
+              <MetaRow label="Status Sumber">{sourceStatus}</MetaRow>
+              <MetaRow label="Yurisdiksi">Republik Indonesia</MetaRow>
+              <MetaRow label="Domain">{citation.sourceDomain ?? "Tidak tersedia"}</MetaRow>
+            </div>
+          </section>
 
-        {/* DETAILS */}
-        {!pdfOnly && <section className="mb-8">
-          <h3
-            className="uppercase mb-3 px-1"
-            style={{
-              fontSize: 11,
-              letterSpacing: "0.1em",
-              fontWeight: 700,
-              color: "var(--tj-text-muted)",
-            }}
-          >
-            Informasi Dokumen
-          </h3>
-          <div className="rounded-2xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm divide-y divide-[var(--tj-border-subtle)]">
-            <MetaRow label="Lokasi">{location}</MetaRow>
-            <MetaRow label="Halaman">Hal. {pageNumber}</MetaRow>
-            <MetaRow label="Status Sumber">{sourceStatus}</MetaRow>
-            <MetaRow label="Yurisdiksi">Republik Indonesia</MetaRow>
-            <MetaRow label="Domain">{citation.sourceDomain ?? "Tidak tersedia"}</MetaRow>
-          </div>
-        </section>}
+          {/* FOOTER */}
+          <footer className="pt-2">
+            <div
+              className="flex items-center justify-center gap-2.5 min-h-11 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3 text-center text-[var(--tj-text-secondary)]"
+              style={{ fontSize: 14, fontWeight: 700 }}
+            >
+              {viewer?.pdf_access_available && !renderFailed
+                ? "PDF asli dirender di frontend melalui akses backend tervalidasi"
+                : "PDF/BBox viewer belum tersedia untuk evidence ini"}
+            </div>
+          </footer>
+        </div>}
       </div>
-
-      {/* FOOTER */}
-      {!pdfOnly && <footer className="border-t border-[var(--tj-border-subtle)] p-4 bg-[var(--tj-surface)]/60 backdrop-blur-xl shrink-0">
-        <div
-          className="flex items-center justify-center gap-2.5 min-h-11 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3 text-center text-[var(--tj-text-secondary)]"
-          style={{ fontSize: 14, fontWeight: 700 }}
-        >
-          {viewer?.pdf_access_available && !renderFailed
-            ? "PDF asli dirender di frontend melalui akses backend tervalidasi"
-            : "PDF/BBox viewer belum tersedia untuk evidence ini"}
-        </div>
-      </footer>}
     </>
   );
 }

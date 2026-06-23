@@ -12,6 +12,10 @@ const frontendUrl = process.env.TJIPTO_SMOKE_FRONTEND_URL ?? "http://127.0.0.1:5
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
 async function waitFor(url, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -104,6 +108,40 @@ async function runSmoke() {
     });
     await page.locator('canvas[aria-label="Halaman sumber 3"][data-rendered="true"]').waitFor();
     await page.locator('[data-bbox-highlight="active"]').first().waitFor();
+    await page.waitForFunction(() => !document.body.textContent?.includes("1 / 1"));
+    await page.waitForFunction(() => !document.body.textContent?.includes("Hal. 3"));
+    await page.locator('[data-evidence-detail-area="normal"]').waitFor();
+    const separatedScroll = await page.evaluate(() => {
+      const pdfArea = document.querySelector('[data-evidence-pdf-area="normal"]');
+      const detailArea = document.querySelector('[data-evidence-detail-area="normal"]');
+      if (!(pdfArea instanceof HTMLElement) || !(detailArea instanceof HTMLElement)) return null;
+      const beforePdfTop = pdfArea.scrollTop;
+      detailArea.scrollTop = 40;
+      return {
+        pdfScrollable: pdfArea.scrollHeight > pdfArea.clientHeight,
+        detailScrollable: detailArea.scrollHeight > detailArea.clientHeight,
+        pdfUnchanged: pdfArea.scrollTop === beforePdfTop,
+      };
+    });
+    assert(separatedScroll?.pdfScrollable, "PDF area is not independently scrollable.");
+    assert(separatedScroll?.detailScrollable, "Evidence detail area is not independently scrollable.");
+    assert(separatedScroll?.pdfUnchanged, "Detail scroll changed the PDF scroll position.");
+    const toolbarAlignment = await page.evaluate(() => {
+      const pdfArea = document.querySelector('[data-evidence-pdf-area="normal"]');
+      const zoomOut = document.querySelector('button[aria-label="Zoom out"]');
+      const bookmark = document.querySelector('button[aria-label="Simpan bookmark sementara"]');
+      if (!(pdfArea instanceof HTMLElement) || !(zoomOut instanceof HTMLElement) || !(bookmark instanceof HTMLElement)) return null;
+      const pdfBox = pdfArea.getBoundingClientRect();
+      const zoomBox = zoomOut.getBoundingClientRect();
+      const bookmarkBox = bookmark.getBoundingClientRect();
+      const padding = Number.parseFloat(getComputedStyle(pdfArea).paddingLeft);
+      return {
+        leftDelta: Math.abs(zoomBox.left - (pdfBox.left + padding)),
+        rightDelta: Math.abs(bookmarkBox.right - (pdfBox.right - padding)),
+      };
+    });
+    assert((toolbarAlignment?.leftDelta ?? 99) < 4, "Zoom controls are not aligned with the PDF viewport left edge.");
+    assert((toolbarAlignment?.rightDelta ?? 99) < 4, "Bookmark control is not aligned with the PDF viewport right edge.");
     const panelBeforeResize = await page.locator('[data-evidence-panel="normal"]').boundingBox();
     const resizeHandle = page.locator('[data-evidence-resize-handle="true"]');
     await resizeHandle.waitFor();
@@ -120,11 +158,31 @@ async function runSmoke() {
     await page.locator('[data-bbox-highlight]').first().waitFor();
 
     const beforeZoom = await page.locator('canvas[aria-label="Halaman sumber 3"]').boundingBox();
+    const beforeZoomState = await page.evaluate(() => {
+      const pdfArea = document.querySelector('[data-evidence-pdf-area="normal"]');
+      const page3 = document.querySelector('[data-pdf-page="3"]');
+      if (!(pdfArea instanceof HTMLElement) || !(page3 instanceof HTMLElement)) return null;
+      return {
+        scrollTop: pdfArea.scrollTop,
+        pageTop: page3.getBoundingClientRect().top,
+      };
+    });
     await page.getByRole("button", { name: "Zoom in" }).click();
     await page.waitForFunction((width) => {
       const canvas = window.document.querySelector('canvas[aria-label="Halaman sumber 3"]');
       return canvas instanceof HTMLElement && canvas.getBoundingClientRect().width > Number(width);
     }, beforeZoom?.width ?? 0);
+    const afterZoomState = await page.evaluate(() => {
+      const pdfArea = document.querySelector('[data-evidence-pdf-area="normal"]');
+      const page3 = document.querySelector('[data-pdf-page="3"]');
+      if (!(pdfArea instanceof HTMLElement) || !(page3 instanceof HTMLElement)) return null;
+      return {
+        scrollTop: pdfArea.scrollTop,
+        pageTop: page3.getBoundingClientRect().top,
+      };
+    });
+    assert((afterZoomState?.scrollTop ?? 0) > 0, "Zoom jumped the PDF scroll to the top.");
+    assert(Math.abs((afterZoomState?.pageTop ?? 0) - (beforeZoomState?.pageTop ?? 0)) < 160, "Zoom moved the active page too far from the reading position.");
     const panelAfterResize = await page.locator('[data-evidence-panel="normal"]').boundingBox();
     await page.getByRole("button", { name: "Expand PDF-only mode" }).click();
     await page.locator('[data-evidence-panel="expanded"]').waitFor();
