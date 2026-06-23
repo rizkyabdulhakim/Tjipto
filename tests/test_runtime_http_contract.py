@@ -41,9 +41,18 @@ class RuntimeHttpContractTest(unittest.TestCase):
         search = self._post("/legal/uud/search", {"query": "negara hukum", "limit": 2})
         self.assertEqual(search["status"], "found")
         self.assertTrue(search["results"])
+        for internal in ("matches", "context_pack", "route", "intent", "ranked_final_evidence_ids"):
+            self.assertNotIn(internal, search)
         first = search["results"][0]
         self.assertTrue(first["evidence_id"])
         self.assertTrue(first["legal_unit_id"])
+        self.assertIn("viewer_ref", first)
+        self.assertIn("source_role", first)
+        self.assertNotIn("route_score", first)
+        self.assertNotIn("source_sha256", first)
+        self.assertNotIn("source_pdf_path", first)
+        self.assertNotIn("source_sha256", first["viewer_ref"])
+        self.assertNotIn("source_pdf_path", first["viewer_ref"])
 
         weak = self._post("/legal/uud/search", {"query": "aturan KUHP tentang pencurian"})
         self.assertEqual(weak["public_status"], "no_results")
@@ -99,6 +108,12 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(ready["status"], "answer_ready")
         self.assertTrue(ready["citations"])
         self.assertTrue(ready["viewer_refs"])
+        for internal in ("matches", "context_pack", "route", "intent", "evidence"):
+            self.assertNotIn(internal, ready)
+        self.assertNotIn("source_sha256", ready["citations"][0])
+        self.assertNotIn("source_pdf_path", ready["citations"][0])
+        self.assertNotIn("source_sha256", ready["viewer_refs"][0])
+        self.assertNotIn("source_pdf_path", ready["viewer_refs"][0])
 
         limited = self._post("/legal/uud/ask", {"query": "negara hukum"})
         self.assertEqual(limited["status"], "limited_answer")

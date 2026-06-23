@@ -109,6 +109,9 @@ def _base_payload(corpus_id: str, evidence: dict, bboxes: list[dict]) -> dict:
         "quoted_text": evidence["quoted_text"],
         "source_pdf_path": evidence["source_pdf_path"],
         "source_sha256": evidence["source_sha256"],
+        "source_role": evidence.get("source_role"),
+        "temporal_context": evidence.get("temporal_context"),
+        "source_status_label": _source_status_label(evidence),
         "page_numbers": evidence["page_numbers"],
         "bbox_count": len(bboxes),
         "bbox_rectangles": tuple(bboxes),
@@ -184,3 +187,14 @@ def _pdf_access_url(corpus_id: str, evidence: dict, page_number: int, bbox_id: s
     if bbox_id:
         query["bbox_id"] = bbox_id
     return f"/legal/{quote(corpus_id, safe='')}/pdf?{urlencode(query)}"
+
+
+def _source_status_label(evidence: dict) -> str:
+    role = str(evidence.get("source_role") or evidence.get("temporal_context") or "")
+    if role == "current_consolidated":
+        return "Berlaku (konsolidasi saat ini)"
+    if role.startswith("amendment_"):
+        return "Historis (sumber perubahan)"
+    if role == "original_historical":
+        return "Historis (naskah asli)"
+    return "Status sumber tidak tersedia"

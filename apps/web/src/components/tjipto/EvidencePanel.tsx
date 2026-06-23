@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import * as pdfjs from "pdfjs-dist";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist/types/src/display/api";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
   X,
@@ -13,7 +14,6 @@ import {
   ChevronRight,
   Check,
   FileText,
-  Hash,
   Scale,
   Bookmark,
 } from "lucide-react";
@@ -39,24 +39,6 @@ export function EvidencePanel({
     <AnimatePresence>
       {citation && (
         <>
-          {/* Desktop side-by-side panel */}
-          <motion.aside
-            key="ev-desktop"
-            initial={{ x: 40, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 40, opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
-            className="hidden lg:flex flex-col w-[440px] shrink-0 h-full bg-[var(--tj-surface)]/60 backdrop-blur-3xl border-l border-[var(--tj-glass-border)] shadow-2xl z-10"
-          >
-            <EvidenceContent
-              citation={citation}
-              allCitations={allCitations}
-              onClose={onClose}
-              onSelect={onSelect}
-            />
-          </motion.aside>
-
-          {/* Tablet / mobile overlay */}
           <motion.div
             key="ev-overlay-bg"
             initial={{ opacity: 0 }}
@@ -67,12 +49,12 @@ export function EvidencePanel({
             className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
           />
           <motion.aside
-            key="ev-overlay"
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
-            className="lg:hidden fixed inset-y-0 right-0 z-50 flex flex-col w-full sm:w-[460px] sm:max-w-[95vw] bg-[var(--tj-surface)]/80 backdrop-blur-3xl border-l border-[var(--tj-glass-border)] shadow-2xl"
+            key="ev-panel"
+            initial={{ x: 40, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 40, opacity: 0 }}
+            transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+            className="fixed lg:static inset-y-0 right-0 z-50 lg:z-10 flex flex-col w-full sm:w-[460px] lg:w-[440px] sm:max-w-[95vw] shrink-0 h-full bg-[var(--tj-surface)]/80 lg:bg-[var(--tj-surface)]/60 backdrop-blur-3xl border-l border-[var(--tj-glass-border)] shadow-2xl"
           >
             <EvidenceContent
               citation={citation}
@@ -109,9 +91,7 @@ function EvidenceContent({
   const [renderFailed, setRenderFailed] = useState(false);
   const location = legalUnitLabel(citation.article, citation.paragraph);
   const pageNumber = viewer?.page_numbers?.[0] ?? citation.pageNumber;
-  const sourceHash = viewer?.source_sha256
-    ? `sha256:${viewer.source_sha256}`
-    : citation.fileHash;
+  const sourceStatus = viewer?.source_status_label ?? citation.sourceStatusLabel ?? sourceStatusLabel(citation.sourceRole, citation.temporalContext);
 
   useEffect(() => setSaved(false), [citation.documentId]);
 
@@ -263,6 +243,8 @@ function EvidenceContent({
           <ToolbarBtn
             onClick={() => setZoom((z) => Math.max(50, z - 10))}
             disabled={zoom <= 50}
+            aria-label="Zoom out"
+            title="Zoom out"
           >
             <Minus size={14} />
           </ToolbarBtn>
@@ -281,6 +263,8 @@ function EvidenceContent({
           <ToolbarBtn
             onClick={() => setZoom((z) => Math.min(200, z + 10))}
             disabled={zoom >= 200}
+            aria-label="Zoom in"
+            title="Zoom in"
           >
             <Plus size={14} />
           </ToolbarBtn>
@@ -305,7 +289,7 @@ function EvidenceContent({
           className="relative mx-auto rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm"
           style={{
             width: `${zoom}%`,
-            maxWidth: "100%",
+            maxWidth: zoom <= 100 ? "100%" : "none",
             minHeight: 260,
             transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
           }}
@@ -313,6 +297,7 @@ function EvidenceContent({
           {viewer?.pdf_access_available && viewer.pdf?.access_url && !renderFailed ? (
             <RenderedViewer
               viewer={viewer}
+              targetPage={pageNumber}
               onRenderFailed={() => {
                 setRenderFailed(true);
                 setViewer((current) => current ? { ...current, rendering_available: false, render_status: "render_failed_safe" } : current);
@@ -382,9 +367,9 @@ function EvidenceContent({
           <div className="rounded-2xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm divide-y divide-[var(--tj-border-subtle)]">
             <MetaRow label="Lokasi">{location}</MetaRow>
             <MetaRow label="Halaman">Hal. {pageNumber}</MetaRow>
+            <MetaRow label="Status Sumber">{sourceStatus}</MetaRow>
             <MetaRow label="Yurisdiksi">Republik Indonesia</MetaRow>
             <MetaRow label="Domain">{citation.sourceDomain ?? "Tidak tersedia"}</MetaRow>
-            <MetaRow label="Hash File" mono>{sourceHash ?? "Tidak tersedia"}</MetaRow>
           </div>
         </section>
       </div>
@@ -455,36 +440,29 @@ function MetaRow({
   );
 }
 
-function RenderedViewer({ viewer, onRenderFailed }: { viewer: ViewerPayload; onRenderFailed: () => void }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
-  const [rendered, setRendered] = useState(false);
-  const boxes = (viewer.bbox_rectangles ?? []).filter(
-    (box) => box.page_number === viewer.page_number,
-  );
+function RenderedViewer({
+  viewer,
+  targetPage,
+  onRenderFailed,
+}: {
+  viewer: ViewerPayload;
+  targetPage: number;
+  onRenderFailed: () => void;
+}) {
+  const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+  const [renderedPages, setRenderedPages] = useState(0);
+  const pdfUrl = pdfAccessUrl(viewer);
 
   useEffect(() => {
     let cancelled = false;
-    const canvas = canvasRef.current;
-    const pdfUrl = pdfAccessUrl(viewer);
-    if (!canvas || !pdfUrl || !viewer.page_number) return;
-    setRendered(false);
+    setPdf(null);
+    setRenderedPages(0);
+    if (!pdfUrl) return;
 
     pdfjs.getDocument({ url: pdfUrl }).promise
-      .then((pdf) => pdf.getPage(viewer.page_number ?? 1))
-      .then((page) => {
-        if (cancelled) return;
-        const viewport = page.getViewport({ scale: 1.5 });
-        const context = canvas.getContext("2d");
-        if (!context) throw new Error("canvas_unavailable");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const pageViewport = page.getViewport({ scale: 1 });
-        setPageSize({ width: pageViewport.width, height: pageViewport.height });
-        return page.render({ canvas, canvasContext: context, viewport }).promise;
-      })
-      .then(() => {
-        if (!cancelled) setRendered(true);
+      .then((document) => {
+        if (!cancelled) setPdf(document);
       })
       .catch(() => {
         if (!cancelled) onRenderFailed();
@@ -493,13 +471,110 @@ function RenderedViewer({ viewer, onRenderFailed }: { viewer: ViewerPayload; onR
     return () => {
       cancelled = true;
     };
-  }, [viewer.page_number, viewer.pdf?.access_url]);
+  }, [pdfUrl]);
+
+  useEffect(() => {
+    if (!pdf || renderedPages < 1) return;
+    pageRefs.current[targetPage]?.scrollIntoView({ block: "center" });
+  }, [pdf, renderedPages, targetPage]);
+
+  if (!pdf) {
+    return (
+      <div className="min-h-[260px] flex items-center justify-center text-sm text-[var(--tj-text-secondary)]">
+        Memuat dokumen PDF
+      </div>
+    );
+  }
 
   return (
-    <div className="relative bg-white">
+    <div className="bg-white px-3 py-4 space-y-4" data-pdf-document="full" data-page-count={pdf.numPages}>
+      {Array.from({ length: pdf.numPages }, (_, index) => {
+        const pageNumber = index + 1;
+        return (
+          <div
+            key={pageNumber}
+            ref={(node) => {
+              pageRefs.current[pageNumber] = node;
+            }}
+            data-pdf-page={pageNumber}
+            className="relative mx-auto overflow-hidden bg-white shadow-sm"
+            style={{ width: "100%" }}
+          >
+            <PdfPage
+              pdf={pdf}
+              pageNumber={pageNumber}
+              active={pageNumber === targetPage}
+              boxes={viewer.bbox_rectangles ?? []}
+              onRenderFailed={onRenderFailed}
+              onRendered={() => setRenderedPages((count) => count + 1)}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PdfPage({
+  pdf,
+  pageNumber,
+  active,
+  boxes,
+  onRenderFailed,
+  onRendered,
+}: {
+  pdf: PDFDocumentProxy;
+  pageNumber: number;
+  active: boolean;
+  boxes: NonNullable<ViewerPayload["bbox_rectangles"]>;
+  onRenderFailed: () => void;
+  onRendered: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
+  const [rendered, setRendered] = useState(false);
+  const pageBoxes = boxes.filter(
+    (box) => active && box.page_number === pageNumber,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setRendered(false);
+
+    pdf.getPage(pageNumber)
+      .then((page) => {
+        if (cancelled) return;
+        const viewport = page.getViewport({ scale: 1.35 });
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("canvas_unavailable");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const pageViewport = page.getViewport({ scale: 1 });
+        setPageSize({ width: pageViewport.width, height: pageViewport.height });
+        return renderPdfPage(page, canvas, context, viewport);
+      })
+      .then(() => {
+        if (!cancelled) {
+          setRendered(true);
+          onRendered();
+        }
+      })
+      .catch(() => {
+        if (!cancelled) onRenderFailed();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pdf, pageNumber]);
+
+  return (
+    <>
       <canvas
         ref={canvasRef}
-        aria-label={`Halaman sumber ${viewer.page_number ?? ""}`}
+        aria-label={`Halaman sumber ${pageNumber}`}
         data-rendered={rendered ? "true" : "false"}
         className="block w-full h-auto"
       />
@@ -509,21 +584,33 @@ function RenderedViewer({ viewer, onRenderFailed }: { viewer: ViewerPayload; onR
         </div>
       )}
       {pageSize && rendered && <div className="absolute inset-0 pointer-events-none">
-        {boxes.map((box) => (
+        {pageBoxes.map((box) => (
           <span
             key={box.bbox_id}
-            className="absolute border-2 border-[var(--tj-accent)] bg-[var(--tj-pdf-highlight)] shadow-[0_0_0_1px_rgba(255,255,255,0.75)]"
+            data-bbox-highlight="active"
+            className="absolute"
             style={{
               left: `${percent(box.x0, pageSize.width)}%`,
               top: `${percent(box.y0, pageSize.height)}%`,
               width: `${percent((box.x1 ?? 0) - (box.x0 ?? 0), pageSize.width)}%`,
               height: `${percent((box.y1 ?? 0) - (box.y0 ?? 0), pageSize.height)}%`,
+              background: "rgba(255, 235, 59, 0.5)",
+              border: "1px solid rgba(255, 235, 59, 0.5)",
             }}
           />
         ))}
       </div>}
-    </div>
+    </>
   );
+}
+
+function renderPdfPage(
+  page: PDFPageProxy,
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+  viewport: ReturnType<PDFPageProxy["getViewport"]>,
+) {
+  return page.render({ canvas, canvasContext: context, viewport }).promise;
 }
 
 function percent(value: number | undefined, total: number) {
@@ -565,4 +652,12 @@ function legalUnitLabel(article?: string, paragraph?: string) {
   const knownLabel = /^(pasal|bab|aturan|pembukaan)\b/i.test(base) || base.includes(" / ");
   const label = knownLabel ? base : `Pasal ${base}`;
   return paragraph ? `${label} ayat (${paragraph})` : label;
+}
+
+function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
+  const role = sourceRole ?? temporalContext;
+  if (role === "current_consolidated") return "Berlaku (konsolidasi saat ini)";
+  if (role?.startsWith("amendment_")) return "Historis (sumber perubahan)";
+  if (role === "original_historical") return "Historis (naskah asli)";
+  return "Status sumber tidak tersedia";
 }

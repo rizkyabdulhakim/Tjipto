@@ -1,10 +1,17 @@
 import { Search, FileText, Clock, Filter } from "lucide-react";
 import { useEffect, useState } from "react";
-import { listLegalBookmarks, searchLegal, type BookmarkPointer, type SearchResult } from "../../lib/api";
+import {
+  listLegalBookmarks,
+  mapSearchResultToCitation,
+  searchLegal,
+  type BookmarkPointer,
+  type SearchResult,
+} from "../../lib/api";
+import type { Citation } from "../../lib/types";
 
 const filters = ["Sumber", "Status", "Periode"];
 
-export function SearchRoute() {
+export function SearchRoute({ onOpenCitation }: { onOpenCitation?: (citation: Citation) => void }) {
   const [q, setQ] = useState("negara hukum");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [status, setStatus] = useState("loading");
@@ -78,22 +85,32 @@ export function SearchRoute() {
           </div>
         ) : (
           <ul className="mt-3 space-y-2">
-            {results.map((row) => (
-              <li key={row.evidence_id} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
-                <div className="flex items-start gap-3">
-                  <span className="inline-flex items-center px-2 h-[22px] rounded-md shrink-0 mt-0.5" style={{ fontSize: 11, fontWeight: 600, background: "var(--tj-accent-soft)", color: "var(--tj-accent)" }}>
-                    {row.corpus_id.toUpperCase()}
-                  </span>
-                  <div className="min-w-0">
-                    <div style={{ fontSize: 15, fontWeight: 600, color: "var(--tj-text-primary)" }}>{row.title}</div>
-                    <p className="mt-1.5 line-clamp-3" style={{ fontSize: 13.5, lineHeight: "20px", color: "var(--tj-text-secondary)" }}>{row.snippet}</p>
-                    <div className="mt-3" style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
-                      {row.retrieval_method} · {row.reasons} · {row.legal_unit_id}
-                    </div>
-                  </div>
-                </div>
-              </li>
-            ))}
+            {results.map((row, index) => {
+              const citation = mapSearchResultToCitation(row, index);
+              const page = row.page_numbers?.[0] ?? row.viewer_ref?.page_numbers?.[0];
+              return (
+                <li key={row.evidence_id} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
+                  <button
+                    type="button"
+                    aria-label={`Buka viewer ${row.title ?? row.evidence_id}`}
+                    className="w-full flex items-start gap-3 text-left disabled:cursor-not-allowed disabled:opacity-70"
+                    onClick={() => citation && onOpenCitation?.(citation)}
+                    disabled={!citation}
+                  >
+                    <span className="inline-flex items-center px-2 h-[22px] rounded-md shrink-0 mt-0.5" style={{ fontSize: 11, fontWeight: 600, background: "var(--tj-accent-soft)", color: "var(--tj-accent)" }}>
+                      {row.corpus_id.toUpperCase()}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block" style={{ fontSize: 15, fontWeight: 600, color: "var(--tj-text-primary)" }}>{row.title}</span>
+                      <span className="block mt-1.5 line-clamp-3" style={{ fontSize: 13.5, lineHeight: "20px", color: "var(--tj-text-secondary)" }}>{row.snippet}</span>
+                      <span className="block mt-3" style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
+                        {page ? `Halaman ${page}` : "Halaman tidak tersedia"} · {sourceStatusLabel(row.source_role, row.temporal_context)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -171,4 +188,12 @@ export function LibraryRoute() {
       </div>
     </div>
   );
+}
+
+function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
+  const role = sourceRole ?? temporalContext;
+  if (role === "current_consolidated") return "Berlaku";
+  if (role?.startsWith("amendment_")) return "Historis";
+  if (role === "original_historical") return "Historis";
+  return "Status sumber tidak tersedia";
 }

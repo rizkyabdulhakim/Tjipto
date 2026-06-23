@@ -113,6 +113,9 @@ export default function App() {
 
   const stop = () => setIsStreaming(false);
   const allCitations = messages.flatMap((message) => message.citations ?? []);
+  const panelCitations = activeCitation && !allCitations.some((c) => c.documentId === activeCitation.documentId)
+    ? [...allCitations, activeCitation]
+    : allCitations;
 
   return (
     <div className={`tj-root size-full ${theme === "dark" ? "tj-dark" : ""}`}>
@@ -246,14 +249,14 @@ export default function App() {
               ) : (
                 <EmptyState onSubmit={submit} />
               ))}
-            {route === "search" && <SearchRoute />}
+            {route === "search" && <SearchRoute onOpenCitation={setActiveCitation} />}
             {route === "library" && <LibraryRoute />}
           </div>
         </main>
 
         <EvidencePanel
           citation={activeCitation}
-          allCitations={allCitations}
+          allCitations={panelCitations}
           onClose={() => setActiveCitation(null)}
           onSelect={setActiveCitation}
         />

@@ -87,7 +87,19 @@ async function runSmoke() {
     await page.getByText(/SUMBER/).waitFor();
 
     await page.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
-    await page.locator('canvas[aria-label^="Halaman sumber"][data-rendered="true"]').first().waitFor();
+    await page.locator('[data-pdf-document="full"]').waitFor();
+    await page.waitForFunction(() => {
+      const document = window.document.querySelector('[data-pdf-document="full"]');
+      return Number(document?.getAttribute("data-page-count") ?? "0") > 1;
+    });
+    await page.locator('canvas[aria-label="Halaman sumber 3"][data-rendered="true"]').waitFor();
+    await page.locator('[data-bbox-highlight="active"]').first().waitFor();
+    const beforeZoom = await page.locator('canvas[aria-label="Halaman sumber 3"]').boundingBox();
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    await page.waitForFunction((width) => {
+      const canvas = window.document.querySelector('canvas[aria-label="Halaman sumber 3"]');
+      return canvas instanceof HTMLElement && canvas.getBoundingClientRect().width > Number(width);
+    }, beforeZoom?.width ?? 0);
     await page.getByText("PDF asli dirender di frontend melalui akses backend tervalidasi").first().waitFor();
     await page.getByLabel("Simpan bookmark sementara").first().click();
 
@@ -95,6 +107,9 @@ async function runSmoke() {
     await page.getByRole("heading", { name: "Search UUD" }).waitFor();
     await page.getByPlaceholder("Cari dalam UUD 1945...").fill("BAB XA");
     await page.getByText(/BAB XA/).first().waitFor();
+    await page.getByLabel(/Buka viewer/).first().click();
+    await page.locator('[data-pdf-document="full"]').waitFor();
+    await page.locator('[data-bbox-highlight="active"]').first().waitFor();
 
     await page.getByRole("button", { name: "Pustaka Hukum" }).click();
     await page.getByRole("heading", { name: "Library" }).waitFor();

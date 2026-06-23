@@ -17,19 +17,8 @@ export interface TjiptoAskResponse {
   status: string;
   answer_type?: string;
   answer?: string;
-  route?: string;
-  intent?: string;
-  evidence?: EvidencePayload[];
   citations?: CitationPayload[];
   viewer_refs?: ViewerRefPayload[];
-  context_pack?: {
-    answer_evidence?: EvidencePayload[];
-    supporting_context?: EvidencePayload[];
-    excluded_results?: EvidencePayload[];
-    citation_payloads?: CitationPayload[];
-    viewer_refs?: ViewerRefPayload[];
-    validation_reasons?: ValidationReasons;
-  };
 }
 
 export interface SearchResult {
@@ -38,10 +27,17 @@ export interface SearchResult {
   evidence_id: string;
   citation_id?: string;
   viewer_ref_id?: string;
+  source_document_id?: string;
   title?: string;
+  document_title?: string;
+  citation?: string;
+  label?: string;
   snippet?: string;
-  retrieval_method?: string;
-  reasons?: string;
+  source_role?: string;
+  temporal_context?: string;
+  page_numbers?: number[];
+  bbox_count?: number;
+  viewer_ref?: ViewerRefPayload;
   status: string;
 }
 
@@ -50,8 +46,9 @@ export interface ViewerRefPayload {
   evidence_id: string;
   page_numbers?: number[];
   bbox_count?: number;
-  source_pdf_path?: string;
-  source_sha256?: string;
+  source_role?: string;
+  temporal_context?: string;
+  source_status_label?: string;
   can_resolve?: boolean;
 }
 
@@ -67,16 +64,10 @@ export interface CitationPayload {
   quoted_text: string;
   source_role?: string;
   temporal_context?: string;
-  source_pdf_path?: string;
-  source_sha256?: string;
   page_numbers?: number[];
   bbox_count?: number;
   viewer_ref?: ViewerRefPayload;
   evidence_status?: string;
-}
-
-export interface EvidencePayload extends CitationPayload {
-  route_sources?: string[];
 }
 
 export interface ViewerPayload {
@@ -89,6 +80,9 @@ export interface ViewerPayload {
   quoted_text?: string;
   source_pdf_path?: string;
   source_sha256?: string;
+  source_role?: string;
+  temporal_context?: string;
+  source_status_label?: string;
   page_numbers?: number[];
   bbox_count?: number;
   bbox_rectangles?: Array<{
@@ -235,13 +229,50 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       excerpt: String(item.quoted_text),
       sourceUrl: "",
       sourceDomain: item.source_role ?? item.corpus_id ?? "runtime",
-      fileHash: item.source_sha256 ? `sha256:${String(item.source_sha256)}` : undefined,
+      sourceRole: item.source_role,
+      temporalContext: item.temporal_context,
+      sourceStatusLabel: sourceStatusLabel(item.source_role, item.temporal_context),
     };
   });
+}
+
+export function mapSearchResultToCitation(item: SearchResult, index: number): Citation | null {
+  if (!item?.evidence_id || !item.snippet) return null;
+  const pages = Array.isArray(item.page_numbers)
+    ? item.page_numbers
+    : Array.isArray(item.viewer_ref?.page_numbers)
+      ? item.viewer_ref.page_numbers
+      : [];
+  const pageNumber = Number(pages[0] ?? 1);
+  return {
+    id: index + 1,
+    documentId: String(item.evidence_id),
+    legalUnitId: item.legal_unit_id,
+    sourceDocumentId: item.source_document_id,
+    viewerRefId: item.viewer_ref_id ?? item.viewer_ref?.evidence_id,
+    documentTitle: item.document_title ?? fallbackDocumentTitle(item.corpus_id),
+    regulationType: "UUD",
+    article: String(item.label ?? item.citation ?? item.title ?? "UUD"),
+    pageNumber: Number.isFinite(pageNumber) ? pageNumber : 1,
+    excerpt: String(item.snippet),
+    sourceUrl: "",
+    sourceDomain: item.source_role ?? item.corpus_id ?? "runtime",
+    sourceRole: item.source_role,
+    temporalContext: item.temporal_context,
+    sourceStatusLabel: sourceStatusLabel(item.source_role, item.temporal_context),
+  };
 }
 
 function fallbackDocumentTitle(corpusId?: string) {
   return corpusId === "uud"
     ? "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945"
     : corpusId ?? "Dokumen hukum";
+}
+
+function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
+  const role = sourceRole ?? temporalContext;
+  if (role === "current_consolidated") return "Berlaku (konsolidasi saat ini)";
+  if (role?.startsWith("amendment_")) return "Historis (sumber perubahan)";
+  if (role === "original_historical") return "Historis (naskah asli)";
+  return undefined;
 }

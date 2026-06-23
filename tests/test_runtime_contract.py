@@ -64,6 +64,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(viewer["pdf"]["mime_type"], "application/pdf")
         self.assertTrue(viewer["pdf"]["access_url"].startswith("/legal/uud/pdf?"))
         self.assertNotIn("data_url", viewer["pdf"])
+        self.assertEqual(viewer["source_role"], "current_consolidated")
+        self.assertEqual(viewer["source_status_label"], "Berlaku (konsolidasi saat ini)")
         self.assertTrue(viewer["page_numbers"])
         self.assertGreater(viewer["bbox_count"], 0)
         self.assertTrue(viewer["bbox_rectangles"])

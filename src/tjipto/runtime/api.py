@@ -14,12 +14,12 @@ class BadRequest(ValueError):
 def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path | None = None) -> dict:
     service = LegalRuntimeService(repo_root)
     if action == "search":
-        return service.search(
+        return _public_search(service.search(
             corpus_id,
             str(payload.get("query", "")),
             _limit(payload, default=10),
             _filters(payload),
-        )
+        ))
     if action == "citation":
         return service.citation(
             corpus_id,
@@ -37,12 +37,12 @@ def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path |
             source_pdf_path=_optional_str(payload, "source_pdf_path"),
         )
     if action == "ask":
-        return service.ask(
+        return _public_ask(service.ask(
             corpus_id,
             str(payload.get("query", "")),
             _limit(payload, default=3),
             _filters(payload),
-        )
+        ))
     if action == "capabilities":
         return service.capabilities(corpus_id)
     if action == "bookmarks":
@@ -56,6 +56,86 @@ def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path |
             _optional_str(payload, "viewer_ref_id"),
         )
     return {"status": "unsupported_action"}
+
+
+def _public_search(result: dict) -> dict:
+    return {
+        "status": result.get("status"),
+        "public_status": result.get("public_status"),
+        "corpus_id": result.get("corpus_id"),
+        "reason": _public_reason(result.get("reason")),
+        "applied_filters": result.get("applied_filters", {}),
+        "results": tuple(_public_search_result(row) for row in result.get("results", ())),
+    }
+
+
+def _public_ask(result: dict) -> dict:
+    return {
+        "status": result.get("status"),
+        "public_status": result.get("public_status", result.get("status")),
+        "answer_type": result.get("answer_type"),
+        "answer": result.get("answer"),
+        "reason": _public_reason(result.get("reason")),
+        "applied_filters": result.get("applied_filters", {}),
+        "citations": tuple(_public_citation(row) for row in result.get("citations", ())),
+        "viewer_refs": tuple(_public_viewer_ref(row) for row in result.get("viewer_refs", ())),
+    }
+
+
+def _public_reason(reason):
+    return reason if reason in {"invalid_query", "unsupported_corpus", "citation_not_found", "insufficient_evidence"} else None
+
+
+def _public_search_result(row: dict) -> dict:
+    return {
+        "corpus_id": row.get("corpus_id"),
+        "legal_unit_id": row.get("legal_unit_id"),
+        "evidence_id": row.get("evidence_id"),
+        "citation_id": row.get("citation_id"),
+        "viewer_ref_id": row.get("viewer_ref_id"),
+        "source_document_id": row.get("source_document_id"),
+        "title": row.get("title"),
+        "document_title": row.get("document_title"),
+        "citation": row.get("citation"),
+        "label": row.get("label"),
+        "snippet": row.get("snippet"),
+        "source_role": row.get("source_role"),
+        "temporal_context": row.get("temporal_context"),
+        "page_numbers": row.get("page_numbers", ()),
+        "bbox_count": row.get("bbox_count"),
+        "viewer_ref": _public_viewer_ref(row.get("viewer_ref") or {}),
+        "status": row.get("status"),
+    }
+
+
+def _public_citation(row: dict) -> dict:
+    return {
+        "corpus_id": row.get("corpus_id"),
+        "evidence_id": row.get("evidence_id"),
+        "legal_unit_id": row.get("legal_unit_id"),
+        "source_document_id": row.get("source_document_id"),
+        "citation": row.get("citation"),
+        "label": row.get("label"),
+        "hierarchy": row.get("hierarchy", ()),
+        "document_title": row.get("document_title"),
+        "quoted_text": row.get("quoted_text"),
+        "source_role": row.get("source_role"),
+        "temporal_context": row.get("temporal_context"),
+        "page_numbers": row.get("page_numbers", ()),
+        "bbox_count": row.get("bbox_count"),
+        "viewer_ref": _public_viewer_ref(row.get("viewer_ref") or {}),
+        "evidence_status": row.get("evidence_status"),
+    }
+
+
+def _public_viewer_ref(row: dict) -> dict:
+    return {
+        "action": row.get("action"),
+        "evidence_id": row.get("evidence_id"),
+        "page_numbers": row.get("page_numbers", ()),
+        "bbox_count": row.get("bbox_count"),
+        "can_resolve": row.get("can_resolve"),
+    }
 
 
 def handle_pdf_request(corpus_id: str, payload: dict, repo_root: Path | None = None) -> dict:

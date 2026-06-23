@@ -22,6 +22,9 @@ export interface Citation {
   excerpt: string;
   sourceUrl: string;
   sourceDomain?: string;
+  sourceRole?: string;
+  temporalContext?: string;
+  sourceStatusLabel?: string;
   fileHash?: string;
   boundingBox?: BoundingBox;
 }
