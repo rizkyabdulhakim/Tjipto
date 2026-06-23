@@ -6,12 +6,12 @@ from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.metadata import (
     filter_evidence,
     has_metadata_target,
-    has_relation_target,
     metadata_lookup,
     normalize_filters,
     public_filters,
 )
 from tjipto.retrieval.query import classify_intent, normalize_query
+from tjipto.retrieval.relations import has_relation_target, relation_lookup
 from tjipto.retrieval.service import RetrievalService
 from tjipto.retrieval.structured import has_structured_target, structured_lookup
 
@@ -69,6 +69,32 @@ def route_retrieval(
         return envelope | dense_search(store, normalized["normalized_query"], limit)
 
     service = RetrievalService(store)
+    relation_all = tuple(relation_lookup(store, normalized["normalized_query"], len(store.evidence)))
+    relation = filter_evidence(relation_all, filters)
+    if relation:
+        ranked, trace = merge_ranked(store, {"relation": relation}, filters)
+        return envelope | {
+            "status": "found",
+            "route": "relation",
+            "intent": "legal_relation_lookup",
+            "matches": ranked[:limit],
+            "expansion_trace": trace,
+        }
+    if relation_all:
+        return envelope | {
+            "status": "no_results",
+            "route": "no_results",
+            "intent": "legal_relation_lookup",
+            "reason": "filters_removed_all",
+        }
+    if has_relation_target(normalized["normalized_query"]):
+        return envelope | {
+            "status": "no_results",
+            "route": "relation_not_found",
+            "intent": "legal_relation_lookup",
+            "reason": "relation_not_found",
+        }
+
     if intent["intent"] == "exact_citation":
         matches = tuple(service.citation(normalized["normalized_query"]))
         filtered = filter_evidence(matches, filters)
@@ -143,13 +169,6 @@ def route_retrieval(
             "route": "no_results",
             "intent": "metadata_lookup",
             "reason": "filters_removed_all",
-        }
-    if has_relation_target(normalized["normalized_query"]):
-        return envelope | {
-            "status": "no_results",
-            "route": "relation_not_found",
-            "intent": "legal_relation_lookup",
-            "reason": "relation_not_found",
         }
     if has_metadata_target(normalized["normalized_query"]):
         return envelope | {

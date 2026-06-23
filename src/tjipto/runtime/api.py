@@ -72,13 +72,16 @@ def _public_search(result: dict) -> dict:
 def _public_ask(result: dict) -> dict:
     return {
         "status": result.get("status"),
-        "public_status": result.get("public_status", result.get("status")),
-        "answer_type": result.get("answer_type"),
         "answer": result.get("answer"),
-        "reason": _public_reason(result.get("reason")),
-        "applied_filters": result.get("applied_filters", {}),
+        "intent": result.get("intent"),
+        "route": result.get("route"),
         "citations": tuple(_public_citation(row) for row in result.get("citations", ())),
         "viewer_refs": tuple(_public_viewer_ref(row) for row in result.get("viewer_refs", ())),
+        "metadata_facts": tuple(_public_metadata_fact(row) for row in result.get("metadata_facts", ())),
+        "legal_relations": tuple(_public_legal_relation(row) for row in result.get("legal_relations", ())),
+        "answer_scope": result.get("answer_scope"),
+        "warnings": tuple(result.get("warnings", ())),
+        "insufficient_reasons": tuple(_public_reason(row) or row for row in result.get("insufficient_reasons", ())),
     }
 
 
@@ -161,7 +164,7 @@ def _public_search_result(row: dict) -> dict:
 
 
 def _public_citation(row: dict) -> dict:
-    return {
+    public = {
         "corpus_id": row.get("corpus_id"),
         "evidence_id": row.get("evidence_id"),
         "legal_unit_id": row.get("legal_unit_id"),
@@ -179,6 +182,27 @@ def _public_citation(row: dict) -> dict:
         "bbox_count": row.get("bbox_count"),
         "viewer_ref": _public_viewer_ref(row.get("viewer_ref") or {}),
         "evidence_status": row.get("evidence_status"),
+    }
+    if row.get("legal_relation"):
+        public["legal_relation"] = _public_legal_relation(row["legal_relation"])
+    return public
+
+
+def _public_metadata_fact(row: dict) -> dict:
+    return {
+        "field": row.get("field"),
+        "answer": row.get("answer"),
+        "evidence_id": row.get("evidence_id"),
+    }
+
+
+def _public_legal_relation(row: dict) -> dict:
+    return {
+        "relation_type": row.get("relation_type"),
+        "source_legal_unit_id": row.get("source_legal_unit_id"),
+        "source_label": row.get("source_label"),
+        "target_legal_unit_id": row.get("target_legal_unit_id"),
+        "target_label": row.get("target_label"),
     }
 
 

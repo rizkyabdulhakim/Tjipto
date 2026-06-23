@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-DIRECT_ROUTES = {"exact", "metadata", "structured", "bm25"}
+DIRECT_ROUTES = {"exact", "metadata", "relation", "structured", "bm25"}
 REQUIRED_FIELDS = (
     "citation",
     "quoted_text",
@@ -100,6 +100,8 @@ def _payload(store, row: dict) -> dict:
         "quoted_text": row.get("quoted_text"),
         "metadata_answer": row.get("metadata_answer"),
         "metadata_field": row.get("metadata_field"),
+        "legal_relation": row.get("legal_relation"),
+        "candidate_type": row.get("candidate_type"),
         "route_sources": tuple(row.get("route_sources") or ()),
         "evidence_status": row.get("status"),
         "viewer_ref": {
@@ -124,6 +126,8 @@ def _citation_payload(row: dict) -> dict:
         "quoted_text": row.get("quoted_text"),
         "metadata_answer": row.get("metadata_answer"),
         "metadata_field": row.get("metadata_field"),
+        "legal_relation": row.get("legal_relation"),
+        "candidate_type": row.get("candidate_type"),
         "source_role": row.get("source_role"),
         "temporal_context": row.get("temporal_context"),
         "source_pdf_path": row.get("source_pdf_path"),

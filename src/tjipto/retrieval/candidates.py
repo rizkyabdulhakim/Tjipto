@@ -1,6 +1,21 @@
 from __future__ import annotations
 
-ROUTE_WEIGHT = {"exact": 1000.0, "metadata": 900.0, "structured": 800.0, "bm25": 600.0, "graph": 120.0}
+ROUTE_WEIGHT = {
+    "exact": 1000.0,
+    "metadata": 900.0,
+    "relation": 850.0,
+    "structured": 800.0,
+    "bm25": 600.0,
+    "graph": 120.0,
+}
+CANDIDATE_TYPE = {
+    "exact": "legal_unit_candidate",
+    "structured": "legal_unit_candidate",
+    "metadata": "metadata_candidate",
+    "relation": "relation_candidate",
+    "bm25": "lexical_candidate",
+    "graph": "graph_candidate",
+}
 
 
 def merge_ranked(store, route_rows: dict[str, tuple[dict, ...]], filters: dict) -> tuple[tuple[dict, ...], tuple[dict, ...]]:
@@ -91,6 +106,8 @@ def _add(rows_by_id: dict[str, dict], store, row: dict, route: str, order: int, 
         rows_by_id[evidence_id] = existing
     if route not in existing["route_sources"]:
         existing["route_sources"] = (*existing["route_sources"], route)
+    if route != "graph" or "candidate_type" not in existing:
+        existing["candidate_type"] = CANDIDATE_TYPE.get(route, existing.get("candidate_type", "legal_unit_candidate"))
     score = (
         0.0
         if route == "bm25" and row.get("lexical_relevance_ok") is False

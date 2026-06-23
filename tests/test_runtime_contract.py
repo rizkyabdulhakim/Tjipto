@@ -194,7 +194,7 @@ class RuntimeContractTest(unittest.TestCase):
     def test_ask_contract_is_evidence_bounded(self) -> None:
         answer = self.service.ask("uud", "Pasal 1 ayat (3)")
         self.assertEqual(answer["status"], "answer_ready")
-        self.assertEqual(answer["route"], "exact")
+        self.assertEqual(answer["route"], "legal_reference")
         self.assertEqual(answer["intent"], "exact_citation")
         self.assertEqual(answer["normalized_query"], "Pasal 1 ayat (3)")
         self.assertIn("Dukungan sitasi berbasis bukti", answer["answer"])
@@ -207,20 +207,20 @@ class RuntimeContractTest(unittest.TestCase):
 
         limited = self.service.ask("uud", "negara hukum")
         self.assertEqual(limited["status"], "limited_answer")
-        self.assertEqual(limited["route"], "bm25")
+        self.assertEqual(limited["route"], "lexical_fallback")
         self.assertEqual(limited["intent"], "natural_language")
         self.assertTrue(limited["evidence"])
 
         for query in ("Pasal 999", "Pasal 1 ayat 999", "Pasal 28E ayat (999)"):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "citation_not_found")
-            self.assertEqual(result["route"], "citation_not_found")
+            self.assertEqual(result["route"], "legal_reference")
             self.assertEqual(result["reason"], "citation_not_found")
             self.assertFalse(result["evidence"])
 
         domain_query = self.service.ask("uud", "aturan KUHP tentang pencurian")
         self.assertEqual(domain_query["status"], "insufficient_evidence")
-        self.assertEqual(domain_query["route"], "bm25")
+        self.assertEqual(domain_query["route"], "lexical_fallback")
         self.assertIsNone(domain_query["required_corpus"])
         self.assertFalse(domain_query["evidence"])
         self.assertFalse(domain_query["citations"])
@@ -233,19 +233,45 @@ class RuntimeContractTest(unittest.TestCase):
     def test_ask_answers_grounded_document_metadata(self) -> None:
         result = self.service.ask("uud", "tanggal perubahan kedua UUD")
         self.assertEqual(result["status"], "answer_ready")
-        self.assertEqual(result["route"], "metadata")
+        self.assertEqual(result["route"], "metadata_fact")
         self.assertEqual(result["intent"], "metadata_lookup")
         self.assertEqual(result["answer_type"], "metadata_fact")
         self.assertIn("18 Agustus 2000", result["answer"])
+        self.assertEqual(result["metadata_facts"][0]["field"], "date")
         self.assertTrue(result["citations"])
         self.assertEqual(result["citations"][0]["metadata_field"], "date")
         self.assertEqual(result["citations"][0]["metadata_answer"], "18 Agustus 2000")
         self.assertFalse(result["viewer_refs"][0]["can_resolve"])
 
+        penetapan = self.service.ask("uud", "tanggal penetapan perubahan kedua UUD")
+        self.assertEqual(penetapan["route"], "metadata_fact")
+        self.assertEqual(penetapan["metadata_facts"][0]["field"], "penetapan")
+        self.assertEqual(penetapan["metadata_facts"][0]["answer"], "18 Agustus 2000")
+
+        institution = self.service.ask("uud", "perubahan kedua UUD ditetapkan oleh siapa")
+        self.assertEqual(institution["route"], "metadata_fact")
+        self.assertEqual(institution["metadata_facts"][0]["field"], "institution")
+
+    def test_ask_answers_grounded_legal_unit_relations(self) -> None:
+        result = self.service.ask("uud", "apa saja ayat dalam Pasal 1", limit=5)
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["route"], "legal_relation")
+        self.assertEqual(result["intent"], "legal_relation_lookup")
+        self.assertEqual(result["answer_type"], "legal_relation")
+        self.assertEqual({row["target_label"] for row in result["legal_relations"]}, {"(1)", "(2)", "(3)"})
+        self.assertEqual({row["candidate_type"] for row in result["evidence"]}, {"relation_candidate"})
+        self.assertTrue(result["citations"])
+        self.assertTrue(result["viewer_refs"])
+
+        bab = self.service.ask("uud", "apa saja pasal dalam BAB I", limit=5)
+        self.assertEqual(bab["status"], "answer_ready")
+        self.assertEqual(bab["route"], "legal_relation")
+        self.assertEqual(bab["legal_relations"][0]["target_label"], "Pasal 1")
+
     def test_ask_does_not_promote_ungrounded_legal_relations(self) -> None:
         result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")
         self.assertEqual(result["status"], "insufficient_evidence")
-        self.assertEqual(result["route"], "relation_not_found")
+        self.assertEqual(result["route"], "legal_relation")
         self.assertEqual(result["intent"], "legal_relation_lookup")
         self.assertFalse(result["evidence"])
         self.assertFalse(result["citations"])
@@ -296,7 +322,7 @@ class RuntimeContractTest(unittest.TestCase):
         ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "limited_answer", query)
-            self.assertEqual(result["route"], "bm25", query)
+            self.assertEqual(result["route"], "lexical_fallback", query)
             self.assertIsNone(result["required_corpus"], query)
             self.assertTrue(result["evidence"], query)
 
@@ -319,7 +345,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertFalse(result["context_pack"]["citation_payloads"], query)
             self.assertFalse(result["context_pack"]["viewer_refs"], query)
             reasons = set(result["context_pack"]["validation_reasons"].values())
-            if result["route"] == "bm25":
+            if result["route"] == "lexical_fallback":
                 self.assertIn("insufficient_query_support", reasons, query)
 
     def test_retrieval_router_envelope_routes(self) -> None:
@@ -466,7 +492,8 @@ class RuntimeContractTest(unittest.TestCase):
             ROOT,
         )
         self.assertEqual(api_result["status"], "answer_ready")
-        self.assertEqual(api_result["applied_filters"]["temporal_context"], "amendment_1_historical")
+        self.assertEqual(api_result["route"], "legal_reference")
+        self.assertEqual(api_result["citations"][0]["temporal_context"], "amendment_1_historical")
 
     def test_dense_readiness_does_not_fake_matches(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -657,8 +684,9 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(any(evidence["citation"] == "PEMBUKAAN/Preambule" for evidence in exact["evidence"]))
 
         structured = self.service.ask("uud", "Pembukaan", limit=5)
-        self.assertEqual(structured["status"], "limited_answer")
-        self.assertEqual(structured["answer_type"], "limited_evidence_summary")
+        self.assertEqual(structured["status"], "answer_ready")
+        self.assertEqual(structured["route"], "legal_reference")
+        self.assertEqual(structured["answer_type"], "quoted_evidence")
         self.assertTrue(any(row["route_sources"] == ("graph",) for row in structured["matches"]))
         evidence_ids = {evidence["evidence_id"] for evidence in structured["evidence"]}
         self.assertTrue(all(direct_routes & set(row["route_sources"]) for row in structured["matches"] if row["evidence_id"] in evidence_ids))

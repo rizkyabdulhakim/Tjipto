@@ -4,7 +4,10 @@ import re
 
 
 FIELD_PATTERNS = {
-    "date": ("tanggal", "kapan", "ditetapkan", "penetapan", "berlaku"),
+    "penetapan": ("ditetapkan", "penetapan", "enactment"),
+    "promulgation": ("diundangkan", "pengundangan", "promulgation"),
+    "revocation": ("dicabut", "pencabutan", "revocation"),
+    "date": ("tanggal", "kapan"),
     "institution": ("lembaga", "institusi", "majelis", "mpr", "ditetapkan oleh"),
     "place": ("tempat", "di mana", "dimana", "jakarta"),
     "signatories": ("penanda tangan", "ditandatangani", "ketua", "wakil ketua", "amien rais", "sutjipto"),
@@ -112,18 +115,12 @@ def has_metadata_target(query: str) -> bool:
     return _metadata_field(query) is not None
 
 
-def has_relation_target(query: str) -> bool:
-    folded = (query or "").casefold()
-    return "perubahan" in folded and any(
-        pattern in folded
-        for pattern in ("mengubah", "diubah", "amandemen", "amended", "amends")
-    )
-
-
 def _metadata_field(query: str) -> str | None:
     folded = (query or "").casefold()
     if not any(word in folded for word in ("u" "ud", "perubahan", "amendment", "naskah")):
         return None
+    if "ditetapkan oleh" in folded:
+        return "institution"
     for field, patterns in FIELD_PATTERNS.items():
         if any(pattern in folded for pattern in patterns):
             return field
@@ -170,6 +167,11 @@ def _metadata_result(store, row: dict, grounding: dict, field: str) -> dict | No
 
 
 def _field_value(row: dict, field: str) -> str | None:
+    if field == "penetapan":
+        value = row.get("penetapan")
+        return value.get("date_text") if isinstance(value, dict) else None
+    if field in {"promulgation", "revocation"}:
+        return None
     value = row.get(field)
     if field == "signatories":
         signatories = row.get("signatories") or ()

@@ -116,9 +116,27 @@ class RuntimeHttpContractTest(unittest.TestCase):
     def test_uud_ask_examples(self) -> None:
         ready = self._post("/legal/uud/ask", {"query": "Pasal 1 ayat (3)"})
         self.assertEqual(ready["status"], "answer_ready")
+        self.assertEqual(ready["route"], "legal_reference")
+        self.assertEqual(ready["intent"], "exact_citation")
         self.assertTrue(ready["citations"])
         self.assertTrue(ready["viewer_refs"])
-        for internal in ("matches", "context_pack", "route", "intent", "evidence"):
+        self.assertEqual(
+            set(ready),
+            {
+                "status",
+                "answer",
+                "intent",
+                "route",
+                "citations",
+                "viewer_refs",
+                "metadata_facts",
+                "legal_relations",
+                "answer_scope",
+                "warnings",
+                "insufficient_reasons",
+            },
+        )
+        for internal in ("matches", "context_pack", "evidence", "answer_type", "reason", "applied_filters"):
             self.assertNotIn(internal, ready)
         self.assertNotIn("source_sha256", ready["citations"][0])
         self.assertNotIn("source_pdf_path", ready["citations"][0])
@@ -127,16 +145,29 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
         limited = self._post("/legal/uud/ask", {"query": "negara hukum"})
         self.assertEqual(limited["status"], "limited_answer")
+        self.assertEqual(limited["route"], "lexical_fallback")
         self.assertTrue(limited["citations"])
         self.assertTrue(limited["viewer_refs"])
 
+        metadata = self._post("/legal/uud/ask", {"query": "tanggal perubahan kedua UUD"})
+        self.assertEqual(metadata["status"], "answer_ready")
+        self.assertEqual(metadata["route"], "metadata_fact")
+        self.assertEqual(metadata["metadata_facts"][0]["field"], "date")
+
+        relation = self._post("/legal/uud/ask", {"query": "apa saja ayat dalam Pasal 1"})
+        self.assertEqual(relation["status"], "answer_ready")
+        self.assertEqual(relation["route"], "legal_relation")
+        self.assertEqual({row["target_label"] for row in relation["legal_relations"]}, {"(1)", "(2)", "(3)"})
+
         weak = self._post("/legal/uud/ask", {"query": "aturan KUHP tentang pencurian"})
         self.assertEqual(weak["status"], "insufficient_evidence")
+        self.assertEqual(weak["route"], "lexical_fallback")
         self.assertEqual(weak["citations"], [])
         self.assertEqual(weak["viewer_refs"], [])
 
         missing = self._post("/legal/uud/ask", {"query": "Pasal 999"})
         self.assertEqual(missing["status"], "citation_not_found")
+        self.assertEqual(missing["route"], "legal_reference")
         self.assertEqual(missing["citations"], [])
         self.assertEqual(missing["viewer_refs"], [])
 

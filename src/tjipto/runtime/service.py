@@ -194,44 +194,65 @@ class LegalRuntimeService:
     def ask(self, corpus_id: str, query: str, limit: int = 3, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
         routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
+        ask_route = _ask_route(routed["route"])
         if routed["status"] != "found":
             public_status = "insufficient_evidence" if routed.get("route") in {"metadata_not_found", "relation_not_found"} else routed["status"]
             context_pack = empty_context_pack(routed.get("reason") or routed["status"])
             return routed | {
                 "status": public_status,
+                "route": ask_route,
                 "answer_type": "none",
                 "answer": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
                 "context_pack": context_pack,
                 "evidence": (),
                 "citations": (),
                 "viewer_refs": (),
+                "metadata_facts": (),
+                "legal_relations": (),
+                "answer_scope": "insufficient_evidence",
+                "warnings": (),
+                "insufficient_reasons": (routed.get("reason") or routed["status"],),
             }
         context_pack = assemble_context_pack(store, routed["matches"])
         evidence = context_pack["answer_evidence"]
         if not evidence:
             return routed | {
                 "status": "insufficient_evidence",
+                "route": ask_route,
                 "answer_type": "none",
                 "answer": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
                 "context_pack": context_pack,
                 "evidence": (),
                 "citations": (),
                 "viewer_refs": (),
+                "metadata_facts": (),
+                "legal_relations": (),
+                "answer_scope": "insufficient_evidence",
+                "warnings": (),
+                "insufficient_reasons": tuple(sorted(set(context_pack["validation_reasons"].values()))),
             }
-        status = "answer_ready" if routed["route"] in {"exact", "metadata"} else "limited_answer"
+        status = "limited_answer" if ask_route == "lexical_fallback" else "answer_ready"
         return routed | {
             "status": status,
-            "answer_type": "metadata_fact" if routed["route"] == "metadata" else ("quoted_evidence" if status == "answer_ready" else "limited_evidence_summary"),
+            "route": ask_route,
+            "answer_type": _answer_type(ask_route, status),
             "answer": self._answer_text(status, evidence),
             "context_pack": context_pack,
             "evidence": evidence,
             "citations": context_pack["citation_payloads"],
             "viewer_refs": context_pack["viewer_refs"],
+            "metadata_facts": tuple(_metadata_fact(row) for row in evidence if row.get("metadata_field")),
+            "legal_relations": tuple(row["legal_relation"] for row in evidence if row.get("legal_relation")),
+            "answer_scope": "direct_evidence" if status == "answer_ready" else "limited_evidence",
+            "warnings": (),
+            "insufficient_reasons": (),
         }
 
     def _answer_text(self, status: str, evidence: tuple[dict, ...]) -> str:
         if evidence[0].get("metadata_answer"):
             return f"{evidence[0]['metadata_answer']} (from grounded document metadata)."
+        if evidence[0].get("legal_relation"):
+            return "Dukungan relasi hukum berbasis bukti tersedia; sistem tidak menghasilkan kesimpulan hukum."
         citation = evidence[0].get("label") or evidence[0].get("citation") or "evidence"
         if status == "answer_ready":
             return f"Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum."
@@ -264,4 +285,35 @@ def _search_result(row: dict, routed: dict, context_pack: dict) -> dict:
         "retrieval_method": routed["route"],
         "reasons": context_pack["validation_reasons"].get(row["evidence_id"]),
         "status": "evidence",
+    }
+
+
+def _ask_route(route: str) -> str:
+    return {
+        "exact": "legal_reference",
+        "structured": "legal_reference",
+        "metadata": "metadata_fact",
+        "metadata_not_found": "metadata_fact",
+        "relation": "legal_relation",
+        "relation_not_found": "legal_relation",
+        "citation_not_found": "legal_reference",
+        "structured_not_found": "legal_reference",
+        "bm25": "lexical_fallback",
+    }.get(route, route)
+
+
+def _answer_type(route: str, status: str) -> str:
+    if status != "answer_ready":
+        return "limited_evidence_summary"
+    return {
+        "metadata_fact": "metadata_fact",
+        "legal_relation": "legal_relation",
+    }.get(route, "quoted_evidence")
+
+
+def _metadata_fact(row: dict) -> dict:
+    return {
+        "field": row.get("metadata_field"),
+        "answer": row.get("metadata_answer"),
+        "evidence_id": row.get("evidence_id"),
     }
