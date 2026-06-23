@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, PointerEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import * as pdfjs from "pdfjs-dist";
@@ -9,6 +9,7 @@ import {
   Minus,
   Plus,
   Maximize2,
+  Minimize2,
   Copy,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +24,10 @@ import { bboxToViewportPercent } from "../../lib/pdfBBox";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
+const SIDEBAR_MIN_WIDTH = 360;
+const SIDEBAR_DEFAULT_WIDTH = 440;
+const SIDEBAR_MAX_WIDTH = 760;
+
 interface EvidencePanelProps {
   citation: Citation | null;
   allCitations: Citation[];
@@ -36,6 +41,36 @@ export function EvidencePanel({
   onClose,
   onSelect,
 }: EvidencePanelProps) {
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const [isResizing, setIsResizing] = useState(false);
+  const [pdfOnly, setPdfOnly] = useState(false);
+
+  const startResize = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setIsResizing(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const stopResize = (event: PointerEvent<HTMLButtonElement>) => {
+    setIsResizing(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const resize = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!isResizing) return;
+    const nextWidth = window.innerWidth - event.clientX;
+    setSidebarWidth(clamp(nextWidth, SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - 96)));
+  };
+
+  useEffect(() => {
+    if (!citation) {
+      setPdfOnly(false);
+      setIsResizing(false);
+    }
+  }, [citation]);
+
   return (
     <AnimatePresence>
       {citation && (
@@ -51,17 +86,34 @@ export function EvidencePanel({
           />
           <motion.aside
             key="ev-panel"
-            initial={{ x: 40, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 40, opacity: 0 }}
+            initial={pdfOnly ? { opacity: 0 } : { x: 40, opacity: 0 }}
+            animate={pdfOnly ? { opacity: 1 } : { x: 0, opacity: 1 }}
+            exit={pdfOnly ? { opacity: 0 } : { x: 40, opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
-            className="fixed lg:static inset-y-0 right-0 z-50 lg:z-10 flex flex-col w-full sm:w-[460px] lg:w-[440px] sm:max-w-[95vw] shrink-0 h-full bg-[var(--tj-surface)]/80 lg:bg-[var(--tj-surface)]/60 backdrop-blur-3xl border-l border-[var(--tj-glass-border)] shadow-2xl"
+            className={`${pdfOnly ? "fixed inset-0 z-50 w-full max-w-none" : "fixed lg:static inset-y-0 right-0 z-50 lg:z-10 w-full sm:w-[460px] md:w-[var(--tj-evidence-panel-width)] sm:max-w-[95vw]"} flex flex-col shrink-0 h-full bg-[var(--tj-surface)]/80 lg:bg-[var(--tj-surface)]/60 backdrop-blur-3xl border-l border-[var(--tj-glass-border)] shadow-2xl`}
+            style={{ "--tj-evidence-panel-width": `${sidebarWidth}px` } as CSSProperties}
+            data-evidence-panel={pdfOnly ? "expanded" : "normal"}
           >
+            {!pdfOnly && (
+              <button
+                type="button"
+                aria-label="Resize evidence panel"
+                title="Resize evidence panel"
+                onPointerDown={startResize}
+                onPointerMove={resize}
+                onPointerUp={stopResize}
+                onPointerCancel={stopResize}
+                className={`hidden md:block absolute inset-y-0 -left-1.5 z-20 w-3 cursor-col-resize touch-none transition-colors ${isResizing ? "bg-[var(--tj-accent-soft)]" : "hover:bg-[var(--tj-accent-soft)]"}`}
+                data-evidence-resize-handle="true"
+              />
+            )}
             <EvidenceContent
               citation={citation}
               allCitations={allCitations}
               onClose={onClose}
               onSelect={onSelect}
+              pdfOnly={pdfOnly}
+              onTogglePdfOnly={() => setPdfOnly((value) => !value)}
             />
           </motion.aside>
         </>
@@ -75,11 +127,15 @@ function EvidenceContent({
   allCitations,
   onClose,
   onSelect,
+  pdfOnly,
+  onTogglePdfOnly,
 }: {
   citation: Citation;
   allCitations: Citation[];
   onClose: () => void;
   onSelect: (c: Citation) => void;
+  pdfOnly: boolean;
+  onTogglePdfOnly: () => void;
 }) {
   const idx = allCitations.findIndex((c) => c.id === citation.id);
   const prev = allCitations[idx - 1];
@@ -140,7 +196,7 @@ function EvidenceContent({
   return (
     <>
       {/* HEADER */}
-      <header className="px-6 pt-5 pb-4 border-b border-[var(--tj-border-subtle)] shrink-0">
+      {!pdfOnly && <header className="px-6 pt-5 pb-4 border-b border-[var(--tj-border-subtle)] shrink-0">
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1.5 min-w-0">
             <div className="flex items-center gap-2">
@@ -206,11 +262,11 @@ function EvidenceContent({
             <span>Halaman {pageNumber}</span>
           </div>
         </div>
-      </header>
+      </header>}
 
       {/* TOOLBAR */}
       <div className="px-4 h-12 flex items-center gap-3 border-b border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)]/40 shrink-0">
-        <div className="flex items-center bg-[var(--tj-surface)]/80 rounded-xl border border-[var(--tj-border-subtle)] p-0.5 shadow-sm">
+        {!pdfOnly && <div className="flex items-center bg-[var(--tj-surface)]/80 rounded-xl border border-[var(--tj-border-subtle)] p-0.5 shadow-sm">
           <ToolbarBtn
             disabled={!prev}
             onClick={() => prev && onSelect(prev)}
@@ -236,7 +292,7 @@ function EvidenceContent({
           >
             <ChevronRight size={16} />
           </ToolbarBtn>
-        </div>
+        </div>}
 
         <div className="flex-1" />
 
@@ -271,27 +327,32 @@ function EvidenceContent({
           </ToolbarBtn>
         </div>
 
-        <ToolbarBtn className="w-9 h-9 rounded-xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] shadow-sm">
-          <Maximize2 size={15} />
-        </ToolbarBtn>
         <ToolbarBtn
+          onClick={onTogglePdfOnly}
+          className="w-9 h-9 rounded-xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] shadow-sm"
+          aria-label={pdfOnly ? "Exit PDF-only mode" : "Expand PDF-only mode"}
+          title={pdfOnly ? "Exit PDF-only mode" : "Expand PDF-only mode"}
+        >
+          {pdfOnly ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+        </ToolbarBtn>
+        {!pdfOnly && <ToolbarBtn
           onClick={savePointer}
           className="w-9 h-9 rounded-xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] shadow-sm"
           aria-label="Simpan bookmark sementara"
           title="Simpan bookmark sementara"
         >
           {saved ? <Check size={15} /> : <Bookmark size={15} />}
-        </ToolbarBtn>
+        </ToolbarBtn>}
       </div>
 
       {/* PDF VIEW */}
-      <div className="flex-1 overflow-y-auto bg-[var(--tj-app-bg)]/40 tj-scroll p-6">
+      <div className={`flex-1 overflow-y-auto bg-[var(--tj-app-bg)]/40 tj-scroll ${pdfOnly ? "p-4 sm:p-6" : "p-6"}`} data-evidence-pdf-area={pdfOnly ? "expanded" : "normal"}>
         <div
-          className="relative mx-auto rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm"
+          className={`relative mx-auto rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm ${pdfOnly ? "max-w-[min(1180px,100%)]" : ""}`}
           style={{
             width: `${zoom}%`,
             maxWidth: zoom <= 100 ? "100%" : "none",
-            minHeight: 260,
+            minHeight: pdfOnly ? "calc(100vh - 112px)" : 260,
             transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
           }}
         >
@@ -315,7 +376,7 @@ function EvidenceContent({
         </div>
         
         {/* EXCERPT CARD */}
-        <section className="mt-8 mb-6">
+        {!pdfOnly && <section className="mt-8 mb-6">
           <div className="flex items-center justify-between mb-3 px-1">
             <h3
               className="uppercase"
@@ -350,10 +411,10 @@ function EvidenceContent({
               "{citation.excerpt}"
             </blockquote>
           </div>
-        </section>
+        </section>}
 
         {/* DETAILS */}
-        <section className="mb-8">
+        {!pdfOnly && <section className="mb-8">
           <h3
             className="uppercase mb-3 px-1"
             style={{
@@ -372,11 +433,11 @@ function EvidenceContent({
             <MetaRow label="Yurisdiksi">Republik Indonesia</MetaRow>
             <MetaRow label="Domain">{citation.sourceDomain ?? "Tidak tersedia"}</MetaRow>
           </div>
-        </section>
+        </section>}
       </div>
 
       {/* FOOTER */}
-      <footer className="border-t border-[var(--tj-border-subtle)] p-4 bg-[var(--tj-surface)]/60 backdrop-blur-xl shrink-0">
+      {!pdfOnly && <footer className="border-t border-[var(--tj-border-subtle)] p-4 bg-[var(--tj-surface)]/60 backdrop-blur-xl shrink-0">
         <div
           className="flex items-center justify-center gap-2.5 min-h-11 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3 text-center text-[var(--tj-text-secondary)]"
           style={{ fontSize: 14, fontWeight: 700 }}
@@ -385,7 +446,7 @@ function EvidenceContent({
             ? "PDF asli dirender di frontend melalui akses backend tervalidasi"
             : "PDF/BBox viewer belum tersedia untuk evidence ini"}
         </div>
-      </footer>
+      </footer>}
     </>
   );
 }
@@ -663,4 +724,8 @@ function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
   if (role?.startsWith("amendment_")) return "Historis (sumber perubahan)";
   if (role === "original_historical") return "Historis (naskah asli)";
   return "Status sumber tidak tersedia";
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }

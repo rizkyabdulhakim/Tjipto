@@ -97,20 +97,67 @@ async function runSmoke() {
 
     await page.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
     await page.locator('[data-pdf-document="full"]').waitFor();
+    await page.locator('[data-evidence-panel="normal"]').waitFor();
     await page.waitForFunction(() => {
       const document = window.document.querySelector('[data-pdf-document="full"]');
       return Number(document?.getAttribute("data-page-count") ?? "0") > 1;
     });
     await page.locator('canvas[aria-label="Halaman sumber 3"][data-rendered="true"]').waitFor();
     await page.locator('[data-bbox-highlight="active"]').first().waitFor();
+    const panelBeforeResize = await page.locator('[data-evidence-panel="normal"]').boundingBox();
+    const resizeHandle = page.locator('[data-evidence-resize-handle="true"]');
+    await resizeHandle.waitFor();
+    const handleBox = await resizeHandle.boundingBox();
+    if (!panelBeforeResize || !handleBox) throw new Error("Evidence panel resize target unavailable.");
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 120);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x - 140, handleBox.y + 120, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForFunction((width) => {
+      const panel = window.document.querySelector('[data-evidence-panel="normal"]');
+      return panel instanceof HTMLElement && panel.getBoundingClientRect().width > Number(width) + 80;
+    }, panelBeforeResize.width);
+    await page.locator('[data-bbox-highlight]').first().waitFor();
+
     const beforeZoom = await page.locator('canvas[aria-label="Halaman sumber 3"]').boundingBox();
     await page.getByRole("button", { name: "Zoom in" }).click();
     await page.waitForFunction((width) => {
       const canvas = window.document.querySelector('canvas[aria-label="Halaman sumber 3"]');
       return canvas instanceof HTMLElement && canvas.getBoundingClientRect().width > Number(width);
     }, beforeZoom?.width ?? 0);
+    const panelAfterResize = await page.locator('[data-evidence-panel="normal"]').boundingBox();
+    await page.getByRole("button", { name: "Expand PDF-only mode" }).click();
+    await page.locator('[data-evidence-panel="expanded"]').waitFor();
+    await page.locator('[data-evidence-pdf-area="expanded"]').waitFor();
+    await page.locator('[data-bbox-highlight]').first().waitFor();
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    await page.waitForFunction((width) => {
+      const canvas = window.document.querySelector('canvas[aria-label="Halaman sumber 3"]');
+      return canvas instanceof HTMLElement && canvas.getBoundingClientRect().width > Number(width);
+    }, beforeZoom?.width ?? 0);
+    await page.getByRole("button", { name: "Exit PDF-only mode" }).click();
+    await page.locator('[data-evidence-panel="normal"]').waitFor();
+    await page.locator('[data-evidence-pdf-area="normal"]').waitFor();
+    await page.locator('[data-bbox-highlight]').first().waitFor();
+    await page.waitForFunction((width) => {
+      const panel = window.document.querySelector('[data-evidence-panel="normal"]');
+      return panel instanceof HTMLElement && Math.abs(panel.getBoundingClientRect().width - Number(width)) < 12;
+    }, panelAfterResize?.width ?? 0);
     await page.getByText("PDF asli dirender di frontend melalui akses backend tervalidasi").first().waitFor();
     await page.getByLabel("Simpan bookmark sementara").first().click();
+
+    const mobilePage = await browser.newPage({ viewport: { width: 390, height: 800 } });
+    await mobilePage.goto(frontendUrl, { waitUntil: "networkidle" });
+    await mobilePage.getByPlaceholder("Tanya UUD 1945...").fill("Pasal 1 ayat (3)");
+    await mobilePage.getByLabel("Send").click();
+    await mobilePage.getByText("Dukungan sitasi berbasis bukti").waitFor();
+    await mobilePage.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
+    await mobilePage.locator('[data-evidence-panel="normal"]').waitFor();
+    await mobilePage.waitForFunction(() => {
+      const handle = window.document.querySelector('[data-evidence-resize-handle="true"]');
+      return !handle || window.getComputedStyle(handle).display === "none";
+    });
+    await mobilePage.close();
 
     await page.getByRole("button", { name: "Cari Regulasi" }).click();
     await page.getByRole("heading", { name: "Search UUD" }).waitFor();
