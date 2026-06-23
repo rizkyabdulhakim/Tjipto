@@ -14,7 +14,7 @@ FINAL = ROOT / "data/final/uud"
 class BBoxContractTest(unittest.TestCase):
     def test_bbox_rows_are_accepted_and_page_grounded(self) -> None:
         rows = read_jsonl(FINAL / "bbox_registry.jsonl")
-        self.assertEqual(len(rows), 1388)
+        self.assertEqual(len(rows), 1542)
         for row in rows:
             self.assertTrue(bbox_is_accepted(row))
             self.assertGreaterEqual(row["x1"], row["x0"])
@@ -34,6 +34,7 @@ class BBoxContractTest(unittest.TestCase):
         self.assertEqual(len(metadata_grounding_ids), 5)
         for row in rows:
             self.assertEqual(row["status"], "accepted_metadata_grounding")
+            self.assertFalse(row["viewer_highlightable"])
             self.assertTrue(row["quoted_text"])
             self.assertTrue(row["bbox_refs"])
             self.assertTrue(set(row["bbox_refs"]).isdisjoint(legal_evidence_bbox_ids))

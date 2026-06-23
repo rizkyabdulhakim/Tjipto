@@ -13,7 +13,7 @@ FINAL = ROOT / "data/final/uud"
 class EvidenceContractTest(unittest.TestCase):
     def test_final_evidence_rows_are_grounded(self) -> None:
         rows = read_jsonl(FINAL / "evidence_registry.jsonl")
-        self.assertEqual(len(rows), 438)
+        self.assertEqual(len(rows), 464)
         for row in rows:
             self.assertEqual(row["corpus_id"], "uud")
             self.assertEqual(row["status"], "final")
@@ -29,8 +29,8 @@ class EvidenceContractTest(unittest.TestCase):
         units = read_jsonl(FINAL / "legal_units.jsonl")
         chunks = read_jsonl(FINAL / "chunks.jsonl")
         source_docs = read_jsonl(FINAL / "source_documents.jsonl")
-        self.assertEqual(len(units), 609)
-        self.assertEqual(len(chunks), 609)
+        self.assertEqual(len(units), 651)
+        self.assertEqual(len(chunks), 651)
         unit_ids = {row["legal_unit_id"] for row in units}
         source_doc_ids = {row["source_document_id"] for row in source_docs}
         for row in chunks:
@@ -141,6 +141,53 @@ class EvidenceContractTest(unittest.TestCase):
                 row["field_statuses"].get("ln_tln"),
                 {"not_found_in_source", None},
             )
+
+    def test_instrument_units_and_historical_anomaly_are_preserved(self) -> None:
+        units = read_jsonl(FINAL / "legal_units.jsonl")
+        chunks = {
+            row["legal_unit_id"]: row
+            for row in read_jsonl(FINAL / "chunks.jsonl")
+        }
+        labels = {row.get("unit_label") for row in units}
+        for label in (
+            "Perubahan Pertama Recital",
+            "Perubahan Kedua Scope",
+            "Perubahan Ketiga Closing",
+            "Perubahan Keempat Clause (a)",
+            "Perubahan Keempat Clause (b)",
+            "Perubahan Keempat Clause (c)",
+            "Perubahan Keempat Clause (d)",
+            "Perubahan Keempat Clause (e)",
+        ):
+            self.assertIn(label, labels)
+
+        anomaly_rows = [
+            row
+            for row in units
+            if row.get("exclusion_ref") == "source_typo_reference::uud_source_typo_reference_00001"
+        ]
+        self.assertEqual(
+            {row["unit_label"] for row in anomaly_rows},
+            {"ATURAN TAMBAHAN source typo reference", "Pasal I", "Pasal III"},
+        )
+        for row in anomaly_rows:
+            self.assertFalse(row["runtime_loadable"])
+            self.assertEqual(row["status"], "inactive_source_typo_reference")
+            chunk = chunks[row["legal_unit_id"]]
+            self.assertFalse(chunk["canonical_use_allowed"])
+            self.assertFalse(chunk["runtime_loadable"])
+            self.assertEqual(chunk["status"], "inactive_source_typo_reference")
+
+    def test_closing_clauses_are_separated_from_normative_units(self) -> None:
+        forbidden = (
+            "Naskah perubahan ini merupakan bagian tak terpisahkan",
+            "Perubahan tersebut diputuskan",
+            "Ditetapkan di Jakarta",
+        )
+        for row in read_jsonl(FINAL / "legal_units.jsonl"):
+            if row["unit_type"] not in {"pasal_record", "ayat_record"}:
+                continue
+            self.assertFalse(any(marker in row["text"] for marker in forbidden), row["legal_unit_id"])
 
 
 if __name__ == "__main__":

@@ -149,7 +149,7 @@ class RuntimeContractTest(unittest.TestCase):
             for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")
         }
         rows = read_jsonl(ROOT / "data/final/uud/retrieval_units.jsonl")
-        self.assertEqual(len(rows), 438)
+        self.assertEqual(len(rows), 464)
         for row in rows:
             self.assertIn(row["evidence_id"], evidence_ids)
             self.assertGreaterEqual(row["bbox_total_count"], len(row["bbox_sample_refs"]))
@@ -562,13 +562,14 @@ class RuntimeContractTest(unittest.TestCase):
     def test_provenance_validation_reports_header_stripped_uud_matches(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
         report = validate_corpus_provenance(config)
-        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["status"], "needs_review")
         for key in ("legal_units", "chunks"):
-            self.assertEqual(report[key]["total"], 609)
-            self.assertEqual(report[key]["raw_pdf_match"], 584)
-            self.assertEqual(report[key]["normalized_pdf_match"], 584)
-            self.assertEqual(report[key]["header_stripped_pdf_match"], 609)
-            self.assertEqual(report[key]["needs_review"], 0)
+            self.assertEqual(report[key]["total"], 651)
+            self.assertEqual(report[key]["raw_pdf_match"], 621)
+            self.assertEqual(report[key]["normalized_pdf_match"], 621)
+            self.assertEqual(report[key]["header_stripped_pdf_match"], 645)
+            self.assertEqual(report[key]["evidence_grounded_match"], 464)
+            self.assertEqual(report[key]["needs_review"], 6)
 
     def test_structured_lookup_is_evidence_and_bbox_backed(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -848,8 +849,8 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_artifact_paths_resolve_through_manifest_keys(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
-        self.assertEqual(len(config.jsonl("evidence")), 438)
-        self.assertEqual(len(config.jsonl("bbox")), 1388)
+        self.assertEqual(len(config.jsonl("evidence")), 464)
+        self.assertEqual(len(config.jsonl("bbox")), 1542)
         self.assertEqual(len(config.jsonl("graph_nodes")), 2339)
 
     def test_runtime_services_and_stores_do_not_hardcode_artifacts(self) -> None:

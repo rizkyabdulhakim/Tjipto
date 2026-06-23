@@ -492,12 +492,12 @@
     "note": "metadata_grounding_id identifies non-normative metadata grounding rows; evidence_link.final_evidence_id remains backward-compatible when present and may point to metadata grounding records, not legal evidence_registry rows"
   },
   "final_artifact_counts": {
-    "chunks": 609,
-    "legal_units": 609,
+    "chunks": 651,
+    "legal_units": 651,
     "excluded_records": 6,
-    "evidence_records": 438,
-    "bbox_records": 1388,
-    "retrieval_units": 438
+    "evidence_records": 464,
+    "bbox_records": 1542,
+    "retrieval_units": 464
   },
   "artifact_governance": {
     "status": "current_final_artifacts_present",
@@ -513,5 +513,19 @@
     "reviewed_exceptions_preserved": [
       "Pasal 22D ayat (3) bbox/text exception remains tracked in structure_fidelity.reviewed_exception_unit"
     ]
+  },
+  "instrument_baseline": {
+    "status": "corrected",
+    "instrument_unit_types": [
+      "amendment_recital_record",
+      "amendment_scope_record",
+      "instrument_clause_record",
+      "instrument_closing_record",
+      "decision_clause_record",
+      "effective_clause_record",
+      "determination_clause_record",
+      "signatory_block_record"
+    ],
+    "metadata_viewer_highlightable": false
   }
 }

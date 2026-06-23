@@ -21,20 +21,20 @@ class ManifestContractTest(unittest.TestCase):
             manifest["counts"],
             {
                 "article_versions": 218,
-                "bbox_records": 1388,
-                "chunks": 609,
+                "bbox_records": 1542,
+                "chunks": 651,
                 "document_metadata": 6,
-                "evidence_records": 438,
+                "evidence_records": 464,
                 "excluded_records": 6,
                 "graph_edges": 3150,
                 "graph_nodes": 2339,
-                "legal_units": 609,
+                "legal_units": 651,
                 "metadata_assertions": 1319,
                 "metadata_grounding": 5,
                 "metadata_grounding_records": 5,
                 "metadata_graph_edges": 449,
                 "pages": 63,
-                "retrieval_units": 438,
+                "retrieval_units": 464,
                 "source_conflicts": 2,
                 "source_documents": 6,
                 "validation_alignment_results": 610,
@@ -54,11 +54,13 @@ class ManifestContractTest(unittest.TestCase):
             self.assertTrue((FINAL / name).exists(), name)
         self.assertEqual(report["structure_fidelity"]["status"], "corrected")
         self.assertEqual(report["metadata_grounding_contract"]["status"], "clarified")
-        self.assertEqual(report["final_artifact_counts"]["chunks"], 609)
+        self.assertEqual(report["final_artifact_counts"]["chunks"], 651)
         self.assertEqual(
             report["final_artifact_counts"]["chunks"],
             len((FINAL / "chunks.jsonl").read_text(encoding="utf-8").splitlines()),
         )
+        self.assertEqual(report["instrument_baseline"]["status"], "corrected")
+        self.assertFalse(report["instrument_baseline"]["metadata_viewer_highlightable"])
         self.assertEqual(report["artifact_governance"]["status"], "current_final_artifacts_present")
         self.assertIn(
             "Pasal 22D ayat (3) bbox/text exception remains tracked",

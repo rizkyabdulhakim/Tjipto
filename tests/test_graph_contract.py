@@ -8,6 +8,7 @@ import unicodedata
 import unittest
 
 from tjipto.corpora.adapter import config_for
+from tjipto.corpora.uud_artifact_baseline import validate_uud_artifact_baseline
 from tjipto.core.manifest import file_sha256
 from tjipto.graph.store import GraphStore
 from tjipto.core.manifest import read_jsonl
@@ -168,6 +169,9 @@ class GraphContractTest(unittest.TestCase):
             if row.get("chunk_id"):
                 self.assertIn(row["chunk_id"], chunk_ids)
 
+    def test_uud_baseline_validator_passes(self) -> None:
+        self.assertEqual(validate_uud_artifact_baseline(ROOT), ())
+
     def test_metadata_graph_edges_exclude_source_role_level_amends(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/metadata_graph_edges.jsonl")
         self.assertEqual(len(edges), 449)
@@ -319,8 +323,8 @@ class GraphContractTest(unittest.TestCase):
     def test_uud_ingestion_reproducibility_runner_passes(self) -> None:
         result = validate_corpus_ingestion_artifacts("uud", ROOT)
         self.assertEqual(result["status"], "valid", result["errors"][:5])
-        self.assertEqual(result["counts"]["evidence_records"], 438)
-        self.assertEqual(result["counts"]["bbox_records"], 1388)
+        self.assertEqual(result["counts"]["evidence_records"], 464)
+        self.assertEqual(result["counts"]["bbox_records"], 1542)
         self.assertEqual(validate_uud_ingestion_artifacts(ROOT), result)
 
     def _compact_text(self, text: str) -> str:
