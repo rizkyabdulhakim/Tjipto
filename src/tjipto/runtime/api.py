@@ -138,6 +138,8 @@ def _public_bbox(row: dict) -> dict:
 
 
 def _public_reason(reason):
+    if reason in {"metadata_not_found", "relation_not_found"}:
+        return "insufficient_evidence"
     return reason if reason in {"invalid_query", "unsupported_corpus", "citation_not_found", "insufficient_evidence"} else None
 
 

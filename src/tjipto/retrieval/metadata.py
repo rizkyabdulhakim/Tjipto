@@ -92,10 +92,13 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     if field is None:
         return ()
     role = _source_role(query)
+    requires_penetapan = _asks_enactment_context((query or "").casefold())
     rows = []
     grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}
     for row in store.document_metadata:
         if role is not None and row.get("source_role") != role:
+            continue
+        if requires_penetapan and row.get("field_statuses", {}).get("penetapan") != "grounded":
             continue
         if row.get("field_statuses", {}).get(field) != "grounded":
             continue
@@ -119,12 +122,66 @@ def _metadata_field(query: str) -> str | None:
     folded = (query or "").casefold()
     if not any(word in folded for word in ("u" "ud", "perubahan", "amendment", "naskah")):
         return None
-    if "ditetapkan oleh" in folded:
+    if _asks_promulgation(folded):
+        return "promulgation"
+    if _asks_revocation(folded):
+        return "revocation"
+    if _asks_signatories(folded):
+        return "signatories"
+    if _asks_enactment_place(folded):
+        return "place"
+    if _asks_institution(folded):
         return "institution"
+    if _asks_enactment_date(folded):
+        return "penetapan"
     for field, patterns in FIELD_PATTERNS.items():
         if any(pattern in folded for pattern in patterns):
             return field
     return None
+
+
+def _asks_promulgation(folded: str) -> bool:
+    return any(pattern in folded for pattern in ("diundangkan", "pengundangan", "promulgation"))
+
+
+def _asks_revocation(folded: str) -> bool:
+    return any(pattern in folded for pattern in ("dicabut", "pencabutan", "revocation"))
+
+
+def _asks_signatories(folded: str) -> bool:
+    return any(
+        pattern in folded
+        for pattern in ("penanda tangan", "ditandatangani", "ketua", "wakil ketua", "amien rais", "sutjipto")
+    )
+
+
+def _asks_enactment_place(folded: str) -> bool:
+    return (
+        "tempat" in folded and any(pattern in folded for pattern in ("penetapan", "ditetapkan"))
+    ) or (
+        "ditetapkan" in folded and any(pattern in folded for pattern in ("di mana", "dimana"))
+    )
+
+
+def _asks_institution(folded: str) -> bool:
+    return (
+        any(pattern in folded for pattern in ("lembaga", "institusi", "majelis", "mpr", "ditetapkan oleh"))
+        or "yang menetapkan" in folded
+        or re.search(r"\bpenetap\b", folded) is not None
+    )
+
+
+def _asks_enactment_date(folded: str) -> bool:
+    return (
+        "tanggal penetapan" in folded
+        or "tanggal ditetapkan" in folded
+        or "kapan ditetapkan" in folded
+        or ("penetapan" in folded and any(pattern in folded for pattern in ("tanggal", "kapan")))
+    )
+
+
+def _asks_enactment_context(folded: str) -> bool:
+    return any(pattern in folded for pattern in ("penetapan", "ditetapkan", "menetapkan")) or re.search(r"\bpenetap\b", folded) is not None
 
 
 def _source_role(query: str) -> str | None:

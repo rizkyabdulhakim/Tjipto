@@ -251,6 +251,41 @@ class RuntimeContractTest(unittest.TestCase):
         institution = self.service.ask("uud", "perubahan kedua UUD ditetapkan oleh siapa")
         self.assertEqual(institution["route"], "metadata_fact")
         self.assertEqual(institution["metadata_facts"][0]["field"], "institution")
+        self.assertIn("MAJELIS PERMUSYAWARATAN RAKYAT", institution["answer"])
+
+        generic_institution = self.service.ask("uud", "siapa yang menetapkan UUD")
+        self.assertEqual(generic_institution["status"], "answer_ready")
+        self.assertEqual(generic_institution["route"], "metadata_fact")
+        self.assertEqual(generic_institution["metadata_facts"][0]["field"], "institution")
+
+        first_institution = self.service.ask("uud", "lembaga penetap perubahan pertama UUD")
+        self.assertEqual(first_institution["status"], "answer_ready")
+        self.assertEqual(first_institution["metadata_facts"][0]["field"], "institution")
+        self.assertIn("MAJELIS PERMUSYAWARATAN RAKYAT", first_institution["answer"])
+
+        second_place = self.service.ask("uud", "tempat penetapan perubahan kedua UUD")
+        self.assertEqual(second_place["status"], "answer_ready")
+        self.assertEqual(second_place["metadata_facts"][0]["field"], "place")
+        self.assertEqual(second_place["metadata_facts"][0]["answer"], "Jakarta")
+        self.assertNotIn("18 Agustus 2000", second_place["answer"])
+
+        second_place_natural = self.service.ask("uud", "ditetapkan di mana perubahan kedua UUD")
+        self.assertEqual(second_place_natural["status"], "answer_ready")
+        self.assertEqual(second_place_natural["metadata_facts"][0]["field"], "place")
+        self.assertEqual(second_place_natural["metadata_facts"][0]["answer"], "Jakarta")
+
+        first_promulgation = self.service.ask("uud", "tanggal pengundangan perubahan pertama UUD")
+        self.assertEqual(first_promulgation["status"], "insufficient_evidence")
+        self.assertEqual(first_promulgation["route"], "metadata_fact")
+        self.assertEqual(first_promulgation["intent"], "metadata_lookup")
+        self.assertFalse(first_promulgation["metadata_facts"])
+        self.assertFalse(first_promulgation["citations"])
+        self.assertNotIn("19 Oktober 1999", first_promulgation["answer"])
+
+        revocation = self.service.ask("uud", "tanggal pencabutan perubahan kedua UUD")
+        self.assertEqual(revocation["status"], "insufficient_evidence")
+        self.assertEqual(revocation["route"], "metadata_fact")
+        self.assertFalse(revocation["metadata_facts"])
 
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
         result = self.service.ask("uud", "apa saja ayat dalam Pasal 1", limit=5)
@@ -268,6 +303,13 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(bab["route"], "legal_relation")
         self.assertEqual(bab["legal_relations"][0]["target_label"], "Pasal 1")
 
+        parent = self.service.ask("uud", "Pasal 1 berada di BAB apa")
+        self.assertEqual(parent["status"], "answer_ready")
+        self.assertEqual(parent["route"], "legal_relation")
+        self.assertEqual(parent["intent"], "legal_relation_lookup")
+        self.assertEqual(parent["legal_relations"][0]["relation_type"], "pasal_parent_bab")
+        self.assertEqual(parent["legal_relations"][0]["target_label"], "BAB I")
+
     def test_ask_does_not_promote_ungrounded_legal_relations(self) -> None:
         result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")
         self.assertEqual(result["status"], "insufficient_evidence")
@@ -276,6 +318,19 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(result["evidence"])
         self.assertFalse(result["citations"])
         self.assertFalse(result["viewer_refs"])
+
+        exact_priority = self.service.ask("uud", "relasi amandemen Pasal 1")
+        self.assertEqual(exact_priority["status"], "insufficient_evidence")
+        self.assertEqual(exact_priority["route"], "legal_relation")
+        self.assertEqual(exact_priority["intent"], "legal_relation_lookup")
+        self.assertFalse(exact_priority["evidence"])
+        self.assertFalse(exact_priority["citations"])
+
+        version = self.service.ask("uud", "versi historis Pasal 1 diubah oleh apa")
+        self.assertEqual(version["status"], "insufficient_evidence")
+        self.assertEqual(version["route"], "legal_relation")
+        self.assertEqual(version["intent"], "legal_relation_lookup")
+        self.assertFalse(version["legal_relations"])
 
     def test_viewer_payload_is_multi_page_and_public_safe(self) -> None:
         evidence_id = "uud_current_consolidated_final_citation_evidence_00232"

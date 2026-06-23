@@ -154,10 +154,24 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(metadata["route"], "metadata_fact")
         self.assertEqual(metadata["metadata_facts"][0]["field"], "date")
 
+        place = self._post("/legal/uud/ask", {"query": "tempat penetapan perubahan kedua UUD"})
+        self.assertEqual(place["status"], "answer_ready")
+        self.assertEqual(place["route"], "metadata_fact")
+        self.assertEqual(place["metadata_facts"][0]["field"], "place")
+        self.assertEqual(place["metadata_facts"][0]["answer"], "Jakarta")
+
         relation = self._post("/legal/uud/ask", {"query": "apa saja ayat dalam Pasal 1"})
         self.assertEqual(relation["status"], "answer_ready")
         self.assertEqual(relation["route"], "legal_relation")
         self.assertEqual({row["target_label"] for row in relation["legal_relations"]}, {"(1)", "(2)", "(3)"})
+
+        unsupported_relation = self._post("/legal/uud/ask", {"query": "relasi amandemen Pasal 1"})
+        self.assertEqual(unsupported_relation["status"], "insufficient_evidence")
+        self.assertEqual(unsupported_relation["route"], "legal_relation")
+        self.assertEqual(unsupported_relation["intent"], "legal_relation_lookup")
+        self.assertEqual(unsupported_relation["citations"], [])
+        self.assertEqual(unsupported_relation["viewer_refs"], [])
+        self.assertEqual(unsupported_relation["insufficient_reasons"], ["insufficient_evidence"])
 
         weak = self._post("/legal/uud/ask", {"query": "aturan KUHP tentang pencurian"})
         self.assertEqual(weak["status"], "insufficient_evidence")
