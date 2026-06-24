@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from pathlib import Path
-import re
-import unicodedata
 
 from tjipto.corpora.uud.bbox_builder import (
     aggregate_bbox_precision,
@@ -19,134 +17,21 @@ from tjipto.corpora.uud.manifest import refresh_manifest, write_json, write_json
 from tjipto.corpora.uud.metadata_builder import rebuild_metadata_grounding, repair_metadata_graph_edges
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval, retrieval_text
-from tjipto.corpora.uud.specs import FINAL_DIR
+from tjipto.corpora.uud.specs import FINAL_DIR, INSERTED_BAB_SPECS
+from tjipto.corpora.uud.structure_builder import (
+    find_unit,
+    next_numeric_id,
+    numeric_suffix,
+    page_span_for_text,
+    slice_before,
+    slice_between,
+    slug,
+    split_effective_clause,
+    trim_before,
+)
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import LEGAL_EDGE_TYPES, validate_uud_artifact_dir
 from tjipto.core.manifest import read_json, read_jsonl
-
-
-INSERTED_BAB_SPECS = (
-    {
-        "source_document_id": "uud::current_consolidated",
-        "label": "BAB VIIA",
-        "title": "DEWAN PERWAKILAN DAERAH",
-        "page_number": 14,
-        "start": "BAB VIIA",
-        "end": "Pasal 22C",
-        "parent_label": "BAB VII",
-        "child_labels": ("Pasal 22C", "Pasal 22D"),
-        "trim_targets": ("Pasal 22B",),
-        "trim_bab": "BAB VII",
-    },
-    {
-        "source_document_id": "uud::current_consolidated",
-        "label": "BAB VIIB",
-        "title": "PEMILIHAN UMUM",
-        "page_number": 15,
-        "start": "BAB VIIB",
-        "end": "Pasal 22E",
-        "parent_label": "BAB VII",
-        "child_labels": ("Pasal 22E",),
-        "trim_targets": ("Pasal 22D", ("BAB VIIA", "Pasal 22D", "(4)")),
-        "trim_bab": "BAB VII",
-    },
-    {
-        "source_document_id": "uud::current_consolidated",
-        "label": "BAB VIIIA",
-        "title": "BADAN PEMERIKSA KEUANGAN",
-        "page_number": 16,
-        "start": "BAB VIIIA",
-        "end": "Pasal 23E",
-        "parent_label": "BAB VIII",
-        "child_labels": ("Pasal 23E", "Pasal 23F", "Pasal 23G"),
-        "trim_targets": ("Pasal 23D",),
-        "trim_bab": "BAB VIII",
-    },
-    {
-        "source_document_id": "uud::current_consolidated",
-        "label": "BAB IXA",
-        "title": "WILAYAH NEGARA",
-        "page_number": 19,
-        "start": "BAB IXA",
-        "end": "Pasal 25A",
-        "parent_label": "BAB IX",
-        "child_labels": ("Pasal 25A",),
-        "trim_targets": ("Pasal 25",),
-        "trim_bab": "BAB IX",
-    },
-    {
-        "source_document_id": "uud::current_consolidated",
-        "label": "BAB XA",
-        "title": "HAK ASASI MANUSIA",
-        "page_number": 20,
-        "start": "BAB XA",
-        "end": "Pasal 28A",
-        "parent_label": "BAB X",
-        "child_labels": ("Pasal 28A", "Pasal 28B", "Pasal 28C", "Pasal 28D", "Pasal 28E", "Pasal 28F", "Pasal 28G", "Pasal 28H", "Pasal 28I", "Pasal 28J"),
-        "trim_targets": ("Pasal 28",),
-        "trim_bab": "BAB X",
-    },
-    {
-        "source_document_id": "uud::amendment_2_historical",
-        "label": "BAB IXA",
-        "title": "WILAYAH NEGARA",
-        "page_number": 3,
-        "start": "BAB IXA",
-        "end": "Pasal 25E",
-        "parent_label": None,
-        "child_labels": ("Pasal 25E",),
-        "trim_targets": (),
-        "trim_bab": None,
-    },
-    {
-        "source_document_id": "uud::amendment_2_historical",
-        "label": "BAB XA",
-        "title": "HAK ASASI MANUSIA",
-        "page_number": 4,
-        "start": "BAB XA",
-        "end": "Pasal 28A",
-        "parent_label": "BAB X",
-        "child_labels": ("Pasal 28A", "Pasal 28B", "Pasal 28C", "Pasal 28D", "Pasal 28E", "Pasal 28F", "Pasal 28G", "Pasal 28H", "Pasal 28I", "Pasal 28J"),
-        "trim_targets": ("Pasal 27",),
-        "trim_bab": "BAB X",
-    },
-    {
-        "source_document_id": "uud::amendment_3_historical",
-        "label": "BAB VIIA",
-        "title": "DEWAN PERWAKILAN DAERAH",
-        "page_number": 4,
-        "start": "BAB VIIA",
-        "end": "Pasal 22C",
-        "parent_label": None,
-        "child_labels": ("Pasal 22C", "Pasal 22D"),
-        "trim_targets": ("Pasal 17",),
-        "trim_bab": None,
-    },
-    {
-        "source_document_id": "uud::amendment_3_historical",
-        "label": "BAB VIIB",
-        "title": "PEMILIHAN UMUM",
-        "page_number": 5,
-        "start": "BAB VIIB",
-        "end": "Pasal 22E",
-        "parent_label": None,
-        "child_labels": ("Pasal 22E",),
-        "trim_targets": ("Pasal 22D",),
-        "trim_bab": None,
-    },
-    {
-        "source_document_id": "uud::amendment_3_historical",
-        "label": "BAB VIIIA",
-        "title": "BADAN PEMERIKSA KEUANGAN",
-        "page_number": 6,
-        "start": "BAB VIIIA",
-        "end": "Pasal 23E",
-        "parent_label": None,
-        "child_labels": ("Pasal 23E", "Pasal 23F", "Pasal 23G"),
-        "trim_targets": (),
-        "trim_bab": None,
-    },
-)
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
@@ -189,8 +74,8 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
 
     source_documents = {row["source_document_id"]: row for row in read_jsonl(final_dir / "source_documents.jsonl")}
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
-    legal_units = [row for row in legal_units if _numeric_suffix(row["legal_unit_id"]) <= 609]
-    chunks = [row for row in chunks if _numeric_suffix(row["chunk_id"]) <= 609]
+    legal_units = [row for row in legal_units if numeric_suffix(row["legal_unit_id"]) <= 609]
+    chunks = [row for row in chunks if numeric_suffix(row["chunk_id"]) <= 609]
     evidence = [row for row in evidence if not row["evidence_id"].startswith("uud_instrument_final_citation_evidence::")]
     bbox_rows = [row for row in bbox_rows if not row["evidence_id"].startswith("uud_instrument_final_citation_evidence::")]
     retrieval_units = [row for row in retrieval_units if not row["retrieval_unit_id"].startswith("uud_retrieval_unit::uud_instrument_final_citation_evidence::")]
@@ -211,14 +96,14 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_id: fitz.open(repo_root / meta["path"])
         for source_id, meta in source_documents.items()
     }
-    pdf_lines = {
+    pdf_lines_by_source = {
         source_id: pdf_lines(doc)
         for source_id, doc in docs.items()
     }
-    page_text_spans = build_page_text_spans(source_documents=source_documents, pdf_lines=pdf_lines)
+    page_text_spans = build_page_text_spans(source_documents=source_documents, pdf_lines=pdf_lines_by_source)
 
-    next_legal_id = _next_numeric_id(legal_units, "legal_unit_id")
-    next_chunk_id = _next_numeric_id(chunks, "chunk_id")
+    next_legal_id = next_numeric_id(legal_units, "legal_unit_id")
+    next_chunk_id = next_numeric_id(chunks, "chunk_id")
     next_evidence_id = 1
 
     def allocate_legal_id() -> str:
@@ -240,18 +125,18 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         return value
 
     def trim_unit(source_document_id: str, unit_label: str, marker: str, *, hierarchy_suffix: tuple[str, ...] | None = None) -> None:
-        unit = _find_unit(legal_units, source_document_id, unit_label, hierarchy_suffix=hierarchy_suffix)
+        unit = find_unit(legal_units, source_document_id, unit_label, hierarchy_suffix=hierarchy_suffix)
         chunk = chunks_by_unit[unit["legal_unit_id"]]
         if marker not in unit["text"]:
             return
-        trimmed = _trim_before(unit["text"], marker)
+        trimmed = trim_before(unit["text"], marker)
         unit["text"] = trimmed
-        unit["page_start"], unit["page_end"] = _page_span_for_text(pages_by_source, source_document_id, trimmed, unit["page_start"], unit["page_end"])
+        unit["page_start"], unit["page_end"] = page_span_for_text(pages_by_source, source_document_id, trimmed, unit["page_start"], unit["page_end"])
         chunk["text"] = trimmed
         chunk["page_range"] = {"start_page_number": unit["page_start"], "end_page_number": unit["page_end"]}
         existing = evidence_by_unit.get(unit["legal_unit_id"])
         if existing:
-            rebuild_evidence(existing, trimmed, pdf_lines[source_document_id], source_documents[source_document_id], bbox_by_evidence)
+            rebuild_evidence(existing, trimmed, pdf_lines_by_source[source_document_id], source_documents[source_document_id], bbox_by_evidence)
             rebuild_retrieval(existing, chunk, retrieval_units)
 
     def trim_bab(source_document_id: str, unit_label: str, marker: str) -> None:
@@ -259,16 +144,16 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         chunk = chunks_by_unit[unit["legal_unit_id"]]
         if marker not in unit["text"]:
             return
-        trimmed = _trim_before(unit["text"], marker)
+        trimmed = trim_before(unit["text"], marker)
         unit["text"] = trimmed
-        unit["page_start"], unit["page_end"] = _page_span_for_text(pages_by_source, source_document_id, trimmed, unit["page_start"], unit["page_end"])
+        unit["page_start"], unit["page_end"] = page_span_for_text(pages_by_source, source_document_id, trimmed, unit["page_start"], unit["page_end"])
         chunk["text"] = trimmed
         chunk["page_range"] = {"start_page_number": unit["page_start"], "end_page_number": unit["page_end"]}
 
     for spec in INSERTED_BAB_SPECS:
         source_id = spec["source_document_id"]
         page_text = pages_by_source[(source_id, spec["page_number"])]
-        bab_text = _slice_between(page_text, spec["start"], spec["end"])
+        bab_text = slice_between(page_text, spec["start"], spec["end"])
         for target in spec["trim_targets"]:
             if isinstance(target, tuple):
                 trim_unit(source_id, target[-1], spec["label"], hierarchy_suffix=target)
@@ -384,7 +269,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         chunks.append(chunk)
         if not build_evidence:
             return legal_unit_id
-        evidence_id = allocate_evidence_id(source_role(source_id), _slug(unit_label or unit_type))
+        evidence_id = allocate_evidence_id(source_role(source_id), slug(unit_label or unit_type))
         bbox_records = build_bbox_rows(
             evidence_id=evidence_id,
             source_meta=source_meta,
@@ -392,7 +277,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
             text=text,
             page_start=page_start,
             page_end=page_end,
-            line_entries=pdf_lines[source_id],
+            line_entries=pdf_lines_by_source[source_id],
         )
         quoted_text = "\n".join(row["text"] for row in bbox_records)
         evidence_row = {
@@ -439,14 +324,14 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     source_id = "uud::amendment_1_historical"
     page1 = pages_by_source[(source_id, 1)]
     page3 = pages_by_source[(source_id, 3)]
-    recital_text = _slice_before(page1, "Setelah mempelajari").strip()
-    scope_text = _slice_between(page1, "Setelah mempelajari", "selengkapnya menjadi berbunyi sebagai berikut :").strip() + " selengkapnya menjadi berbunyi sebagai berikut :"
+    recital_text = slice_before(page1, "Setelah mempelajari").strip()
+    scope_text = slice_between(page1, "Setelah mempelajari", "selengkapnya menjadi berbunyi sebagai berikut :").strip() + " selengkapnya menjadi berbunyi sebagai berikut :"
     append_instrument_unit(source_id, "amendment_recital_record", "Perubahan Pertama Recital", recital_text, 1, 1)
     append_instrument_unit(source_id, "amendment_scope_record", "Perubahan Pertama Scope", scope_text, 1, 1)
     trim_unit(source_id, "Pasal 21", "Naskah perubahan ini merupakan bagian tak terpisahkan")
-    closing = _slice_between(page3, "Naskah perubahan ini merupakan", "Perubahan tersebut diputuskan").strip()
-    decision, effective = _split_effective_clause(_slice_between(page3, "Perubahan tersebut diputuskan", "Ditetapkan di Jakarta").strip())
-    determination = _slice_between(page3, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()
+    closing = slice_between(page3, "Naskah perubahan ini merupakan", "Perubahan tersebut diputuskan").strip()
+    decision, effective = split_effective_clause(slice_between(page3, "Perubahan tersebut diputuskan", "Ditetapkan di Jakarta").strip())
+    determination = slice_between(page3, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()
     signatory = page3[page3.index("MAJELIS PERMUSYAWARATAN RAKYAT"):].strip()
     append_instrument_unit(source_id, "instrument_closing_record", "Perubahan Pertama Closing", closing, 3, 3)
     append_instrument_unit(source_id, "decision_clause_record", "Perubahan Pertama Decision", decision, 3, 3)
@@ -458,13 +343,13 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     source_id = "uud::amendment_2_historical"
     page1 = pages_by_source[(source_id, 1)]
     page8 = pages_by_source[(source_id, 8)]
-    recital_text = _slice_before(page1, "Setelah Mempelajari").strip()
-    scope_text = _slice_between(page1, "Setelah Mempelajari", "sehingga selengkapnya berbunyi sebagai berikut :").strip() + " sehingga selengkapnya berbunyi sebagai berikut :"
+    recital_text = slice_before(page1, "Setelah Mempelajari").strip()
+    scope_text = slice_between(page1, "Setelah Mempelajari", "sehingga selengkapnya berbunyi sebagai berikut :").strip() + " sehingga selengkapnya berbunyi sebagai berikut :"
     append_instrument_unit(source_id, "amendment_recital_record", "Perubahan Kedua Recital", recital_text, 1, 1)
     append_instrument_unit(source_id, "amendment_scope_record", "Perubahan Kedua Scope", scope_text, 1, 1)
     trim_bab(source_id, "BAB XV", "Ditetapkan di Jakarta")
     trim_unit(source_id, "Pasal 36C", "Ditetapkan di Jakarta")
-    determination = _slice_between(page8, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()
+    determination = slice_between(page8, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()
     signatory = page8[page8.index("MAJELIS PERMUSYAWARATAN RAKYAT"):].strip()
     append_instrument_unit(source_id, "determination_clause_record", "Perubahan Kedua Determination", determination, 8, 8)
     append_instrument_unit(source_id, "signatory_block_record", "Perubahan Kedua Signatories", signatory, 8, 8)
@@ -474,15 +359,15 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     page1 = pages_by_source[(source_id, 1)]
     page8 = pages_by_source[(source_id, 8)]
     page9 = pages_by_source[(source_id, 9)]
-    recital_text = _slice_before(page1, "Setelah mempelajari").strip()
-    scope_text = _slice_between(page1, "Setelah mempelajari", "sehingga selengkapnya menjadi berbunyi sebagai berikut:").strip() + " sehingga selengkapnya menjadi berbunyi sebagai berikut:"
+    recital_text = slice_before(page1, "Setelah mempelajari").strip()
+    scope_text = slice_between(page1, "Setelah mempelajari", "sehingga selengkapnya menjadi berbunyi sebagai berikut:").strip() + " sehingga selengkapnya menjadi berbunyi sebagai berikut:"
     append_instrument_unit(source_id, "amendment_recital_record", "Perubahan Ketiga Recital", recital_text, 1, 1)
     append_instrument_unit(source_id, "amendment_scope_record", "Perubahan Ketiga Scope", scope_text, 1, 1)
     trim_unit(source_id, "Pasal 24C", "Naskah perubahan ini merupakan bagian tak terpisahkan")
     trim_unit(source_id, "(6)", "Naskah perubahan ini merupakan bagian tak terpisahkan", hierarchy_suffix=("Pasal 24C", "(6)"))
-    closing = _slice_between(page8, "Naskah perubahan ini merupakan", "Perubahan tersebut diputuskan").strip()
-    decision, effective = _split_effective_clause(page8[page8.index("Perubahan tersebut diputuskan"):].strip())
-    determination = _slice_between(page9, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()
+    closing = slice_between(page8, "Naskah perubahan ini merupakan", "Perubahan tersebut diputuskan").strip()
+    decision, effective = split_effective_clause(page8[page8.index("Perubahan tersebut diputuskan"):].strip())
+    determination = slice_between(page9, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()
     signatory = page9[page9.index("MAJELIS PERMUSYAWARATAN RAKYAT"):].strip()
     append_instrument_unit(source_id, "instrument_closing_record", "Perubahan Ketiga Closing", closing, 8, 8)
     append_instrument_unit(source_id, "decision_clause_record", "Perubahan Ketiga Decision", decision, 8, 8)
@@ -495,13 +380,13 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     page1 = pages_by_source[(source_id, 1)]
     page5 = pages_by_source[(source_id, 5)]
     page6 = pages_by_source[(source_id, 6)]
-    recital_text = _slice_before(page1, "(a)").strip()
-    scope_text = _slice_between(page1, "(a)", "berikut.").strip() + " berikut."
+    recital_text = slice_before(page1, "(a)").strip()
+    scope_text = slice_between(page1, "(a)", "berikut.").strip() + " berikut."
     append_instrument_unit(source_id, "amendment_recital_record", "Perubahan Keempat Recital", recital_text, 1, 1)
     scope_unit_id = append_instrument_unit(source_id, "amendment_scope_record", "Perubahan Keempat Scope", scope_text, 1, 1)
     for clause in ("(a)", "(b)", "(c)", "(d)", "(e)"):
         next_clause = {"(a)": "(b)", "(b)": "(c)", "(c)": "(d)", "(d)": "(e)", "(e)": "berikut."}[clause]
-        clause_text = _slice_between(page1, clause, next_clause).strip()
+        clause_text = slice_between(page1, clause, next_clause).strip()
         append_instrument_unit(
             source_id,
             "instrument_clause_record",
@@ -512,9 +397,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
             hierarchy=["Perubahan Keempat Scope", clause],
             parent_legal_unit_ids=[scope_unit_id],
         )
-    aturan_text = _slice_between(page5 + "\n" + page6, "ATURAN TAMBAHAN", "Perubahan tersebut diputuskan").strip()
-    pasal_i_text = _slice_between(page5, "Pasal I", "Pasal III").strip()
-    pasal_iii_text = _slice_between(page6, "Pasal III", "Perubahan tersebut diputuskan").strip()
+    aturan_text = slice_between(page5 + "\n" + page6, "ATURAN TAMBAHAN", "Perubahan tersebut diputuskan").strip()
+    pasal_i_text = slice_between(page5, "Pasal I", "Pasal III").strip()
+    pasal_iii_text = slice_between(page6, "Pasal III", "Perubahan tersebut diputuskan").strip()
     anomaly_ref = "source_typo_reference::uud_source_typo_reference_00001"
     aturan_unit_id = append_instrument_unit(
         source_id,
@@ -563,8 +448,8 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         exclusion_ref=anomaly_ref,
         build_evidence=False,
     )
-    decision, effective = _split_effective_clause(_slice_between(page6, "Perubahan tersebut diputuskan", "Ditetapkan di Jakarta").strip())
-    determination = _slice_between(page6, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()
+    decision, effective = split_effective_clause(slice_between(page6, "Perubahan tersebut diputuskan", "Ditetapkan di Jakarta").strip())
+    determination = slice_between(page6, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()
     signatory = page6[page6.index("MAJELIS PERMUSYAWARATAN RAKYAT"):].strip()
     append_instrument_unit(source_id, "decision_clause_record", "Perubahan Keempat Decision", decision, 6, 6)
     append_instrument_unit(source_id, "effective_clause_record", "Perubahan Keempat Effective", effective, 6, 6, build_evidence=False)
@@ -692,79 +577,3 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
 def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
     final_dir = (repo_root / FINAL_DIR).resolve()
     return validate_uud_artifact_dir(final_dir)
-
-
-def _next_numeric_id(rows: list[dict], key: str) -> int:
-    max_value = 0
-    for row in rows:
-        value = _numeric_suffix(str(row.get(key, "")))
-        if value:
-            max_value = max(max_value, value)
-    return max_value + 1
-
-
-def _numeric_suffix(value: str) -> int:
-    match = re.search(r"(\d+)$", value)
-    return int(match.group(1)) if match else 0
-
-
-def _find_unit(
-    legal_units: list[dict],
-    source_document_id: str,
-    unit_label: str,
-    *,
-    hierarchy_suffix: tuple[str, ...] | None = None,
-) -> dict:
-    candidates = [
-        row
-        for row in legal_units
-        if row["source_document_id"] == source_document_id and row.get("unit_label") == unit_label
-    ]
-    if hierarchy_suffix is not None:
-        compact_suffix = tuple(_compact(part) for part in hierarchy_suffix)
-        candidates = [
-            row
-            for row in candidates
-            if tuple(_compact(part) for part in [*(row.get("hierarchy") or ()), row.get("unit_label")])[-len(compact_suffix):] == compact_suffix
-        ]
-    if len(candidates) != 1:
-        raise KeyError(f"unable_to_resolve_unit:{source_document_id}:{unit_label}:{hierarchy_suffix}")
-    return candidates[0]
-
-
-def _slice_before(text: str, marker: str) -> str:
-    return text[:text.index(marker)]
-
-
-def _slice_between(text: str, start: str, end: str) -> str:
-    start_index = text.index(start)
-    end_index = text.index(end, start_index + len(start))
-    return text[start_index:end_index].strip()
-
-
-def _trim_before(text: str, marker: str) -> str:
-    return text[:text.index(marker)].rstrip() + "\n"
-
-
-def _split_effective_clause(text: str) -> tuple[str, str]:
-    marker = ", dan mulai berlaku"
-    if marker not in text:
-        return text, "dan mulai berlaku pada tanggal ditetapkan."
-    head, tail = text.split(marker, 1)
-    return head.strip() + ".", ("dan mulai berlaku" + tail).strip()
-
-
-def _page_span_for_text(pages_by_source: dict[tuple[str, int], str], source_id: str, text: str, page_start: int, page_end: int) -> tuple[int, int]:
-    for page_number in range(page_start, page_end + 1):
-        if _compact(text) in _compact(pages_by_source[(source_id, page_number)]):
-            return page_number, page_number
-    return page_start, page_end
-
-
-def _compact(text: str) -> str:
-    text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "").replace("\u00c2", "")
-    return re.sub(r"\s+", " ", text).strip().casefold()
-
-
-def _slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", (text or "").casefold()).strip("_")

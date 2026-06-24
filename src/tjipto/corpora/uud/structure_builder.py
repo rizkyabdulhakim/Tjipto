@@ -1,2 +1,86 @@
 from __future__ import annotations
 
+import re
+import unicodedata
+
+
+def next_numeric_id(rows: list[dict], key: str) -> int:
+    max_value = 0
+    for row in rows:
+        value = numeric_suffix(str(row.get(key, "")))
+        if value:
+            max_value = max(max_value, value)
+    return max_value + 1
+
+
+def numeric_suffix(value: str) -> int:
+    match = re.search(r"(\d+)$", value)
+    return int(match.group(1)) if match else 0
+
+
+def find_unit(
+    legal_units: list[dict],
+    source_document_id: str,
+    unit_label: str,
+    *,
+    hierarchy_suffix: tuple[str, ...] | None = None,
+) -> dict:
+    candidates = [
+        row
+        for row in legal_units
+        if row["source_document_id"] == source_document_id and row.get("unit_label") == unit_label
+    ]
+    if hierarchy_suffix is not None:
+        compact_suffix = tuple(compact(part) for part in hierarchy_suffix)
+        candidates = [
+            row
+            for row in candidates
+            if tuple(compact(part) for part in [*(row.get("hierarchy") or ()), row.get("unit_label")])[-len(compact_suffix):] == compact_suffix
+        ]
+    if len(candidates) != 1:
+        raise KeyError(f"unable_to_resolve_unit:{source_document_id}:{unit_label}:{hierarchy_suffix}")
+    return candidates[0]
+
+
+def slice_before(text: str, marker: str) -> str:
+    return text[:text.index(marker)]
+
+
+def slice_between(text: str, start: str, end: str) -> str:
+    start_index = text.index(start)
+    end_index = text.index(end, start_index + len(start))
+    return text[start_index:end_index].strip()
+
+
+def trim_before(text: str, marker: str) -> str:
+    return text[:text.index(marker)].rstrip() + "\n"
+
+
+def split_effective_clause(text: str) -> tuple[str, str]:
+    marker = ", dan mulai berlaku"
+    if marker not in text:
+        return text, "dan mulai berlaku pada tanggal ditetapkan."
+    head, tail = text.split(marker, 1)
+    return head.strip() + ".", ("dan mulai berlaku" + tail).strip()
+
+
+def page_span_for_text(
+    pages_by_source: dict[tuple[str, int], str],
+    source_id: str,
+    text: str,
+    page_start: int,
+    page_end: int,
+) -> tuple[int, int]:
+    for page_number in range(page_start, page_end + 1):
+        if compact(text) in compact(pages_by_source[(source_id, page_number)]):
+            return page_number, page_number
+    return page_start, page_end
+
+
+def compact(text: str) -> str:
+    text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "").replace("\u00c2", "")
+    return re.sub(r"\s+", " ", text).strip().casefold()
+
+
+def slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", (text or "").casefold()).strip("_")
