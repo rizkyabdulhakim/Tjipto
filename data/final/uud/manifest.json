@@ -15,8 +15,8 @@
     "legal_units": 651,
     "metadata_assertions": 1319,
     "metadata_graph_edges": 449,
-    "metadata_grounding": 5,
-    "metadata_grounding_records": 5,
+    "metadata_grounding": 37,
+    "metadata_grounding_records": 37,
     "not_promoted_amends_edges": 8,
     "pages": 63,
     "retrieval_units": 464,
@@ -43,8 +43,8 @@
       "sha256": "d7285dcae633dde30665fc6c4cca875fad195f37c88fae5f145ce2f85c86545b"
     },
     "document_metadata.jsonl": {
-      "bytes": 13197,
-      "sha256": "e6ca798d563b303d99f13865f19c7bc009732c4652faa5b43763cbf64146502f"
+      "bytes": 17662,
+      "sha256": "07dd8b61a83eea7585d977883cebcf686b6e1bfd46c332b64bcf21e9d4d51343"
     },
     "evidence_registry.jsonl": {
       "bytes": 515888,
@@ -75,12 +75,12 @@
       "sha256": "fb01c39991503b12814edd89e03df77deb24d9b86579c3baa14949da1fc0b646"
     },
     "metadata_grounding.jsonl": {
-      "bytes": 6341,
-      "sha256": "824f9894c03455f7549efa6eba3c9a8d9d343256d13c89005910c01e6a00c28d"
+      "bytes": 41885,
+      "sha256": "9ce67d2ba87311dc3c8d0bb89b6ee0c9010cce3f1e7831b5112239e18f56f7b7"
     },
     "metadata_grounding_registry.jsonl": {
-      "bytes": 4886,
-      "sha256": "d6a6c1ef5a2a536ae9b3cc3e527000225533d87d36f20417855195c0d7e24b13"
+      "bytes": 24778,
+      "sha256": "6a481c7d81855ab53d6daf101fa71fedce55e9f3fb5bee6bbaa0aeb18d1b1293"
     },
     "pages.jsonl": {
       "bytes": 116591,
@@ -115,8 +115,8 @@
       "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 24028,
-      "sha256": "8ff2f0e0b06b6f2c1b8d8691bb7105fcaa14b881ffc10949aaf33c6dbe5373d3"
+      "bytes": 23954,
+      "sha256": "4d4ac5fa712c3e6b0a98269f4508830919d956734eba5f74d148c2a9c4255f84"
     }
   },
   "fixtures": {

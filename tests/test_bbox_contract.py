@@ -33,8 +33,8 @@ class BBoxContractTest(unittest.TestCase):
             row["bbox_id"] for row in read_jsonl(FINAL / "metadata_grounding_registry.jsonl")
         }
         rows = read_jsonl(FINAL / "metadata_grounding.jsonl")
-        self.assertEqual(len(rows), 5)
-        self.assertEqual(len(metadata_grounding_ids), 5)
+        self.assertEqual(len(rows), 37)
+        self.assertEqual(len(metadata_grounding_ids), 37)
         for row in rows:
             self.assertEqual(row["status"], "accepted_metadata_grounding")
             self.assertFalse(row["viewer_highlightable"])

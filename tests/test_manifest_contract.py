@@ -30,8 +30,8 @@ class ManifestContractTest(unittest.TestCase):
                 "graph_nodes": 2339,
                 "legal_units": 651,
                 "metadata_assertions": 1319,
-                "metadata_grounding": 5,
-                "metadata_grounding_records": 5,
+                "metadata_grounding": 37,
+                "metadata_grounding_records": 37,
                 "metadata_graph_edges": 449,
                 "pages": 63,
                 "retrieval_units": 464,
@@ -54,7 +54,7 @@ class ManifestContractTest(unittest.TestCase):
         for name in report["referenced_artifacts"]:
             self.assertTrue((FINAL / name).exists(), name)
         self.assertEqual(report["structure_fidelity"]["status"], "corrected")
-        self.assertEqual(report["metadata_grounding_contract"]["status"], "clarified")
+        self.assertEqual(report["metadata_grounding_contract"]["status"], "field_grounded")
         actual_counts = {
             "chunks": len((FINAL / "chunks.jsonl").read_text(encoding="utf-8").splitlines()),
             "legal_units": len((FINAL / "legal_units.jsonl").read_text(encoding="utf-8").splitlines()),

@@ -489,8 +489,8 @@
     "inserted_bab_heading_owner_policy": "inserted heading bboxes may stay exact, but they are viewer_highlightable only when owned by bab_record evidence"
   },
   "metadata_grounding_contract": {
-    "status": "clarified",
-    "note": "metadata_grounding_id identifies non-normative metadata grounding rows; evidence_link.final_evidence_id remains backward-compatible when present and may point to metadata grounding records, not legal evidence_registry rows"
+    "status": "field_grounded",
+    "note": "field-level metadata grounding preserves block-level rows and keeps metadata viewer highlights fail-closed unless exact accepted support exists"
   },
   "final_artifact_counts": {
     "chunks": 651,

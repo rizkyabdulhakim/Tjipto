@@ -20,6 +20,11 @@ _UUD_1945 = {
         "institution": ("lembaga", "institusi", "majelis", "mpr", "ditetapkan oleh"),
         "place": ("tempat", "di mana", "dimana"),
         "signatories": ("penanda tangan", "ditandatangani", "ketua", "wakil ketua"),
+        "decision_date": ("diputuskan",),
+        "decision_session": ("rapat", "sidang"),
+        "effective_rule": ("berlaku",),
+        "source_publication": ("satu naskah", "source publication", "publikasi"),
+        "source_anomaly_status": ("konflik sumber", "anomali sumber", "typo sumber"),
         "official_title": ("judul", "nama resmi", "naskah"),
     },
     "metadata_roles": (

@@ -114,8 +114,10 @@ class EvidenceContractTest(unittest.TestCase):
             row["metadata_grounding_id"]: row
             for row in read_jsonl(FINAL / "metadata_grounding.jsonl")
         }
+        field_grounding = [row for row in grounding.values() if row.get("metadata_field")]
         docs = read_jsonl(FINAL / "document_metadata.jsonl")
         self.assertEqual(len(docs), 6)
+        self.assertGreater(len(field_grounding), 5)
         for row in docs:
             for refs in row["grounded_fields"].values():
                 for ref in refs:
@@ -132,8 +134,20 @@ class EvidenceContractTest(unittest.TestCase):
                 if row["date"]:
                     quote = grounding[row["grounded_fields"]["date"][0]]["quoted_text"]
                     self.assertIn(row["date"], quote)
-                    self.assertIn(row["place"], quote)
-                    self.assertIn(row["institution"], quote)
+                self.assertIn("penetapan", row["grounded_fields"])
+                self.assertIn("institution", row["grounded_fields"])
+                self.assertIn("signatories", row["grounded_fields"])
+            if row["source_role"] == "amendment_3_historical":
+                self.assertEqual(row["decision_date"], "9 November 2001")
+                self.assertEqual(row["field_statuses"]["decision_date"], "grounded")
+                self.assertEqual(row["field_statuses"]["decision_session"], "grounded")
+                self.assertEqual(row["field_statuses"]["effective_rule"], "grounded")
+                self.assertIn("decision_date", row["grounded_fields"])
+                self.assertIn("decision_session", row["grounded_fields"])
+                self.assertIn("effective_rule", row["grounded_fields"])
+            if row["source_role"] == "amendment_2_historical":
+                self.assertEqual(row["source_anomaly_status"], "source_article_renumbering_conflict")
+                self.assertEqual(row["field_statuses"]["source_anomaly_status"], "artifact_recorded")
             if row["source_role"] == "original_historical":
                 self.assertEqual(row["status"], "not_found_in_source")
                 self.assertIsNone(row["official_title"])
@@ -141,6 +155,12 @@ class EvidenceContractTest(unittest.TestCase):
                 row["field_statuses"].get("ln_tln"),
                 {"not_found_in_source", None},
             )
+        for row in field_grounding:
+            self.assertEqual(row["grounding_status"], "field_level_grounded")
+            self.assertFalse(row["viewer_highlightable"])
+            self.assertEqual(row["bbox_precision"], "page_grounded_only")
+            self.assertFalse(row["runtime_loadable"])
+            self.assertTrue(row["quote"])
 
     def test_instrument_units_and_historical_anomaly_are_preserved(self) -> None:
         units = read_jsonl(FINAL / "legal_units.jsonl")

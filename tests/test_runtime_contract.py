@@ -301,6 +301,27 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(first_promulgation["citations"])
         self.assertNotIn("19 Oktober 1999", first_promulgation["answer"])
 
+        effective = self.service.ask("uud", "tanggal berlaku perubahan ketiga UUD")
+        self.assertEqual(effective["status"], "answer_ready")
+        self.assertEqual(effective["route"], "metadata_fact")
+        self.assertEqual(effective["metadata_facts"][0]["field"], "effective_rule")
+        self.assertIn("mulai berlaku", effective["metadata_facts"][0]["answer"])
+
+        missing_effective = self.service.ask("uud", "tanggal berlaku perubahan kedua UUD")
+        self.assertEqual(missing_effective["status"], "insufficient_evidence")
+        self.assertEqual(missing_effective["route"], "metadata_fact")
+        self.assertFalse(missing_effective["metadata_facts"])
+
+        decision_date = self.service.ask("uud", "kapan diputuskan perubahan ketiga UUD")
+        self.assertEqual(decision_date["status"], "answer_ready")
+        self.assertEqual(decision_date["metadata_facts"][0]["field"], "decision_date")
+        self.assertEqual(decision_date["metadata_facts"][0]["answer"], "9 November 2001")
+
+        decision_session = self.service.ask("uud", "perubahan ketiga diputuskan dalam rapat apa")
+        self.assertEqual(decision_session["status"], "answer_ready")
+        self.assertEqual(decision_session["metadata_facts"][0]["field"], "decision_session")
+        self.assertIn("Rapat Paripurna", decision_session["metadata_facts"][0]["answer"])
+
         revocation = self.service.ask("uud", "tanggal pencabutan perubahan kedua UUD")
         self.assertEqual(revocation["status"], "insufficient_evidence")
         self.assertEqual(revocation["route"], "metadata_fact")

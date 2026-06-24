@@ -113,6 +113,12 @@ def _metadata_field(query: str, *, strategy: str) -> str | None:
         return "revocation"
     if _asks_signatories(folded):
         return "signatories"
+    if _asks_effective_rule(folded):
+        return "effective_rule"
+    if _asks_decision_date(folded):
+        return "decision_date"
+    if _asks_decision_session(folded):
+        return "decision_session"
     if _asks_enactment_place(folded):
         return "place"
     if _asks_institution(folded):
@@ -145,6 +151,27 @@ def _asks_enactment_place(folded: str) -> bool:
         "tempat" in folded and any(pattern in folded for pattern in ("penetapan", "ditetapkan"))
     ) or (
         "ditetapkan" in folded and any(pattern in folded for pattern in ("di mana", "dimana"))
+    )
+
+
+def _asks_effective_rule(folded: str) -> bool:
+    return (
+        "berlaku" in folded
+        and any(pattern in folded for pattern in ("tanggal", "kapan", "mulai"))
+    )
+
+
+def _asks_decision_date(folded: str) -> bool:
+    return (
+        "diputuskan" in folded
+        and any(pattern in folded for pattern in ("tanggal", "kapan"))
+    )
+
+
+def _asks_decision_session(folded: str) -> bool:
+    return (
+        "diputuskan" in folded
+        and any(pattern in folded for pattern in ("rapat apa", "sidang apa", "rapat", "sidang"))
     )
 
 
@@ -214,6 +241,9 @@ def _field_value(row: dict, field: str) -> str | None:
         return value.get("date_text") if isinstance(value, dict) else None
     if field in {"promulgation", "revocation"}:
         return None
+    if field in {"effective_rule", "decision_date", "decision_session", "source_anomaly_status"}:
+        value = row.get(field)
+        return str(value) if value else None
     value = row.get(field)
     if field == "signatories":
         signatories = row.get("signatories") or ()
