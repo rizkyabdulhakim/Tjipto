@@ -6,6 +6,13 @@ from pathlib import Path
 import re
 import unicodedata
 
+from tjipto.corpora.uud.bbox_builder import (
+    aggregate_bbox_precision,
+    apply_inserted_bab_heading_bbox_policy,
+    bbox_precision_counts,
+    build_bbox_rows,
+    pdf_lines,
+)
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.corpora.uud.manifest import refresh_manifest, write_json, write_jsonl
 from tjipto.corpora.uud.metadata_builder import repair_metadata_graph_edges
@@ -15,9 +22,6 @@ from tjipto.corpora.uud.specs import FINAL_DIR
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import LEGAL_EDGE_TYPES, validate_uud_artifact_dir
 from tjipto.core.manifest import read_json, read_jsonl
-
-
-INSERTED_BAB_HEADING_BBOX_MARKER = "::heading_bab_"
 
 
 INSERTED_BAB_SPECS = (
@@ -199,7 +203,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         bbox_by_evidence[row["evidence_id"]].append(row)
     for row in evidence:
         if row["evidence_id"] in bbox_by_evidence:
-            row["bbox_precision"] = _aggregate_bbox_precision(bbox_by_evidence[row["evidence_id"]])
+            row["bbox_precision"] = aggregate_bbox_precision(bbox_by_evidence[row["evidence_id"]])
             row["viewer_highlightable"] = any(item["viewer_highlightable"] for item in bbox_by_evidence[row["evidence_id"]])
 
     docs = {
@@ -207,7 +211,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         for source_id, meta in source_documents.items()
     }
     pdf_lines = {
-        source_id: _pdf_lines(doc)
+        source_id: pdf_lines(doc)
         for source_id, doc in docs.items()
     }
     page_text_spans = build_page_text_spans(source_documents=source_documents, pdf_lines=pdf_lines)
@@ -380,7 +384,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         if not build_evidence:
             return legal_unit_id
         evidence_id = allocate_evidence_id(source_role(source_id), _slug(unit_label or unit_type))
-        bbox_records = _build_bbox_rows(
+        bbox_records = build_bbox_rows(
             evidence_id=evidence_id,
             source_meta=source_meta,
             source_id=source_id,
@@ -392,7 +396,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         quoted_text = "\n".join(row["text"] for row in bbox_records)
         evidence_row = {
             "bbox_refs": [row["bbox_id"] for row in bbox_records],
-            "bbox_precision": _aggregate_bbox_precision(bbox_records),
+            "bbox_precision": aggregate_bbox_precision(bbox_records),
             "citation": unit_label,
             "corpus_id": "uud",
             "evidence_id": evidence_id,
@@ -580,7 +584,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         for evidence_id in sorted(bbox_by_evidence)
         for row in bbox_by_evidence[evidence_id]
     ]
-    _apply_inserted_bab_heading_bbox_policy(bbox_rows, evidence)
+    apply_inserted_bab_heading_bbox_policy(bbox_rows, evidence)
     bbox_rows.sort(key=lambda row: (row["source_document_id"], row["page_number"], row["bbox_id"]))
     legal_units.sort(key=lambda row: row["legal_unit_id"])
     chunks.sort(key=lambda row: row["chunk_id"])
@@ -625,7 +629,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         "graph_edges": len(graph_edges),
         "page_text_spans": len(page_text_spans),
     }
-    validation_report["bbox_precision_counts"] = _bbox_precision_counts(bbox_rows)
+    validation_report["bbox_precision_counts"] = bbox_precision_counts(bbox_rows)
     validation_report["bbox_highlightability_counts"] = {
         "viewer_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is True),
         "non_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is not True),
@@ -757,7 +761,7 @@ def _page_span_for_text(pages_by_source: dict[tuple[str, int], str], source_id: 
 
 
 def _rebuild_evidence(existing: dict, text: str, line_entries: dict[int, list[dict]], source_meta: dict, bbox_by_evidence: dict[str, list[dict]]) -> None:
-    bbox_records = _build_bbox_rows(
+    bbox_records = build_bbox_rows(
         evidence_id=existing["evidence_id"],
         source_meta=source_meta,
         source_id=existing["source_document_id"],
@@ -769,7 +773,7 @@ def _rebuild_evidence(existing: dict, text: str, line_entries: dict[int, list[di
     existing["quoted_text"] = "\n".join(row["text"] for row in bbox_records)
     existing["page_numbers"] = sorted({row["page_number"] for row in bbox_records})
     existing["bbox_refs"] = [row["bbox_id"] for row in bbox_records]
-    existing["bbox_precision"] = _aggregate_bbox_precision(bbox_records)
+    existing["bbox_precision"] = aggregate_bbox_precision(bbox_records)
     existing["viewer_highlightable"] = any(row["viewer_highlightable"] for row in bbox_records)
     bbox_by_evidence[existing["evidence_id"]] = bbox_records
 
@@ -791,87 +795,6 @@ def _retrieval_text(citation: str | None, hierarchy: list[str] | tuple[str, ...]
     return f"{prefix}\n{quoted_text}".strip()
 
 
-def _build_bbox_rows(
-    *,
-    evidence_id: str,
-    source_meta: dict,
-    source_id: str,
-    text: str,
-    page_start: int,
-    page_end: int,
-    line_entries: dict[int, list[dict]],
-) -> list[dict]:
-    expected = [_compact(line) for line in text.splitlines() if line.strip()]
-    matched = []
-    target_index = 0
-    for page_number in range(page_start, page_end + 1):
-        candidates = line_entries.get(page_number, [])
-        for candidate in candidates:
-            if target_index >= len(expected):
-                break
-            if _compact(candidate["text"]) != expected[target_index]:
-                continue
-            matched.append({
-                "page_number": page_number,
-                **candidate,
-            })
-            target_index += 1
-        if target_index >= len(expected):
-            break
-    if target_index < len(expected):
-        return _fallback_bbox_rows(
-            evidence_id=evidence_id,
-            source_meta=source_meta,
-            source_id=source_id,
-            text=text,
-            page_start=page_start,
-            page_end=page_end,
-            line_entries=line_entries,
-        )
-    rows = []
-    for index, row in enumerate(matched):
-        rows.append({
-            "bbox_id": f"uud_unified_bbox::{evidence_id}::{index:04d}",
-            "bbox_precision": "exact",
-            "corpus_id": "uud",
-            "evidence_id": evidence_id,
-            "page_number": row["page_number"],
-            "source_document_id": source_id,
-            "source_pdf": source_meta["filename"],
-            "source_pdf_path": source_meta["path"],
-            "source_sha256": source_meta["sha256"],
-            "status": "accepted",
-            "text": row["text"],
-            "viewer_highlightable": True,
-            "x0": row["x0"],
-            "x1": row["x1"],
-            "y0": row["y0"],
-            "y1": row["y1"],
-        })
-    return rows
-
-
-def _pdf_lines(doc) -> dict[int, list[dict]]:
-    pages: dict[int, list[dict]] = {}
-    for page_number in range(1, doc.page_count + 1):
-        page = doc[page_number - 1]
-        entries = []
-        for block in page.get_text("dict").get("blocks", []):
-            if block.get("type") != 0:
-                continue
-            for line in block.get("lines", []):
-                text = "".join(span.get("text", "") for span in line.get("spans", [])).strip()
-                if not text:
-                    continue
-                x0 = min(span["bbox"][0] for span in line.get("spans", []))
-                y0 = min(span["bbox"][1] for span in line.get("spans", []))
-                x1 = max(span["bbox"][2] for span in line.get("spans", []))
-                y1 = max(span["bbox"][3] for span in line.get("spans", []))
-                entries.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1})
-        pages[page_number] = entries
-    return pages
-
-
 def _compact(text: str) -> str:
     text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "").replace("Â", "")
     return re.sub(r"\s+", " ", text).strip().casefold()
@@ -879,81 +802,6 @@ def _compact(text: str) -> str:
 
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", (text or "").casefold()).strip("_")
-
-
-def _fallback_bbox_rows(
-    *,
-    evidence_id: str,
-    source_meta: dict,
-    source_id: str,
-    text: str,
-    page_start: int,
-    page_end: int,
-    line_entries: dict[int, list[dict]],
-) -> list[dict]:
-    rows = []
-    for index, page_number in enumerate(range(page_start, page_end + 1)):
-        candidates = line_entries.get(page_number, [])
-        if not candidates:
-            continue
-        rows.append({
-            "bbox_id": f"uud_unified_bbox::{evidence_id}::{index:04d}",
-            "bbox_precision": "page_grounded_only",
-            "corpus_id": "uud",
-            "evidence_id": evidence_id,
-            "page_number": page_number,
-            "source_document_id": source_id,
-            "source_pdf": source_meta["filename"],
-            "source_pdf_path": source_meta["path"],
-            "source_sha256": source_meta["sha256"],
-            "status": "accepted",
-            "text": text.strip() if index == 0 else "",
-            "viewer_highlightable": False,
-            "x0": min(row["x0"] for row in candidates),
-            "x1": max(row["x1"] for row in candidates),
-            "y0": min(row["y0"] for row in candidates),
-            "y1": max(row["y1"] for row in candidates),
-        })
-    if not rows:
-        raise ValueError(f"unable_to_build_bbox_rows:{source_id}:{text[:80]}")
-    return rows
-
-
-def _aggregate_bbox_precision(rows: list[dict]) -> str:
-    precisions = {row.get("bbox_precision") for row in rows}
-    if precisions == {"exact"}:
-        return "exact"
-    if "page_grounded_only" in precisions:
-        return "page_grounded_only"
-    return "coarse"
-
-
-def _apply_inserted_bab_heading_bbox_policy(bbox_rows: list[dict], evidence: list[dict]) -> None:
-    evidence_by_id = {row["evidence_id"]: row for row in evidence}
-    for row in bbox_rows:
-        if INSERTED_BAB_HEADING_BBOX_MARKER not in row["bbox_id"]:
-            continue
-        evidence_row = evidence_by_id.get(row["evidence_id"])
-        if evidence_row and evidence_row.get("citation") == row.get("text"):
-            continue
-        row["viewer_highlightable"] = False
-    by_evidence: dict[str, list[dict]] = defaultdict(list)
-    for row in bbox_rows:
-        by_evidence[row["evidence_id"]].append(row)
-    for row in evidence:
-        bbox_records = by_evidence.get(row["evidence_id"], [])
-        if not bbox_records:
-            continue
-        row["bbox_precision"] = _aggregate_bbox_precision(bbox_records)
-        row["viewer_highlightable"] = any(item.get("viewer_highlightable") is True for item in bbox_records)
-
-
-def _bbox_precision_counts(bbox_rows: list[dict]) -> dict[str, int]:
-    return {
-        "exact": sum(1 for row in bbox_rows if row.get("bbox_precision") == "exact"),
-        "coarse": sum(1 for row in bbox_rows if row.get("bbox_precision") == "coarse"),
-        "page_grounded_only": sum(1 for row in bbox_rows if row.get("bbox_precision") == "page_grounded_only"),
-    }
 
 
 def _rebuild_metadata_grounding(
