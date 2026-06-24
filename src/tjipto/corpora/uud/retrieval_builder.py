@@ -31,3 +31,20 @@ def apply_chunk_grounding(
         ]
         chunk["grounding_status"] = "text_span_page_grounded" if chunk["text_span_ids"] else "text_span_unavailable"
         chunk["runtime_loadable"] = unit.get("runtime_loadable") is not False and bool(chunk_evidence)
+
+
+def rebuild_retrieval(existing: dict, chunk: dict, retrieval_units: list[dict]) -> None:
+    quoted = existing["quoted_text"]
+    for row in retrieval_units:
+        if row["evidence_id"] == existing["evidence_id"]:
+            row["page_numbers"] = existing["page_numbers"]
+            row["bbox_sample_refs"] = existing["bbox_refs"][:1]
+            row["bbox_total_count"] = len(existing["bbox_refs"])
+            row["text"] = retrieval_text(existing["citation"], existing.get("hierarchy") or [], quoted)
+            chunk["text"] = quoted if chunk["status"] == "active_canonical_record" else chunk["text"]
+            break
+
+
+def retrieval_text(citation: str | None, hierarchy: list[str] | tuple[str, ...], quoted_text: str) -> str:
+    prefix = " ".join([item for item in [citation, *hierarchy] if item])
+    return f"{prefix}\n{quoted_text}".strip()

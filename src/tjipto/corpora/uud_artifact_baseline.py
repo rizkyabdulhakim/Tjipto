@@ -13,11 +13,12 @@ from tjipto.corpora.uud.bbox_builder import (
     build_bbox_rows,
     pdf_lines,
 )
+from tjipto.corpora.uud.evidence_builder import rebuild_evidence
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.corpora.uud.manifest import refresh_manifest, write_json, write_jsonl
 from tjipto.corpora.uud.metadata_builder import rebuild_metadata_grounding, repair_metadata_graph_edges
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
-from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding
+from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval, retrieval_text
 from tjipto.corpora.uud.specs import FINAL_DIR
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import LEGAL_EDGE_TYPES, validate_uud_artifact_dir
@@ -250,8 +251,8 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         chunk["page_range"] = {"start_page_number": unit["page_start"], "end_page_number": unit["page_end"]}
         existing = evidence_by_unit.get(unit["legal_unit_id"])
         if existing:
-            _rebuild_evidence(existing, trimmed, pdf_lines[source_document_id], source_documents[source_document_id], bbox_by_evidence)
-            _rebuild_retrieval(existing, chunk, retrieval_units)
+            rebuild_evidence(existing, trimmed, pdf_lines[source_document_id], source_documents[source_document_id], bbox_by_evidence)
+            rebuild_retrieval(existing, chunk, retrieval_units)
 
     def trim_bab(source_document_id: str, unit_label: str, marker: str) -> None:
         unit = units_by_source_label[(source_document_id, unit_label)]
@@ -430,7 +431,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
             "source_sha256": source_meta["sha256"],
             "status": "accepted",
             "temporal_context": source_role(source_id),
-            "text": _retrieval_text(unit_label, hierarchy or [], quoted_text),
+            "text": retrieval_text(unit_label, hierarchy or [], quoted_text),
         })
         return legal_unit_id
 
@@ -758,41 +759,6 @@ def _page_span_for_text(pages_by_source: dict[tuple[str, int], str], source_id: 
         if _compact(text) in _compact(pages_by_source[(source_id, page_number)]):
             return page_number, page_number
     return page_start, page_end
-
-
-def _rebuild_evidence(existing: dict, text: str, line_entries: dict[int, list[dict]], source_meta: dict, bbox_by_evidence: dict[str, list[dict]]) -> None:
-    bbox_records = build_bbox_rows(
-        evidence_id=existing["evidence_id"],
-        source_meta=source_meta,
-        source_id=existing["source_document_id"],
-        text=text,
-        page_start=min(existing["page_numbers"]),
-        page_end=max(existing["page_numbers"]),
-        line_entries=line_entries,
-    )
-    existing["quoted_text"] = "\n".join(row["text"] for row in bbox_records)
-    existing["page_numbers"] = sorted({row["page_number"] for row in bbox_records})
-    existing["bbox_refs"] = [row["bbox_id"] for row in bbox_records]
-    existing["bbox_precision"] = aggregate_bbox_precision(bbox_records)
-    existing["viewer_highlightable"] = any(row["viewer_highlightable"] for row in bbox_records)
-    bbox_by_evidence[existing["evidence_id"]] = bbox_records
-
-
-def _rebuild_retrieval(existing: dict, chunk: dict, retrieval_units: list[dict]) -> None:
-    quoted = existing["quoted_text"]
-    for row in retrieval_units:
-        if row["evidence_id"] == existing["evidence_id"]:
-            row["page_numbers"] = existing["page_numbers"]
-            row["bbox_sample_refs"] = existing["bbox_refs"][:1]
-            row["bbox_total_count"] = len(existing["bbox_refs"])
-            row["text"] = _retrieval_text(existing["citation"], existing.get("hierarchy") or [], quoted)
-            chunk["text"] = quoted if chunk["status"] == "active_canonical_record" else chunk["text"]
-            break
-
-
-def _retrieval_text(citation: str | None, hierarchy: list[str] | tuple[str, ...], quoted_text: str) -> str:
-    prefix = " ".join([item for item in [citation, *hierarchy] if item])
-    return f"{prefix}\n{quoted_text}".strip()
 
 
 def _compact(text: str) -> str:
