@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 from uuid import uuid4
 
 from tjipto.corpora.registry import CorpusRegistry
@@ -329,7 +330,8 @@ def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
     if conflict is None:
         return None
     reasons = ["source_anomaly", "canonical_conflict"]
-    if "pasal iii" in (query or "").casefold():
+    folded = (query or "").casefold()
+    if "pasal iii" in folded:
         reasons.extend(["historical_source_typo", "not_runtime_loadable"])
     else:
         reasons.append("insufficient_promotion_evidence")
@@ -354,18 +356,43 @@ def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
 
 def _matched_source_conflict(store, query: str) -> dict | None:
     folded = (query or "").casefold()
-    if "aturan tambahan" not in folded or "perubahan keempat" not in folded:
-        return None
-    if not any(pattern in folded for pattern in ("pasal iii", "konflik sumber", "tidak dipromosikan", "promosikan")):
+    if not any(pattern in folded for pattern in ("konflik", "anomali", "tidak dipromosikan", "promosikan", "renumbering", "penomoran", "pasal iii", "pasal 25e")):
         return None
     return next(
         (
-            row for row in store.source_conflicts
-            if row.get("source_document_id") == "uud::amendment_4_historical"
-            and row.get("type") == "source_marker_sequence_conflict"
+            row
+            for row in store.source_conflicts
+            if _query_matches_source_conflict(row, folded)
         ),
         None,
     )
+
+
+def _query_matches_source_conflict(conflict: dict, folded_query: str) -> bool:
+    source_role = str(conflict.get("source_document_id") or "").split("::")[-1]
+    haystack = " ".join(
+        str(value or "")
+        for value in (
+            conflict.get("source_conflict_id"),
+            conflict.get("type"),
+            conflict.get("classification"),
+            conflict.get("source_document_id"),
+            _source_role_label(source_role),
+            "konflik sumber anomali sumber",
+        )
+    ).replace("_", " ").casefold()
+    query_tokens = set(re.findall(r"[a-z0-9]+", folded_query))
+    conflict_tokens = {token for token in re.findall(r"[a-z0-9]+", haystack) if len(token) > 2}
+    return len(query_tokens & conflict_tokens) >= 2
+
+
+def _source_role_label(source_role: str) -> str:
+    return {
+        "amendment_1_historical": "perubahan pertama",
+        "amendment_2_historical": "perubahan kedua",
+        "amendment_3_historical": "perubahan ketiga",
+        "amendment_4_historical": "perubahan keempat",
+    }.get(source_role, source_role)
 
 
 def _source_anomaly_answer(conflict: dict, query: str) -> str:
@@ -379,10 +406,15 @@ def _source_anomaly_answer(conflict: dict, query: str) -> str:
         )
     if "konflik sumber" in folded:
         return (
-            f"Catatan konflik sumber mencatat {conflict.get('classification')} pada Perubahan Keempat. "
+            f"Catatan konflik sumber mencatat {conflict.get('classification')}. "
             f"Reviewer decision: {decision.get('reviewer_decision')}."
+        )
+    if conflict.get("type") == "article_renumbering_conflict":
+        return (
+            f"Catatan konflik sumber mencatat {conflict.get('classification')}. "
+            "Sistem menyimpan ini sebagai jejak perbedaan sumber, bukan kesimpulan hukum final."
         )
     return (
         "Catatan konflik sumber tidak menyediakan bukti promosi yang cukup untuk menjadikan Aturan Tambahan "
-        f"Perubahan Keempat sebagai jawaban hukum final. Reviewer decision: {decision.get('reviewer_decision')}."
+        f"sebagai jawaban hukum final. Reviewer decision: {decision.get('reviewer_decision')}."
     )

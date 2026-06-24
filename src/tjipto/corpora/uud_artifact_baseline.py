@@ -7,7 +7,10 @@ from pathlib import Path
 import re
 import unicodedata
 
-from tjipto.core.manifest import file_sha256, read_json, read_jsonl
+from tjipto.corpora.uud.manifest import refresh_manifest, write_json, write_jsonl
+from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
+from tjipto.corpora.uud.text_span_builder import build_page_text_spans
+from tjipto.core.manifest import read_json, read_jsonl
 
 
 FINAL_DIR = Path("data/final/uud")
@@ -170,12 +173,27 @@ INSERTED_BAB_SPECS = (
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
+    final_dir = (repo_root / FINAL_DIR).resolve()
+    result: dict = {}
+
+    def build(stage_dir: Path) -> None:
+        nonlocal result
+        result = _rebuild_uud_artifact_baseline_at(repo_root, stage_dir)
+
+    run_staged_uud_pipeline(
+        final_dir,
+        build,
+        validate_uud_artifact_dir,
+    )
+    return result
+
+
+def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     try:
         import fitz
     except ImportError as error:  # pragma: no cover
         raise RuntimeError("PyMuPDF is required to rebuild UUD artifacts") from error
 
-    final_dir = (repo_root / FINAL_DIR).resolve()
     manifest = read_json(final_dir / "manifest.json")
     pages = read_jsonl(final_dir / "pages.jsonl")
     legal_units = read_jsonl(final_dir / "legal_units.jsonl")
@@ -186,6 +204,8 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
     document_metadata = read_jsonl(final_dir / "document_metadata.jsonl")
     metadata_grounding = read_jsonl(final_dir / "metadata_grounding.jsonl")
     metadata_grounding_registry = read_jsonl(final_dir / "metadata_grounding_registry.jsonl")
+    metadata_assertions = read_jsonl(final_dir / "metadata.jsonl")
+    metadata_graph_edges = read_jsonl(final_dir / "metadata_graph_edges.jsonl")
     excluded_records = read_jsonl(final_dir / "excluded_records.jsonl")
     source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
     validation_report = read_json(final_dir / "validation_report.json")
@@ -218,6 +238,7 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         source_id: _pdf_lines(doc)
         for source_id, doc in docs.items()
     }
+    page_text_spans = build_page_text_spans(source_documents=source_documents, pdf_lines=pdf_lines)
 
     next_legal_id = _next_numeric_id(legal_units, "legal_unit_id")
     next_chunk_id = _next_numeric_id(chunks, "chunk_id")
@@ -593,6 +614,8 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
     chunks.sort(key=lambda row: row["chunk_id"])
     evidence.sort(key=lambda row: row["evidence_id"])
     retrieval_units.sort(key=lambda row: row["retrieval_unit_id"])
+    _apply_chunk_grounding(chunks, legal_units, evidence, page_text_spans)
+    metadata_graph_edges = _repair_metadata_graph_edges(metadata_graph_edges, metadata_assertions)
     graph_nodes, graph_edges = _rebuild_graph_artifacts(
         source_documents=list(source_documents.values()),
         pages=pages,
@@ -603,17 +626,21 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         source_conflicts=source_conflicts,
         metadata_grounding=metadata_grounding,
     )
+    manifest["page_text_spans"] = "page_text_spans.jsonl"
+    manifest.setdefault("files", {}).setdefault("page_text_spans.jsonl", {})
 
-    _write_jsonl(final_dir / "legal_units.jsonl", legal_units)
-    _write_jsonl(final_dir / "chunks.jsonl", chunks)
-    _write_jsonl(final_dir / "evidence_registry.jsonl", evidence)
-    _write_jsonl(final_dir / "bbox_registry.jsonl", bbox_rows)
-    _write_jsonl(final_dir / "retrieval_units.jsonl", retrieval_units)
-    _write_jsonl(final_dir / "document_metadata.jsonl", document_metadata)
-    _write_jsonl(final_dir / "metadata_grounding.jsonl", metadata_grounding)
-    _write_jsonl(final_dir / "metadata_grounding_registry.jsonl", metadata_grounding_registry)
-    _write_jsonl(final_dir / "graph_nodes.jsonl", graph_nodes)
-    _write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
+    write_jsonl(final_dir / "legal_units.jsonl", legal_units)
+    write_jsonl(final_dir / "chunks.jsonl", chunks)
+    write_jsonl(final_dir / "evidence_registry.jsonl", evidence)
+    write_jsonl(final_dir / "bbox_registry.jsonl", bbox_rows)
+    write_jsonl(final_dir / "retrieval_units.jsonl", retrieval_units)
+    write_jsonl(final_dir / "document_metadata.jsonl", document_metadata)
+    write_jsonl(final_dir / "metadata_grounding.jsonl", metadata_grounding)
+    write_jsonl(final_dir / "metadata_grounding_registry.jsonl", metadata_grounding_registry)
+    write_jsonl(final_dir / "metadata_graph_edges.jsonl", metadata_graph_edges)
+    write_jsonl(final_dir / "graph_nodes.jsonl", graph_nodes)
+    write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
+    write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
 
     validation_report["final_artifact_counts"] = {
         "chunks": len(chunks),
@@ -624,6 +651,7 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         "retrieval_units": len(retrieval_units),
         "graph_nodes": len(graph_nodes),
         "graph_edges": len(graph_edges),
+        "page_text_spans": len(page_text_spans),
     }
     validation_report["bbox_precision_counts"] = _bbox_precision_counts(bbox_rows)
     validation_report["bbox_highlightability_counts"] = {
@@ -655,6 +683,8 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         "status": "field_grounded",
         "note": "field-level metadata grounding preserves block-level rows and keeps metadata viewer highlights fail-closed unless exact accepted support exists",
     }
+    if "referenced_artifacts" in validation_report and "page_text_spans.jsonl" not in validation_report["referenced_artifacts"]:
+        validation_report["referenced_artifacts"].append("page_text_spans.jsonl")
     validation_report["legal_graph_baseline"] = {
         "status": "evidence_backed_minimal_baseline",
         "legal_edge_types": sorted(LEGAL_EDGE_TYPES),
@@ -668,9 +698,9 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
     validation_report["structure_fidelity"]["inserted_bab_heading_owner_policy"] = (
         "inserted heading bboxes may stay exact, but they are viewer_highlightable only when owned by bab_record evidence"
     )
-    (final_dir / "validation_report.json").write_text(json.dumps(validation_report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_json(final_dir / "validation_report.json", validation_report)
 
-    _refresh_manifest(final_dir, manifest)
+    refresh_manifest(final_dir, manifest)
     return {
         "legal_units": len(legal_units),
         "chunks": len(chunks),
@@ -684,6 +714,10 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
 
 def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
     final_dir = (repo_root / FINAL_DIR).resolve()
+    return validate_uud_artifact_dir(final_dir)
+
+
+def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     legal_units = read_jsonl(final_dir / "legal_units.jsonl")
     chunks = read_jsonl(final_dir / "chunks.jsonl")
     evidence = read_jsonl(final_dir / "evidence_registry.jsonl")
@@ -693,6 +727,7 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
     graph_nodes = read_jsonl(final_dir / "graph_nodes.jsonl")
     graph_edges = read_jsonl(final_dir / "graph_edges.jsonl")
     source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
+    page_text_spans = read_jsonl(final_dir / "page_text_spans.jsonl") if (final_dir / "page_text_spans.jsonl").exists() else []
 
     errors: list[str] = []
     seen_ids: dict[str, set[str]] = defaultdict(set)
@@ -703,6 +738,7 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
     graph_node_ids = {row["node_id"] for row in graph_nodes}
     source_conflict_ids = {row["source_conflict_id"] for row in source_conflicts}
     metadata_grounding_ids = {row["metadata_grounding_id"] for row in metadata_grounding}
+    text_span_ids = {row["text_span_id"] for row in page_text_spans}
     bbox_by_evidence: dict[str, list[dict]] = defaultdict(list)
     for row in bbox_rows:
         bbox_by_evidence[row["evidence_id"]].append(row)
@@ -749,6 +785,13 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
         seen_ids["chunk_id"].add(row["chunk_id"])
         if row["legal_unit_id"] not in units_by_id:
             errors.append(f"orphan_chunk:{row['chunk_id']}")
+        for text_span_id in row.get("text_span_ids") or ():
+            if text_span_id not in text_span_ids:
+                errors.append(f"orphan_chunk_text_span:{row['chunk_id']}:{text_span_id}")
+        if row.get("runtime_loadable") is True and not row.get("grounding_status"):
+            errors.append(f"runtime_loadable_chunk_missing_grounding:{row['chunk_id']}")
+        if row.get("runtime_loadable") is True and not row.get("bbox_ids"):
+            errors.append(f"runtime_loadable_chunk_missing_bbox:{row['chunk_id']}")
         if row["chunk_type"] == "bab_structural_context_record" and any(marker in row["text"] for marker in STRUCTURAL_FORBIDDEN_MARKERS):
             errors.append(f"structural_chunk_contains_instrument_text:{row['chunk_id']}")
     for row in evidence:
@@ -790,6 +833,14 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
             errors.append(f"invalid_bbox_precision:{row['bbox_id']}")
         if row.get("bbox_precision") in {"coarse", "page_grounded_only"} and row.get("viewer_highlightable"):
             errors.append(f"coarse_bbox_marked_highlightable:{row['bbox_id']}")
+    for row in page_text_spans:
+        if row["text_span_id"] in seen_ids["text_span_id"]:
+            errors.append(f"duplicate_text_span_id:{row['text_span_id']}")
+        seen_ids["text_span_id"].add(row["text_span_id"])
+        if not row.get("text"):
+            errors.append(f"empty_text_span:{row['text_span_id']}")
+        if row.get("bbox_precision") != "exact":
+            errors.append(f"text_span_missing_exact_bbox:{row['text_span_id']}")
     for row in retrieval_units:
         if row["retrieval_unit_id"] in seen_ids["retrieval_unit_id"]:
             errors.append(f"duplicate_retrieval_unit_id:{row['retrieval_unit_id']}")
@@ -833,34 +884,6 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
                 errors.append(f"legal_edge_unknown_evidence_ref:{row['edge_id']}:{evidence_ref}")
 
     return tuple(sorted(set(errors)))
-
-
-def _refresh_manifest(final_dir: Path, manifest: dict) -> None:
-    counts = manifest.setdefault("counts", {})
-    counts["document_metadata"] = _count_jsonl(final_dir / "document_metadata.jsonl")
-    counts["legal_units"] = _count_jsonl(final_dir / "legal_units.jsonl")
-    counts["chunks"] = _count_jsonl(final_dir / "chunks.jsonl")
-    counts["evidence_records"] = _count_jsonl(final_dir / "evidence_registry.jsonl")
-    counts["bbox_records"] = _count_jsonl(final_dir / "bbox_registry.jsonl")
-    counts["metadata_grounding"] = _count_jsonl(final_dir / "metadata_grounding.jsonl")
-    counts["metadata_grounding_records"] = _count_jsonl(final_dir / "metadata_grounding_registry.jsonl")
-    counts["graph_nodes"] = _count_jsonl(final_dir / "graph_nodes.jsonl")
-    counts["graph_edges"] = _count_jsonl(final_dir / "graph_edges.jsonl")
-    counts["retrieval_units"] = _count_jsonl(final_dir / "retrieval_units.jsonl")
-    for rel in manifest["files"]:
-        path = final_dir / rel
-        if path.exists():
-            manifest["files"][rel]["bytes"] = path.stat().st_size
-            manifest["files"][rel]["sha256"] = file_sha256(path)
-    (final_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def _write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
-
-
-def _count_jsonl(path: Path) -> int:
-    return len(read_jsonl(path))
 
 
 def _next_numeric_id(rows: list[dict], key: str) -> int:
@@ -958,6 +981,50 @@ def _rebuild_retrieval(existing: dict, chunk: dict, retrieval_units: list[dict])
             row["text"] = _retrieval_text(existing["citation"], existing.get("hierarchy") or [], quoted)
             chunk["text"] = quoted if chunk["status"] == "active_canonical_record" else chunk["text"]
             break
+
+
+def _apply_chunk_grounding(
+    chunks: list[dict],
+    legal_units: list[dict],
+    evidence: list[dict],
+    page_text_spans: list[dict],
+) -> None:
+    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    evidence_by_unit: dict[str, list[dict]] = defaultdict(list)
+    spans_by_page: dict[tuple[str, int], list[str]] = defaultdict(list)
+    for row in evidence:
+        evidence_by_unit[row["legal_unit_id"]].append(row)
+    for row in page_text_spans:
+        spans_by_page[(row["source_document_id"], row["page_number"])].append(row["text_span_id"])
+    for chunk in chunks:
+        unit = units_by_id[chunk["legal_unit_id"]]
+        page_range = chunk["page_range"]
+        page_numbers = list(range(page_range["start_page_number"], page_range["end_page_number"] + 1))
+        chunk_evidence = evidence_by_unit.get(chunk["legal_unit_id"], [])
+        chunk["page_numbers"] = page_numbers
+        chunk["evidence_ids"] = [row["evidence_id"] for row in chunk_evidence]
+        chunk["bbox_ids"] = [bbox_id for row in chunk_evidence for bbox_id in row.get("bbox_refs") or ()]
+        chunk["text_span_ids"] = [
+            span_id
+            for page_number in page_numbers
+            for span_id in spans_by_page.get((unit["source_document_id"], page_number), [])
+        ]
+        chunk["grounding_status"] = "text_span_page_grounded" if chunk["text_span_ids"] else "text_span_unavailable"
+        chunk["runtime_loadable"] = unit.get("runtime_loadable") is not False and bool(chunk_evidence)
+
+
+def _repair_metadata_graph_edges(edges: list[dict], metadata_assertions: list[dict]) -> list[dict]:
+    metadata_id_by_key = {
+        (row["evidence_link"]["final_evidence_id"], row["predicate"]): row["metadata_id"]
+        for row in metadata_assertions
+    }
+    for edge in edges:
+        evidence_id = edge.get("evidence_link", {}).get("final_evidence_id")
+        predicate = str(edge.get("target_id") or "").rsplit("::", 1)[-1]
+        metadata_id = metadata_id_by_key.get((evidence_id, predicate))
+        if metadata_id:
+            edge["target_id"] = metadata_id
+    return edges
 
 
 def _retrieval_text(citation: str | None, hierarchy: list[str] | tuple[str, ...], quoted_text: str) -> str:
@@ -1148,7 +1215,11 @@ def _rebuild_metadata_grounding(
         for row in legal_units
     }
     block_rows = [
-        row | {"bbox_precision": "page_grounded_only", "viewer_highlightable": False}
+        row | {
+            "bbox_precision": "page_grounded_only",
+            "grounding_status": row.get("grounding_status") or "block_level_grounded",
+            "viewer_highlightable": False,
+        }
         for row in metadata_grounding
         if not str(row.get("metadata_grounding_id", "")).startswith("uud_metadata_field_grounding::")
     ]

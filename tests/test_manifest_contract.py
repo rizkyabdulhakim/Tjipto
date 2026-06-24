@@ -33,6 +33,7 @@ class ManifestContractTest(unittest.TestCase):
                 "metadata_grounding": 37,
                 "metadata_grounding_records": 37,
                 "metadata_graph_edges": 449,
+                "page_text_spans": len((FINAL / "page_text_spans.jsonl").read_text(encoding="utf-8").splitlines()),
                 "pages": 63,
                 "retrieval_units": 464,
                 "source_conflicts": 2,
@@ -64,6 +65,7 @@ class ManifestContractTest(unittest.TestCase):
             "retrieval_units": len((FINAL / "retrieval_units.jsonl").read_text(encoding="utf-8").splitlines()),
             "graph_nodes": len((FINAL / "graph_nodes.jsonl").read_text(encoding="utf-8").splitlines()),
             "graph_edges": len((FINAL / "graph_edges.jsonl").read_text(encoding="utf-8").splitlines()),
+            "page_text_spans": len((FINAL / "page_text_spans.jsonl").read_text(encoding="utf-8").splitlines()),
         }
         for key, value in actual_counts.items():
             self.assertEqual(report["final_artifact_counts"][key], value)

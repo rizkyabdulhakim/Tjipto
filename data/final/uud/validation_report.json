@@ -284,7 +284,8 @@
     "source_integrity.json",
     "validation_alignment_results.jsonl",
     "validation_exception_review_labels.jsonl",
-    "validation_exceptions.jsonl"
+    "validation_exceptions.jsonl",
+    "page_text_spans.jsonl"
   ],
   "source_conflict_resolution": {
     "affected_historical_scope": "aturan_tambahan_marker_sequence",
@@ -500,7 +501,8 @@
     "bbox_records": 1542,
     "retrieval_units": 464,
     "graph_nodes": 2740,
-    "graph_edges": 5122
+    "graph_edges": 5122,
+    "page_text_spans": 2193
   },
   "artifact_governance": {
     "status": "current_final_artifacts_present",

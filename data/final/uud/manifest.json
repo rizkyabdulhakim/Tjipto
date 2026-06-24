@@ -24,7 +24,8 @@
     "source_documents": 6,
     "validation_alignment_results": 610,
     "validation_exception_review_labels": 9,
-    "validation_exceptions": 19
+    "validation_exceptions": 19,
+    "page_text_spans": 2193
   },
   "document_metadata": "document_metadata.jsonl",
   "evidence_registry": "evidence_registry.jsonl",
@@ -35,60 +36,60 @@
       "sha256": "81323b9524ea53ab2a1d5b52c39e9de7ce374dc6bf5b1daee73bcdc0da833b1d"
     },
     "bbox_registry.jsonl": {
-      "bytes": 1064357,
-      "sha256": "d85029da9e8850d69100b779259f45238f00f0fc278ae6ecd7ab79c1175628c6"
+      "bytes": 1062815,
+      "sha256": "83a3a2945b72ecc0629464778aa7f9b8d46f75822f9aa2fb067e27626fa6a786"
     },
     "chunks.jsonl": {
-      "bytes": 486782,
-      "sha256": "d7285dcae633dde30665fc6c4cca875fad195f37c88fae5f145ce2f85c86545b"
+      "bytes": 2108122,
+      "sha256": "293a0479c80178f99ef7b04d2912b63c342e94613ce9d00bc2c6bea72cade792"
     },
     "document_metadata.jsonl": {
-      "bytes": 17662,
-      "sha256": "07dd8b61a83eea7585d977883cebcf686b6e1bfd46c332b64bcf21e9d4d51343"
+      "bytes": 17656,
+      "sha256": "bb8d507aa5c5f1877c5d348a3c395c4b4ca12c8ecbffa40d996d53e6c9cd251f"
     },
     "evidence_registry.jsonl": {
-      "bytes": 515888,
-      "sha256": "d28363ff221cb75207b21d8d3985e25d2f80f70b5b5cfc056d4c593261363fd4"
+      "bytes": 515424,
+      "sha256": "d12e274d2616a5737c8e8253a3dee9b2b98b2ce484191e158b3b4dc6e642887c"
     },
     "excluded_records.jsonl": {
       "bytes": 2333,
       "sha256": "ad8b77fd73c46374e37938aeef7727c24a6d4987df2e664c3771bebf10ce49d0"
     },
     "graph_edges.jsonl": {
-      "bytes": 1762102,
-      "sha256": "9f8c79708cb1a9587c5303e849dc4007d39e87eb4459ae0181eaf2dcb49b315d"
+      "bytes": 1756980,
+      "sha256": "5ebf4b5b910e24a7f8afe7cc45cd7f9ba652f55887fc8736e32b858bddec255c"
     },
     "graph_nodes.jsonl": {
-      "bytes": 1464309,
-      "sha256": "e7c8462ce71a1b46459273857bd0161655e46bd46e39e19895c4b28ff12ea66f"
+      "bytes": 1461569,
+      "sha256": "78287d920c80d9051b49af134399738153007aecbc13e438048eff6a8e1dac70"
     },
     "legal_units.jsonl": {
-      "bytes": 497240,
-      "sha256": "4f915ac751a4e5da8bffbc10ee74b4133c660796692ecdcca9f1a1d293c466fa"
+      "bytes": 496589,
+      "sha256": "c5c8e9676539d9a9776365d7f93cc828ca5432ffcf6604c8fa706bb5c58eb73b"
     },
     "metadata.jsonl": {
       "bytes": 1040292,
       "sha256": "42a1382299a964ebe1e89001a499fd4e3e961ffbc216cb3b2f7d0d8c145d109d"
     },
     "metadata_graph_edges.jsonl": {
-      "bytes": 383364,
-      "sha256": "fb01c39991503b12814edd89e03df77deb24d9b86579c3baa14949da1fc0b646"
+      "bytes": 389496,
+      "sha256": "7415e7d05790c4e8b6b827356790a3118dffa967042502c2471d4e952c95f188"
     },
     "metadata_grounding.jsonl": {
-      "bytes": 41885,
-      "sha256": "9ce67d2ba87311dc3c8d0bb89b6ee0c9010cce3f1e7831b5112239e18f56f7b7"
+      "bytes": 42068,
+      "sha256": "89987aeecdb3074eb3d51efea421e3913f969fcb97189da1d3cbec6e52746dd6"
     },
     "metadata_grounding_registry.jsonl": {
-      "bytes": 24778,
-      "sha256": "6a481c7d81855ab53d6daf101fa71fedce55e9f3fb5bee6bbaa0aeb18d1b1293"
+      "bytes": 24741,
+      "sha256": "56736fb7462b51af32ce61babc5e958891628ead255a2f409e4773bba2ff8986"
     },
     "pages.jsonl": {
       "bytes": 116591,
       "sha256": "afcd4b89997579bbe3a08f5f762d3afb2129b389bc768d064d97d9b061083e33"
     },
     "retrieval_units.jsonl": {
-      "bytes": 410080,
-      "sha256": "43e9439cdd291a44f716a1a585e306ed5f29d0a31d492820e3528979e6b010c7"
+      "bytes": 409616,
+      "sha256": "a8c59ea42f45b108b23f750b08b8085ea650e1e627ef9a15f72d8e0184d95599"
     },
     "source_conflicts.jsonl": {
       "bytes": 1915,
@@ -115,8 +116,12 @@
       "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 24448,
-      "sha256": "582179643cdda3d0fbdfa466f31feec3f2066d3321200ed88c51d3679dd8266b"
+      "bytes": 23938,
+      "sha256": "84e0d9b7f5e92a73693cd3ae1a6e6c5ebba513abcf4406e1967bb0724f9b6e9f"
+    },
+    "page_text_spans.jsonl": {
+      "bytes": 1366315,
+      "sha256": "dc42279a8efd6e011fc4f90b96a37b257253724a24e360c2b7b848bc3964cb13"
     }
   },
   "fixtures": {
@@ -154,5 +159,6 @@
   "validation_alignment_results": "validation_alignment_results.jsonl",
   "validation_exception_review_labels": "validation_exception_review_labels.jsonl",
   "validation_exceptions": "validation_exceptions.jsonl",
-  "validation_report": "validation_report.json"
+  "validation_report": "validation_report.json",
+  "page_text_spans": "page_text_spans.jsonl"
 }
