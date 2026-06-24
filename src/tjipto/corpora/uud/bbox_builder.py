@@ -165,5 +165,5 @@ def _fallback_bbox_rows(
 
 
 def _compact(text: str) -> str:
-    text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "").replace("Â", "")
+    text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "").replace("\u00c2", "")
     return re.sub(r"\s+", " ", text).strip().casefold()
