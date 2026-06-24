@@ -19,6 +19,7 @@ from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval, retrieval_text
 from tjipto.corpora.uud.specs import FINAL_DIR, INSERTED_BAB_SPECS
 from tjipto.corpora.uud.structure_builder import (
+    apply_inserted_bab_specs,
     find_unit,
     next_numeric_id,
     numeric_suffix,
@@ -150,62 +151,18 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         chunk["text"] = trimmed
         chunk["page_range"] = {"start_page_number": unit["page_start"], "end_page_number": unit["page_end"]}
 
-    for spec in INSERTED_BAB_SPECS:
-        source_id = spec["source_document_id"]
-        page_text = pages_by_source[(source_id, spec["page_number"])]
-        bab_text = slice_between(page_text, spec["start"], spec["end"])
-        for target in spec["trim_targets"]:
-            if isinstance(target, tuple):
-                trim_unit(source_id, target[-1], spec["label"], hierarchy_suffix=target)
-            else:
-                trim_unit(source_id, target, spec["label"])
-        if spec["trim_bab"]:
-            trim_bab(source_id, spec["trim_bab"], spec["label"])
-        parent_ids = []
-        if spec["parent_label"]:
-            parent = units_by_source_label[(source_id, spec["parent_label"])]
-            parent_ids.append(parent["legal_unit_id"])
-        legal_unit_id = allocate_legal_id()
-        chunk_id = allocate_chunk_id()
-        source_meta = source_documents[source_id]
-        legal_units.append({
-            "corpus_id": "uud",
-            "hierarchy": [],
-            "legal_unit_id": legal_unit_id,
-            "page_end": spec["page_number"],
-            "page_start": spec["page_number"],
-            "parent_legal_unit_ids": parent_ids,
-            "provenance": {"donor_id": legal_unit_id},
-            "source_document_id": source_id,
-            "source_sha256": source_meta["sha256"],
-            "status": "finalizable",
-            "text": bab_text,
-            "unit_label": spec["label"],
-            "unit_type": "bab_record",
-        })
-        chunks.append({
-            "canonical_use_allowed": False,
-            "chunk_id": chunk_id,
-            "chunk_type": "bab_structural_context_record",
-            "corpus_id": "uud",
-            "hierarchy": [spec["label"]],
-            "legal_unit_id": legal_unit_id,
-            "page_range": {"start_page_number": spec["page_number"], "end_page_number": spec["page_number"]},
-            "provenance": {"donor_id": chunk_id},
-            "source_sha256": source_meta["sha256"],
-            "status": "parent_context_only",
-            "text": bab_text,
-        })
-        units_by_source_label[(source_id, spec["label"])] = legal_units[-1]
-        for child_label in spec["child_labels"]:
-            child = units_by_source_label[(source_id, child_label)]
-            if legal_unit_id not in child["parent_legal_unit_ids"]:
-                child["parent_legal_unit_ids"] = [legal_unit_id, *child["parent_legal_unit_ids"]]
-            for unit in legal_units:
-                if unit["source_document_id"] != source_id or unit["unit_type"] != "ayat_record":
-                    continue
-                if child["legal_unit_id"] in (unit.get("parent_legal_unit_ids") or ()) and legal_unit_id not in unit["parent_legal_unit_ids"]:
-                    unit["parent_legal_unit_ids"] = [legal_unit_id, *unit["parent_legal_unit_ids"]]
+    apply_inserted_bab_specs(
+        specs=INSERTED_BAB_SPECS,
+        pages_by_source=pages_by_source,
+        source_documents=source_documents,
+        legal_units=legal_units,
+        chunks=chunks,
+        units_by_source_label=units_by_source_label,
+        trim_unit=trim_unit,
+        trim_bab=trim_bab,
+        allocate_legal_id=allocate_legal_id,
+        allocate_chunk_id=allocate_chunk_id,
+    )
 
     source_role = lambda source_id: source_id.split("::", 1)[1]
 
