@@ -8,13 +8,15 @@ import unicodedata
 
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.corpora.uud.manifest import refresh_manifest, write_json, write_jsonl
+from tjipto.corpora.uud.metadata_builder import repair_metadata_graph_edges
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
+from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding
+from tjipto.corpora.uud.specs import FINAL_DIR
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import LEGAL_EDGE_TYPES, validate_uud_artifact_dir
 from tjipto.core.manifest import read_json, read_jsonl
 
 
-FINAL_DIR = Path("data/final/uud")
 INSERTED_BAB_HEADING_BBOX_MARKER = "::heading_bab_"
 
 
@@ -584,8 +586,8 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     chunks.sort(key=lambda row: row["chunk_id"])
     evidence.sort(key=lambda row: row["evidence_id"])
     retrieval_units.sort(key=lambda row: row["retrieval_unit_id"])
-    _apply_chunk_grounding(chunks, legal_units, evidence, page_text_spans)
-    metadata_graph_edges = _repair_metadata_graph_edges(metadata_graph_edges, metadata_assertions)
+    apply_chunk_grounding(chunks, legal_units, evidence, page_text_spans)
+    metadata_graph_edges = repair_metadata_graph_edges(metadata_graph_edges, metadata_assertions)
     graph_nodes, graph_edges = build_graph_artifacts(
         source_documents=list(source_documents.values()),
         pages=pages,
@@ -782,50 +784,6 @@ def _rebuild_retrieval(existing: dict, chunk: dict, retrieval_units: list[dict])
             row["text"] = _retrieval_text(existing["citation"], existing.get("hierarchy") or [], quoted)
             chunk["text"] = quoted if chunk["status"] == "active_canonical_record" else chunk["text"]
             break
-
-
-def _apply_chunk_grounding(
-    chunks: list[dict],
-    legal_units: list[dict],
-    evidence: list[dict],
-    page_text_spans: list[dict],
-) -> None:
-    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
-    evidence_by_unit: dict[str, list[dict]] = defaultdict(list)
-    spans_by_page: dict[tuple[str, int], list[str]] = defaultdict(list)
-    for row in evidence:
-        evidence_by_unit[row["legal_unit_id"]].append(row)
-    for row in page_text_spans:
-        spans_by_page[(row["source_document_id"], row["page_number"])].append(row["text_span_id"])
-    for chunk in chunks:
-        unit = units_by_id[chunk["legal_unit_id"]]
-        page_range = chunk["page_range"]
-        page_numbers = list(range(page_range["start_page_number"], page_range["end_page_number"] + 1))
-        chunk_evidence = evidence_by_unit.get(chunk["legal_unit_id"], [])
-        chunk["page_numbers"] = page_numbers
-        chunk["evidence_ids"] = [row["evidence_id"] for row in chunk_evidence]
-        chunk["bbox_ids"] = [bbox_id for row in chunk_evidence for bbox_id in row.get("bbox_refs") or ()]
-        chunk["text_span_ids"] = [
-            span_id
-            for page_number in page_numbers
-            for span_id in spans_by_page.get((unit["source_document_id"], page_number), [])
-        ]
-        chunk["grounding_status"] = "text_span_page_grounded" if chunk["text_span_ids"] else "text_span_unavailable"
-        chunk["runtime_loadable"] = unit.get("runtime_loadable") is not False and bool(chunk_evidence)
-
-
-def _repair_metadata_graph_edges(edges: list[dict], metadata_assertions: list[dict]) -> list[dict]:
-    metadata_id_by_key = {
-        (row["evidence_link"]["final_evidence_id"], row["predicate"]): row["metadata_id"]
-        for row in metadata_assertions
-    }
-    for edge in edges:
-        evidence_id = edge.get("evidence_link", {}).get("final_evidence_id")
-        predicate = str(edge.get("target_id") or "").rsplit("::", 1)[-1]
-        metadata_id = metadata_id_by_key.get((evidence_id, predicate))
-        if metadata_id:
-            edge["target_id"] = metadata_id
-    return edges
 
 
 def _retrieval_text(citation: str | None, hierarchy: list[str] | tuple[str, ...], quoted_text: str) -> str:
