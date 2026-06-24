@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
+from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.core.manifest import read_jsonl
 
 
@@ -38,6 +39,77 @@ LEGAL_EDGE_TYPES = {
     "HAS_DECISION_SESSION",
     "HAS_SOURCE_ANOMALY",
 }
+
+
+def update_validation_report(
+    validation_report: dict,
+    *,
+    chunks: list[dict],
+    legal_units: list[dict],
+    excluded_records: list[dict],
+    evidence: list[dict],
+    bbox_rows: list[dict],
+    retrieval_units: list[dict],
+    graph_nodes: list[dict],
+    graph_edges: list[dict],
+    page_text_spans: list[dict],
+) -> None:
+    validation_report["final_artifact_counts"] = {
+        "chunks": len(chunks),
+        "legal_units": len(legal_units),
+        "excluded_records": len(excluded_records),
+        "evidence_records": len(evidence),
+        "bbox_records": len(bbox_rows),
+        "retrieval_units": len(retrieval_units),
+        "graph_nodes": len(graph_nodes),
+        "graph_edges": len(graph_edges),
+        "page_text_spans": len(page_text_spans),
+    }
+    validation_report["bbox_precision_counts"] = bbox_precision_counts(bbox_rows)
+    validation_report["bbox_highlightability_counts"] = {
+        "viewer_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is True),
+        "non_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is not True),
+    }
+    validation_report.setdefault("instrument_baseline", {})
+    validation_report["instrument_baseline"] = {
+        "status": "corrected",
+        "instrument_unit_types": [
+            "amendment_recital_record",
+            "amendment_scope_record",
+            "instrument_clause_record",
+            "instrument_closing_record",
+            "decision_clause_record",
+            "effective_clause_record",
+            "determination_clause_record",
+            "signatory_block_record",
+        ],
+        "metadata_viewer_highlightable": False,
+    }
+    validation_report["bbox_precision_policy"] = {
+        "status": "corrected",
+        "exact_policy": "bbox_precision=exact rows may remain viewer_highlightable",
+        "fallback_policy": "bbox_precision=page_grounded_only rows are not viewer_highlightable",
+        "coarse_policy": "bbox_precision=coarse rows are not viewer_highlightable",
+    }
+    validation_report["metadata_grounding_contract"] = {
+        "status": "field_grounded",
+        "note": "field-level metadata grounding preserves block-level rows and keeps metadata viewer highlights fail-closed unless exact accepted support exists",
+    }
+    if "referenced_artifacts" in validation_report and "page_text_spans.jsonl" not in validation_report["referenced_artifacts"]:
+        validation_report["referenced_artifacts"].append("page_text_spans.jsonl")
+    validation_report["legal_graph_baseline"] = {
+        "status": "evidence_backed_minimal_baseline",
+        "legal_edge_types": sorted(LEGAL_EDGE_TYPES),
+        "runtime_loadable_legal_edges": sum(
+            1
+            for row in graph_edges
+            if row.get("edge_type") in LEGAL_EDGE_TYPES and row.get("runtime_loadable") is True
+        ),
+    }
+    validation_report.setdefault("structure_fidelity", {})
+    validation_report["structure_fidelity"]["inserted_bab_heading_owner_policy"] = (
+        "inserted heading bboxes may stay exact, but they are viewer_highlightable only when owned by bab_record evidence"
+    )
 
 
 def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:

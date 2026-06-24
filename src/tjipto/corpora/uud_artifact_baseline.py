@@ -8,7 +8,6 @@ from tjipto.corpora.uud.anomaly_builder import append_amendment_instrument_units
 from tjipto.corpora.uud.bbox_builder import (
     aggregate_bbox_precision,
     apply_inserted_bab_heading_bbox_policy,
-    bbox_precision_counts,
     pdf_lines,
 )
 from tjipto.corpora.uud.evidence_builder import append_instrument_unit as append_instrument_record, rebuild_evidence
@@ -30,7 +29,7 @@ from tjipto.corpora.uud.structure_builder import (
     trim_before,
 )
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
-from tjipto.corpora.uud.validation import LEGAL_EDGE_TYPES, validate_uud_artifact_dir
+from tjipto.corpora.uud.validation import update_validation_report, validate_uud_artifact_dir
 from tjipto.core.manifest import read_json, read_jsonl
 
 
@@ -263,61 +262,17 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
 
-    validation_report["final_artifact_counts"] = {
-        "chunks": len(chunks),
-        "legal_units": len(legal_units),
-        "excluded_records": len(read_jsonl(final_dir / "excluded_records.jsonl")),
-        "evidence_records": len(evidence),
-        "bbox_records": len(bbox_rows),
-        "retrieval_units": len(retrieval_units),
-        "graph_nodes": len(graph_nodes),
-        "graph_edges": len(graph_edges),
-        "page_text_spans": len(page_text_spans),
-    }
-    validation_report["bbox_precision_counts"] = bbox_precision_counts(bbox_rows)
-    validation_report["bbox_highlightability_counts"] = {
-        "viewer_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is True),
-        "non_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is not True),
-    }
-    validation_report.setdefault("instrument_baseline", {})
-    validation_report["instrument_baseline"] = {
-        "status": "corrected",
-        "instrument_unit_types": [
-            "amendment_recital_record",
-            "amendment_scope_record",
-            "instrument_clause_record",
-            "instrument_closing_record",
-            "decision_clause_record",
-            "effective_clause_record",
-            "determination_clause_record",
-            "signatory_block_record",
-        ],
-        "metadata_viewer_highlightable": False,
-    }
-    validation_report["bbox_precision_policy"] = {
-        "status": "corrected",
-        "exact_policy": "bbox_precision=exact rows may remain viewer_highlightable",
-        "fallback_policy": "bbox_precision=page_grounded_only rows are not viewer_highlightable",
-        "coarse_policy": "bbox_precision=coarse rows are not viewer_highlightable",
-    }
-    validation_report["metadata_grounding_contract"] = {
-        "status": "field_grounded",
-        "note": "field-level metadata grounding preserves block-level rows and keeps metadata viewer highlights fail-closed unless exact accepted support exists",
-    }
-    if "referenced_artifacts" in validation_report and "page_text_spans.jsonl" not in validation_report["referenced_artifacts"]:
-        validation_report["referenced_artifacts"].append("page_text_spans.jsonl")
-    validation_report["legal_graph_baseline"] = {
-        "status": "evidence_backed_minimal_baseline",
-        "legal_edge_types": sorted(LEGAL_EDGE_TYPES),
-        "runtime_loadable_legal_edges": sum(
-            1
-            for row in graph_edges
-            if row.get("edge_type") in LEGAL_EDGE_TYPES and row.get("runtime_loadable") is True
-        ),
-    }
-    validation_report.setdefault("structure_fidelity", {})
-    validation_report["structure_fidelity"]["inserted_bab_heading_owner_policy"] = (
-        "inserted heading bboxes may stay exact, but they are viewer_highlightable only when owned by bab_record evidence"
+    update_validation_report(
+        validation_report,
+        chunks=chunks,
+        legal_units=legal_units,
+        excluded_records=excluded_records,
+        evidence=evidence,
+        bbox_rows=bbox_rows,
+        retrieval_units=retrieval_units,
+        graph_nodes=graph_nodes,
+        graph_edges=graph_edges,
+        page_text_spans=page_text_spans,
     )
     write_json(final_dir / "validation_report.json", validation_report)
 
