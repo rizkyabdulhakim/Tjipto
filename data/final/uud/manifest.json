@@ -35,20 +35,20 @@
       "sha256": "81323b9524ea53ab2a1d5b52c39e9de7ce374dc6bf5b1daee73bcdc0da833b1d"
     },
     "bbox_registry.jsonl": {
-      "bytes": 976388,
-      "sha256": "ecd10ce12fef27881a955bc704784d359f32d6fbc4195d2b8fb3f44b5fb669cb"
+      "bytes": 1064352,
+      "sha256": "02efc0c5fe42f51ee8bcf3dd36fefae1b6f9424f4ad35dac161c15217e9d798d"
     },
     "chunks.jsonl": {
-      "bytes": 487362,
-      "sha256": "e4087efff0dbc63d67e56421d7ebe834efb5a171ac398bef962133e31bc147a9"
+      "bytes": 486782,
+      "sha256": "d7285dcae633dde30665fc6c4cca875fad195f37c88fae5f145ce2f85c86545b"
     },
     "document_metadata.jsonl": {
       "bytes": 13197,
       "sha256": "e6ca798d563b303d99f13865f19c7bc009732c4652faa5b43763cbf64146502f"
     },
     "evidence_registry.jsonl": {
-      "bytes": 489370,
-      "sha256": "29963691391c5704caeecc1abf7564ff6766ce7e67ad6cb98b2ce8a36d113fee"
+      "bytes": 515888,
+      "sha256": "d28363ff221cb75207b21d8d3985e25d2f80f70b5b5cfc056d4c593261363fd4"
     },
     "excluded_records.jsonl": {
       "bytes": 2333,
@@ -63,8 +63,8 @@
       "sha256": "d14790c0231c7c569253a6485ce21404268b089ced91d2967fe19406f65d9580"
     },
     "legal_units.jsonl": {
-      "bytes": 497820,
-      "sha256": "52455f8ee77a710e9e8033c818cf1397eb7f95c815eba5e6a2da41ca31af20af"
+      "bytes": 497240,
+      "sha256": "4f915ac751a4e5da8bffbc10ee74b4133c660796692ecdcca9f1a1d293c466fa"
     },
     "metadata.jsonl": {
       "bytes": 1040292,
@@ -75,8 +75,8 @@
       "sha256": "fb01c39991503b12814edd89e03df77deb24d9b86579c3baa14949da1fc0b646"
     },
     "metadata_grounding.jsonl": {
-      "bytes": 6141,
-      "sha256": "333e087974ce4f31c4cc3d35588facf02751bc737ba6fac35e12c08a2ef8ec12"
+      "bytes": 6341,
+      "sha256": "824f9894c03455f7549efa6eba3c9a8d9d343256d13c89005910c01e6a00c28d"
     },
     "metadata_grounding_registry.jsonl": {
       "bytes": 4886,
@@ -115,8 +115,8 @@
       "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 23339,
-      "sha256": "f6fd2e0041cde722a73483c988e6b50b38183b1c1a097b76336daeb88df8efef"
+      "bytes": 23660,
+      "sha256": "426f7a5f314985968877cfe634e0a9736ca692f77c8fed6dcbff9cc520cbd5c9"
     }
   },
   "fixtures": {

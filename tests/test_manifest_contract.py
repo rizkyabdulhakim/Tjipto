@@ -61,6 +61,7 @@ class ManifestContractTest(unittest.TestCase):
         )
         self.assertEqual(report["instrument_baseline"]["status"], "corrected")
         self.assertFalse(report["instrument_baseline"]["metadata_viewer_highlightable"])
+        self.assertEqual(report["bbox_precision_policy"]["status"], "corrected")
         self.assertEqual(report["artifact_governance"]["status"], "current_final_artifacts_present")
         self.assertIn(
             "Pasal 22D ayat (3) bbox/text exception remains tracked",

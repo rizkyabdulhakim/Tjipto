@@ -527,5 +527,11 @@
       "signatory_block_record"
     ],
     "metadata_viewer_highlightable": false
+  },
+  "bbox_precision_policy": {
+    "status": "corrected",
+    "exact_policy": "bbox_precision=exact rows may remain viewer_highlightable",
+    "fallback_policy": "bbox_precision=page_grounded_only rows are not viewer_highlightable",
+    "coarse_policy": "bbox_precision=coarse rows are not viewer_highlightable"
   }
 }

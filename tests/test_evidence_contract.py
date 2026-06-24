@@ -189,6 +189,24 @@ class EvidenceContractTest(unittest.TestCase):
                 continue
             self.assertFalse(any(marker in row["text"] for marker in forbidden), row["legal_unit_id"])
 
+    def test_amendment_2_bab_xv_parent_context_is_clean(self) -> None:
+        units = read_jsonl(FINAL / "legal_units.jsonl")
+        unit = next(
+            row
+            for row in units
+            if row["source_document_id"] == "uud::amendment_2_historical" and row.get("unit_label") == "BAB XV"
+        )
+        self.assertNotIn("Ditetapkan di Jakarta", unit["text"])
+        self.assertNotIn("MAJELIS PERMUSYAWARATAN RAKYAT", unit["text"])
+        chunk = next(
+            row
+            for row in read_jsonl(FINAL / "chunks.jsonl")
+            if row["legal_unit_id"] == unit["legal_unit_id"]
+        )
+        self.assertEqual(chunk["chunk_type"], "bab_structural_context_record")
+        self.assertNotIn("Ditetapkan di Jakarta", chunk["text"])
+        self.assertNotIn("MAJELIS PERMUSYAWARATAN RAKYAT", chunk["text"])
+
 
 if __name__ == "__main__":
     unittest.main()

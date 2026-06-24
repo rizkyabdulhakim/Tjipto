@@ -17,6 +17,8 @@ class BBoxContractTest(unittest.TestCase):
         self.assertEqual(len(rows), 1542)
         for row in rows:
             self.assertTrue(bbox_is_accepted(row))
+            self.assertIn(row["bbox_precision"], {"exact", "coarse", "page_grounded_only"})
+            self.assertEqual(row["viewer_highlightable"], row["bbox_precision"] == "exact")
             self.assertGreaterEqual(row["x1"], row["x0"])
             self.assertGreaterEqual(row["y1"], row["y0"])
             self.assertTrue(row["text"])
@@ -35,6 +37,7 @@ class BBoxContractTest(unittest.TestCase):
         for row in rows:
             self.assertEqual(row["status"], "accepted_metadata_grounding")
             self.assertFalse(row["viewer_highlightable"])
+            self.assertEqual(row["bbox_precision"], "page_grounded_only")
             self.assertTrue(row["quoted_text"])
             self.assertTrue(row["bbox_refs"])
             self.assertTrue(set(row["bbox_refs"]).isdisjoint(legal_evidence_bbox_ids))
@@ -63,6 +66,30 @@ class BBoxContractTest(unittest.TestCase):
             self.assertEqual(target["hierarchy"][0], expected[row["text"]], row["bbox_id"])
             self.assertIn(row["bbox_id"], target["bbox_refs"])
             self.assertIn("heading_bab_", row["bbox_id"])
+
+    def test_decision_bbox_precision_is_exact_or_non_highlightable(self) -> None:
+        bbox_by_id = {
+            row["bbox_id"]: row
+            for row in read_jsonl(FINAL / "bbox_registry.jsonl")
+        }
+        for label in (
+            "Perubahan Pertama Decision",
+            "Perubahan Ketiga Decision",
+            "Perubahan Keempat Decision",
+        ):
+            evidence = next(
+                row
+                for row in read_jsonl(FINAL / "evidence_registry.jsonl")
+                if row["citation"] == label
+            )
+            self.assertIn(evidence["bbox_precision"], {"exact", "page_grounded_only", "coarse"})
+            self.assertEqual(evidence["viewer_highlightable"], evidence["bbox_precision"] == "exact")
+            for bbox_id in evidence["bbox_refs"]:
+                bbox = bbox_by_id[bbox_id]
+                self.assertIn(bbox["bbox_precision"], {"exact", "page_grounded_only", "coarse"})
+                self.assertEqual(bbox["viewer_highlightable"], bbox["bbox_precision"] == "exact")
+                if bbox["viewer_highlightable"]:
+                    self.assertNotIn("Pasal ", bbox["text"])
 
 
 if __name__ == "__main__":

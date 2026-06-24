@@ -10,6 +10,14 @@ from tjipto.core.manifest import file_sha256, read_json, read_jsonl
 
 
 FINAL_DIR = Path("data/final/uud")
+DECISION_LABELS = {
+    "Perubahan Pertama Decision",
+    "Perubahan Ketiga Decision",
+    "Perubahan Keempat Decision",
+}
+STRUCTURAL_FORBIDDEN_MARKERS = (
+    "Ditetapkan di Jakarta",
+)
 
 
 INSERTED_BAB_SPECS = (
@@ -155,12 +163,23 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
 
     source_documents = {row["source_document_id"]: row for row in read_jsonl(final_dir / "source_documents.jsonl")}
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
+    legal_units = [row for row in legal_units if _numeric_suffix(row["legal_unit_id"]) <= 609]
+    chunks = [row for row in chunks if _numeric_suffix(row["chunk_id"]) <= 609]
+    evidence = [row for row in evidence if not row["evidence_id"].startswith("uud_instrument_final_citation_evidence::")]
+    bbox_rows = [row for row in bbox_rows if not row["evidence_id"].startswith("uud_instrument_final_citation_evidence::")]
+    retrieval_units = [row for row in retrieval_units if not row["retrieval_unit_id"].startswith("uud_retrieval_unit::uud_instrument_final_citation_evidence::")]
     units_by_source_label = {(row["source_document_id"], row.get("unit_label")): row for row in legal_units}
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     evidence_by_unit = {row["legal_unit_id"]: row for row in evidence}
     bbox_by_evidence: dict[str, list[dict]] = defaultdict(list)
     for row in bbox_rows:
+        row.setdefault("bbox_precision", "exact")
+        row.setdefault("viewer_highlightable", True)
         bbox_by_evidence[row["evidence_id"]].append(row)
+    for row in evidence:
+        if row["evidence_id"] in bbox_by_evidence:
+            row["bbox_precision"] = _aggregate_bbox_precision(bbox_by_evidence[row["evidence_id"]])
+            row["viewer_highlightable"] = any(item["viewer_highlightable"] for item in bbox_by_evidence[row["evidence_id"]])
 
     docs = {
         source_id: fitz.open(repo_root / meta["path"])
@@ -196,6 +215,8 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
     def trim_unit(source_document_id: str, unit_label: str, marker: str, *, hierarchy_suffix: tuple[str, ...] | None = None) -> None:
         unit = _find_unit(legal_units, source_document_id, unit_label, hierarchy_suffix=hierarchy_suffix)
         chunk = chunks_by_unit[unit["legal_unit_id"]]
+        if marker not in unit["text"]:
+            return
         trimmed = _trim_before(unit["text"], marker)
         unit["text"] = trimmed
         unit["page_start"], unit["page_end"] = _page_span_for_text(pages_by_source, source_document_id, trimmed, unit["page_start"], unit["page_end"])
@@ -349,6 +370,7 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         quoted_text = "\n".join(row["text"] for row in bbox_records)
         evidence_row = {
             "bbox_refs": [row["bbox_id"] for row in bbox_records],
+            "bbox_precision": _aggregate_bbox_precision(bbox_records),
             "citation": unit_label,
             "corpus_id": "uud",
             "evidence_id": evidence_id,
@@ -363,6 +385,7 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
             "source_sha256": source_meta["sha256"],
             "status": "final",
             "temporal_context": source_role(source_id),
+            "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
         }
         evidence.append(evidence_row)
         bbox_rows.extend(bbox_records)
@@ -412,6 +435,7 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
     scope_text = _slice_between(page1, "Setelah Mempelajari", "sehingga selengkapnya berbunyi sebagai berikut :").strip() + " sehingga selengkapnya berbunyi sebagai berikut :"
     append_instrument_unit(source_id, "amendment_recital_record", "Perubahan Kedua Recital", recital_text, 1, 1)
     append_instrument_unit(source_id, "amendment_scope_record", "Perubahan Kedua Scope", scope_text, 1, 1)
+    trim_bab(source_id, "BAB XV", "Ditetapkan di Jakarta")
     trim_unit(source_id, "Pasal 36C", "Ditetapkan di Jakarta")
     determination = _slice_between(page8, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()
     signatory = page8[page8.index("MAJELIS PERMUSYAWARATAN RAKYAT"):].strip()
@@ -521,6 +545,7 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
     append_instrument_unit(source_id, "signatory_block_record", "Perubahan Keempat Signatories", signatory, 6, 6)
 
     for row in metadata_grounding:
+        row["bbox_precision"] = "page_grounded_only"
         row["viewer_highlightable"] = False
 
     bbox_rows = [
@@ -564,6 +589,12 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         ],
         "metadata_viewer_highlightable": False,
     }
+    validation_report["bbox_precision_policy"] = {
+        "status": "corrected",
+        "exact_policy": "bbox_precision=exact rows may remain viewer_highlightable",
+        "fallback_policy": "bbox_precision=page_grounded_only rows are not viewer_highlightable",
+        "coarse_policy": "bbox_precision=coarse rows are not viewer_highlightable",
+    }
     (final_dir / "validation_report.json").write_text(json.dumps(validation_report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     _refresh_manifest(final_dir, manifest)
@@ -586,6 +617,7 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
     metadata_grounding = read_jsonl(final_dir / "metadata_grounding.jsonl")
 
     errors: list[str] = []
+    seen_ids: dict[str, set[str]] = defaultdict(set)
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     chunks_by_id = {row["chunk_id"]: row for row in chunks}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
@@ -616,6 +648,9 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
 
     forbidden_markers = ("Naskah perubahan ini merupakan", "Perubahan tersebut diputuskan", "Ditetapkan di Jakarta")
     for row in legal_units:
+        if row["legal_unit_id"] in seen_ids["legal_unit_id"]:
+            errors.append(f"duplicate_legal_unit_id:{row['legal_unit_id']}")
+        seen_ids["legal_unit_id"].add(row["legal_unit_id"])
         if row["unit_type"] in {"pasal_record", "ayat_record"}:
             if any(marker in row["text"] for marker in forbidden_markers):
                 errors.append(f"closing_clause_attached_to_normative_unit:{row['legal_unit_id']}")
@@ -624,11 +659,21 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
         if row["unit_type"] == "pasal_record" and row.get("hierarchy") and str(row["hierarchy"][0]).startswith("BAB"):
             if not any(units_by_id[parent]["unit_type"] == "bab_record" for parent in row.get("parent_legal_unit_ids") or () if parent in units_by_id):
                 errors.append(f"pasal_missing_bab_parent:{row['legal_unit_id']}")
+        if row["unit_type"] == "bab_record" and any(marker in row["text"] for marker in STRUCTURAL_FORBIDDEN_MARKERS):
+            errors.append(f"structural_bab_contains_instrument_text:{row['legal_unit_id']}")
 
     for row in chunks:
+        if row["chunk_id"] in seen_ids["chunk_id"]:
+            errors.append(f"duplicate_chunk_id:{row['chunk_id']}")
+        seen_ids["chunk_id"].add(row["chunk_id"])
         if row["legal_unit_id"] not in units_by_id:
             errors.append(f"orphan_chunk:{row['chunk_id']}")
+        if row["chunk_type"] == "bab_structural_context_record" and any(marker in row["text"] for marker in STRUCTURAL_FORBIDDEN_MARKERS):
+            errors.append(f"structural_chunk_contains_instrument_text:{row['chunk_id']}")
     for row in evidence:
+        if row["evidence_id"] in seen_ids["evidence_id"]:
+            errors.append(f"duplicate_evidence_id:{row['evidence_id']}")
+        seen_ids["evidence_id"].add(row["evidence_id"])
         if row["legal_unit_id"] not in units_by_id:
             errors.append(f"orphan_evidence:{row['evidence_id']}")
         for bbox_id in row.get("bbox_refs") or ():
@@ -636,14 +681,38 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
                 errors.append(f"orphan_bbox_ref:{row['evidence_id']}:{bbox_id}")
             elif bbox_by_id[bbox_id]["page_number"] not in row["page_numbers"]:
                 errors.append(f"bbox_page_mismatch:{row['evidence_id']}:{bbox_id}")
+        if row.get("citation") in DECISION_LABELS:
+            for bbox_id in row.get("bbox_refs") or ():
+                bbox_row = bbox_by_id.get(bbox_id)
+                if not bbox_row:
+                    continue
+                if bbox_row.get("viewer_highlightable") and bbox_row.get("bbox_precision") != "exact":
+                    errors.append(f"decision_bbox_not_exact:{row['evidence_id']}:{bbox_id}")
+                if bbox_row.get("viewer_highlightable") and "Pasal " in bbox_row.get("text", ""):
+                    errors.append(f"decision_bbox_contains_normative_text:{row['evidence_id']}:{bbox_id}")
+                if bbox_row.get("bbox_precision") in {"coarse", "page_grounded_only"} and bbox_row.get("viewer_highlightable"):
+                    errors.append(f"coarse_bbox_marked_highlightable:{bbox_id}")
+    for row in bbox_rows:
+        if row["bbox_id"] in seen_ids["bbox_id"]:
+            errors.append(f"duplicate_bbox_id:{row['bbox_id']}")
+        seen_ids["bbox_id"].add(row["bbox_id"])
+        if row.get("bbox_precision") not in {"exact", "coarse", "page_grounded_only"}:
+            errors.append(f"invalid_bbox_precision:{row['bbox_id']}")
+        if row.get("bbox_precision") in {"coarse", "page_grounded_only"} and row.get("viewer_highlightable"):
+            errors.append(f"coarse_bbox_marked_highlightable:{row['bbox_id']}")
     for row in retrieval_units:
+        if row["retrieval_unit_id"] in seen_ids["retrieval_unit_id"]:
+            errors.append(f"duplicate_retrieval_unit_id:{row['retrieval_unit_id']}")
+        seen_ids["retrieval_unit_id"].add(row["retrieval_unit_id"])
         if row["chunk_id"] not in chunks_by_id:
             errors.append(f"orphan_retrieval_chunk:{row['retrieval_unit_id']}")
         if row["evidence_id"] not in evidence_by_id:
             errors.append(f"orphan_retrieval_evidence:{row['retrieval_unit_id']}")
     for row in metadata_grounding:
-        if not row.get("viewer_highlightable") is False:
+        if row.get("viewer_highlightable") is not False:
             errors.append(f"metadata_grounding_highlightable_not_clarified:{row['metadata_grounding_id']}")
+        if row.get("bbox_precision") not in {None, "coarse", "exact", "page_grounded_only"}:
+            errors.append(f"invalid_metadata_bbox_precision:{row['metadata_grounding_id']}")
 
     return tuple(sorted(set(errors)))
 
@@ -674,10 +743,15 @@ def _count_jsonl(path: Path) -> int:
 def _next_numeric_id(rows: list[dict], key: str) -> int:
     max_value = 0
     for row in rows:
-        match = re.search(r"(\d+)$", str(row.get(key, "")))
-        if match:
-            max_value = max(max_value, int(match.group(1)))
+        value = _numeric_suffix(str(row.get(key, "")))
+        if value:
+            max_value = max(max_value, value)
     return max_value + 1
+
+
+def _numeric_suffix(value: str) -> int:
+    match = re.search(r"(\d+)$", value)
+    return int(match.group(1)) if match else 0
 
 
 def _find_unit(
@@ -746,6 +820,8 @@ def _rebuild_evidence(existing: dict, text: str, line_entries: dict[int, list[di
     existing["quoted_text"] = "\n".join(row["text"] for row in bbox_records)
     existing["page_numbers"] = sorted({row["page_number"] for row in bbox_records})
     existing["bbox_refs"] = [row["bbox_id"] for row in bbox_records]
+    existing["bbox_precision"] = _aggregate_bbox_precision(bbox_records)
+    existing["viewer_highlightable"] = any(row["viewer_highlightable"] for row in bbox_records)
     bbox_by_evidence[existing["evidence_id"]] = bbox_records
 
 
@@ -807,6 +883,7 @@ def _build_bbox_rows(
     for index, row in enumerate(matched):
         rows.append({
             "bbox_id": f"uud_unified_bbox::{evidence_id}::{index:04d}",
+            "bbox_precision": "exact",
             "corpus_id": "uud",
             "evidence_id": evidence_id,
             "page_number": row["page_number"],
@@ -816,6 +893,7 @@ def _build_bbox_rows(
             "source_sha256": source_meta["sha256"],
             "status": "accepted",
             "text": row["text"],
+            "viewer_highlightable": True,
             "x0": row["x0"],
             "x1": row["x1"],
             "y0": row["y0"],
@@ -871,6 +949,7 @@ def _fallback_bbox_rows(
             continue
         rows.append({
             "bbox_id": f"uud_unified_bbox::{evidence_id}::{index:04d}",
+            "bbox_precision": "page_grounded_only",
             "corpus_id": "uud",
             "evidence_id": evidence_id,
             "page_number": page_number,
@@ -880,6 +959,7 @@ def _fallback_bbox_rows(
             "source_sha256": source_meta["sha256"],
             "status": "accepted",
             "text": text.strip() if index == 0 else "",
+            "viewer_highlightable": False,
             "x0": min(row["x0"] for row in candidates),
             "x1": max(row["x1"] for row in candidates),
             "y0": min(row["y0"] for row in candidates),
@@ -888,3 +968,12 @@ def _fallback_bbox_rows(
     if not rows:
         raise ValueError(f"unable_to_build_bbox_rows:{source_id}:{text[:80]}")
     return rows
+
+
+def _aggregate_bbox_precision(rows: list[dict]) -> str:
+    precisions = {row.get("bbox_precision") for row in rows}
+    if precisions == {"exact"}:
+        return "exact"
+    if "page_grounded_only" in precisions:
+        return "page_grounded_only"
+    return "coarse"
