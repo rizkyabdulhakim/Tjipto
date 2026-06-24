@@ -129,7 +129,9 @@ def _public_viewer(result: dict) -> dict:
 def _public_bbox(row: dict) -> dict:
     return {
         "bbox_id": row.get("bbox_id"),
+        "bbox_precision": row.get("bbox_precision"),
         "page_number": row.get("page_number"),
+        "viewer_highlightable": row.get("viewer_highlightable"),
         "x0": row.get("x0"),
         "y0": row.get("y0"),
         "x1": row.get("x1"),

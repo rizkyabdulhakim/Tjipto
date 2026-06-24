@@ -343,6 +343,32 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertNotIn("source_sha256", viewer["pdf"]["access_url"])
         self.assertNotIn("source_pdf_path", viewer["pdf"]["access_url"])
 
+    def test_public_viewer_payload_exposes_highlightability_contract(self) -> None:
+        exact = handle_request(
+            "uud",
+            "viewer",
+            {"evidence_id": "uud_current_consolidated_final_citation_evidence_00237"},
+            ROOT,
+        )
+        self.assertTrue(exact["bbox_rectangles"])
+        self.assertEqual(exact["bbox_rectangles"][0]["bbox_precision"], "exact")
+        self.assertTrue(exact["bbox_rectangles"][0]["viewer_highlightable"])
+        self.assertNotIn("source_pdf_path", exact["bbox_rectangles"][0])
+        self.assertNotIn("source_sha256", exact["bbox_rectangles"][0])
+        self.assertNotIn("evidence_id", exact["bbox_rectangles"][0])
+        self.assertNotIn("source_document_id", exact["bbox_rectangles"][0])
+
+        decision = handle_request(
+            "uud",
+            "viewer",
+            {"evidence_id": "uud_instrument_final_citation_evidence::amendment_4_historical::00024::perubahan_keempat_decision"},
+            ROOT,
+        )
+        self.assertEqual(decision["status"], "viewer_payload_ready")
+        self.assertTrue(decision["bbox_rectangles"])
+        self.assertEqual(decision["bbox_rectangles"][0]["bbox_precision"], "page_grounded_only")
+        self.assertFalse(decision["bbox_rectangles"][0]["viewer_highlightable"])
+
     def test_query_normalization_and_intent_classification(self) -> None:
         self.assertEqual(normalize_query("pasal 28 e")["normalized_query"], "Pasal 28E")
         self.assertEqual(normalize_query("pasal 1 ayat 3")["normalized_query"], "Pasal 1 ayat (3)")

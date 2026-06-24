@@ -80,9 +80,23 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertNotIn("source_pdf_path", viewer["pdf"]["access_url"])
         self.assertNotIn("data_url", viewer["pdf"])
         self.assertTrue(viewer["bbox_rectangles"])
+        self.assertEqual(viewer["bbox_rectangles"][0]["bbox_precision"], "exact")
+        self.assertTrue(viewer["bbox_rectangles"][0]["viewer_highlightable"])
+        self.assertNotIn("source_pdf_path", viewer["bbox_rectangles"][0])
+        self.assertNotIn("source_sha256", viewer["bbox_rectangles"][0])
+        self.assertNotIn("source_document_id", viewer["bbox_rectangles"][0])
+        self.assertNotIn("evidence_id", viewer["bbox_rectangles"][0])
         pdf_body, pdf_headers = self._get_bytes(viewer["pdf"]["access_url"])
         self.assertEqual(pdf_headers["Content-Type"], "application/pdf")
         self.assertTrue(pdf_body.startswith(b"%PDF"))
+
+        decision = self._post(
+            "/legal/uud/viewer",
+            {"evidence_id": "uud_instrument_final_citation_evidence::amendment_4_historical::00024::perubahan_keempat_decision"},
+        )
+        self.assertEqual(decision["status"], "viewer_payload_ready")
+        self.assertEqual(decision["bbox_rectangles"][0]["bbox_precision"], "page_grounded_only")
+        self.assertFalse(decision["bbox_rectangles"][0]["viewer_highlightable"])
 
         saved = self._post("/legal/uud/bookmarks", {"evidence_id": evidence_id, "note": "cek lagi"})
         self.assertEqual(saved["status"], "saved")

@@ -84,7 +84,10 @@ export interface ViewerPayload {
   source_status_label?: string;
   page_numbers?: number[];
   bbox_count?: number;
-  bbox_rectangles?: PdfBBox[];
+  bbox_rectangles?: (PdfBBox & {
+    bbox_precision?: "exact" | "coarse" | "page_grounded_only";
+    viewer_highlightable?: boolean;
+  })[];
   pdf_access_available?: boolean;
   rendering_available?: boolean;
   render_status?: string;

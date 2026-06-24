@@ -543,7 +543,7 @@ function PdfPage({
   const [pageViewport, setPageViewport] = useState<ReturnType<PDFPageProxy["getViewport"]> | null>(null);
   const [rendered, setRendered] = useState(false);
   const pageBoxes = boxes.filter(
-    (box) => box.page_number === pageNumber,
+    (box) => box.page_number === pageNumber && box.viewer_highlightable !== false,
   );
 
   useEffect(() => {
