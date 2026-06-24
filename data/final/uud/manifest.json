@@ -10,8 +10,8 @@
     "document_metadata": 6,
     "evidence_records": 464,
     "excluded_records": 6,
-    "graph_edges": 3150,
-    "graph_nodes": 2339,
+    "graph_edges": 5122,
+    "graph_nodes": 2740,
     "legal_units": 651,
     "metadata_assertions": 1319,
     "metadata_graph_edges": 449,
@@ -55,12 +55,12 @@
       "sha256": "ad8b77fd73c46374e37938aeef7727c24a6d4987df2e664c3771bebf10ce49d0"
     },
     "graph_edges.jsonl": {
-      "bytes": 765325,
-      "sha256": "1cc2cad7de169e769267e619671a7a54c31250a52e37ae786a544b8ff1c84ce6"
+      "bytes": 1762102,
+      "sha256": "9f8c79708cb1a9587c5303e849dc4007d39e87eb4459ae0181eaf2dcb49b315d"
     },
     "graph_nodes.jsonl": {
-      "bytes": 851845,
-      "sha256": "d14790c0231c7c569253a6485ce21404268b089ced91d2967fe19406f65d9580"
+      "bytes": 1464309,
+      "sha256": "e7c8462ce71a1b46459273857bd0161655e46bd46e39e19895c4b28ff12ea66f"
     },
     "legal_units.jsonl": {
       "bytes": 497240,
@@ -115,8 +115,8 @@
       "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 23954,
-      "sha256": "4d4ac5fa712c3e6b0a98269f4508830919d956734eba5f74d148c2a9c4255f84"
+      "bytes": 24448,
+      "sha256": "582179643cdda3d0fbdfa466f31feec3f2066d3321200ed88c51d3679dd8266b"
     }
   },
   "fixtures": {

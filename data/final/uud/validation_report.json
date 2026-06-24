@@ -498,7 +498,9 @@
     "excluded_records": 6,
     "evidence_records": 464,
     "bbox_records": 1542,
-    "retrieval_units": 464
+    "retrieval_units": 464,
+    "graph_nodes": 2740,
+    "graph_edges": 5122
   },
   "artifact_governance": {
     "status": "current_final_artifacts_present",
@@ -543,5 +545,24 @@
   "bbox_highlightability_counts": {
     "viewer_highlightable": 1532,
     "non_highlightable": 10
+  },
+  "legal_graph_baseline": {
+    "status": "evidence_backed_minimal_baseline",
+    "legal_edge_types": [
+      "ADDS",
+      "AMENDED_BY",
+      "AMENDS",
+      "CONTAINS",
+      "DELETES",
+      "HAS_DECISION_SESSION",
+      "HAS_EFFECTIVE_RULE",
+      "HAS_SIGNATORY",
+      "HAS_SOURCE_ANOMALY",
+      "MODIFIES",
+      "PART_OF",
+      "RENAMES",
+      "SUPPLEMENTS"
+    ],
+    "runtime_loadable_legal_edges": 1497
   }
 }

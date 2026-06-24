@@ -157,9 +157,42 @@ def validate_corpus_ingestion_artifacts(corpus_id: str, repo_root: Path) -> dict
                 errors.append(f"graph_node_missing_pdf:{node_id}")
             elif row.get("source_sha256") and _sha256(path) != row["source_sha256"]:
                 errors.append(f"graph_node_source_sha256_mismatch:{node_id}")
+    legal_edge_types = {
+        "CONTAINS",
+        "PART_OF",
+        "AMENDS",
+        "AMENDED_BY",
+        "ADDS",
+        "MODIFIES",
+        "DELETES",
+        "RENAMES",
+        "SUPPLEMENTS",
+        "HAS_EFFECTIVE_RULE",
+        "HAS_SIGNATORY",
+        "HAS_DECISION_SESSION",
+        "HAS_SOURCE_ANOMALY",
+    }
+    evidence_ids = set(evidence)
+    metadata_grounding_ids = {row["metadata_grounding_id"] for row in config.jsonl("metadata_grounding")}
+    source_conflict_ids = {row["source_conflict_id"] for row in config.jsonl("source_conflicts")}
     for edge in config.jsonl("graph_edges"):
         if edge["source_id"] not in graph_nodes or edge["target_id"] not in graph_nodes:
             errors.append(f"graph_edge_unknown_endpoint:{edge['edge_id']}")
+        if edge.get("edge_type") in legal_edge_types:
+            if not edge.get("source_document_id"):
+                errors.append(f"graph_legal_edge_missing_source_document:{edge['edge_id']}")
+            if edge.get("runtime_loadable") is True:
+                if not edge.get("evidence_ref"):
+                    errors.append(f"graph_runtime_edge_missing_evidence:{edge['edge_id']}")
+                if not edge.get("validation_status"):
+                    errors.append(f"graph_runtime_edge_missing_validation:{edge['edge_id']}")
+                if not edge.get("confidence_policy"):
+                    errors.append(f"graph_runtime_edge_missing_confidence:{edge['edge_id']}")
+            ref = edge.get("evidence_ref")
+            if ref and ref not in evidence_ids and ref not in metadata_grounding_ids and ref not in source_conflict_ids:
+                errors.append(f"graph_legal_edge_unknown_evidence_ref:{edge['edge_id']}:{ref}")
+            if edge.get("edge_type") in {"AMENDS", "AMENDED_BY"} and str(edge["source_id"]).startswith("source_role::"):
+                errors.append(f"graph_source_role_amends_promoted:{edge['edge_id']}")
 
     for row in config.jsonl("retrieval_units"):
         if row["evidence_id"] not in evidence:

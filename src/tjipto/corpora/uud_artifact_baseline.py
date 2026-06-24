@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -19,6 +20,29 @@ INSERTED_BAB_HEADING_BBOX_MARKER = "::heading_bab_"
 STRUCTURAL_FORBIDDEN_MARKERS = (
     "Ditetapkan di Jakarta",
 )
+PROVENANCE_EDGE_TYPES = {
+    "HAS_FINAL_EVIDENCE",
+    "BELONGS_TO_SOURCE_ROLE",
+    "USES_SOURCE_PDF",
+    "PAGE_GROUNDED_AT",
+    "HAS_BBOX",
+    "EXCLUDED_BECAUSE",
+}
+LEGAL_EDGE_TYPES = {
+    "CONTAINS",
+    "PART_OF",
+    "AMENDS",
+    "AMENDED_BY",
+    "ADDS",
+    "MODIFIES",
+    "DELETES",
+    "RENAMES",
+    "SUPPLEMENTS",
+    "HAS_EFFECTIVE_RULE",
+    "HAS_SIGNATORY",
+    "HAS_DECISION_SESSION",
+    "HAS_SOURCE_ANOMALY",
+}
 
 
 INSERTED_BAB_SPECS = (
@@ -162,6 +186,7 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
     document_metadata = read_jsonl(final_dir / "document_metadata.jsonl")
     metadata_grounding = read_jsonl(final_dir / "metadata_grounding.jsonl")
     metadata_grounding_registry = read_jsonl(final_dir / "metadata_grounding_registry.jsonl")
+    excluded_records = read_jsonl(final_dir / "excluded_records.jsonl")
     source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
     validation_report = read_json(final_dir / "validation_report.json")
 
@@ -568,6 +593,16 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
     chunks.sort(key=lambda row: row["chunk_id"])
     evidence.sort(key=lambda row: row["evidence_id"])
     retrieval_units.sort(key=lambda row: row["retrieval_unit_id"])
+    graph_nodes, graph_edges = _rebuild_graph_artifacts(
+        source_documents=list(source_documents.values()),
+        pages=pages,
+        legal_units=legal_units,
+        evidence=evidence,
+        bbox_rows=bbox_rows,
+        excluded_records=excluded_records,
+        source_conflicts=source_conflicts,
+        metadata_grounding=metadata_grounding,
+    )
 
     _write_jsonl(final_dir / "legal_units.jsonl", legal_units)
     _write_jsonl(final_dir / "chunks.jsonl", chunks)
@@ -577,6 +612,8 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
     _write_jsonl(final_dir / "document_metadata.jsonl", document_metadata)
     _write_jsonl(final_dir / "metadata_grounding.jsonl", metadata_grounding)
     _write_jsonl(final_dir / "metadata_grounding_registry.jsonl", metadata_grounding_registry)
+    _write_jsonl(final_dir / "graph_nodes.jsonl", graph_nodes)
+    _write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
 
     validation_report["final_artifact_counts"] = {
         "chunks": len(chunks),
@@ -585,6 +622,8 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         "evidence_records": len(evidence),
         "bbox_records": len(bbox_rows),
         "retrieval_units": len(retrieval_units),
+        "graph_nodes": len(graph_nodes),
+        "graph_edges": len(graph_edges),
     }
     validation_report["bbox_precision_counts"] = _bbox_precision_counts(bbox_rows)
     validation_report["bbox_highlightability_counts"] = {
@@ -616,6 +655,15 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         "status": "field_grounded",
         "note": "field-level metadata grounding preserves block-level rows and keeps metadata viewer highlights fail-closed unless exact accepted support exists",
     }
+    validation_report["legal_graph_baseline"] = {
+        "status": "evidence_backed_minimal_baseline",
+        "legal_edge_types": sorted(LEGAL_EDGE_TYPES),
+        "runtime_loadable_legal_edges": sum(
+            1
+            for row in graph_edges
+            if row.get("edge_type") in LEGAL_EDGE_TYPES and row.get("runtime_loadable") is True
+        ),
+    }
     validation_report.setdefault("structure_fidelity", {})
     validation_report["structure_fidelity"]["inserted_bab_heading_owner_policy"] = (
         "inserted heading bboxes may stay exact, but they are viewer_highlightable only when owned by bab_record evidence"
@@ -629,6 +677,8 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         "evidence": len(evidence),
         "bbox": len(bbox_rows),
         "retrieval_units": len(retrieval_units),
+        "graph_nodes": len(graph_nodes),
+        "graph_edges": len(graph_edges),
     }
 
 
@@ -640,6 +690,9 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
     bbox_rows = read_jsonl(final_dir / "bbox_registry.jsonl")
     retrieval_units = read_jsonl(final_dir / "retrieval_units.jsonl")
     metadata_grounding = read_jsonl(final_dir / "metadata_grounding.jsonl")
+    graph_nodes = read_jsonl(final_dir / "graph_nodes.jsonl")
+    graph_edges = read_jsonl(final_dir / "graph_edges.jsonl")
+    source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
 
     errors: list[str] = []
     seen_ids: dict[str, set[str]] = defaultdict(set)
@@ -647,6 +700,9 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
     chunks_by_id = {row["chunk_id"]: row for row in chunks}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    graph_node_ids = {row["node_id"] for row in graph_nodes}
+    source_conflict_ids = {row["source_conflict_id"] for row in source_conflicts}
+    metadata_grounding_ids = {row["metadata_grounding_id"] for row in metadata_grounding}
     bbox_by_evidence: dict[str, list[dict]] = defaultdict(list)
     for row in bbox_rows:
         bbox_by_evidence[row["evidence_id"]].append(row)
@@ -747,6 +803,34 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
             errors.append(f"metadata_grounding_highlightable_not_clarified:{row['metadata_grounding_id']}")
         if row.get("bbox_precision") not in {None, "coarse", "exact", "page_grounded_only"}:
             errors.append(f"invalid_metadata_bbox_precision:{row['metadata_grounding_id']}")
+    for row in graph_nodes:
+        if row["node_id"] in seen_ids["node_id"]:
+            errors.append(f"duplicate_graph_node_id:{row['node_id']}")
+        seen_ids["node_id"].add(row["node_id"])
+    for row in graph_edges:
+        if row["edge_id"] in seen_ids["edge_id"]:
+            errors.append(f"duplicate_graph_edge_id:{row['edge_id']}")
+        seen_ids["edge_id"].add(row["edge_id"])
+        if row["source_id"] not in graph_node_ids or row["target_id"] not in graph_node_ids:
+            errors.append(f"orphan_graph_edge:{row['edge_id']}")
+        edge_type = row.get("edge_type")
+        if edge_type not in PROVENANCE_EDGE_TYPES | LEGAL_EDGE_TYPES:
+            errors.append(f"invalid_graph_edge_type:{row['edge_id']}:{edge_type}")
+        if edge_type in LEGAL_EDGE_TYPES:
+            if row.get("source_document_id") not in {unit["source_document_id"] for unit in legal_units}:
+                errors.append(f"legal_edge_missing_source_document:{row['edge_id']}")
+            if row.get("runtime_loadable") is True:
+                if not row.get("evidence_ref"):
+                    errors.append(f"runtime_loadable_legal_edge_missing_evidence:{row['edge_id']}")
+                if not row.get("validation_status"):
+                    errors.append(f"runtime_loadable_legal_edge_missing_validation:{row['edge_id']}")
+                if not row.get("confidence_policy"):
+                    errors.append(f"runtime_loadable_legal_edge_missing_confidence:{row['edge_id']}")
+            if edge_type in {"AMENDS", "AMENDED_BY"} and row["source_id"].startswith("source_role::"):
+                errors.append(f"source_role_amends_promoted:{row['edge_id']}")
+            evidence_ref = row.get("evidence_ref")
+            if evidence_ref and evidence_ref not in evidence_by_id and evidence_ref not in metadata_grounding_ids and evidence_ref not in source_conflict_ids:
+                errors.append(f"legal_edge_unknown_evidence_ref:{row['edge_id']}:{evidence_ref}")
 
     return tuple(sorted(set(errors)))
 
@@ -760,6 +844,8 @@ def _refresh_manifest(final_dir: Path, manifest: dict) -> None:
     counts["bbox_records"] = _count_jsonl(final_dir / "bbox_registry.jsonl")
     counts["metadata_grounding"] = _count_jsonl(final_dir / "metadata_grounding.jsonl")
     counts["metadata_grounding_records"] = _count_jsonl(final_dir / "metadata_grounding_registry.jsonl")
+    counts["graph_nodes"] = _count_jsonl(final_dir / "graph_nodes.jsonl")
+    counts["graph_edges"] = _count_jsonl(final_dir / "graph_edges.jsonl")
     counts["retrieval_units"] = _count_jsonl(final_dir / "retrieval_units.jsonl")
     for rel in manifest["files"]:
         path = final_dir / rel
@@ -1061,8 +1147,17 @@ def _rebuild_metadata_grounding(
         (row["source_document_id"].split("::", 1)[1], row.get("unit_label")): row
         for row in legal_units
     }
-    block_rows = [row | {"bbox_precision": "page_grounded_only", "viewer_highlightable": False} for row in metadata_grounding]
-    block_registry_rows = list(metadata_grounding_registry)
+    block_rows = [
+        row | {"bbox_precision": "page_grounded_only", "viewer_highlightable": False}
+        for row in metadata_grounding
+        if not str(row.get("metadata_grounding_id", "")).startswith("uud_metadata_field_grounding::")
+    ]
+    block_ids = {row["metadata_grounding_id"] for row in block_rows}
+    block_registry_rows = [
+        row
+        for row in metadata_grounding_registry
+        if row.get("metadata_grounding_id") in block_ids
+    ]
     source_conflicts_by_role: dict[str, list[dict]] = defaultdict(list)
     for row in source_conflicts:
         source_conflicts_by_role[row["source_document_id"].split("::", 1)[1]].append(row)
@@ -1299,6 +1394,320 @@ def _rebuild_metadata_grounding(
     all_grounding_rows = block_rows + field_rows
     all_registry_rows = block_registry_rows + field_registry_rows
     return document_metadata, all_grounding_rows, all_registry_rows
+
+
+def _rebuild_graph_artifacts(
+    *,
+    source_documents: list[dict],
+    pages: list[dict],
+    legal_units: list[dict],
+    evidence: list[dict],
+    bbox_rows: list[dict],
+    excluded_records: list[dict],
+    source_conflicts: list[dict],
+    metadata_grounding: list[dict],
+) -> tuple[list[dict], list[dict]]:
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    seen_nodes: set[str] = set()
+    seen_edges: set[str] = set()
+    unit_node_ids: dict[str, str] = {}
+    evidence_by_unit = {row["legal_unit_id"]: row for row in evidence}
+    source_by_id = {row["source_document_id"]: row for row in source_documents}
+    metadata_by_key = {
+        (row.get("source_role"), row.get("metadata_field")): row
+        for row in metadata_grounding
+    }
+
+    def add_node(node_id: str, **payload) -> None:
+        if node_id in seen_nodes:
+            return
+        seen_nodes.add(node_id)
+        nodes.append({"node_id": node_id, **payload})
+
+    def add_edge(source_id: str, target_id: str, edge_type: str, **payload) -> None:
+        edge_id = _edge_id(edge_type, source_id, target_id, payload.get("evidence_ref"))
+        if edge_id in seen_edges:
+            return
+        seen_edges.add(edge_id)
+        edges.append({
+            "edge_id": edge_id,
+            "edge_type": edge_type,
+            "relation_type": edge_type,
+            "source_id": source_id,
+            "target_id": target_id,
+            **payload,
+        })
+
+    for row in source_documents:
+        source_role = row["source_document_id"].split("::", 1)[1]
+        add_node(
+            f"source_role::{source_role}",
+            node_type="source_role",
+            source_role=source_role,
+        )
+        add_node(
+            f"source_pdf::{row['sha256'][:16]}",
+            node_type="source_pdf",
+            source_document_id=row["source_document_id"],
+            source_pdf=row["filename"],
+            source_pdf_path=row["path"],
+            source_role=source_role,
+            source_sha256=row["sha256"],
+        )
+
+    for row in pages:
+        source_meta = source_by_id[row["source_document_id"]]
+        add_node(
+            f"page::{source_meta['sha256'][:16]}::{row['page_number']:04d}",
+            node_type="page",
+            page_number=row["page_number"],
+            source_document_id=row["source_document_id"],
+            source_pdf=source_meta["filename"],
+            source_pdf_path=source_meta["path"],
+            source_role=row["source_document_id"].split("::", 1)[1],
+            source_sha256=source_meta["sha256"],
+        )
+
+    for row in legal_units:
+        source_role = row["source_document_id"].split("::", 1)[1]
+        node_id = f"legal_unit::{row['legal_unit_id']}"
+        unit_node_ids[row["legal_unit_id"]] = node_id
+        add_node(
+            node_id,
+            node_type="legal_unit",
+            legal_unit_id=row["legal_unit_id"],
+            source_document_id=row["source_document_id"],
+            source_role=source_role,
+            unit_label=row.get("unit_label"),
+            unit_type=row.get("unit_type"),
+            hierarchy_path=row.get("hierarchy") or ([row["unit_label"]] if row.get("unit_label") else []),
+            runtime_loadable=row.get("runtime_loadable") is not False,
+        )
+
+    for row in evidence:
+        add_node(
+            f"final_evidence::{row['evidence_id']}",
+            node_type="final_evidence",
+            final_evidence_id=row["evidence_id"],
+            citation=row.get("citation"),
+            source_document_id=row["source_document_id"],
+            source_role=row.get("source_role"),
+            source_sha256=row.get("source_sha256"),
+            viewer_highlightable=row.get("viewer_highlightable"),
+            bbox_precision=row.get("bbox_precision"),
+        )
+
+    for row in bbox_rows:
+        add_node(
+            f"bbox::{row['bbox_id']}",
+            node_type="bbox",
+            bbox_status="final_accepted_bbox",
+            bbox_id=row["bbox_id"],
+            final_evidence_id=row["evidence_id"],
+            page_number=row["page_number"],
+            rectangle_index=_numeric_suffix(row["bbox_id"]),
+            source_document_id=row["source_document_id"],
+            source_pdf=row["source_pdf"],
+            source_pdf_path=row["source_pdf_path"],
+            source_role=row["source_document_id"].split("::", 1)[1],
+            source_sha256=row["source_sha256"],
+        )
+
+    for row in excluded_records:
+        add_node(
+            f"excluded_record::{row['legacy_chunk_id']}",
+            node_type="excluded_record",
+            excluded_reason=row["reason"],
+            excluded_status=row["status"],
+            runtime_loadable=False,
+            source_role=row["source_role"],
+        )
+
+    for row in source_conflicts:
+        add_node(
+            f"source_conflict::{row['source_conflict_id']}",
+            node_type="source_conflict",
+            source_conflict_id=row["source_conflict_id"],
+            source_document_id=row["source_document_id"],
+            source_role=row["source_document_id"].split("::", 1)[1],
+            conflict_type=row["type"],
+            classification=row["classification"],
+            runtime_loadable=False,
+            status=row["status"],
+        )
+
+    for row in evidence:
+        evidence_node = f"final_evidence::{row['evidence_id']}"
+        source_meta = source_by_id[row["source_document_id"]]
+        add_edge(unit_node_ids[row["legal_unit_id"]], evidence_node, "HAS_FINAL_EVIDENCE")
+        add_edge(evidence_node, f"source_role::{row['source_role']}", "BELONGS_TO_SOURCE_ROLE")
+        add_edge(evidence_node, f"source_pdf::{source_meta['sha256'][:16]}", "USES_SOURCE_PDF")
+        for page_number in row.get("page_numbers") or ():
+            add_edge(
+                evidence_node,
+                f"page::{source_meta['sha256'][:16]}::{page_number:04d}",
+                "PAGE_GROUNDED_AT",
+            )
+        for bbox_id in row.get("bbox_refs") or ():
+            add_edge(evidence_node, f"bbox::{bbox_id}", "HAS_BBOX")
+
+    for row in excluded_records:
+        add_edge(
+            f"excluded_record::{row['legacy_chunk_id']}",
+            f"source_role::{row['source_role']}",
+            "EXCLUDED_BECAUSE",
+        )
+
+    for row in legal_units:
+        child_node = unit_node_ids[row["legal_unit_id"]]
+        evidence_row = evidence_by_unit.get(row["legal_unit_id"])
+        evidence_ref = evidence_row["evidence_id"] if evidence_row else None
+        runtime_loadable = evidence_ref is not None
+        for parent_id in row.get("parent_legal_unit_ids") or ():
+            parent_node = unit_node_ids.get(parent_id)
+            if not parent_node:
+                continue
+            payload = {
+                "source_document_id": row["source_document_id"],
+                "evidence_ref": evidence_ref,
+                "runtime_loadable": runtime_loadable,
+                "validation_status": "accepted_structural_hierarchy",
+                "confidence_policy": "legal_unit_parent_child_artifact",
+            }
+            add_edge(parent_node, child_node, "CONTAINS", **payload)
+            add_edge(child_node, parent_node, "PART_OF", **payload)
+
+    for row in evidence:
+        if row.get("citation", "").endswith(" Scope"):
+            source_node = unit_node_ids.get(row["legal_unit_id"])
+            for label in _scope_target_labels(row.get("quoted_text")):
+                target = _resolve_legal_unit_by_label(
+                    legal_units,
+                    row["source_document_id"],
+                    label,
+                )
+                if source_node and target:
+                    add_edge(
+                        source_node,
+                        unit_node_ids[target["legal_unit_id"]],
+                        "MODIFIES",
+                        source_document_id=row["source_document_id"],
+                        evidence_ref=row["evidence_id"],
+                        runtime_loadable=True,
+                        validation_status="accepted_instrument_scope",
+                        confidence_policy="explicit_scope_article_reference",
+                    )
+
+    delete_clause = next((row for row in evidence if row.get("citation") == "Perubahan Keempat Clause (d)"), None)
+    if delete_clause:
+        source_node = unit_node_ids[delete_clause["legal_unit_id"]]
+        for label in ("BAB IV", "Pasal 16"):
+            target = _resolve_legal_unit_by_label(legal_units, delete_clause["source_document_id"], label)
+            if target:
+                add_edge(
+                    source_node,
+                    unit_node_ids[target["legal_unit_id"]],
+                    "DELETES",
+                    source_document_id=delete_clause["source_document_id"],
+                    evidence_ref=delete_clause["evidence_id"],
+                    runtime_loadable=True,
+                    validation_status="accepted_instrument_clause",
+                    confidence_policy="explicit_delete_clause_reference",
+                )
+
+    for ordinal in ("Pertama", "Kedua", "Ketiga", "Keempat"):
+        role = _source_role_for_ordinal(ordinal)
+        signatory = next((row for row in evidence if row.get("citation") == f"Perubahan {ordinal} Signatories"), None)
+        if signatory:
+            add_edge(
+                f"source_role::{role}",
+                unit_node_ids[signatory["legal_unit_id"]],
+                "HAS_SIGNATORY",
+                source_document_id=signatory["source_document_id"],
+                evidence_ref=signatory["evidence_id"],
+                runtime_loadable=True,
+                validation_status="accepted_signatory_block",
+                confidence_policy="explicit_signatory_block_evidence",
+            )
+        decision = next((row for row in evidence if row.get("citation") == f"Perubahan {ordinal} Decision"), None)
+        if decision:
+            add_edge(
+                f"source_role::{role}",
+                unit_node_ids[decision["legal_unit_id"]],
+                "HAS_DECISION_SESSION",
+                source_document_id=decision["source_document_id"],
+                evidence_ref=decision["evidence_id"],
+                runtime_loadable=True,
+                validation_status="accepted_decision_clause",
+                confidence_policy="explicit_decision_clause_evidence",
+            )
+        effective_unit = next((row for row in legal_units if row.get("unit_label") == f"Perubahan {ordinal} Effective"), None)
+        effective_grounding = metadata_by_key.get((role, "effective_rule"))
+        if effective_unit and effective_grounding:
+            add_edge(
+                f"source_role::{role}",
+                unit_node_ids[effective_unit["legal_unit_id"]],
+                "HAS_EFFECTIVE_RULE",
+                source_document_id=effective_unit["source_document_id"],
+                evidence_ref=effective_grounding["metadata_grounding_id"],
+                runtime_loadable=False,
+                validation_status="grounded_metadata_only",
+                confidence_policy="field_level_metadata_grounding",
+            )
+
+    for row in source_conflicts:
+        role = row["source_document_id"].split("::", 1)[1]
+        add_edge(
+            f"source_role::{role}",
+            f"source_conflict::{row['source_conflict_id']}",
+            "HAS_SOURCE_ANOMALY",
+            source_document_id=row["source_document_id"],
+            evidence_ref=row["source_conflict_id"],
+            runtime_loadable=False,
+            validation_status="recorded_source_conflict",
+            confidence_policy="source_conflict_artifact_only",
+        )
+
+    nodes.sort(key=lambda row: (row["node_type"], row["node_id"]))
+    edges.sort(key=lambda row: (row["edge_type"], row["source_id"], row["target_id"], row["edge_id"]))
+    return nodes, edges
+
+
+def _edge_id(edge_type: str, source_id: str, target_id: str, evidence_ref: str | None) -> str:
+    digest = hashlib.md5(f"{edge_type}|{source_id}|{target_id}|{evidence_ref or ''}".encode("utf-8")).hexdigest()
+    return f"edge::{digest}"
+
+
+def _scope_target_labels(text: str | None) -> list[str]:
+    labels = []
+    seen = set()
+    for match in re.finditer(r"\bPasal\s+\d+[A-Z]?\b", text or ""):
+        label = match.group(0)
+        if label not in seen:
+            seen.add(label)
+            labels.append(label)
+    return labels
+
+
+def _resolve_legal_unit_by_label(legal_units: list[dict], source_document_id: str, label: str) -> dict | None:
+    return next(
+        (
+            row
+            for row in legal_units
+            if row["source_document_id"] == source_document_id and row.get("unit_label") == label
+        ),
+        None,
+    )
+
+
+def _source_role_for_ordinal(ordinal: str) -> str:
+    return {
+        "Pertama": "amendment_1_historical",
+        "Kedua": "amendment_2_historical",
+        "Ketiga": "amendment_3_historical",
+        "Keempat": "amendment_4_historical",
+    }[ordinal]
 
 
 def _ordinal_label(source_role: str) -> str:

@@ -35,9 +35,13 @@ def _article_for(row: dict) -> str | None:
 
 
 class GraphContractTest(unittest.TestCase):
-    def test_graph_lite_counts_are_preserved(self) -> None:
+    def test_graph_counts_match_manifest(self) -> None:
         graph = GraphStore(config_for("uud", ROOT))
-        self.assertEqual(graph.counts(), {"nodes": 2339, "edges": 3150})
+        manifest = json.loads((ROOT / "data/final/uud/manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            graph.counts(),
+            {"nodes": manifest["counts"]["graph_nodes"], "edges": manifest["counts"]["graph_edges"]},
+        )
 
     def test_article_versions_are_source_scoped_not_equivalence_claims(self) -> None:
         rows = read_jsonl(ROOT / "data/final/uud/article_versions.jsonl")
@@ -191,6 +195,39 @@ class GraphContractTest(unittest.TestCase):
         for row in amends:
             self.assertEqual(row["status"], "not_promoted_source_role_level_only")
             self.assertFalse(row["runtime_loadable"])
+
+    def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
+        edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
+        nodes = {row["node_id"] for row in read_jsonl(ROOT / "data/final/uud/graph_nodes.jsonl")}
+        legal_edges = [row for row in edges if row.get("edge_type") in {
+            "CONTAINS",
+            "PART_OF",
+            "MODIFIES",
+            "DELETES",
+            "HAS_EFFECTIVE_RULE",
+            "HAS_SIGNATORY",
+            "HAS_DECISION_SESSION",
+            "HAS_SOURCE_ANOMALY",
+        }]
+        self.assertTrue(legal_edges)
+        self.assertTrue(any(row["edge_type"] == "DELETES" for row in legal_edges))
+        self.assertTrue(any(row["edge_type"] == "HAS_SIGNATORY" for row in legal_edges))
+        self.assertTrue(any(row["edge_type"] == "HAS_DECISION_SESSION" for row in legal_edges))
+        self.assertTrue(any(row["edge_type"] == "HAS_EFFECTIVE_RULE" for row in legal_edges))
+        self.assertTrue(any(row["edge_type"] == "HAS_SOURCE_ANOMALY" for row in legal_edges))
+        self.assertFalse([
+            row for row in legal_edges
+            if row["edge_type"] in {"AMENDS", "AMENDED_BY"} and row["source_id"].startswith("source_role::")
+        ])
+        for row in legal_edges:
+            self.assertIn(row["source_id"], nodes)
+            self.assertIn(row["target_id"], nodes)
+            self.assertEqual(row["relation_type"], row["edge_type"])
+            self.assertTrue(row.get("source_document_id"))
+            if row.get("runtime_loadable") is True:
+                self.assertTrue(row.get("evidence_ref"))
+                self.assertTrue(row.get("validation_status"))
+                self.assertTrue(row.get("confidence_policy"))
 
     def test_uud_ingestion_artifacts_are_consistent(self) -> None:
         import fitz

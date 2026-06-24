@@ -26,8 +26,8 @@ class ManifestContractTest(unittest.TestCase):
                 "document_metadata": 6,
                 "evidence_records": 464,
                 "excluded_records": 6,
-                "graph_edges": 3150,
-                "graph_nodes": 2339,
+                "graph_edges": len((FINAL / "graph_edges.jsonl").read_text(encoding="utf-8").splitlines()),
+                "graph_nodes": len((FINAL / "graph_nodes.jsonl").read_text(encoding="utf-8").splitlines()),
                 "legal_units": 651,
                 "metadata_assertions": 1319,
                 "metadata_grounding": 37,
@@ -55,12 +55,15 @@ class ManifestContractTest(unittest.TestCase):
             self.assertTrue((FINAL / name).exists(), name)
         self.assertEqual(report["structure_fidelity"]["status"], "corrected")
         self.assertEqual(report["metadata_grounding_contract"]["status"], "field_grounded")
+        self.assertEqual(report["legal_graph_baseline"]["status"], "evidence_backed_minimal_baseline")
         actual_counts = {
             "chunks": len((FINAL / "chunks.jsonl").read_text(encoding="utf-8").splitlines()),
             "legal_units": len((FINAL / "legal_units.jsonl").read_text(encoding="utf-8").splitlines()),
             "evidence_records": len((FINAL / "evidence_registry.jsonl").read_text(encoding="utf-8").splitlines()),
             "bbox_records": len((FINAL / "bbox_registry.jsonl").read_text(encoding="utf-8").splitlines()),
             "retrieval_units": len((FINAL / "retrieval_units.jsonl").read_text(encoding="utf-8").splitlines()),
+            "graph_nodes": len((FINAL / "graph_nodes.jsonl").read_text(encoding="utf-8").splitlines()),
+            "graph_edges": len((FINAL / "graph_edges.jsonl").read_text(encoding="utf-8").splitlines()),
         }
         for key, value in actual_counts.items():
             self.assertEqual(report["final_artifact_counts"][key], value)
