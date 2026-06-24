@@ -8,15 +8,14 @@ from tjipto.corpora.uud.bbox_builder import (
     aggregate_bbox_precision,
     apply_inserted_bab_heading_bbox_policy,
     bbox_precision_counts,
-    build_bbox_rows,
     pdf_lines,
 )
-from tjipto.corpora.uud.evidence_builder import rebuild_evidence
+from tjipto.corpora.uud.evidence_builder import append_instrument_unit as append_instrument_record, rebuild_evidence
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.corpora.uud.manifest import refresh_manifest, write_json, write_jsonl
 from tjipto.corpora.uud.metadata_builder import rebuild_metadata_grounding, repair_metadata_graph_edges
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
-from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval, retrieval_text
+from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval
 from tjipto.corpora.uud.specs import FINAL_DIR, INSERTED_BAB_SPECS
 from tjipto.corpora.uud.structure_builder import (
     apply_inserted_bab_specs,
@@ -26,7 +25,6 @@ from tjipto.corpora.uud.structure_builder import (
     page_span_for_text,
     slice_before,
     slice_between,
-    slug,
     split_effective_clause,
     trim_before,
 )
@@ -164,8 +162,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         allocate_chunk_id=allocate_chunk_id,
     )
 
-    source_role = lambda source_id: source_id.split("::", 1)[1]
-
     def append_instrument_unit(
         source_id: str,
         unit_type: str,
@@ -183,99 +179,33 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         exclusion_ref: str | None = None,
         build_evidence: bool = True,
     ) -> str:
-        legal_unit_id = allocate_legal_id()
-        chunk_id = allocate_chunk_id()
-        source_meta = source_documents[source_id]
-        unit = {
-            "corpus_id": "uud",
-            "hierarchy": hierarchy or [],
-            "legal_unit_id": legal_unit_id,
-            "page_end": page_end,
-            "page_start": page_start,
-            "parent_legal_unit_ids": parent_legal_unit_ids or [],
-            "provenance": {"donor_id": legal_unit_id},
-            "source_document_id": source_id,
-            "source_sha256": source_meta["sha256"],
-            "status": chunk_status if runtime_loadable is False else "finalizable",
-            "text": text,
-            "unit_label": unit_label,
-            "unit_type": unit_type,
-        }
-        if runtime_loadable is False:
-            unit["runtime_loadable"] = False
-        if exclusion_ref:
-            unit["exclusion_ref"] = exclusion_ref
-        legal_units.append(unit)
-        chunk = {
-            "canonical_use_allowed": canonical_use_allowed,
-            "chunk_id": chunk_id,
-            "chunk_type": chunk_type or f"{unit_type.replace('_record', '')}_chunk_record",
-            "corpus_id": "uud",
-            "hierarchy": hierarchy or ([unit_label] if unit_label else []),
-            "legal_unit_id": legal_unit_id,
-            "page_range": {"start_page_number": page_start, "end_page_number": page_end},
-            "provenance": {"donor_id": chunk_id},
-            "source_sha256": source_meta["sha256"],
-            "status": chunk_status,
-            "text": text,
-        }
-        if runtime_loadable is False:
-            chunk["runtime_loadable"] = False
-        if exclusion_ref:
-            chunk["exclusion_ref"] = exclusion_ref
-        chunks.append(chunk)
-        if not build_evidence:
-            return legal_unit_id
-        evidence_id = allocate_evidence_id(source_role(source_id), slug(unit_label or unit_type))
-        bbox_records = build_bbox_rows(
-            evidence_id=evidence_id,
-            source_meta=source_meta,
+        return append_instrument_record(
             source_id=source_id,
+            unit_type=unit_type,
+            unit_label=unit_label,
             text=text,
             page_start=page_start,
             page_end=page_end,
-            line_entries=pdf_lines_by_source[source_id],
+            source_documents=source_documents,
+            pdf_lines_by_source=pdf_lines_by_source,
+            legal_units=legal_units,
+            chunks=chunks,
+            evidence=evidence,
+            bbox_rows=bbox_rows,
+            bbox_by_evidence=bbox_by_evidence,
+            retrieval_units=retrieval_units,
+            allocate_legal_id=allocate_legal_id,
+            allocate_chunk_id=allocate_chunk_id,
+            allocate_evidence_id=allocate_evidence_id,
+            hierarchy=hierarchy,
+            parent_legal_unit_ids=parent_legal_unit_ids,
+            chunk_type=chunk_type,
+            canonical_use_allowed=canonical_use_allowed,
+            chunk_status=chunk_status,
+            runtime_loadable=runtime_loadable,
+            exclusion_ref=exclusion_ref,
+            build_evidence=build_evidence,
         )
-        quoted_text = "\n".join(row["text"] for row in bbox_records)
-        evidence_row = {
-            "bbox_refs": [row["bbox_id"] for row in bbox_records],
-            "bbox_precision": aggregate_bbox_precision(bbox_records),
-            "citation": unit_label,
-            "corpus_id": "uud",
-            "evidence_id": evidence_id,
-            "hierarchy": hierarchy or ([unit_label] if unit_label else []),
-            "legal_unit_id": legal_unit_id,
-            "page_numbers": sorted({row["page_number"] for row in bbox_records}),
-            "quoted_text": quoted_text,
-            "source_document_id": source_id,
-            "source_pdf": source_meta["filename"],
-            "source_pdf_path": source_meta["path"],
-            "source_role": source_role(source_id),
-            "source_sha256": source_meta["sha256"],
-            "status": "final",
-            "temporal_context": source_role(source_id),
-            "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
-        }
-        evidence.append(evidence_row)
-        bbox_rows.extend(bbox_records)
-        bbox_by_evidence[evidence_id] = bbox_records
-        retrieval_units.append({
-            "bbox_sample_refs": [bbox_records[0]["bbox_id"]] if bbox_records else [],
-            "bbox_total_count": len(bbox_records),
-            "chunk_id": chunk_id,
-            "corpus_id": "uud",
-            "evidence_id": evidence_id,
-            "legal_unit_id": legal_unit_id,
-            "page_numbers": evidence_row["page_numbers"],
-            "retrieval_unit_id": f"uud_retrieval_unit::{evidence_id}",
-            "source_pdf_path": source_meta["path"],
-            "source_role": source_role(source_id),
-            "source_sha256": source_meta["sha256"],
-            "status": "accepted",
-            "temporal_context": source_role(source_id),
-            "text": retrieval_text(unit_label, hierarchy or [], quoted_text),
-        })
-        return legal_unit_id
 
     # Amendment 1
     source_id = "uud::amendment_1_historical"
