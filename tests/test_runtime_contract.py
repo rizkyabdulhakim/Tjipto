@@ -17,11 +17,29 @@ from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.router import route_retrieval
 from tjipto.retrieval.structured import structured_lookup
 from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candidate
-from tjipto.runtime.api import handle_request
+from tjipto.runtime.api import _public_bbox, handle_request
 from tjipto.runtime.service import LegalRuntimeService
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _exact_highlightable_evidence_id() -> str:
+    for row in CorpusRegistry(ROOT).resolve("uud").jsonl("evidence"):
+        if row.get("viewer_highlightable") is True:
+            return row["evidence_id"]
+    raise AssertionError("missing exact highlightable evidence")
+
+
+def _page_grounded_decision_evidence_id() -> str:
+    for row in CorpusRegistry(ROOT).resolve("uud").jsonl("evidence"):
+        if row.get("citation") in {
+            "Perubahan Pertama Decision",
+            "Perubahan Ketiga Decision",
+            "Perubahan Keempat Decision",
+        } and row.get("viewer_highlightable") is False:
+            return row["evidence_id"]
+    raise AssertionError("missing page-grounded decision evidence")
 
 
 class RuntimeContractTest(unittest.TestCase):
@@ -140,6 +158,7 @@ class RuntimeContractTest(unittest.TestCase):
     def test_retrieval_units_reference_final_evidence(self) -> None:
         from tjipto.core.manifest import read_jsonl
 
+        config = CorpusRegistry(ROOT).resolve("uud")
         evidence_ids = {
             row["evidence_id"]
             for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")
@@ -149,7 +168,7 @@ class RuntimeContractTest(unittest.TestCase):
             for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")
         }
         rows = read_jsonl(ROOT / "data/final/uud/retrieval_units.jsonl")
-        self.assertEqual(len(rows), 464)
+        self.assertEqual(len(rows), config.manifest["counts"]["retrieval_units"])
         for row in rows:
             self.assertIn(row["evidence_id"], evidence_ids)
             self.assertGreaterEqual(row["bbox_total_count"], len(row["bbox_sample_refs"]))
@@ -347,7 +366,7 @@ class RuntimeContractTest(unittest.TestCase):
         exact = handle_request(
             "uud",
             "viewer",
-            {"evidence_id": "uud_current_consolidated_final_citation_evidence_00237"},
+            {"evidence_id": _exact_highlightable_evidence_id()},
             ROOT,
         )
         self.assertTrue(exact["bbox_rectangles"])
@@ -361,13 +380,20 @@ class RuntimeContractTest(unittest.TestCase):
         decision = handle_request(
             "uud",
             "viewer",
-            {"evidence_id": "uud_instrument_final_citation_evidence::amendment_4_historical::00024::perubahan_keempat_decision"},
+            {"evidence_id": _page_grounded_decision_evidence_id()},
             ROOT,
         )
         self.assertEqual(decision["status"], "viewer_payload_ready")
         self.assertTrue(decision["bbox_rectangles"])
         self.assertEqual(decision["bbox_rectangles"][0]["bbox_precision"], "page_grounded_only")
         self.assertFalse(decision["bbox_rectangles"][0]["viewer_highlightable"])
+
+    def test_public_bbox_defaults_fail_closed(self) -> None:
+        for value in (None, "oops"):
+            row = _public_bbox({"bbox_precision": value, "viewer_highlightable": True})
+            self.assertEqual(row["bbox_precision"], "page_grounded_only")
+            self.assertFalse(row["viewer_highlightable"])
+        self.assertFalse(_public_bbox({"bbox_precision": "exact", "viewer_highlightable": None})["viewer_highlightable"])
 
     def test_query_normalization_and_intent_classification(self) -> None:
         self.assertEqual(normalize_query("pasal 28 e")["normalized_query"], "Pasal 28E")
@@ -875,9 +901,9 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_artifact_paths_resolve_through_manifest_keys(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
-        self.assertEqual(len(config.jsonl("evidence")), 464)
-        self.assertEqual(len(config.jsonl("bbox")), 1542)
-        self.assertEqual(len(config.jsonl("graph_nodes")), 2339)
+        self.assertEqual(len(config.jsonl("evidence")), config.manifest["counts"]["evidence_records"])
+        self.assertEqual(len(config.jsonl("bbox")), config.manifest["counts"]["bbox_records"])
+        self.assertEqual(len(config.jsonl("graph_nodes")), config.manifest["counts"]["graph_nodes"])
 
     def test_runtime_services_and_stores_do_not_hardcode_artifacts(self) -> None:
         checked_roots = (
@@ -957,6 +983,8 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(LegalRuntimeService(root).ask("demo", "generic corpus resolution")["status"], "limited_answer")
             self.assertEqual(config.query_strategy, "generic")
             self.assertEqual(route_retrieval("demo", "Pasal 1", store)["intent"], "natural_language")
+            self.assertNotEqual(route_retrieval("demo", "Jakarta", store)["intent"], "metadata_lookup")
+            self.assertNotEqual(route_retrieval("demo", "Amien Rais", store)["intent"], "metadata_lookup")
             self.assertEqual(structured_lookup(store, "Pasal 1", strategy=config.structured_strategy), ())
             filtered = route_retrieval(
                 "demo",

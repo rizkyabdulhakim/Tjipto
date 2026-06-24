@@ -15,6 +15,7 @@ DECISION_LABELS = {
     "Perubahan Ketiga Decision",
     "Perubahan Keempat Decision",
 }
+INSERTED_BAB_HEADING_BBOX_MARKER = "::heading_bab_"
 STRUCTURAL_FORBIDDEN_MARKERS = (
     "Ditetapkan di Jakarta",
 )
@@ -553,6 +554,7 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         for evidence_id in sorted(bbox_by_evidence)
         for row in bbox_by_evidence[evidence_id]
     ]
+    _apply_inserted_bab_heading_bbox_policy(bbox_rows, evidence)
     bbox_rows.sort(key=lambda row: (row["source_document_id"], row["page_number"], row["bbox_id"]))
     legal_units.sort(key=lambda row: row["legal_unit_id"])
     chunks.sort(key=lambda row: row["chunk_id"])
@@ -573,6 +575,11 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         "evidence_records": len(evidence),
         "bbox_records": len(bbox_rows),
         "retrieval_units": len(retrieval_units),
+    }
+    validation_report["bbox_precision_counts"] = _bbox_precision_counts(bbox_rows)
+    validation_report["bbox_highlightability_counts"] = {
+        "viewer_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is True),
+        "non_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is not True),
     }
     validation_report.setdefault("instrument_baseline", {})
     validation_report["instrument_baseline"] = {
@@ -595,6 +602,10 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         "fallback_policy": "bbox_precision=page_grounded_only rows are not viewer_highlightable",
         "coarse_policy": "bbox_precision=coarse rows are not viewer_highlightable",
     }
+    validation_report.setdefault("structure_fidelity", {})
+    validation_report["structure_fidelity"]["inserted_bab_heading_owner_policy"] = (
+        "inserted heading bboxes may stay exact, but they are viewer_highlightable only when owned by bab_record evidence"
+    )
     (final_dir / "validation_report.json").write_text(json.dumps(validation_report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     _refresh_manifest(final_dir, manifest)
@@ -696,6 +707,15 @@ def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
         if row["bbox_id"] in seen_ids["bbox_id"]:
             errors.append(f"duplicate_bbox_id:{row['bbox_id']}")
         seen_ids["bbox_id"].add(row["bbox_id"])
+        evidence_row = evidence_by_id.get(row["evidence_id"])
+        owner = units_by_id.get(evidence_row["legal_unit_id"]) if evidence_row else None
+        if (
+            INSERTED_BAB_HEADING_BBOX_MARKER in row["bbox_id"]
+            and owner is not None
+            and owner.get("unit_type") != "bab_record"
+            and row.get("viewer_highlightable")
+        ):
+            errors.append(f"inserted_bab_heading_highlightable_without_bab_owner:{row['bbox_id']}")
         if row.get("bbox_precision") not in {"exact", "coarse", "page_grounded_only"}:
             errors.append(f"invalid_bbox_precision:{row['bbox_id']}")
         if row.get("bbox_precision") in {"coarse", "page_grounded_only"} and row.get("viewer_highlightable"):
@@ -977,3 +997,31 @@ def _aggregate_bbox_precision(rows: list[dict]) -> str:
     if "page_grounded_only" in precisions:
         return "page_grounded_only"
     return "coarse"
+
+
+def _apply_inserted_bab_heading_bbox_policy(bbox_rows: list[dict], evidence: list[dict]) -> None:
+    evidence_by_id = {row["evidence_id"]: row for row in evidence}
+    for row in bbox_rows:
+        if INSERTED_BAB_HEADING_BBOX_MARKER not in row["bbox_id"]:
+            continue
+        evidence_row = evidence_by_id.get(row["evidence_id"])
+        if evidence_row and evidence_row.get("citation") == row.get("text"):
+            continue
+        row["viewer_highlightable"] = False
+    by_evidence: dict[str, list[dict]] = defaultdict(list)
+    for row in bbox_rows:
+        by_evidence[row["evidence_id"]].append(row)
+    for row in evidence:
+        bbox_records = by_evidence.get(row["evidence_id"], [])
+        if not bbox_records:
+            continue
+        row["bbox_precision"] = _aggregate_bbox_precision(bbox_records)
+        row["viewer_highlightable"] = any(item.get("viewer_highlightable") is True for item in bbox_records)
+
+
+def _bbox_precision_counts(bbox_rows: list[dict]) -> dict[str, int]:
+    return {
+        "exact": sum(1 for row in bbox_rows if row.get("bbox_precision") == "exact"),
+        "coarse": sum(1 for row in bbox_rows if row.get("bbox_precision") == "coarse"),
+        "page_grounded_only": sum(1 for row in bbox_rows if row.get("bbox_precision") == "page_grounded_only"),
+    }

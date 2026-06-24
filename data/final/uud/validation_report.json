@@ -485,7 +485,8 @@
     "source_conflict_coverage": [
       "uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict"
     ],
-    "reading_order_observability": "validated through page text order plus heading bbox y-order; no new extraction subsystem added"
+    "reading_order_observability": "validated through page text order plus heading bbox y-order; no new extraction subsystem added",
+    "inserted_bab_heading_owner_policy": "inserted heading bboxes may stay exact, but they are viewer_highlightable only when owned by bab_record evidence"
   },
   "metadata_grounding_contract": {
     "status": "clarified",
@@ -533,5 +534,14 @@
     "exact_policy": "bbox_precision=exact rows may remain viewer_highlightable",
     "fallback_policy": "bbox_precision=page_grounded_only rows are not viewer_highlightable",
     "coarse_policy": "bbox_precision=coarse rows are not viewer_highlightable"
+  },
+  "bbox_precision_counts": {
+    "exact": 1537,
+    "coarse": 0,
+    "page_grounded_only": 5
+  },
+  "bbox_highlightability_counts": {
+    "viewer_highlightable": 1532,
+    "non_highlightable": 10
   }
 }

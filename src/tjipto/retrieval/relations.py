@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import re
 
+from tjipto.corpora.intent_config import intent_config_for
+
 
 BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s*([a-z]?)\b", re.IGNORECASE)
 PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\b", re.IGNORECASE)
 
 
 def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
-    if not has_relation_target(query):
+    strategy = getattr(getattr(store, "config", None), "query_strategy", "generic")
+    if not has_relation_target(query, strategy=strategy):
         return ()
-    relation = _relation(query)
+    relation = _relation(query, strategy=strategy)
     if relation is None:
         return ()
     descendants_by_parent, evidence_by_unit = _relation_indexes(store)
@@ -58,11 +61,14 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     return tuple(rows[:limit])
 
 
-def has_relation_target(query: str) -> bool:
+def has_relation_target(query: str, *, strategy: str = "generic") -> bool:
     folded = (query or "").casefold()
-    if _unsupported_relation_requested(query, folded):
+    config = intent_config_for(strategy)
+    if not config["relation_words"] and not config["direct_relation_words"] and not config["pasal_parent_words"]:
+        return False
+    if _unsupported_relation_requested(query, folded, strategy=strategy):
         return True
-    if _pasal_parent_requested(query, folded):
+    if _pasal_parent_requested(query, folded, strategy=strategy):
         return True
     if PASAL_RE.search(query or "") and "ayat" in folded:
         return any(word in folded for word in ("apa saja", "daftar", "dalam", "anak", "child"))
@@ -71,30 +77,31 @@ def has_relation_target(query: str) -> bool:
     return False
 
 
-def _relation(query: str) -> str | None:
+def _relation(query: str, *, strategy: str) -> str | None:
     folded = (query or "").casefold()
-    if _pasal_parent_requested(query, folded):
+    if _pasal_parent_requested(query, folded, strategy=strategy):
         return "pasal_parent_bab"
     if PASAL_RE.search(query or "") and "ayat" in folded:
         return "pasal_ayat_children"
     if BAB_RE.search(query or "") and "pasal" in folded:
         return "bab_pasal_children"
-    if _unsupported_relation_requested(query, folded):
+    if _unsupported_relation_requested(query, folded, strategy=strategy):
         return "unsupported_amendment_relation"
     return None
 
 
-def _unsupported_relation_requested(query: str, folded: str) -> bool:
+def _unsupported_relation_requested(query: str, folded: str, *, strategy: str) -> bool:
+    config = intent_config_for(strategy)
     has_pasal = PASAL_RE.search(query or "") is not None
-    direct_relation = any(pattern in folded for pattern in ("mengubah", "diubah", "amandemen", "amended", "amends"))
-    relation_words = any(pattern in folded for pattern in ("relasi", "hubungan", "naskah asli", "versi", "historis"))
+    direct_relation = any(pattern in folded for pattern in config["direct_relation_words"])
+    relation_words = any(pattern in folded for pattern in config["relation_words"])
     return direct_relation or (relation_words and (has_pasal or "perubahan" in folded))
 
 
-def _pasal_parent_requested(query: str, folded: str) -> bool:
+def _pasal_parent_requested(query: str, folded: str, *, strategy: str) -> bool:
     return PASAL_RE.search(query or "") is not None and any(
         pattern in folded
-        for pattern in ("bagian dari", "berada di bab", "berada dalam bab", "masuk bab", "termasuk bab")
+        for pattern in intent_config_for(strategy)["pasal_parent_words"]
     )
 
 

@@ -2,26 +2,7 @@ from __future__ import annotations
 
 import re
 
-
-FIELD_PATTERNS = {
-    "penetapan": ("ditetapkan", "penetapan", "enactment"),
-    "promulgation": ("diundangkan", "pengundangan", "promulgation"),
-    "revocation": ("dicabut", "pencabutan", "revocation"),
-    "date": ("tanggal", "kapan"),
-    "institution": ("lembaga", "institusi", "majelis", "mpr", "ditetapkan oleh"),
-    "place": ("tempat", "di mana", "dimana", "jakarta"),
-    "signatories": ("penanda tangan", "ditandatangani", "ketua", "wakil ketua", "amien rais", "sutjipto"),
-    "official_title": ("judul", "nama resmi", "naskah"),
-}
-
-ROLE_PATTERNS = (
-    ("amendment_1_historical", re.compile(r"\b(perubahan\s*(pertama|1|i)|amendment\s*1)\b", re.IGNORECASE)),
-    ("amendment_2_historical", re.compile(r"\b(perubahan\s*(kedua|2|ii)|amendment\s*2)\b", re.IGNORECASE)),
-    ("amendment_3_historical", re.compile(r"\b(perubahan\s*(ketiga|3|iii)|amendment\s*3)\b", re.IGNORECASE)),
-    ("amendment_4_historical", re.compile(r"\b(perubahan\s*(keempat|4|iv)|amendment\s*4)\b", re.IGNORECASE)),
-    ("current_consolidated", re.compile(r"\b(satu\s+naskah|konsolidasi|current|berlaku)\b", re.IGNORECASE)),
-    ("original_historical", re.compile(r"\b(naskah\s+asli|original)\b", re.IGNORECASE)),
-)
+from tjipto.corpora.intent_config import intent_config_for
 
 
 def normalize_filters(filters: dict | None = None, *, config=None, **kwargs) -> dict:
@@ -88,10 +69,11 @@ def public_filters(filters: dict) -> dict:
 
 
 def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
-    field = _metadata_field(query)
+    strategy = getattr(getattr(store, "config", None), "query_strategy", "generic")
+    field = _metadata_field(query, strategy=strategy)
     if field is None:
         return ()
-    role = _source_role(query)
+    role = _source_role(query, strategy=strategy)
     requires_penetapan = _asks_enactment_context((query or "").casefold())
     rows = []
     grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}
@@ -114,12 +96,15 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     return tuple(rows[:limit])
 
 
-def has_metadata_target(query: str) -> bool:
-    return _metadata_field(query) is not None
+def has_metadata_target(query: str, *, strategy: str = "generic") -> bool:
+    return _metadata_field(query, strategy=strategy) is not None
 
 
-def _metadata_field(query: str) -> str | None:
+def _metadata_field(query: str, *, strategy: str) -> str | None:
     folded = (query or "").casefold()
+    patterns = intent_config_for(strategy)["metadata_fields"]
+    if not patterns:
+        return None
     if not any(word in folded for word in ("u" "ud", "perubahan", "amendment", "naskah")):
         return None
     if _asks_promulgation(folded):
@@ -134,8 +119,8 @@ def _metadata_field(query: str) -> str | None:
         return "institution"
     if _asks_enactment_date(folded):
         return "penetapan"
-    for field, patterns in FIELD_PATTERNS.items():
-        if any(pattern in folded for pattern in patterns):
+    for field, field_patterns in patterns.items():
+        if any(pattern in folded for pattern in field_patterns):
             return field
     return None
 
@@ -151,7 +136,7 @@ def _asks_revocation(folded: str) -> bool:
 def _asks_signatories(folded: str) -> bool:
     return any(
         pattern in folded
-        for pattern in ("penanda tangan", "ditandatangani", "ketua", "wakil ketua", "amien rais", "sutjipto")
+        for pattern in ("penanda tangan", "ditandatangani", "ketua", "wakil ketua")
     )
 
 
@@ -184,8 +169,8 @@ def _asks_enactment_context(folded: str) -> bool:
     return any(pattern in folded for pattern in ("penetapan", "ditetapkan", "menetapkan")) or re.search(r"\bpenetap\b", folded) is not None
 
 
-def _source_role(query: str) -> str | None:
-    for role, pattern in ROLE_PATTERNS:
+def _source_role(query: str, *, strategy: str) -> str | None:
+    for role, pattern in intent_config_for(strategy)["metadata_roles"]:
         if pattern.search(query or ""):
             return role
     return None

@@ -127,16 +127,25 @@ def _public_viewer(result: dict) -> dict:
 
 
 def _public_bbox(row: dict) -> dict:
+    precision = _public_bbox_precision(row.get("bbox_precision"))
     return {
         "bbox_id": row.get("bbox_id"),
-        "bbox_precision": row.get("bbox_precision"),
+        "bbox_precision": precision,
         "page_number": row.get("page_number"),
-        "viewer_highlightable": row.get("viewer_highlightable"),
+        "viewer_highlightable": _public_viewer_highlightable(precision, row.get("viewer_highlightable")),
         "x0": row.get("x0"),
         "y0": row.get("y0"),
         "x1": row.get("x1"),
         "y1": row.get("y1"),
     }
+
+
+def _public_bbox_precision(value) -> str:
+    return value if value in {"exact", "coarse", "page_grounded_only"} else "page_grounded_only"
+
+
+def _public_viewer_highlightable(precision: str, value) -> bool:
+    return precision == "exact" and value is True
 
 
 def _public_reason(reason):

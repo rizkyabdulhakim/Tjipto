@@ -50,14 +50,33 @@ class ManifestContractTest(unittest.TestCase):
 
     def test_validation_report_references_existing_artifacts(self) -> None:
         report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
+        manifest = json.loads((FINAL / "manifest.json").read_text(encoding="utf-8"))
         for name in report["referenced_artifacts"]:
             self.assertTrue((FINAL / name).exists(), name)
         self.assertEqual(report["structure_fidelity"]["status"], "corrected")
         self.assertEqual(report["metadata_grounding_contract"]["status"], "clarified")
-        self.assertEqual(report["final_artifact_counts"]["chunks"], 651)
+        actual_counts = {
+            "chunks": len((FINAL / "chunks.jsonl").read_text(encoding="utf-8").splitlines()),
+            "legal_units": len((FINAL / "legal_units.jsonl").read_text(encoding="utf-8").splitlines()),
+            "evidence_records": len((FINAL / "evidence_registry.jsonl").read_text(encoding="utf-8").splitlines()),
+            "bbox_records": len((FINAL / "bbox_registry.jsonl").read_text(encoding="utf-8").splitlines()),
+            "retrieval_units": len((FINAL / "retrieval_units.jsonl").read_text(encoding="utf-8").splitlines()),
+        }
+        for key, value in actual_counts.items():
+            self.assertEqual(report["final_artifact_counts"][key], value)
+            self.assertEqual(manifest["counts"][key], value)
+        bbox_rows = [json.loads(line) for line in (FINAL / "bbox_registry.jsonl").read_text(encoding="utf-8").splitlines() if line]
         self.assertEqual(
-            report["final_artifact_counts"]["chunks"],
-            len((FINAL / "chunks.jsonl").read_text(encoding="utf-8").splitlines()),
+            report["bbox_precision_counts"],
+            {
+                "exact": sum(1 for row in bbox_rows if row["bbox_precision"] == "exact"),
+                "coarse": sum(1 for row in bbox_rows if row["bbox_precision"] == "coarse"),
+                "page_grounded_only": sum(1 for row in bbox_rows if row["bbox_precision"] == "page_grounded_only"),
+            },
+        )
+        self.assertEqual(
+            report["bbox_highlightability_counts"]["non_highlightable"],
+            sum(1 for row in bbox_rows if row["viewer_highlightable"] is not True),
         )
         self.assertEqual(report["instrument_baseline"]["status"], "corrected")
         self.assertFalse(report["instrument_baseline"]["metadata_viewer_highlightable"])

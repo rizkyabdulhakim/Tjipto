@@ -87,7 +87,7 @@ def route_retrieval(
             "intent": "legal_relation_lookup",
             "reason": "filters_removed_all",
         }
-    if has_relation_target(normalized["normalized_query"]):
+    if has_relation_target(normalized["normalized_query"], strategy=query_strategy):
         return envelope | {
             "status": "no_results",
             "route": "relation_not_found",
@@ -170,7 +170,7 @@ def route_retrieval(
             "intent": "metadata_lookup",
             "reason": "filters_removed_all",
         }
-    if has_metadata_target(normalized["normalized_query"]):
+    if has_metadata_target(normalized["normalized_query"], strategy=query_strategy):
         return envelope | {
             "status": "no_results",
             "route": "metadata_not_found",

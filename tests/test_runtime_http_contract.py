@@ -9,10 +9,22 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from tjipto.corpora.registry import CorpusRegistry
 from tjipto.runtime.http import make_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _page_grounded_decision_evidence_id() -> str:
+    for row in CorpusRegistry(ROOT).resolve("uud").jsonl("evidence"):
+        if row.get("citation") in {
+            "Perubahan Pertama Decision",
+            "Perubahan Ketiga Decision",
+            "Perubahan Keempat Decision",
+        } and row.get("viewer_highlightable") is False:
+            return row["evidence_id"]
+    raise AssertionError("missing page-grounded decision evidence")
 
 
 class RuntimeHttpContractTest(unittest.TestCase):
@@ -92,7 +104,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
         decision = self._post(
             "/legal/uud/viewer",
-            {"evidence_id": "uud_instrument_final_citation_evidence::amendment_4_historical::00024::perubahan_keempat_decision"},
+            {"evidence_id": _page_grounded_decision_evidence_id()},
         )
         self.assertEqual(decision["status"], "viewer_payload_ready")
         self.assertEqual(decision["bbox_rectangles"][0]["bbox_precision"], "page_grounded_only")
