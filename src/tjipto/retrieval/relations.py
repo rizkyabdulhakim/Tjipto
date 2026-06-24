@@ -93,9 +93,14 @@ def _relation(query: str, *, strategy: str) -> str | None:
 def _unsupported_relation_requested(query: str, folded: str, *, strategy: str) -> bool:
     config = intent_config_for(strategy)
     has_pasal = PASAL_RE.search(query or "") is not None
+    has_bab = BAB_RE.search(query or "") is not None
     direct_relation = any(pattern in folded for pattern in config["direct_relation_words"])
     relation_words = any(pattern in folded for pattern in config["relation_words"])
-    return direct_relation or (relation_words and (has_pasal or "perubahan" in folded))
+    return (
+        direct_relation and (has_pasal or has_bab or relation_words)
+    ) or (
+        relation_words and (has_pasal or has_bab or "perubahan" in folded)
+    )
 
 
 def _pasal_parent_requested(query: str, folded: str, *, strategy: str) -> bool:

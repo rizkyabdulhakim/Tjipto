@@ -372,6 +372,48 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(version["intent"], "legal_relation_lookup")
         self.assertFalse(version["legal_relations"])
 
+    def test_ask_answers_instrument_scope_and_clause_queries(self) -> None:
+        scope = self.service.ask("uud", "Perubahan Pertama mengubah pasal apa saja?")
+        self.assertEqual(scope["status"], "answer_ready")
+        self.assertEqual(scope["route"], "legal_reference")
+        self.assertEqual(scope["intent"], "structured_lookup")
+        self.assertEqual(scope["evidence"][0]["candidate_type"], "instrument_scope_candidate")
+        self.assertEqual(scope["citations"][0]["citation"], "Perubahan Pertama Scope")
+
+        clause = self.service.ask("uud", "Apa isi butir (d) Perubahan Keempat?")
+        self.assertEqual(clause["status"], "answer_ready")
+        self.assertEqual(clause["route"], "legal_reference")
+        self.assertEqual(clause["intent"], "structured_lookup")
+        self.assertEqual(clause["evidence"][0]["candidate_type"], "instrument_clause_candidate")
+        self.assertEqual(clause["citations"][0]["citation"], "Perubahan Keempat Clause (d)")
+
+        deletion = self.service.ask("uud", "Bab IV dihapus oleh perubahan apa?")
+        self.assertEqual(deletion["status"], "answer_ready")
+        self.assertEqual(deletion["route"], "legal_reference")
+        self.assertEqual(deletion["intent"], "structured_lookup")
+        self.assertEqual(deletion["evidence"][0]["candidate_type"], "instrument_clause_candidate")
+        self.assertEqual(deletion["citations"][0]["citation"], "Perubahan Keempat Clause (d)")
+
+    def test_ask_explains_known_source_anomalies_safely(self) -> None:
+        pasal_iii = self.service.ask("uud", "Apa isi Pasal III Aturan Tambahan Perubahan Keempat?")
+        self.assertEqual(pasal_iii["status"], "insufficient_evidence")
+        self.assertEqual(pasal_iii["route"], "source_anomaly_explanation")
+        self.assertIn("historical_source_typo", pasal_iii["insufficient_reasons"])
+        self.assertIn("not_runtime_loadable", pasal_iii["insufficient_reasons"])
+        self.assertIn("reviewer decision", pasal_iii["answer"])
+        self.assertFalse(pasal_iii["citations"])
+
+        conflict = self.service.ask("uud", "Apa konflik sumber Aturan Tambahan Perubahan Keempat?")
+        self.assertEqual(conflict["status"], "insufficient_evidence")
+        self.assertEqual(conflict["route"], "source_anomaly_explanation")
+        self.assertIn("source_anomaly", conflict["insufficient_reasons"])
+        self.assertIn("canonical_conflict", conflict["insufficient_reasons"])
+
+        promotion = self.service.ask("uud", "Kenapa Aturan Tambahan Perubahan Keempat tidak dipromosikan?")
+        self.assertEqual(promotion["status"], "insufficient_evidence")
+        self.assertEqual(promotion["route"], "source_anomaly_explanation")
+        self.assertIn("insufficient_promotion_evidence", promotion["insufficient_reasons"])
+
     def test_viewer_payload_is_multi_page_and_public_safe(self) -> None:
         evidence_id = "uud_current_consolidated_final_citation_evidence_00232"
         viewer = self.service.viewer("uud", evidence_id)

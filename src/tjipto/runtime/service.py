@@ -193,6 +193,9 @@ class LegalRuntimeService:
 
     def ask(self, corpus_id: str, query: str, limit: int = 3, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
+        anomaly = _source_anomaly_response(store, corpus_id, query)
+        if anomaly:
+            return anomaly
         routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         ask_route = _ask_route(routed["route"])
         if routed["status"] != "found":
@@ -317,3 +320,69 @@ def _metadata_fact(row: dict) -> dict:
         "answer": row.get("metadata_answer"),
         "evidence_id": row.get("evidence_id"),
     }
+
+
+def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
+    if store is None:
+        return None
+    conflict = _matched_source_conflict(store, query)
+    if conflict is None:
+        return None
+    reasons = ["source_anomaly", "canonical_conflict"]
+    if "pasal iii" in (query or "").casefold():
+        reasons.extend(["historical_source_typo", "not_runtime_loadable"])
+    else:
+        reasons.append("insufficient_promotion_evidence")
+    answer = _source_anomaly_answer(conflict, query)
+    return {
+        "status": "insufficient_evidence",
+        "route": "source_anomaly_explanation",
+        "intent": "structured_lookup",
+        "answer_type": "none",
+        "answer": answer,
+        "context_pack": empty_context_pack("source_anomaly"),
+        "evidence": (),
+        "citations": (),
+        "viewer_refs": (),
+        "metadata_facts": (),
+        "legal_relations": (),
+        "answer_scope": "insufficient_evidence",
+        "warnings": (),
+        "insufficient_reasons": tuple(dict.fromkeys(reasons)),
+    }
+
+
+def _matched_source_conflict(store, query: str) -> dict | None:
+    folded = (query or "").casefold()
+    if "aturan tambahan" not in folded or "perubahan keempat" not in folded:
+        return None
+    if not any(pattern in folded for pattern in ("pasal iii", "konflik sumber", "tidak dipromosikan", "promosikan")):
+        return None
+    return next(
+        (
+            row for row in store.source_conflicts
+            if row.get("source_document_id") == "uud::amendment_4_historical"
+            and row.get("type") == "source_marker_sequence_conflict"
+        ),
+        None,
+    )
+
+
+def _source_anomaly_answer(conflict: dict, query: str) -> str:
+    decision = conflict.get("resolution_decision") or {}
+    folded = (query or "").casefold()
+    if "pasal iii" in folded:
+        return (
+            "Bukti tidak cukup untuk mempromosikan Pasal III Aturan Tambahan Perubahan Keempat sebagai jawaban hukum final. "
+            f"Catatan konflik sumber menyimpannya sebagai {conflict.get('classification')} "
+            f"with reviewer decision {decision.get('reviewer_decision')}."
+        )
+    if "konflik sumber" in folded:
+        return (
+            f"Catatan konflik sumber mencatat {conflict.get('classification')} pada Perubahan Keempat. "
+            f"Reviewer decision: {decision.get('reviewer_decision')}."
+        )
+    return (
+        "Catatan konflik sumber tidak menyediakan bukti promosi yang cukup untuk menjadikan Aturan Tambahan "
+        f"Perubahan Keempat sebagai jawaban hukum final. Reviewer decision: {decision.get('reviewer_decision')}."
+    )

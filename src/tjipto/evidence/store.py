@@ -10,6 +10,7 @@ class EvidenceStore:
         self._document_metadata: list[dict] | None = None
         self._metadata_grounding: list[dict] | None = None
         self._metadata_bbox_by_grounding: dict[str, list[dict]] | None = None
+        self._source_conflicts: list[dict] | None = None
         self._graph_edges: list[dict] | None = None
         self._bbox_by_evidence: dict[str, list[dict]] | None = None
 
@@ -54,6 +55,12 @@ class EvidenceStore:
         if self._metadata_grounding is None:
             self._metadata_grounding = _optional_jsonl(self.config, "metadata_grounding")
         return self._metadata_grounding
+
+    @property
+    def source_conflicts(self) -> list[dict]:
+        if self._source_conflicts is None:
+            self._source_conflicts = _optional_jsonl(self.config, "source_conflicts")
+        return self._source_conflicts
 
     def get(self, evidence_id: str) -> dict | None:
         return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)
