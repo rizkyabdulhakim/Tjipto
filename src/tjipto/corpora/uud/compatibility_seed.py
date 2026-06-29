@@ -23,5 +23,4 @@ def load_compatibility_seed(stage_dir: Path) -> dict:
         "excluded_records": read_jsonl(stage_dir / "excluded_records.jsonl"),
         "source_conflicts": read_jsonl(stage_dir / "source_conflicts.jsonl"),
         "validation_report": read_json(stage_dir / "validation_report.json"),
-        "source_documents": read_jsonl(stage_dir / "source_documents.jsonl"),
     }

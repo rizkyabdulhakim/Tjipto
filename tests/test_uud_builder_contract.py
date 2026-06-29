@@ -3,8 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
+from tjipto.core.manifest import read_jsonl
+from tjipto.corpora.uud.source_documents_builder import build_source_documents
+
 
 ROOT = Path(__file__).resolve().parents[1]
+FINAL = ROOT / "data/final/uud"
 
 
 class UudBuilderContractTest(unittest.TestCase):
@@ -19,7 +23,14 @@ class UudBuilderContractTest(unittest.TestCase):
         seed = (ROOT / "src/tjipto/corpora/uud/compatibility_seed.py").read_text(encoding="utf-8")
         self.assertIn("load_compatibility_seed(final_dir)", source)
         self.assertNotIn("read_jsonl(final_dir", source)
+        self.assertNotIn("source_documents.jsonl", seed)
         self.assertIn("compatibility bridge", seed)
+
+    def test_source_documents_rebuild_from_specs_and_pdfs(self) -> None:
+        self.assertEqual(
+            build_source_documents(ROOT),
+            read_jsonl(FINAL / "source_documents.jsonl"),
+        )
 
 
 if __name__ == "__main__":

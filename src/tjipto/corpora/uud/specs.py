@@ -6,6 +6,70 @@ from pathlib import Path
 FINAL_DIR = Path("data/final/uud")
 
 
+SOURCE_DOCUMENT_SPECS = (
+    {
+        "source_document_id": "uud::amendment_1_historical",
+        "source_role": "amendment_1_historical",
+        "temporal_context": "amendment_1_historical",
+        "filename": "UUD45_perubahan1.pdf",
+        "path": "data/sources/uud/UUD45_perubahan1.pdf",
+        "download_url": "https://peraturan.bpk.go.id/Download/92284/UUD45_perubahan1.pdf",
+        "source_page_url": "https://peraturan.bpk.go.id/Details/101646/uud-no--",
+        "http_last_modified": "Mon, 01 Jun 2026 05:34:37 GMT",
+    },
+    {
+        "source_document_id": "uud::amendment_2_historical",
+        "source_role": "amendment_2_historical",
+        "temporal_context": "amendment_2_historical",
+        "filename": "UUD45_perubahan2.pdf",
+        "path": "data/sources/uud/UUD45_perubahan2.pdf",
+        "download_url": "https://peraturan.bpk.go.id/Download/92285/UUD45_perubahan2.pdf",
+        "source_page_url": "https://peraturan.bpk.go.id/Details/101646/uud-no--",
+        "http_last_modified": "Sat, 30 May 2026 23:46:02 GMT",
+    },
+    {
+        "source_document_id": "uud::amendment_3_historical",
+        "source_role": "amendment_3_historical",
+        "temporal_context": "amendment_3_historical",
+        "filename": "UUD45_perubahan3.pdf",
+        "path": "data/sources/uud/UUD45_perubahan3.pdf",
+        "download_url": "https://peraturan.bpk.go.id/Download/92286/UUD45_perubahan3.pdf",
+        "source_page_url": "https://peraturan.bpk.go.id/Details/101646/uud-no--",
+        "http_last_modified": "Sun, 31 May 2026 02:51:17 GMT",
+    },
+    {
+        "source_document_id": "uud::amendment_4_historical",
+        "source_role": "amendment_4_historical",
+        "temporal_context": "amendment_4_historical",
+        "filename": "UUD45_perubahan4.pdf",
+        "path": "data/sources/uud/UUD45_perubahan4.pdf",
+        "download_url": "https://peraturan.bpk.go.id/Download/92287/UUD45_perubahan4.pdf",
+        "source_page_url": "https://peraturan.bpk.go.id/Details/101646/uud-no--",
+        "http_last_modified": "Mon, 01 Jun 2026 06:23:34 GMT",
+    },
+    {
+        "source_document_id": "uud::current_consolidated",
+        "source_role": "current_consolidated",
+        "temporal_context": "current_consolidated",
+        "filename": "UUD45_SatuNaskah.pdf",
+        "path": "data/sources/uud/UUD45_SatuNaskah.pdf",
+        "download_url": "https://peraturan.bpk.go.id/Download/92288/UUD45_SatuNaskah.pdf",
+        "source_page_url": "https://peraturan.bpk.go.id/Details/101646/uud-no--",
+        "http_last_modified": "Sun, 31 May 2026 03:17:01 GMT",
+    },
+    {
+        "source_document_id": "uud::original_historical",
+        "source_role": "original_historical",
+        "temporal_context": "original_historical",
+        "filename": "UUD45.pdf",
+        "path": "data/sources/uud/UUD45.pdf",
+        "download_url": "https://peraturan.bpk.go.id/Download/92283/UUD45.pdf",
+        "source_page_url": "https://peraturan.bpk.go.id/Details/101646/uud-no--",
+        "http_last_modified": "Mon, 01 Jun 2026 03:17:12 GMT",
+    },
+)
+
+
 INSERTED_BAB_SPECS = (
     {
         "source_document_id": "uud::current_consolidated",

@@ -31,6 +31,7 @@ def refresh_manifest(final_dir: Path, manifest: dict) -> None:
         "graph_edges": "graph_edges.jsonl",
         "page_text_spans": "page_text_spans.jsonl",
         "retrieval_units": "retrieval_units.jsonl",
+        "source_documents": "source_documents.jsonl",
     }
     for key, filename in count_files.items():
         counts[key] = len(read_jsonl(final_dir / filename))

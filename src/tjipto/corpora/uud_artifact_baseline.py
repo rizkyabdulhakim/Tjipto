@@ -19,6 +19,7 @@ from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval
 from tjipto.corpora.uud.specs import FINAL_DIR, INSERTED_BAB_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding
+from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.structure_builder import (
     apply_inserted_bab_specs,
     find_unit,
@@ -72,7 +73,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     source_conflicts = seed["source_conflicts"]
     validation_report = seed["validation_report"]
 
-    source_documents = {row["source_document_id"]: row for row in seed["source_documents"]}
+    source_documents = {row["source_document_id"]: row for row in build_source_documents(repo_root)}
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
     units_by_source_label = {(row["source_document_id"], row.get("unit_label")): row for row in legal_units}
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
@@ -258,6 +259,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "metadata_grounding_registry.jsonl", metadata_grounding_registry)
     write_jsonl(final_dir / "metadata_graph_edges.jsonl", metadata_graph_edges)
     write_jsonl(final_dir / "source_conflicts.jsonl", source_conflicts)
+    write_jsonl(final_dir / "source_documents.jsonl", list(source_documents.values()))
     write_jsonl(final_dir / "graph_nodes.jsonl", graph_nodes)
     write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
