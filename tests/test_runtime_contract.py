@@ -63,6 +63,11 @@ def _instrument_runtime_cases() -> tuple[dict, ...]:
     return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
+def _query_intent_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/query_intent_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
 class RuntimeContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.service = LegalRuntimeService(ROOT)
@@ -404,24 +409,20 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(_public_bbox({"bbox_precision": "exact", "viewer_highlightable": None})["viewer_highlightable"])
 
     def test_query_normalization_and_intent_classification(self) -> None:
-        self.assertEqual(normalize_query("pasal 28 e")["normalized_query"], "Pasal 28E")
-        self.assertEqual(normalize_query("pasal 1 ayat 3")["normalized_query"], "Pasal 1 ayat (3)")
-        self.assertEqual(normalize_query("pasal 1(3)")["normalized_query"], "Pasal 1 ayat (3)")
-        self.assertEqual(normalize_query("uud 45")["normalized_query"], "UUD 1945")
-        self.assertEqual(
-            normalize_query("pasal 1 ayat 3", strategy="generic")["normalized_query"],
-            "pasal 1 ayat 3",
-        )
-
-        self.assertEqual(classify_intent("uud", "Pasal 1 ayat (3)")["intent"], "exact_citation")
-        self.assertEqual(classify_intent("demo", "Pasal 1", strategy="generic")["intent"], "natural_language")
-        self.assertEqual(classify_intent("uud", "negara hukum")["intent"], "natural_language")
-        self.assertEqual(classify_intent("uud", "aturan KUHP tentang pencurian")["intent"], "natural_language")
-        self.assertEqual(
-            classify_intent("unknown", "Pasal 1", corpus_supported=False)["intent"],
-            "unsupported_corpus",
-        )
-        self.assertNotIn("required_corpus", classify_intent("uud", "aturan KUHP tentang pencurian"))
+        for case in _query_intent_cases():
+            if "normalized_query" in case:
+                result = normalize_query(case["query"], strategy=case.get("strategy", "uud_1945"))
+                self.assertEqual(result["normalized_query"], case["normalized_query"], case["query"])
+            if "intent" in case:
+                result = classify_intent(
+                    case["corpus_id"],
+                    case["query"],
+                    strategy=case.get("strategy", "uud_1945"),
+                    corpus_supported=case.get("corpus_supported", True),
+                )
+                self.assertEqual(result["intent"], case["intent"], case["query"])
+                for field in case.get("not_in") or ():
+                    self.assertNotIn(field, result, case["query"])
 
     def test_bm25_relevance_gate_keeps_core_uud_queries_answerable(self) -> None:
         for query in (

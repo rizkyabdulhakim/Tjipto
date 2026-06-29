@@ -1,0 +1,10 @@
+{"query":"pasal 28 e","normalized_query":"Pasal 28E"}
+{"query":"pasal 1 ayat 3","normalized_query":"Pasal 1 ayat (3)"}
+{"query":"pasal 1(3)","normalized_query":"Pasal 1 ayat (3)"}
+{"query":"uud 45","normalized_query":"UUD 1945"}
+{"query":"pasal 1 ayat 3","strategy":"generic","normalized_query":"pasal 1 ayat 3"}
+{"query":"Pasal 1 ayat (3)","corpus_id":"uud","intent":"exact_citation"}
+{"query":"Pasal 1","corpus_id":"demo","strategy":"generic","intent":"natural_language"}
+{"query":"negara hukum","corpus_id":"uud","intent":"natural_language"}
+{"query":"aturan KUHP tentang pencurian","corpus_id":"uud","intent":"natural_language","not_in":["required_corpus"]}
+{"query":"Pasal 1","corpus_id":"unknown","corpus_supported":false,"intent":"unsupported_corpus"}
