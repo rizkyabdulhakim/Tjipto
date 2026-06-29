@@ -42,6 +42,11 @@ def _page_grounded_decision_evidence_id() -> str:
     raise AssertionError("missing page-grounded decision evidence")
 
 
+def _relation_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/relation_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
 class RuntimeContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.service = LegalRuntimeService(ROOT)
@@ -349,6 +354,28 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(parent["intent"], "legal_relation_lookup")
         self.assertEqual(parent["legal_relations"][0]["relation_type"], "pasal_parent_bab")
         self.assertEqual(parent["legal_relations"][0]["target_label"], "BAB I")
+
+    def test_relation_fixture_asserts_stable_runtime_and_graph_ids(self) -> None:
+        from tjipto.core.manifest import read_jsonl
+
+        graph_edges = {
+            row["edge_id"]: row
+            for row in read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
+        }
+        for case in _relation_cases():
+            result = self.service.ask("uud", case["query"])
+            self.assertEqual(result["status"], "answer_ready", case["query"])
+            self.assertEqual(result["route"], "legal_relation", case["query"])
+            relation = result["legal_relations"][0]
+            self.assertEqual(relation["relation_type"], case["runtime_relation_type"], case["query"])
+            self.assertEqual(relation["source_legal_unit_id"], case["source_legal_unit_id"], case["query"])
+            self.assertEqual(relation["target_legal_unit_id"], case["target_legal_unit_id"], case["query"])
+            self.assertEqual(relation["source_label"], case["source_label"], case["query"])
+            self.assertEqual(relation["target_label"], case["target_label"], case["query"])
+            edge = graph_edges[case["graph_edge_id"]]
+            self.assertEqual(edge["relation_type"], case["graph_relation_type"], case["query"])
+            self.assertEqual(edge["source_id"], f"legal_unit::{case['source_legal_unit_id']}", case["query"])
+            self.assertEqual(edge["target_id"], f"legal_unit::{case['target_legal_unit_id']}", case["query"])
 
     def test_ask_does_not_promote_ungrounded_legal_relations(self) -> None:
         result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")
