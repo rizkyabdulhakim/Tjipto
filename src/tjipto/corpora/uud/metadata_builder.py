@@ -10,7 +10,6 @@ def rebuild_metadata_grounding(
     *,
     document_metadata: list[dict],
     metadata_grounding: list[dict],
-    metadata_grounding_registry: list[dict],
     evidence: list[dict],
     bbox_rows: list[dict],
     legal_units: list[dict],
@@ -39,12 +38,7 @@ def rebuild_metadata_grounding(
         for row in metadata_grounding
         if not str(row.get("metadata_grounding_id", "")).startswith("uud_metadata_field_grounding::")
     ]
-    block_ids = {row["metadata_grounding_id"] for row in block_rows}
-    block_registry_rows = [
-        row
-        for row in metadata_grounding_registry
-        if row.get("metadata_grounding_id") in block_ids
-    ]
+    block_registry_rows = [_block_registry_row(row) for row in block_rows]
     source_conflicts_by_role: dict[str, list[dict]] = defaultdict(list)
     for row in source_conflicts:
         source_conflicts_by_role[row["source_document_id"].split("::", 1)[1]].append(row)
@@ -326,6 +320,20 @@ def repair_metadata_graph_edges(edges: list[dict], metadata_assertions: list[dic
             fallback_predicate = "source_publication_metadata_block" if role == "current_consolidated" else "instrument_closing_and_issuance_block"
             edge["target_id"] = block_metadata_by_role.get((role, fallback_predicate), edge["target_id"])
     return edges
+
+
+def _block_registry_row(row: dict) -> dict:
+    return {
+        "bbox_id": row["bbox_refs"][0],
+        "corpus_id": row["corpus_id"],
+        "metadata_grounding_id": row["metadata_grounding_id"],
+        "page_number": row["page_numbers"][0],
+        "quoted_text": row["quoted_text"],
+        "source_document_id": row["source_document_id"],
+        "source_pdf_path": row["source_pdf_path"],
+        "source_sha256": row["source_sha256"],
+        "status": row["status"],
+    }
 
 
 def _exact_bbox_rows(quoted_text: str, bbox_rows: list[dict]) -> list[dict]:

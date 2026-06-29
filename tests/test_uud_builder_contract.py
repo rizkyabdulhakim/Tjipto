@@ -32,6 +32,7 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertNotIn("pages.jsonl", seed)
         self.assertNotIn("source_conflicts.jsonl", seed)
         self.assertNotIn("excluded_records.jsonl", seed)
+        self.assertNotIn("metadata_grounding_registry.jsonl", seed)
         self.assertIn("compatibility bridge", seed)
 
     def test_source_documents_rebuild_from_specs_and_pdfs(self) -> None:

@@ -15,7 +15,6 @@ def load_compatibility_seed(stage_dir: Path) -> dict:
         "retrieval_units": read_jsonl(stage_dir / "retrieval_units.jsonl"),
         "document_metadata": read_jsonl(stage_dir / "document_metadata.jsonl"),
         "metadata_grounding": read_jsonl(stage_dir / "metadata_grounding.jsonl"),
-        "metadata_grounding_registry": read_jsonl(stage_dir / "metadata_grounding_registry.jsonl"),
         "metadata_assertions": read_jsonl(stage_dir / "metadata.jsonl"),
         "metadata_graph_edges": read_jsonl(stage_dir / "metadata_graph_edges.jsonl"),
         "validation_report": read_json(stage_dir / "validation_report.json"),

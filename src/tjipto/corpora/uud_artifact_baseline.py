@@ -66,7 +66,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     retrieval_units = seed["retrieval_units"]
     document_metadata = seed["document_metadata"]
     metadata_grounding = seed["metadata_grounding"]
-    metadata_grounding_registry = seed["metadata_grounding_registry"]
     metadata_assertions = seed["metadata_assertions"]
     metadata_graph_edges = seed["metadata_graph_edges"]
     validation_report = seed["validation_report"]
@@ -216,7 +215,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     document_metadata, metadata_grounding, metadata_grounding_registry = rebuild_metadata_grounding(
         document_metadata=document_metadata,
         metadata_grounding=metadata_grounding,
-        metadata_grounding_registry=metadata_grounding_registry,
         evidence=evidence,
         bbox_rows=bbox_rows,
         legal_units=legal_units,
