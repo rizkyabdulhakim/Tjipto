@@ -35,6 +35,19 @@ def append_instrument_unit(
     exclusion_ref: str | None = None,
     build_evidence: bool = True,
 ) -> str:
+    existing = next(
+        (
+            row
+            for row in legal_units
+            if row["source_document_id"] == source_id
+            and row.get("unit_type") == unit_type
+            and row.get("unit_label") == unit_label
+            and row.get("hierarchy") == (hierarchy or [])
+        ),
+        None,
+    )
+    if existing:
+        return existing["legal_unit_id"]
     legal_unit_id = allocate_legal_id()
     chunk_id = allocate_chunk_id()
     source_meta = source_documents[source_id]

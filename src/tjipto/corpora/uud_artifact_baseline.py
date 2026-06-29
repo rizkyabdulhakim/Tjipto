@@ -22,7 +22,6 @@ from tjipto.corpora.uud.structure_builder import (
     apply_inserted_bab_specs,
     find_unit,
     next_numeric_id,
-    numeric_suffix,
     page_span_for_text,
     slice_before,
     slice_between,
@@ -74,11 +73,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
 
     source_documents = {row["source_document_id"]: row for row in read_jsonl(final_dir / "source_documents.jsonl")}
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
-    legal_units = [row for row in legal_units if numeric_suffix(row["legal_unit_id"]) <= 609]
-    chunks = [row for row in chunks if numeric_suffix(row["chunk_id"]) <= 609]
-    evidence = [row for row in evidence if not row["evidence_id"].startswith("uud_instrument_final_citation_evidence::")]
-    bbox_rows = [row for row in bbox_rows if not row["evidence_id"].startswith("uud_instrument_final_citation_evidence::")]
-    retrieval_units = [row for row in retrieval_units if not row["retrieval_unit_id"].startswith("uud_retrieval_unit::uud_instrument_final_citation_evidence::")]
     units_by_source_label = {(row["source_document_id"], row.get("unit_label")): row for row in legal_units}
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     evidence_by_unit = {row["legal_unit_id"]: row for row in evidence}

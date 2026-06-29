@@ -29,6 +29,14 @@ def apply_inserted_bab_specs(
                 trim_unit(source_id, target, spec["label"])
         if spec["trim_bab"]:
             trim_bab(source_id, spec["trim_bab"], spec["label"])
+        existing = units_by_source_label.get((source_id, spec["label"]))
+        if existing:
+            legal_unit_id = existing["legal_unit_id"]
+            for child_label in spec["child_labels"]:
+                child = units_by_source_label[(source_id, child_label)]
+                if legal_unit_id not in child["parent_legal_unit_ids"]:
+                    child["parent_legal_unit_ids"] = [legal_unit_id, *child["parent_legal_unit_ids"]]
+            continue
         parent_ids = []
         if spec["parent_label"]:
             parent = units_by_source_label[(source_id, spec["parent_label"])]
