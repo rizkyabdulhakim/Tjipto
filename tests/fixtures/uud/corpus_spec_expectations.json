@@ -4,7 +4,9 @@
     "type_anchors": ["source_marker_sequence_conflict"],
     "role_labels": {"amendment_4_historical": "perubahan keempat"},
     "reason_rules": [{"query_terms": ["pasal iii"], "reasons": ["historical_source_typo", "not_runtime_loadable"]}],
-    "default_reasons": ["insufficient_promotion_evidence"]
+    "default_reasons": ["insufficient_promotion_evidence"],
+    "answer_rule_count": 3,
+    "default_answer_template_contains": "Reviewer decision"
   },
   "schema": {
     "unit_hierarchy": ["pasal_record"],

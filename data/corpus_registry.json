@@ -306,7 +306,22 @@
           "reasons": ["historical_source_typo", "not_runtime_loadable"]
         }
       ],
-      "default_reasons": ["insufficient_promotion_evidence"]
+      "default_reasons": ["insufficient_promotion_evidence"],
+      "answer_rules": [
+        {
+          "query_terms": ["pasal iii"],
+          "template": "Bukti tidak cukup untuk mempromosikan Pasal III Aturan Tambahan Perubahan Keempat sebagai jawaban hukum final. Catatan konflik sumber menyimpannya sebagai {classification} with reviewer decision {reviewer_decision}."
+        },
+        {
+          "query_terms": ["konflik sumber"],
+          "template": "Catatan konflik sumber mencatat {classification}. Reviewer decision: {reviewer_decision}."
+        },
+        {
+          "conflict_types": ["article_renumbering_conflict"],
+          "template": "Catatan konflik sumber mencatat {classification}. Sistem menyimpan ini sebagai jejak perbedaan sumber, bukan kesimpulan hukum final."
+        }
+      ],
+      "default_answer_template": "Catatan konflik sumber tidak menyediakan bukti promosi yang cukup untuk menjadikan Aturan Tambahan sebagai jawaban hukum final. Reviewer decision: {reviewer_decision}."
     }
   }
 }

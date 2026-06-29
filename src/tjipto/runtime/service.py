@@ -332,7 +332,7 @@ def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
     if conflict is None:
         return _source_anomaly_fallback()
     reasons = _source_conflict_reasons(store, query)
-    answer = _source_anomaly_answer(conflict, query)
+    answer = _source_anomaly_answer(store, conflict, query)
     return {
         "status": "insufficient_evidence",
         "route": "source_anomaly_explanation",
@@ -453,26 +453,17 @@ def _public_source_conflict(conflict: dict) -> dict:
     }
 
 
-def _source_anomaly_answer(conflict: dict, query: str) -> str:
+def _source_anomaly_answer(store, conflict: dict, query: str) -> str:
+    intent = _source_conflict_intent(store)
     decision = conflict.get("resolution_decision") or {}
     folded = (query or "").casefold()
-    if "pasal iii" in folded:
-        return (
-            "Bukti tidak cukup untuk mempromosikan Pasal III Aturan Tambahan Perubahan Keempat sebagai jawaban hukum final. "
-            f"Catatan konflik sumber menyimpannya sebagai {conflict.get('classification')} "
-            f"with reviewer decision {decision.get('reviewer_decision')}."
-        )
-    if "konflik sumber" in folded:
-        return (
-            f"Catatan konflik sumber mencatat {conflict.get('classification')}. "
-            f"Reviewer decision: {decision.get('reviewer_decision')}."
-        )
-    if conflict.get("type") == "article_renumbering_conflict":
-        return (
-            f"Catatan konflik sumber mencatat {conflict.get('classification')}. "
-            "Sistem menyimpan ini sebagai jejak perbedaan sumber, bukan kesimpulan hukum final."
-        )
-    return (
-        "Catatan konflik sumber tidak menyediakan bukti promosi yang cukup untuk menjadikan Aturan Tambahan "
-        f"sebagai jawaban hukum final. Reviewer decision: {decision.get('reviewer_decision')}."
-    )
+    values = {
+        "classification": conflict.get("classification") or "",
+        "reviewer_decision": decision.get("reviewer_decision") or "",
+    }
+    for rule in intent.get("answer_rules") or ():
+        terms = tuple(str(term).casefold() for term in rule.get("query_terms") or ())
+        types = tuple(str(item) for item in rule.get("conflict_types") or ())
+        if (terms and any(term in folded for term in terms)) or (types and conflict.get("type") in types):
+            return str(rule.get("template") or "").format_map(values)
+    return str(intent.get("default_answer_template") or "").format_map(values)

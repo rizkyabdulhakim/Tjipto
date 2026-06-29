@@ -28,6 +28,8 @@ class CorpusSpecContractTest(unittest.TestCase):
             self.assertEqual(intent["role_labels"][key], value)
         for field in ("reason_rules", "default_reasons"):
             self.assertEqual(intent[field], expected[field])
+        self.assertEqual(len(intent["answer_rules"]), expected["answer_rule_count"])
+        self.assertIn(expected["default_answer_template_contains"], intent["default_answer_template"])
 
     def test_uud_registry_exposes_minimal_corpus_schema(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
