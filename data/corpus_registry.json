@@ -20,6 +20,61 @@
       "amendment_3_historical",
       "amendment_4_historical"
     ],
+    "schema": {
+      "document_roles": [
+        "current_consolidated",
+        "original_historical",
+        "amendment_1_historical",
+        "amendment_2_historical",
+        "amendment_3_historical",
+        "amendment_4_historical"
+      ],
+      "unit_hierarchy": [
+        "bab_record",
+        "pasal_record",
+        "ayat_record",
+        "amendment_recital_record",
+        "amendment_scope_record",
+        "instrument_clause_record",
+        "instrument_closing_record",
+        "decision_clause_record",
+        "effective_clause_record",
+        "determination_clause_record",
+        "signatory_block_record"
+      ],
+      "metadata_fields": [
+        "date",
+        "decision_date",
+        "decision_session",
+        "effective_rule",
+        "institution",
+        "official_title",
+        "penetapan",
+        "place",
+        "signatories",
+        "source_anomaly_status",
+        "source_publication"
+      ],
+      "relation_types": [
+        "CONTAINS",
+        "PART_OF",
+        "MODIFIES",
+        "DELETES",
+        "HAS_EFFECTIVE_RULE",
+        "HAS_SIGNATORY",
+        "HAS_DECISION_SESSION",
+        "HAS_SOURCE_ANOMALY"
+      ],
+      "source_conflict_types": [
+        "article_renumbering_conflict",
+        "source_marker_sequence_conflict"
+      ],
+      "chunk_policy": {
+        "direct_grounding": "text_span_exact",
+        "page_context_grounding": "page_grounded_context",
+        "fail_closed_without_text_span": true
+      }
+    },
     "source_conflict_intent": {
       "query_terms": [
         "konflik",

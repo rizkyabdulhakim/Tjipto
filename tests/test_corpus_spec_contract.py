@@ -18,6 +18,16 @@ class CorpusSpecContractTest(unittest.TestCase):
         self.assertIn("source_marker_sequence_conflict", intent["type_anchors"])
         self.assertEqual(intent["role_labels"]["amendment_4_historical"], "perubahan keempat")
 
+    def test_uud_registry_exposes_minimal_corpus_schema(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        schema = config.setting("schema")
+        self.assertIn(config.preferred_source_role, schema["document_roles"])
+        self.assertIn("pasal_record", schema["unit_hierarchy"])
+        self.assertIn("source_anomaly_status", schema["metadata_fields"])
+        self.assertIn("HAS_SOURCE_ANOMALY", schema["relation_types"])
+        self.assertIn("article_renumbering_conflict", schema["source_conflict_types"])
+        self.assertEqual(schema["chunk_policy"]["direct_grounding"], "text_span_exact")
+
 
 if __name__ == "__main__":
     unittest.main()
