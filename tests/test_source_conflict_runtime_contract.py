@@ -20,11 +20,14 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "insufficient_evidence", query)
             self.assertEqual(result["route"], "source_anomaly_explanation", query)
-            self.assertIn("source_anomaly", result["insufficient_reasons"], query)
+            for reason in case["expected_insufficient_reasons"]:
+                self.assertIn(reason, result["insufficient_reasons"], query)
             self.assertEqual(result["source_conflict"]["source_conflict_id"], case["source_conflict_id"], query)
             self.assertEqual(result["source_conflict"]["type"], case["type"], query)
             self.assertEqual(result["source_conflict"]["classification"], case["classification"], query)
             self.assertEqual(result["source_conflict"]["source_document_id"], case["source_document_id"], query)
+            for text in case["answer_contains"]:
+                self.assertIn(text.casefold(), result["answer"].casefold(), query)
             self.assertFalse(result["citations"], query)
             self.assertFalse(result["viewer_refs"], query)
 

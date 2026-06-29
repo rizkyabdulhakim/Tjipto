@@ -19,6 +19,7 @@ from tjipto.retrieval.structured import structured_lookup
 from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candidate
 from tjipto.runtime.api import _public_bbox, handle_request
 from tjipto.runtime.service import LegalRuntimeService
+from tests.test_source_conflict_runtime_contract import _source_conflict_cases
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -356,24 +357,15 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["citations"][0]["evidence_id"], case["evidence_id"], case["query"])
 
     def test_ask_explains_known_source_anomalies_safely(self) -> None:
-        pasal_iii = self.service.ask("uud", "Apa isi Pasal III Aturan Tambahan Perubahan Keempat?")
-        self.assertEqual(pasal_iii["status"], "insufficient_evidence")
-        self.assertEqual(pasal_iii["route"], "source_anomaly_explanation")
-        self.assertIn("historical_source_typo", pasal_iii["insufficient_reasons"])
-        self.assertIn("not_runtime_loadable", pasal_iii["insufficient_reasons"])
-        self.assertIn("reviewer decision", pasal_iii["answer"])
-        self.assertFalse(pasal_iii["citations"])
-
-        conflict = self.service.ask("uud", "Apa konflik sumber Aturan Tambahan Perubahan Keempat?")
-        self.assertEqual(conflict["status"], "insufficient_evidence")
-        self.assertEqual(conflict["route"], "source_anomaly_explanation")
-        self.assertIn("source_anomaly", conflict["insufficient_reasons"])
-        self.assertIn("canonical_conflict", conflict["insufficient_reasons"])
-
-        promotion = self.service.ask("uud", "Kenapa Aturan Tambahan Perubahan Keempat tidak dipromosikan?")
-        self.assertEqual(promotion["status"], "insufficient_evidence")
-        self.assertEqual(promotion["route"], "source_anomaly_explanation")
-        self.assertIn("insufficient_promotion_evidence", promotion["insufficient_reasons"])
+        for case in _source_conflict_cases():
+            result = self.service.ask("uud", case["query"])
+            self.assertEqual(result["status"], "insufficient_evidence", case["query"])
+            self.assertEqual(result["route"], "source_anomaly_explanation", case["query"])
+            self.assertEqual(result["source_conflict"]["source_conflict_id"], case["source_conflict_id"], case["query"])
+            for reason in case["expected_insufficient_reasons"]:
+                self.assertIn(reason, result["insufficient_reasons"], case["query"])
+            self.assertFalse(result["citations"], case["query"])
+            self.assertFalse(result["viewer_refs"], case["query"])
 
     def test_viewer_payload_is_multi_page_and_public_safe(self) -> None:
         evidence_id = "uud_current_consolidated_final_citation_evidence_00232"
