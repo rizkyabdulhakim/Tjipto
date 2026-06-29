@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
+from tjipto.corpora.uud.specs import SOURCE_CONFLICT_SPECS
+
+
+def build_source_conflicts() -> list[dict]:
+    return deepcopy(list(SOURCE_CONFLICT_SPECS))
+
 
 def apply_source_conflict_grounding(
     source_conflicts: list[dict],

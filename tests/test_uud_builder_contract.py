@@ -5,6 +5,7 @@ import unittest
 
 from tjipto.core.manifest import read_jsonl
 from tjipto.corpora.uud.pages_builder import build_pages
+from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 
 
@@ -26,6 +27,7 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertNotIn("read_jsonl(final_dir", source)
         self.assertNotIn("source_documents.jsonl", seed)
         self.assertNotIn("pages.jsonl", seed)
+        self.assertNotIn("source_conflicts.jsonl", seed)
         self.assertIn("compatibility bridge", seed)
 
     def test_source_documents_rebuild_from_specs_and_pdfs(self) -> None:
@@ -43,6 +45,16 @@ class UudBuilderContractTest(unittest.TestCase):
             build_pages(ROOT, source_documents),
             read_jsonl(FINAL / "pages.jsonl"),
         )
+
+    def test_source_conflicts_rebuild_from_specs_and_grounding(self) -> None:
+        source_conflicts = build_source_conflicts()
+        apply_source_conflict_grounding(
+            source_conflicts,
+            read_jsonl(FINAL / "evidence_registry.jsonl"),
+            read_jsonl(FINAL / "bbox_registry.jsonl"),
+            read_jsonl(FINAL / "page_text_spans.jsonl"),
+        )
+        self.assertEqual(source_conflicts, read_jsonl(FINAL / "source_conflicts.jsonl"))
 
 
 if __name__ == "__main__":
