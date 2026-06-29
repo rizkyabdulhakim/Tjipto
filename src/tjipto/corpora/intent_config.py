@@ -11,6 +11,8 @@ _GENERIC = {
     "relation_words": (),
     "direct_relation_words": (),
     "pasal_parent_words": (),
+    "relation_child_words": (),
+    "unsupported_relation_context_words": (),
 }
 
 
@@ -35,4 +37,6 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "relation_words": tuple(raw.get("relation_words") or ()),
         "direct_relation_words": tuple(raw.get("direct_relation_words") or ()),
         "pasal_parent_words": tuple(raw.get("pasal_parent_words") or ()),
+        "relation_child_words": tuple(raw.get("relation_child_words") or ()),
+        "unsupported_relation_context_words": tuple(raw.get("unsupported_relation_context_words") or ()),
     }

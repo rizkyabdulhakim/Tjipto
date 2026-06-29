@@ -257,6 +257,16 @@
         "berada dalam bab",
         "masuk bab",
         "termasuk bab"
+      ],
+      "relation_child_words": [
+        "apa saja",
+        "daftar",
+        "dalam",
+        "anak",
+        "child"
+      ],
+      "unsupported_relation_context_words": [
+        "perubahan"
       ]
     },
     "source_conflict_intent": {

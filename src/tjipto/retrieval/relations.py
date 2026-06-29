@@ -65,16 +65,16 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
 def has_relation_target(query: str, *, strategy: str = "generic", config=None) -> bool:
     folded = (query or "").casefold()
     intent = intent_config_for(strategy, config)
-    if not intent["relation_words"] and not intent["direct_relation_words"] and not intent["pasal_parent_words"]:
+    if not any(intent[key] for key in ("relation_words", "direct_relation_words", "pasal_parent_words", "relation_child_words")):
         return False
     if _unsupported_relation_requested(query, folded, strategy=strategy, config=config):
         return True
     if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
         return True
     if PASAL_RE.search(query or "") and "ayat" in folded:
-        return any(word in folded for word in ("apa saja", "daftar", "dalam", "anak", "child"))
+        return _child_relation_requested(folded, intent)
     if BAB_RE.search(query or "") and "pasal" in folded:
-        return any(word in folded for word in ("apa saja", "daftar", "dalam", "anak", "child"))
+        return _child_relation_requested(folded, intent)
     return False
 
 
@@ -97,11 +97,16 @@ def _unsupported_relation_requested(query: str, folded: str, *, strategy: str, c
     has_bab = BAB_RE.search(query or "") is not None
     direct_relation = any(pattern in folded for pattern in intent["direct_relation_words"])
     relation_words = any(pattern in folded for pattern in intent["relation_words"])
+    unsupported_context = any(pattern in folded for pattern in intent["unsupported_relation_context_words"])
     return (
         direct_relation and (has_pasal or has_bab or relation_words)
     ) or (
-        relation_words and (has_pasal or has_bab or "perubahan" in folded)
+        relation_words and (has_pasal or has_bab or unsupported_context)
     )
+
+
+def _child_relation_requested(folded: str, intent: dict) -> bool:
+    return any(word in folded for word in intent["relation_child_words"])
 
 
 def _pasal_parent_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:

@@ -35,6 +35,8 @@ class CorpusSpecContractTest(unittest.TestCase):
         self.assertIn("penetapan", intent["metadata_fields"])
         self.assertIn("tanggal penetapan", intent["metadata_rules"]["enactment_date"])
         self.assertIn("berada di bab", intent["pasal_parent_words"])
+        self.assertIn("apa saja", intent["relation_child_words"])
+        self.assertIn("perubahan", intent["unsupported_relation_context_words"])
         self.assertEqual(intent["metadata_roles"][1]["role"], "amendment_2_historical")
         source = (ROOT / "src/tjipto/corpora/intent_config.py").read_text(encoding="utf-8")
         self.assertNotIn("perubahan pertama", source)
