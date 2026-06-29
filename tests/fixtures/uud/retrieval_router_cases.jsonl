@@ -1,0 +1,7 @@
+{"corpus_id":"uud","query":"pasal 1 ayat 3","status":"found","route":"exact","normalized_query":"Pasal 1 ayat (3)","has_matches":true}
+{"corpus_id":"uud","query":"Pasal 1(3)","status":"found","route":"exact","normalized_query":"Pasal 1 ayat (3)"}
+{"corpus_id":"uud","query":"negara hukum","limit":2,"status":"found","route":"bm25","reason":null,"max_matches":2}
+{"corpus_id":"uud","query":"negara hukum","requested_route":"dense","status":"dense_unavailable","route":"dense_unavailable","reason":"not_configured","has_matches":false}
+{"corpus_id":"uud","query":"zyxqv unsupported legal relation","status":"no_results","intent":"no_results"}
+{"corpus_id":"uud","query":"aturan KUHP tentang pencurian","status":"found","route":"bm25","required_corpus":null,"has_matches":true,"lexical_relevance_ok":false}
+{"corpus_id":"unknown","query":"Pasal 1","status":"unsupported_corpus","route":"unsupported_corpus","store":null}

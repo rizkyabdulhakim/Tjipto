@@ -78,6 +78,11 @@ def _weak_bm25_cases() -> tuple[dict, ...]:
     return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
+def _retrieval_router_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/retrieval_router_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
 class RuntimeContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.service = LegalRuntimeService(ROOT)
@@ -466,43 +471,24 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertIn("amendment_1_historical", config.temporal_contexts)
         self.assertEqual(config.preferred_source_role, "current_consolidated")
 
-        exact = route_retrieval("uud", "pasal 1 ayat 3", store)
-        self.assertEqual(exact["status"], "found")
-        self.assertEqual(exact["route"], "exact")
-        self.assertEqual(exact["normalized_query"], "Pasal 1 ayat (3)")
-        self.assertTrue(exact["matches"])
-
-        shorthand = route_retrieval("uud", "Pasal 1(3)", store)
-        self.assertEqual(shorthand["status"], "found")
-        self.assertEqual(shorthand["route"], "exact")
-        self.assertEqual(shorthand["normalized_query"], "Pasal 1 ayat (3)")
-
-        bm25 = route_retrieval("uud", "negara hukum", store, limit=2)
-        self.assertEqual(bm25["status"], "found")
-        self.assertEqual(bm25["route"], "bm25")
-        self.assertEqual(bm25["reason"], None)
-        self.assertLessEqual(len(bm25["matches"]), 2)
-
-        dense = route_retrieval("uud", "negara hukum", store, route="dense")
-        self.assertEqual(dense["status"], "dense_unavailable")
-        self.assertEqual(dense["route"], "dense_unavailable")
-        self.assertEqual(dense["reason"], "not_configured")
-        self.assertEqual(dense["matches"], ())
-
-        no_results = route_retrieval("uud", "zyxqv unsupported legal relation", store)
-        self.assertEqual(no_results["status"], "no_results")
-        self.assertEqual(no_results["intent"], "no_results")
-
-        domain_query = route_retrieval("uud", "aturan KUHP tentang pencurian", store)
-        self.assertEqual(domain_query["status"], "found")
-        self.assertEqual(domain_query["route"], "bm25")
-        self.assertIsNone(domain_query["required_corpus"])
-        self.assertTrue(domain_query["matches"])
-        self.assertTrue(all(row["lexical_relevance_ok"] is False for row in domain_query["matches"]))
-
-        unsupported = route_retrieval("unknown", "Pasal 1", None)
-        self.assertEqual(unsupported["status"], "unsupported_corpus")
-        self.assertEqual(unsupported["route"], "unsupported_corpus")
+        for case in _retrieval_router_cases():
+            case_store = None if case.get("store", "default") is None else store
+            result = route_retrieval(
+                case["corpus_id"],
+                case["query"],
+                case_store,
+                limit=case.get("limit", 5),
+                route=case.get("requested_route"),
+            )
+            for field in ("status", "route", "reason", "intent", "normalized_query", "required_corpus"):
+                if field in case:
+                    self.assertEqual(result[field], case[field], case["query"])
+            if "has_matches" in case:
+                self.assertEqual(bool(result["matches"]), case["has_matches"], case["query"])
+            if "max_matches" in case:
+                self.assertLessEqual(len(result["matches"]), case["max_matches"], case["query"])
+            if "lexical_relevance_ok" in case:
+                self.assertTrue(all(row["lexical_relevance_ok"] is case["lexical_relevance_ok"] for row in result["matches"]))
 
     def test_metadata_filtering_limits_retrieval_safely(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
