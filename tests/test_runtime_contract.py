@@ -68,6 +68,16 @@ def _query_intent_cases() -> tuple[dict, ...]:
     return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
+def _bm25_relevance_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/bm25_relevance_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
+def _weak_bm25_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/weak_bm25_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
 class RuntimeContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.service = LegalRuntimeService(ROOT)
@@ -425,44 +435,27 @@ class RuntimeContractTest(unittest.TestCase):
                     self.assertNotIn(field, result, case["query"])
 
     def test_bm25_relevance_gate_keeps_core_uud_queries_answerable(self) -> None:
-        for query in (
-            "hukum adat",
-            "hak pendidikan",
-            "lingkungan hidup",
-            "persatuan Indonesia",
-            "hak asasi manusia",
-            "makna negara hukum",
-            "Majelis Permusyawaratan Rakyat",
-            "hak untuk bekerja",
-            "pekerjaan dan penghidupan yang layak",
-        ):
-            result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "limited_answer", query)
-            self.assertEqual(result["route"], "lexical_fallback", query)
-            self.assertIsNone(result["required_corpus"], query)
-            self.assertTrue(result["evidence"], query)
+        for case in _bm25_relevance_cases():
+            result = self.service.ask("uud", case["query"])
+            self.assertEqual(result["status"], case["status"], case["query"])
+            self.assertEqual(result["route"], case["route"], case["query"])
+            self.assertIsNone(result["required_corpus"], case["query"])
+            self.assertEqual(bool(result["evidence"]), case["has_evidence"], case["query"])
 
     def test_weak_bm25_matches_do_not_become_final_payloads(self) -> None:
-        for query in (
-            "aturan KUHP tentang pencurian",
-            "UU Pers tentang wartawan",
-            "berapa lama polisi boleh menahan tersangka",
-            "hukuman pembunuhan berapa",
-            "Permen teknis izin usaha",
-            "sanksi adat menggantikan pidana",
-        ):
-            result = self.service.ask("uud", query)
-            self.assertIn(result["status"], {"insufficient_evidence", "no_results"}, query)
-            self.assertIsNone(result["required_corpus"], query)
-            self.assertFalse(result["evidence"], query)
-            self.assertFalse(result["citations"], query)
-            self.assertFalse(result["viewer_refs"], query)
-            self.assertFalse(result["context_pack"]["answer_evidence"], query)
-            self.assertFalse(result["context_pack"]["citation_payloads"], query)
-            self.assertFalse(result["context_pack"]["viewer_refs"], query)
+        for case in _weak_bm25_cases():
+            result = self.service.ask("uud", case["query"])
+            self.assertIn(result["status"], set(case["statuses"]), case["query"])
+            self.assertIsNone(result["required_corpus"], case["query"])
+            self.assertFalse(result["evidence"], case["query"])
+            self.assertFalse(result["citations"], case["query"])
+            self.assertFalse(result["viewer_refs"], case["query"])
+            self.assertFalse(result["context_pack"]["answer_evidence"], case["query"])
+            self.assertFalse(result["context_pack"]["citation_payloads"], case["query"])
+            self.assertFalse(result["context_pack"]["viewer_refs"], case["query"])
             reasons = set(result["context_pack"]["validation_reasons"].values())
             if result["route"] == "lexical_fallback":
-                self.assertIn("insufficient_query_support", reasons, query)
+                self.assertIn("insufficient_query_support", reasons, case["query"])
 
     def test_retrieval_router_envelope_routes(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
