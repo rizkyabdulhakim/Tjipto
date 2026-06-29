@@ -10,6 +10,7 @@ from tjipto.corpora.uud.bbox_builder import (
     apply_inserted_bab_heading_bbox_policy,
     pdf_lines,
 )
+from tjipto.corpora.uud.compatibility_seed import load_compatibility_seed
 from tjipto.corpora.uud.evidence_builder import append_instrument_unit as append_instrument_record, rebuild_evidence
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.corpora.uud.manifest import refresh_manifest, write_json, write_jsonl
@@ -30,7 +31,6 @@ from tjipto.corpora.uud.structure_builder import (
 )
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import update_validation_report, validate_uud_artifact_dir
-from tjipto.core.manifest import read_json, read_jsonl
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
@@ -55,23 +55,24 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     except ImportError as error:  # pragma: no cover
         raise RuntimeError("PyMuPDF is required to rebuild UUD artifacts") from error
 
-    manifest = read_json(final_dir / "manifest.json")
-    pages = read_jsonl(final_dir / "pages.jsonl")
-    legal_units = read_jsonl(final_dir / "legal_units.jsonl")
-    chunks = read_jsonl(final_dir / "chunks.jsonl")
-    evidence = read_jsonl(final_dir / "evidence_registry.jsonl")
-    bbox_rows = read_jsonl(final_dir / "bbox_registry.jsonl")
-    retrieval_units = read_jsonl(final_dir / "retrieval_units.jsonl")
-    document_metadata = read_jsonl(final_dir / "document_metadata.jsonl")
-    metadata_grounding = read_jsonl(final_dir / "metadata_grounding.jsonl")
-    metadata_grounding_registry = read_jsonl(final_dir / "metadata_grounding_registry.jsonl")
-    metadata_assertions = read_jsonl(final_dir / "metadata.jsonl")
-    metadata_graph_edges = read_jsonl(final_dir / "metadata_graph_edges.jsonl")
-    excluded_records = read_jsonl(final_dir / "excluded_records.jsonl")
-    source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
-    validation_report = read_json(final_dir / "validation_report.json")
+    seed = load_compatibility_seed(final_dir)
+    manifest = seed["manifest"]
+    pages = seed["pages"]
+    legal_units = seed["legal_units"]
+    chunks = seed["chunks"]
+    evidence = seed["evidence"]
+    bbox_rows = seed["bbox_rows"]
+    retrieval_units = seed["retrieval_units"]
+    document_metadata = seed["document_metadata"]
+    metadata_grounding = seed["metadata_grounding"]
+    metadata_grounding_registry = seed["metadata_grounding_registry"]
+    metadata_assertions = seed["metadata_assertions"]
+    metadata_graph_edges = seed["metadata_graph_edges"]
+    excluded_records = seed["excluded_records"]
+    source_conflicts = seed["source_conflicts"]
+    validation_report = seed["validation_report"]
 
-    source_documents = {row["source_document_id"]: row for row in read_jsonl(final_dir / "source_documents.jsonl")}
+    source_documents = {row["source_document_id"]: row for row in seed["source_documents"]}
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
     units_by_source_label = {(row["source_document_id"], row.get("unit_label")): row for row in legal_units}
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
