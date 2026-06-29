@@ -306,12 +306,25 @@ def repair_metadata_graph_edges(edges: list[dict], metadata_assertions: list[dic
         (row["evidence_link"]["final_evidence_id"], row["predicate"]): row["metadata_id"]
         for row in metadata_assertions
     }
+    block_metadata_by_role = {
+        (row["source_role"], row["predicate"]): row["metadata_id"]
+        for row in metadata_assertions
+        if row["predicate"] in {"instrument_closing_and_issuance_block", "source_publication_metadata_block"}
+    }
     for edge in edges:
         evidence_id = edge.get("evidence_link", {}).get("final_evidence_id")
         predicate = str(edge.get("target_id") or "").rsplit("::", 1)[-1]
         metadata_id = metadata_id_by_key.get((evidence_id, predicate))
         if metadata_id:
             edge["target_id"] = metadata_id
+        role = edge.get("source_role")
+        if str(edge.get("source_id", "")).startswith("source_document::") and role:
+            edge["source_id"] = f"source_role::{role}"
+        if str(edge.get("source_id", "")).startswith("uud_legal_unit_"):
+            edge["source_id"] = f"legal_unit::{edge['source_id']}"
+        if str(edge.get("target_id", "")).startswith(("institution::", "signature_block::")) and role:
+            fallback_predicate = "source_publication_metadata_block" if role == "current_consolidated" else "instrument_closing_and_issuance_block"
+            edge["target_id"] = block_metadata_by_role.get((role, fallback_predicate), edge["target_id"])
     return edges
 
 
