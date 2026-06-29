@@ -70,6 +70,26 @@ SOURCE_DOCUMENT_SPECS = (
 )
 
 
+PAGE_SOURCE_ORDER = (
+    "uud::current_consolidated",
+    "uud::original_historical",
+    "uud::amendment_1_historical",
+    "uud::amendment_2_historical",
+    "uud::amendment_3_historical",
+    "uud::amendment_4_historical",
+)
+
+
+PAGE_ID_PREFIXES = {
+    "uud::current_consolidated": "page::uud_1945_current_consolidated_text",
+    "uud::original_historical": "page::uud_1945_original_text",
+    "uud::amendment_1_historical": "page::uud_1945_amendment_1",
+    "uud::amendment_2_historical": "page::uud_1945_amendment_2",
+    "uud::amendment_3_historical": "page::uud_1945_amendment_3",
+    "uud::amendment_4_historical": "page::uud_1945_amendment_4",
+}
+
+
 INSERTED_BAB_SPECS = (
     {
         "source_document_id": "uud::current_consolidated",

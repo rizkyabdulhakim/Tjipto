@@ -15,6 +15,7 @@ from tjipto.corpora.uud.evidence_builder import append_instrument_unit as append
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.corpora.uud.manifest import refresh_manifest, write_json, write_jsonl
 from tjipto.corpora.uud.metadata_builder import rebuild_metadata_grounding, repair_metadata_graph_edges
+from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval
 from tjipto.corpora.uud.specs import FINAL_DIR, INSERTED_BAB_SPECS
@@ -58,7 +59,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
 
     seed = load_compatibility_seed(final_dir)
     manifest = seed["manifest"]
-    pages = seed["pages"]
     legal_units = seed["legal_units"]
     chunks = seed["chunks"]
     evidence = seed["evidence"]
@@ -74,6 +74,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     validation_report = seed["validation_report"]
 
     source_documents = {row["source_document_id"]: row for row in build_source_documents(repo_root)}
+    pages = build_pages(repo_root, source_documents)
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
     units_by_source_label = {(row["source_document_id"], row.get("unit_label")): row for row in legal_units}
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
@@ -260,6 +261,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "metadata_graph_edges.jsonl", metadata_graph_edges)
     write_jsonl(final_dir / "source_conflicts.jsonl", source_conflicts)
     write_jsonl(final_dir / "source_documents.jsonl", list(source_documents.values()))
+    write_jsonl(final_dir / "pages.jsonl", pages)
     write_jsonl(final_dir / "graph_nodes.jsonl", graph_nodes)
     write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)

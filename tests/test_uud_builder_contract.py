@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 
 from tjipto.core.manifest import read_jsonl
+from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 
 
@@ -24,12 +25,23 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertIn("load_compatibility_seed(final_dir)", source)
         self.assertNotIn("read_jsonl(final_dir", source)
         self.assertNotIn("source_documents.jsonl", seed)
+        self.assertNotIn("pages.jsonl", seed)
         self.assertIn("compatibility bridge", seed)
 
     def test_source_documents_rebuild_from_specs_and_pdfs(self) -> None:
         self.assertEqual(
             build_source_documents(ROOT),
             read_jsonl(FINAL / "source_documents.jsonl"),
+        )
+
+    def test_pages_rebuild_from_specs_and_pdfs(self) -> None:
+        source_documents = {
+            row["source_document_id"]: row
+            for row in build_source_documents(ROOT)
+        }
+        self.assertEqual(
+            build_pages(ROOT, source_documents),
+            read_jsonl(FINAL / "pages.jsonl"),
         )
 
 
