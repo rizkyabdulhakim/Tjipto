@@ -48,6 +48,11 @@ def _relation_cases() -> tuple[dict, ...]:
     return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
+def _unsupported_relation_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/unsupported_relation_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
 def _metadata_runtime_cases() -> tuple[dict, ...]:
     path = ROOT / "tests/fixtures/uud/metadata_runtime_cases.jsonl"
     return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
@@ -324,26 +329,13 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(edge["target_id"], f"legal_unit::{case['graph_target_legal_unit_id']}", case["query"])
 
     def test_ask_does_not_promote_ungrounded_legal_relations(self) -> None:
-        result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")
-        self.assertEqual(result["status"], "insufficient_evidence")
-        self.assertEqual(result["route"], "legal_relation")
-        self.assertEqual(result["intent"], "legal_relation_lookup")
-        self.assertFalse(result["evidence"])
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
-
-        exact_priority = self.service.ask("uud", "relasi amandemen Pasal 1")
-        self.assertEqual(exact_priority["status"], "insufficient_evidence")
-        self.assertEqual(exact_priority["route"], "legal_relation")
-        self.assertEqual(exact_priority["intent"], "legal_relation_lookup")
-        self.assertFalse(exact_priority["evidence"])
-        self.assertFalse(exact_priority["citations"])
-
-        version = self.service.ask("uud", "versi historis Pasal 1 diubah oleh apa")
-        self.assertEqual(version["status"], "insufficient_evidence")
-        self.assertEqual(version["route"], "legal_relation")
-        self.assertEqual(version["intent"], "legal_relation_lookup")
-        self.assertFalse(version["legal_relations"])
+        for case in _unsupported_relation_cases():
+            result = self.service.ask("uud", case["query"])
+            self.assertEqual(result["status"], case["status"], case["query"])
+            self.assertEqual(result["route"], case["route"], case["query"])
+            self.assertEqual(result["intent"], case["intent"], case["query"])
+            for field in case["expect_empty"]:
+                self.assertFalse(result[field], case["query"])
 
     def test_ask_answers_instrument_scope_and_clause_queries(self) -> None:
         for case in _instrument_runtime_cases():
