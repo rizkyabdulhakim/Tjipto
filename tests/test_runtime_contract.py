@@ -52,6 +52,11 @@ def _metadata_runtime_cases() -> tuple[dict, ...]:
     return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
+def _instrument_runtime_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/instrument_runtime_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
 class RuntimeContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.service = LegalRuntimeService(ROOT)
@@ -340,26 +345,15 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(version["legal_relations"])
 
     def test_ask_answers_instrument_scope_and_clause_queries(self) -> None:
-        scope = self.service.ask("uud", "Perubahan Pertama mengubah pasal apa saja?")
-        self.assertEqual(scope["status"], "answer_ready")
-        self.assertEqual(scope["route"], "legal_reference")
-        self.assertEqual(scope["intent"], "structured_lookup")
-        self.assertEqual(scope["evidence"][0]["candidate_type"], "instrument_scope_candidate")
-        self.assertEqual(scope["citations"][0]["citation"], "Perubahan Pertama Scope")
-
-        clause = self.service.ask("uud", "Apa isi butir (d) Perubahan Keempat?")
-        self.assertEqual(clause["status"], "answer_ready")
-        self.assertEqual(clause["route"], "legal_reference")
-        self.assertEqual(clause["intent"], "structured_lookup")
-        self.assertEqual(clause["evidence"][0]["candidate_type"], "instrument_clause_candidate")
-        self.assertEqual(clause["citations"][0]["citation"], "Perubahan Keempat Clause (d)")
-
-        deletion = self.service.ask("uud", "Bab IV dihapus oleh perubahan apa?")
-        self.assertEqual(deletion["status"], "answer_ready")
-        self.assertEqual(deletion["route"], "legal_reference")
-        self.assertEqual(deletion["intent"], "structured_lookup")
-        self.assertEqual(deletion["evidence"][0]["candidate_type"], "instrument_clause_candidate")
-        self.assertEqual(deletion["citations"][0]["citation"], "Perubahan Keempat Clause (d)")
+        for case in _instrument_runtime_cases():
+            result = self.service.ask("uud", case["query"])
+            self.assertEqual(result["status"], case["status"], case["query"])
+            self.assertEqual(result["route"], case["route"], case["query"])
+            self.assertEqual(result["intent"], case["intent"], case["query"])
+            self.assertEqual(result["evidence"][0]["candidate_type"], case["candidate_type"], case["query"])
+            self.assertEqual(result["evidence"][0]["evidence_id"], case["evidence_id"], case["query"])
+            self.assertEqual(result["citations"][0]["citation"], case["citation"], case["query"])
+            self.assertEqual(result["citations"][0]["evidence_id"], case["evidence_id"], case["query"])
 
     def test_ask_explains_known_source_anomalies_safely(self) -> None:
         pasal_iii = self.service.ask("uud", "Apa isi Pasal III Aturan Tambahan Perubahan Keempat?")
