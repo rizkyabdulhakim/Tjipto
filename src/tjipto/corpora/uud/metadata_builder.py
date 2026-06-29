@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 import re
+import unicodedata
 
 from tjipto.corpora.uud.specs import METADATA_BLOCK_SPECS
 from tjipto.corpora.uud.structure_builder import compact
@@ -40,6 +41,34 @@ def build_document_metadata(source_documents: dict[str, dict], metadata_groundin
     rows.append(_current_document_metadata(source_documents["uud::current_consolidated"], block_by_role["current_consolidated"]))
     rows.append(_original_document_metadata(source_documents["uud::original_historical"]))
     return sorted(rows, key=lambda row: row["document_metadata_id"])
+
+
+def build_metadata_assertions(evidence: list[dict], metadata_grounding: list[dict], bbox_rows: list[dict]) -> list[dict]:
+    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    rows: list[dict] = []
+    for row in sorted(evidence, key=_metadata_evidence_sort_key):
+        if row["evidence_id"].startswith("uud_instrument_final_citation_evidence::"):
+            continue
+        rows.extend(_evidence_metadata_assertions(row, bbox_by_id))
+    for row in metadata_grounding:
+        if not row["metadata_grounding_id"].startswith("uud_metadata_block_final_evidence::"):
+            continue
+        rows.append(_block_metadata_assertion(row))
+    return rows
+
+
+def _metadata_evidence_sort_key(row: dict) -> tuple[int, str]:
+    evidence_id = row["evidence_id"]
+    prefix_order = (
+        "uud_current_consolidated_final_citation_evidence_",
+        "uud_source_role_final_citation_evidence_",
+        "uud_source_role_historical_final_citation_evidence_",
+        "uud_source_role_additional_final_citation_evidence_",
+    )
+    for index, prefix in enumerate(prefix_order):
+        if evidence_id.startswith(prefix):
+            return index, evidence_id
+    return len(prefix_order), evidence_id
 
 
 def build_metadata_block_grounding(
@@ -404,6 +433,90 @@ def _block_registry_row(row: dict) -> dict:
         "source_sha256": row["source_sha256"],
         "status": row["status"],
     }
+
+
+def _evidence_metadata_assertions(row: dict, bbox_by_id: dict[str, dict]) -> list[dict]:
+    evidence_link = _evidence_link(row, bbox_by_id)
+    return [
+        {
+            "corpus_id": "uud",
+            "evidence_link": evidence_link,
+            "metadata_id": f"uud_metadata_assertion::{row['evidence_id']}::source_role",
+            "predicate": "source_role",
+            "source_role": row["source_role"],
+            "status": "accepted",
+            "subject_id": f"source_role::{row['source_role']}",
+            "temporal_context": row["temporal_context"],
+            "type": "HAS_METADATA",
+            "validator_status": "valid",
+            "value": row["source_role"],
+        },
+        {
+            "corpus_id": "uud",
+            "evidence_link": evidence_link,
+            "metadata_id": f"uud_metadata_assertion::{row['evidence_id']}::temporal_context",
+            "predicate": "temporal_context",
+            "source_role": row["source_role"],
+            "status": "accepted",
+            "subject_id": f"source_role::{row['source_role']}",
+            "temporal_context": row["temporal_context"],
+            "type": "HAS_METADATA",
+            "validator_status": "valid",
+            "value": row["temporal_context"],
+        },
+        {
+            "corpus_id": "uud",
+            "evidence_link": evidence_link,
+            "metadata_id": f"uud_metadata_assertion::{row['evidence_id']}::legal_unit_identity",
+            "predicate": "legal_unit_identity",
+            "source_role": row["source_role"],
+            "status": "accepted",
+            "subject_id": row["legal_unit_id"],
+            "temporal_context": row["temporal_context"],
+            "type": "HAS_METADATA",
+            "validator_status": "valid",
+            "value": row["citation"],
+        },
+    ]
+
+
+def _block_metadata_assertion(row: dict) -> dict:
+    predicate = "source_publication_metadata_block" if row["source_role"] == "current_consolidated" else "instrument_closing_and_issuance_block"
+    return {
+        "corpus_id": "uud",
+        "evidence_link": {
+            "bbox_refs": row["bbox_refs"],
+            "final_evidence_id": row["metadata_grounding_id"],
+            "page_number": row["page_numbers"][0],
+            "quoted_text": row["quoted_text"],
+            "source_pdf_sha256": row["source_sha256"],
+        },
+        "metadata_id": f"uud_metadata_assertion::{row['source_role']}::{predicate}::page_{row['page_numbers'][0]:04d}",
+        "predicate": predicate,
+        "source_role": row["source_role"],
+        "status": "accepted",
+        "subject_id": f"source_document::{row['source_role']}",
+        "temporal_context": row["temporal_context"],
+        "type": "HAS_METADATA",
+        "validator_status": "valid",
+        "value": row["quoted_text"],
+    }
+
+
+def _evidence_link(row: dict, bbox_by_id: dict[str, dict]) -> dict:
+    bbox_ref = next((ref for ref in row["bbox_refs"] if ref.endswith("::0000")), row["bbox_refs"][0])
+    bbox = bbox_by_id.get(bbox_ref, {})
+    return {
+        "bbox_refs": [bbox_ref],
+        "final_evidence_id": row["evidence_id"],
+        "page_number": bbox.get("page_number", row["page_numbers"][0]),
+        "quoted_text": _first_quoted_line(row["quoted_text"]),
+        "source_pdf_sha256": row["source_sha256"],
+    }
+
+
+def _first_quoted_line(text: str) -> str:
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", text.splitlines()[0])).strip()
 
 
 def _metadata_quote(

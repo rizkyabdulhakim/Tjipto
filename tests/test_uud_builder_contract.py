@@ -6,7 +6,7 @@ import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
 from tjipto.corpora.uud.manifest import build_manifest
-from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_block_grounding, rebuild_metadata_grounding
+from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_assertions, build_metadata_block_grounding, rebuild_metadata_grounding
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
@@ -37,6 +37,7 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertNotIn("document_metadata.jsonl", seed)
         self.assertNotIn("metadata_grounding.jsonl", seed)
         self.assertNotIn("metadata_grounding_registry.jsonl", seed)
+        self.assertNotIn("metadata.jsonl", seed)
         self.assertIn("compatibility bridge", seed)
 
     def test_source_documents_rebuild_from_specs_and_pdfs(self) -> None:
@@ -114,6 +115,42 @@ class UudBuilderContractTest(unittest.TestCase):
             source_conflicts=read_jsonl(FINAL / "source_conflicts.jsonl"),
         )
         self.assertEqual(json.loads(json.dumps(document_metadata)), read_jsonl(FINAL / "document_metadata.jsonl"))
+
+    def test_metadata_assertions_rebuild_from_evidence_and_grounding(self) -> None:
+        source_documents = {
+            row["source_document_id"]: row
+            for row in build_source_documents(ROOT)
+        }
+        pages_by_source = {
+            (row["source_document_id"], row["page_number"]): row["text"]
+            for row in build_pages(ROOT, source_documents)
+        }
+        _, metadata_grounding, _ = rebuild_metadata_grounding(
+            document_metadata=build_document_metadata(
+                source_documents,
+                build_metadata_block_grounding(
+                    pages_by_source=pages_by_source,
+                    source_documents=source_documents,
+                ),
+            ),
+            metadata_grounding=build_metadata_block_grounding(
+                pages_by_source=pages_by_source,
+                source_documents=source_documents,
+            ),
+            evidence=read_jsonl(FINAL / "evidence_registry.jsonl"),
+            bbox_rows=read_jsonl(FINAL / "bbox_registry.jsonl"),
+            legal_units=read_jsonl(FINAL / "legal_units.jsonl"),
+            page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
+            source_conflicts=read_jsonl(FINAL / "source_conflicts.jsonl"),
+        )
+        self.assertEqual(
+            build_metadata_assertions(
+                read_jsonl(FINAL / "evidence_registry.jsonl"),
+                metadata_grounding,
+                read_jsonl(FINAL / "bbox_registry.jsonl"),
+            ),
+            read_jsonl(FINAL / "metadata.jsonl"),
+        )
 
     def test_source_conflicts_rebuild_from_specs_and_grounding(self) -> None:
         source_conflicts = build_source_conflicts()

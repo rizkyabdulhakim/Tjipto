@@ -15,7 +15,7 @@ from tjipto.corpora.uud.compatibility_seed import load_compatibility_seed
 from tjipto.corpora.uud.evidence_builder import append_instrument_unit as append_instrument_record, rebuild_evidence
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest, write_json, write_jsonl
-from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_block_grounding, rebuild_metadata_grounding, repair_metadata_graph_edges
+from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_assertions, build_metadata_block_grounding, rebuild_metadata_grounding, repair_metadata_graph_edges
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval
@@ -64,7 +64,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     evidence = seed["evidence"]
     bbox_rows = seed["bbox_rows"]
     retrieval_units = seed["retrieval_units"]
-    metadata_assertions = seed["metadata_assertions"]
     metadata_graph_edges = seed["metadata_graph_edges"]
     validation_report = seed["validation_report"]
 
@@ -233,6 +232,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     apply_inserted_bab_heading_bbox_policy(bbox_rows, evidence)
     apply_source_conflict_grounding(source_conflicts, evidence, bbox_rows, page_text_spans)
     bbox_rows.sort(key=lambda row: (row["source_document_id"], row["page_number"], row["bbox_id"]))
+    metadata_assertions = build_metadata_assertions(evidence, metadata_grounding, bbox_rows)
     legal_units.sort(key=lambda row: row["legal_unit_id"])
     chunks.sort(key=lambda row: row["chunk_id"])
     evidence.sort(key=lambda row: row["evidence_id"])
@@ -257,6 +257,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "document_metadata.jsonl", document_metadata)
     write_jsonl(final_dir / "metadata_grounding.jsonl", metadata_grounding)
     write_jsonl(final_dir / "metadata_grounding_registry.jsonl", metadata_grounding_registry)
+    write_jsonl(final_dir / "metadata.jsonl", metadata_assertions)
     write_jsonl(final_dir / "metadata_graph_edges.jsonl", metadata_graph_edges)
     write_jsonl(final_dir / "source_conflicts.jsonl", source_conflicts)
     write_jsonl(final_dir / "source_documents.jsonl", list(source_documents.values()))
