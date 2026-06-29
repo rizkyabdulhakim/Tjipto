@@ -5,6 +5,7 @@ import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
 from tjipto.corpora.uud.manifest import build_manifest
+from tjipto.corpora.uud.metadata_builder import build_metadata_block_grounding
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
@@ -32,6 +33,7 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertNotIn("pages.jsonl", seed)
         self.assertNotIn("source_conflicts.jsonl", seed)
         self.assertNotIn("excluded_records.jsonl", seed)
+        self.assertNotIn("metadata_grounding.jsonl", seed)
         self.assertNotIn("metadata_grounding_registry.jsonl", seed)
         self.assertIn("compatibility bridge", seed)
 
@@ -64,6 +66,28 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertEqual(
             build_pages(ROOT, source_documents),
             read_jsonl(FINAL / "pages.jsonl"),
+        )
+
+    def test_metadata_block_grounding_rebuilds_from_specs_and_pages(self) -> None:
+        source_documents = {
+            row["source_document_id"]: row
+            for row in build_source_documents(ROOT)
+        }
+        pages_by_source = {
+            (row["source_document_id"], row["page_number"]): row["text"]
+            for row in build_pages(ROOT, source_documents)
+        }
+        expected = [
+            row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")
+            if not row["metadata_grounding_id"].startswith("uud_metadata_field_grounding::")
+        ]
+        self.assertEqual(
+            build_metadata_block_grounding(
+                document_metadata=read_jsonl(FINAL / "document_metadata.jsonl"),
+                pages_by_source=pages_by_source,
+                source_documents=source_documents,
+            ),
+            [{key: row[key] for key in row if key not in {"bbox_precision", "grounding_status", "failure_reason"}} for row in expected],
         )
 
     def test_source_conflicts_rebuild_from_specs_and_grounding(self) -> None:

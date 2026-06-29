@@ -15,7 +15,7 @@ from tjipto.corpora.uud.compatibility_seed import load_compatibility_seed
 from tjipto.corpora.uud.evidence_builder import append_instrument_unit as append_instrument_record, rebuild_evidence
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest, write_json, write_jsonl
-from tjipto.corpora.uud.metadata_builder import rebuild_metadata_grounding, repair_metadata_graph_edges
+from tjipto.corpora.uud.metadata_builder import build_metadata_block_grounding, rebuild_metadata_grounding, repair_metadata_graph_edges
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval
@@ -65,7 +65,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     bbox_rows = seed["bbox_rows"]
     retrieval_units = seed["retrieval_units"]
     document_metadata = seed["document_metadata"]
-    metadata_grounding = seed["metadata_grounding"]
     metadata_assertions = seed["metadata_assertions"]
     metadata_graph_edges = seed["metadata_graph_edges"]
     validation_report = seed["validation_report"]
@@ -76,6 +75,11 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     source_conflicts = build_source_conflicts()
     pages = build_pages(repo_root, source_documents)
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
+    metadata_grounding = build_metadata_block_grounding(
+        document_metadata=document_metadata,
+        pages_by_source=pages_by_source,
+        source_documents=source_documents,
+    )
     units_by_source_label = {(row["source_document_id"], row.get("unit_label")): row for row in legal_units}
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     evidence_by_unit = {row["legal_unit_id"]: row for row in evidence}

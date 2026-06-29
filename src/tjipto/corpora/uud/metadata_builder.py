@@ -3,7 +3,40 @@ from __future__ import annotations
 from collections import defaultdict
 import re
 
+from tjipto.corpora.uud.specs import METADATA_BLOCK_SPECS
 from tjipto.corpora.uud.structure_builder import compact
+
+
+def build_metadata_block_grounding(
+    *,
+    document_metadata: list[dict],
+    pages_by_source: dict[tuple[str, int], str],
+    source_documents: dict[str, dict],
+) -> list[dict]:
+    metadata_by_role = {row["source_role"]: row for row in document_metadata}
+    source_by_role = {row["source_role"]: row for row in source_documents.values()}
+    rows = []
+    for spec in METADATA_BLOCK_SPECS:
+        role = spec["source_role"]
+        source = source_by_role[role]
+        quoted_text = _metadata_quote(spec, metadata_by_role[role], pages_by_source, source["source_document_id"])
+        metadata_grounding_id = f"uud_metadata_block_final_evidence::{role}::{spec['slug']}"
+        rows.append({
+            "bbox_refs": [f"uud_metadata_block_bbox::{role}::{spec['slug']}::0000"],
+            "corpus_id": "uud",
+            "metadata_grounding_id": metadata_grounding_id,
+            "page_numbers": [spec["page_number"]],
+            "provenance": {"donor_id": metadata_grounding_id},
+            "quoted_text": quoted_text,
+            "source_document_id": source["source_document_id"],
+            "source_pdf_path": source["path"],
+            "source_role": role,
+            "source_sha256": source["sha256"],
+            "status": "accepted_metadata_grounding",
+            "temporal_context": role,
+            "viewer_highlightable": False,
+        })
+    return rows
 
 
 def rebuild_metadata_grounding(
@@ -31,8 +64,8 @@ def rebuild_metadata_grounding(
     block_rows = [
         row | {
             "bbox_precision": "page_grounded_only",
-            "failure_reason": row.get("failure_reason") or "metadata_exact_bbox_or_text_span_unavailable",
             "grounding_status": row.get("grounding_status") or "block_level_grounded",
+            "failure_reason": row.get("failure_reason") or "metadata_exact_bbox_or_text_span_unavailable",
             "viewer_highlightable": False,
         }
         for row in metadata_grounding
@@ -334,6 +367,20 @@ def _block_registry_row(row: dict) -> dict:
         "source_sha256": row["source_sha256"],
         "status": row["status"],
     }
+
+
+def _metadata_quote(
+    spec: dict,
+    document_metadata: dict,
+    pages_by_source: dict[tuple[str, int], str],
+    source_document_id: str,
+) -> str:
+    if spec.get("quote_from_metadata"):
+        publication = document_metadata["source_publication"]
+        return f"{publication['institution']} {publication['title_text']}"
+    lines = pages_by_source[(source_document_id, spec["page_number"])].splitlines()
+    start = next(index for index, line in enumerate(lines) if spec["start_marker"] in line)
+    return " ".join(line.strip() for line in lines[start:] if line.strip())
 
 
 def _exact_bbox_rows(quoted_text: str, bbox_rows: list[dict]) -> list[dict]:

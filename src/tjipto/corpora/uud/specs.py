@@ -329,3 +329,37 @@ EXCLUDED_RECORD_SPECS = (
         "unit_label": "(6)",
     },
 )
+
+
+METADATA_BLOCK_SPECS = (
+    {
+        "source_role": "amendment_1_historical",
+        "slug": "instrument_closing_issuance_page_0003",
+        "page_number": 3,
+        "start_marker": "Perubahan tersebut diputuskan",
+    },
+    {
+        "source_role": "amendment_2_historical",
+        "slug": "instrument_closing_issuance_page_0008",
+        "page_number": 8,
+        "start_marker": "Ditetapkan di Jakarta",
+    },
+    {
+        "source_role": "amendment_3_historical",
+        "slug": "instrument_closing_issuance_page_0009",
+        "page_number": 9,
+        "start_marker": "Ditetapkan di Jakarta",
+    },
+    {
+        "source_role": "amendment_4_historical",
+        "slug": "instrument_closing_issuance_page_0006",
+        "page_number": 6,
+        "start_marker": "Perubahan tersebut diputuskan",
+    },
+    {
+        "source_role": "current_consolidated",
+        "slug": "source_publication_page_0001",
+        "page_number": 1,
+        "quote_from_metadata": True,
+    },
+)
