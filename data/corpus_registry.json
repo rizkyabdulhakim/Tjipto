@@ -299,6 +299,15 @@
         "pasal iii",
         "pasal 25e"
       ],
+      "generic_tokens": [
+        "apa",
+        "yang",
+        "sumber",
+        "konflik",
+        "anomali",
+        "status",
+        "pasal"
+      ],
       "role_labels": {
         "amendment_1_historical": "perubahan pertama",
         "amendment_2_historical": "perubahan kedua",

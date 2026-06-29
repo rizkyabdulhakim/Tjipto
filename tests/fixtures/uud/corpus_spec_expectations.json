@@ -1,6 +1,7 @@
 {
   "source_conflict_intent": {
     "query_terms": ["pasal 25e"],
+    "generic_tokens": ["konflik"],
     "type_anchors": ["source_marker_sequence_conflict"],
     "role_labels": {"amendment_4_historical": "perubahan keempat"},
     "reason_rules": [{"query_terms": ["pasal iii"], "reasons": ["historical_source_typo", "not_runtime_loadable"]}],

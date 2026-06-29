@@ -21,7 +21,7 @@ class CorpusSpecContractTest(unittest.TestCase):
         self.assertIsNotNone(config)
         intent = config.setting("source_conflict_intent")
         expected = _expectations()["source_conflict_intent"]
-        for field in ("query_terms", "type_anchors"):
+        for field in ("query_terms", "generic_tokens", "type_anchors"):
             for value in expected[field]:
                 self.assertIn(value, intent[field])
         for key, value in expected["role_labels"].items():

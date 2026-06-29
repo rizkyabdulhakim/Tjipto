@@ -428,14 +428,14 @@ def _source_conflict_match_score(conflict: dict, folded_query: str, intent: dict
             role_label,
         )
     ).replace("_", " ").casefold()
-    query_tokens = _meaningful_conflict_tokens(folded_query)
+    query_tokens = _meaningful_conflict_tokens(folded_query, intent)
     conflict_tokens = {token for token in re.findall(r"[a-z0-9]+", haystack) if len(token) > 2}
     overlap = query_tokens & conflict_tokens
     return len(overlap) if len(overlap) >= 2 else 0
 
 
-def _meaningful_conflict_tokens(text: str) -> set[str]:
-    generic = {"apa", "yang", "sumber", "konflik", "anomali", "status", "pasal"}
+def _meaningful_conflict_tokens(text: str, intent: dict) -> set[str]:
+    generic = set(intent.get("generic_tokens") or ())
     return {token for token in re.findall(r"[a-z0-9]+", text) if len(token) > 2 and token not in generic}
 
 
