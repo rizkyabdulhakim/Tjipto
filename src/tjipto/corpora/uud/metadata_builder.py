@@ -57,6 +57,50 @@ def build_metadata_assertions(evidence: list[dict], metadata_grounding: list[dic
     return rows
 
 
+def build_metadata_graph_edges(metadata_assertions: list[dict]) -> list[dict]:
+    rows: list[dict] = []
+    block_rows = []
+    for row in metadata_assertions:
+        if row["predicate"] == "legal_unit_identity":
+            rows.append(_metadata_graph_edge(
+                edge_id=f"uud_legal_graph_edge::{row['evidence_link']['final_evidence_id']}::has_metadata",
+                edge_type="HAS_METADATA",
+                row=row,
+                source_id=f"legal_unit::{row['subject_id']}",
+            ))
+        elif row["predicate"] in {"instrument_closing_and_issuance_block", "source_publication_metadata_block"}:
+            block_rows.append(row)
+    for row in block_rows:
+        role = row["source_role"]
+        slug = row["evidence_link"]["final_evidence_id"].rsplit("::", 1)[-1]
+        if row["predicate"] == "source_publication_metadata_block":
+            rows.append(_metadata_graph_edge(
+                edge_id=f"uud_legal_graph_edge::{role}::{slug}::source_published_by::institution_majelis_permusyawaratan_rakyat_sekretariat_jenderal",
+                edge_type="SOURCE_PUBLISHED_BY",
+                row=row,
+                source_id=f"source_role::{role}",
+            ))
+            continue
+        for edge_type, suffix in (
+            ("ISSUED_BY", "issued_by::institution_majelis_permusyawaratan_rakyat_republik_indonesia"),
+            ("SIGNED_BY", f"signed_by::signature_block_{role}_{slug}"),
+        ):
+            rows.append(_metadata_graph_edge(
+                edge_id=f"uud_legal_graph_edge::{role}::{slug}::{suffix}",
+                edge_type=edge_type,
+                row=row,
+                source_id=f"source_role::{role}",
+            ))
+        if "diputuskan" in row["value"].casefold():
+            rows.append(_metadata_graph_edge(
+                edge_id=f"uud_legal_graph_edge::{role}::{slug}::decided_by::institution_majelis_permusyawaratan_rakyat_republik_indonesia",
+                edge_type="DECIDED_BY",
+                row=row,
+                source_id=f"source_role::{role}",
+            ))
+    return rows
+
+
 def _metadata_evidence_sort_key(row: dict) -> tuple[int, str]:
     evidence_id = row["evidence_id"]
     prefix_order = (
@@ -69,6 +113,22 @@ def _metadata_evidence_sort_key(row: dict) -> tuple[int, str]:
         if evidence_id.startswith(prefix):
             return index, evidence_id
     return len(prefix_order), evidence_id
+
+
+def _metadata_graph_edge(*, edge_id: str, edge_type: str, row: dict, source_id: str) -> dict:
+    return {
+        "corpus_id": "uud",
+        "edge_id": edge_id,
+        "edge_type": edge_type,
+        "evidence_link": row["evidence_link"],
+        "runtime_loadable": False,
+        "source_id": source_id,
+        "source_role": row["source_role"],
+        "status": "accepted",
+        "target_id": row["metadata_id"],
+        "temporal_context": row["temporal_context"],
+        "validator_status": "valid",
+    }
 
 
 def build_metadata_block_grounding(
@@ -392,33 +452,6 @@ def rebuild_metadata_grounding(
     all_grounding_rows = block_rows + field_rows
     all_registry_rows = block_registry_rows + field_registry_rows
     return document_metadata, all_grounding_rows, all_registry_rows
-
-
-def repair_metadata_graph_edges(edges: list[dict], metadata_assertions: list[dict]) -> list[dict]:
-    metadata_id_by_key = {
-        (row["evidence_link"]["final_evidence_id"], row["predicate"]): row["metadata_id"]
-        for row in metadata_assertions
-    }
-    block_metadata_by_role = {
-        (row["source_role"], row["predicate"]): row["metadata_id"]
-        for row in metadata_assertions
-        if row["predicate"] in {"instrument_closing_and_issuance_block", "source_publication_metadata_block"}
-    }
-    for edge in edges:
-        evidence_id = edge.get("evidence_link", {}).get("final_evidence_id")
-        predicate = str(edge.get("target_id") or "").rsplit("::", 1)[-1]
-        metadata_id = metadata_id_by_key.get((evidence_id, predicate))
-        if metadata_id:
-            edge["target_id"] = metadata_id
-        role = edge.get("source_role")
-        if str(edge.get("source_id", "")).startswith("source_document::") and role:
-            edge["source_id"] = f"source_role::{role}"
-        if str(edge.get("source_id", "")).startswith("uud_legal_unit_"):
-            edge["source_id"] = f"legal_unit::{edge['source_id']}"
-        if str(edge.get("target_id", "")).startswith(("institution::", "signature_block::")) and role:
-            fallback_predicate = "source_publication_metadata_block" if role == "current_consolidated" else "instrument_closing_and_issuance_block"
-            edge["target_id"] = block_metadata_by_role.get((role, fallback_predicate), edge["target_id"])
-    return edges
 
 
 def _block_registry_row(row: dict) -> dict:

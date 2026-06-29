@@ -13,6 +13,5 @@ def load_compatibility_seed(stage_dir: Path) -> dict:
         "evidence": read_jsonl(stage_dir / "evidence_registry.jsonl"),
         "bbox_rows": read_jsonl(stage_dir / "bbox_registry.jsonl"),
         "retrieval_units": read_jsonl(stage_dir / "retrieval_units.jsonl"),
-        "metadata_graph_edges": read_jsonl(stage_dir / "metadata_graph_edges.jsonl"),
         "validation_report": read_json(stage_dir / "validation_report.json"),
     }

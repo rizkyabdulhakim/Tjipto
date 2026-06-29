@@ -6,7 +6,7 @@ import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
 from tjipto.corpora.uud.manifest import build_manifest
-from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_assertions, build_metadata_block_grounding, rebuild_metadata_grounding
+from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_assertions, build_metadata_block_grounding, build_metadata_graph_edges, rebuild_metadata_grounding
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
@@ -38,6 +38,7 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertNotIn("metadata_grounding.jsonl", seed)
         self.assertNotIn("metadata_grounding_registry.jsonl", seed)
         self.assertNotIn("metadata.jsonl", seed)
+        self.assertNotIn("metadata_graph_edges.jsonl", seed)
         self.assertIn("compatibility bridge", seed)
 
     def test_source_documents_rebuild_from_specs_and_pdfs(self) -> None:
@@ -150,6 +151,12 @@ class UudBuilderContractTest(unittest.TestCase):
                 read_jsonl(FINAL / "bbox_registry.jsonl"),
             ),
             read_jsonl(FINAL / "metadata.jsonl"),
+        )
+
+    def test_metadata_graph_edges_rebuild_from_metadata_assertions(self) -> None:
+        self.assertEqual(
+            build_metadata_graph_edges(read_jsonl(FINAL / "metadata.jsonl")),
+            read_jsonl(FINAL / "metadata_graph_edges.jsonl"),
         )
 
     def test_source_conflicts_rebuild_from_specs_and_grounding(self) -> None:
