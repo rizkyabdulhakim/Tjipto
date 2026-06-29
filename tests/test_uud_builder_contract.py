@@ -5,6 +5,7 @@ import unittest
 
 from tjipto.core.manifest import read_jsonl
 from tjipto.corpora.uud.pages_builder import build_pages
+from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 
@@ -28,6 +29,7 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertNotIn("source_documents.jsonl", seed)
         self.assertNotIn("pages.jsonl", seed)
         self.assertNotIn("source_conflicts.jsonl", seed)
+        self.assertNotIn("excluded_records.jsonl", seed)
         self.assertIn("compatibility bridge", seed)
 
     def test_source_documents_rebuild_from_specs_and_pdfs(self) -> None:
@@ -55,6 +57,9 @@ class UudBuilderContractTest(unittest.TestCase):
             read_jsonl(FINAL / "page_text_spans.jsonl"),
         )
         self.assertEqual(source_conflicts, read_jsonl(FINAL / "source_conflicts.jsonl"))
+
+    def test_excluded_records_rebuild_from_specs(self) -> None:
+        self.assertEqual(list(EXCLUDED_RECORD_SPECS), read_jsonl(FINAL / "excluded_records.jsonl"))
 
 
 if __name__ == "__main__":

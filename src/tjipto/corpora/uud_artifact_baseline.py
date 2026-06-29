@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from copy import deepcopy
 from pathlib import Path
 
 from tjipto.corpora.uud.anomaly_builder import append_amendment_instrument_units
@@ -18,7 +19,7 @@ from tjipto.corpora.uud.metadata_builder import rebuild_metadata_grounding, repa
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval
-from tjipto.corpora.uud.specs import FINAL_DIR, INSERTED_BAB_SPECS
+from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, FINAL_DIR, INSERTED_BAB_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.structure_builder import (
@@ -69,9 +70,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     metadata_grounding_registry = seed["metadata_grounding_registry"]
     metadata_assertions = seed["metadata_assertions"]
     metadata_graph_edges = seed["metadata_graph_edges"]
-    excluded_records = seed["excluded_records"]
     validation_report = seed["validation_report"]
 
+    excluded_records = deepcopy(list(EXCLUDED_RECORD_SPECS))
     source_conflicts = build_source_conflicts()
     source_documents = {row["source_document_id"]: row for row in build_source_documents(repo_root)}
     pages = build_pages(repo_root, source_documents)
