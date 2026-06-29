@@ -257,6 +257,21 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"orphan_retrieval_chunk:{row['retrieval_unit_id']}")
         if row["evidence_id"] not in evidence_by_id:
             errors.append(f"orphan_retrieval_evidence:{row['retrieval_unit_id']}")
+    for row in source_conflicts:
+        for field in ("page_numbers", "text_span_ids", "bbox_ids", "evidence_ids", "grounding_status", "validation_status"):
+            if field not in row:
+                errors.append(f"source_conflict_missing_{field}:{row['source_conflict_id']}")
+        for text_span_id in row.get("text_span_ids") or ():
+            if text_span_id not in text_span_ids:
+                errors.append(f"orphan_source_conflict_text_span:{row['source_conflict_id']}:{text_span_id}")
+        for bbox_id in row.get("bbox_ids") or ():
+            if bbox_id not in bbox_by_id:
+                errors.append(f"orphan_source_conflict_bbox:{row['source_conflict_id']}:{bbox_id}")
+        for evidence_id in row.get("evidence_ids") or ():
+            if evidence_id not in evidence_by_id:
+                errors.append(f"orphan_source_conflict_evidence:{row['source_conflict_id']}:{evidence_id}")
+        if (not row.get("evidence_ids") or not row.get("bbox_ids")) and not row.get("failure_reason"):
+            errors.append(f"source_conflict_missing_failure_reason:{row['source_conflict_id']}")
     for row in metadata_grounding:
         if row.get("viewer_highlightable") is not False:
             errors.append(f"metadata_grounding_highlightable_not_clarified:{row['metadata_grounding_id']}")

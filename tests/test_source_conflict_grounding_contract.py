@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+from pathlib import Path
+import unittest
+
+from tests.test_source_conflict_runtime_contract import _source_conflict_cases
+from tjipto.core.manifest import read_jsonl
+
+
+ROOT = Path(__file__).resolve().parents[1]
+FINAL = ROOT / "data/final/uud"
+
+
+class SourceConflictGroundingContractTest(unittest.TestCase):
+    def test_source_conflicts_have_stable_grounding_ids(self) -> None:
+        conflicts = {row["source_conflict_id"]: row for row in read_jsonl(FINAL / "source_conflicts.jsonl")}
+        text_span_ids = {row["text_span_id"] for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
+        evidence_ids = {row["evidence_id"] for row in read_jsonl(FINAL / "evidence_registry.jsonl")}
+        bbox_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
+        for case in _source_conflict_cases():
+            row = conflicts[case["source_conflict_id"]]
+            self.assertEqual(row["text_span_ids"], case["text_span_ids"])
+            self.assertEqual(row["evidence_ids"], case["evidence_ids"])
+            self.assertEqual(row["bbox_ids"], case["bbox_ids"])
+            self.assertEqual(row["grounding_status"], "text_span_exact")
+            self.assertEqual(row["validation_status"], "accepted_source_conflict_record")
+            self.assertTrue(set(row["text_span_ids"]) <= text_span_ids)
+            self.assertTrue(set(row["evidence_ids"]) <= evidence_ids)
+            self.assertTrue(set(row["bbox_ids"]) <= bbox_ids)
+            if not row["evidence_ids"] or not row["bbox_ids"]:
+                self.assertEqual(row["failure_reason"], case["failure_reason"])
+
+
+if __name__ == "__main__":
+    unittest.main()

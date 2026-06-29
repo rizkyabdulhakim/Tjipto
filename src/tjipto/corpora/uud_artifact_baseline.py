@@ -17,6 +17,7 @@ from tjipto.corpora.uud.metadata_builder import rebuild_metadata_grounding, repa
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval
 from tjipto.corpora.uud.specs import FINAL_DIR, INSERTED_BAB_SPECS
+from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding
 from tjipto.corpora.uud.structure_builder import (
     apply_inserted_bab_specs,
     find_unit,
@@ -229,6 +230,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         for row in bbox_by_evidence[evidence_id]
     ]
     apply_inserted_bab_heading_bbox_policy(bbox_rows, evidence)
+    apply_source_conflict_grounding(source_conflicts, evidence, bbox_rows, page_text_spans)
     bbox_rows.sort(key=lambda row: (row["source_document_id"], row["page_number"], row["bbox_id"]))
     legal_units.sort(key=lambda row: row["legal_unit_id"])
     chunks.sort(key=lambda row: row["chunk_id"])
@@ -258,6 +260,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "metadata_grounding.jsonl", metadata_grounding)
     write_jsonl(final_dir / "metadata_grounding_registry.jsonl", metadata_grounding_registry)
     write_jsonl(final_dir / "metadata_graph_edges.jsonl", metadata_graph_edges)
+    write_jsonl(final_dir / "source_conflicts.jsonl", source_conflicts)
     write_jsonl(final_dir / "graph_nodes.jsonl", graph_nodes)
     write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
