@@ -66,7 +66,14 @@ class CorpusSpecContractTest(unittest.TestCase):
                 self.assertIn(value, intent["metadata_rules"][field])
         for row in expected["metadata_roles"]:
             self.assertEqual(intent["metadata_roles"][row["index"]]["role"], row["role"])
-        source = (ROOT / "src/tjipto/corpora/intent_config.py").read_text(encoding="utf-8")
+        source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (
+                ROOT / "src/tjipto/corpora/intent_config.py",
+                ROOT / "src/tjipto/retrieval/metadata.py",
+                ROOT / "src/tjipto/retrieval/structured.py",
+            )
+        )
         for value in _expectations()["generic_intent_source_absent"]:
             self.assertNotIn(value, source)
 

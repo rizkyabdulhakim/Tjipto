@@ -19,7 +19,7 @@
   "intent_config": {
     "document_target_words": ["uud"],
     "metadata_fields": ["penetapan"],
-    "metadata_rules": {"enactment_date": ["tanggal penetapan"]},
+    "metadata_rules": {"enactment_date": ["tanggal penetapan"], "institution_tokens": ["penetap"]},
     "pasal_parent_words": ["berada di bab"],
     "relation_child_words": ["apa saja"],
     "instrument_scope_queries": ["mengubah pasal apa"],

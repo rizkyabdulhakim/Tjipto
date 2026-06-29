@@ -138,6 +138,10 @@ def _asks_any(folded: str, intent: dict, rule: str) -> bool:
     return any(pattern in folded for pattern in intent["metadata_rules"].get(rule, ()))
 
 
+def _asks_token(folded: str, intent: dict, rule: str) -> bool:
+    return any(re.search(rf"\b{re.escape(pattern)}\b", folded) for pattern in intent["metadata_rules"].get(rule, ()))
+
+
 def _asks_promulgation(folded: str, intent: dict) -> bool:
     return _asks_any(folded, intent, "promulgation")
 
@@ -185,7 +189,7 @@ def _asks_institution(folded: str, intent: dict) -> bool:
     return (
         _asks_any(folded, intent, "institution")
         or _asks_any(folded, intent, "institution_question")
-        or re.search(r"\bpenetap\b", folded) is not None
+        or _asks_token(folded, intent, "institution_tokens")
     )
 
 
@@ -200,7 +204,7 @@ def _asks_enactment_date(folded: str, intent: dict) -> bool:
 
 
 def _asks_enactment_context(folded: str, intent: dict) -> bool:
-    return _asks_any(folded, intent, "enactment_context") or re.search(r"\bpenetap\b", folded) is not None
+    return _asks_any(folded, intent, "enactment_context") or _asks_token(folded, intent, "institution_tokens")
 
 
 def _source_role(query: str, *, strategy: str, config=None) -> str | None:
