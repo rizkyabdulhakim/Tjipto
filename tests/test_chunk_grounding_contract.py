@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import unittest
 
@@ -41,6 +42,28 @@ class ChunkGroundingContractTest(unittest.TestCase):
                 if page_span_ids != set(row["text_span_ids"]):
                     continue
                 self.assertLessEqual(len(page_span_ids), len(row["bbox_ids"]), row["chunk_id"])
+
+    def test_fixture_chunk_keeps_stable_grounding_ids(self) -> None:
+        rows = {
+            row["chunk_id"]: row
+            for row in read_jsonl(FINAL / "chunks.jsonl")
+        }
+        for case in _chunk_grounding_cases():
+            row = rows[case["chunk_id"]]
+            for field in (
+                "legal_unit_id",
+                "grounding_status",
+                "page_numbers",
+                "text_span_ids",
+                "evidence_ids",
+                "bbox_ids",
+            ):
+                self.assertEqual(row[field], case[field], case["chunk_id"])
+
+
+def _chunk_grounding_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/chunk_grounding_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
 if __name__ == "__main__":
