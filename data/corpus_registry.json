@@ -299,7 +299,14 @@
           "pasal ii",
           "pasal 3"
         ]
-      }
+      },
+      "reason_rules": [
+        {
+          "query_terms": ["pasal iii"],
+          "reasons": ["historical_source_typo", "not_runtime_loadable"]
+        }
+      ],
+      "default_reasons": ["insufficient_promotion_evidence"]
     }
   }
 }

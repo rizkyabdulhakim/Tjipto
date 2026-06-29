@@ -331,12 +331,7 @@ def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
     conflict = _matched_source_conflict(store, query)
     if conflict is None:
         return _source_anomaly_fallback()
-    reasons = ["source_anomaly", "canonical_conflict"]
-    folded = (query or "").casefold()
-    if "pasal iii" in folded:
-        reasons.extend(["historical_source_typo", "not_runtime_loadable"])
-    else:
-        reasons.append("insufficient_promotion_evidence")
+    reasons = _source_conflict_reasons(store, query)
     answer = _source_anomaly_answer(conflict, query)
     return {
         "status": "insufficient_evidence",
@@ -397,6 +392,19 @@ def _source_anomaly_fallback() -> dict:
         "insufficient_reasons": ("source_anomaly", "source_anomaly_unresolved"),
         "source_conflict": None,
     }
+
+
+def _source_conflict_reasons(store, query: str) -> list[str]:
+    intent = _source_conflict_intent(store)
+    folded = (query or "").casefold()
+    reasons = ["source_anomaly", "canonical_conflict"]
+    for rule in intent.get("reason_rules") or ():
+        terms = tuple(str(term).casefold() for term in rule.get("query_terms") or ())
+        if any(term in folded for term in terms):
+            reasons.extend(str(reason) for reason in rule.get("reasons") or ())
+            return reasons
+    reasons.extend(str(reason) for reason in intent.get("default_reasons") or ())
+    return reasons
 
 
 def _source_conflict_match_score(conflict: dict, folded_query: str, intent: dict) -> int:
