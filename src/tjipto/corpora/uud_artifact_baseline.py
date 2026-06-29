@@ -14,7 +14,7 @@ from tjipto.corpora.uud.bbox_builder import (
 from tjipto.corpora.uud.compatibility_seed import load_compatibility_seed
 from tjipto.corpora.uud.evidence_builder import append_instrument_unit as append_instrument_record, rebuild_evidence
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
-from tjipto.corpora.uud.manifest import refresh_manifest, write_json, write_jsonl
+from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest, write_json, write_jsonl
 from tjipto.corpora.uud.metadata_builder import rebuild_metadata_grounding, repair_metadata_graph_edges
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
@@ -59,7 +59,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         raise RuntimeError("PyMuPDF is required to rebuild UUD artifacts") from error
 
     seed = load_compatibility_seed(final_dir)
-    manifest = seed["manifest"]
     legal_units = seed["legal_units"]
     chunks = seed["chunks"]
     evidence = seed["evidence"]
@@ -73,8 +72,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     validation_report = seed["validation_report"]
 
     excluded_records = deepcopy(list(EXCLUDED_RECORD_SPECS))
-    source_conflicts = build_source_conflicts()
     source_documents = {row["source_document_id"]: row for row in build_source_documents(repo_root)}
+    manifest = build_manifest(source_documents)
+    source_conflicts = build_source_conflicts()
     pages = build_pages(repo_root, source_documents)
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
     units_by_source_label = {(row["source_document_id"], row.get("unit_label")): row for row in legal_units}
@@ -248,9 +248,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
         metadata_grounding=metadata_grounding,
     )
-    manifest["page_text_spans"] = "page_text_spans.jsonl"
-    manifest.setdefault("files", {}).setdefault("page_text_spans.jsonl", {})
-
     write_jsonl(final_dir / "legal_units.jsonl", legal_units)
     write_jsonl(final_dir / "chunks.jsonl", chunks)
     write_jsonl(final_dir / "evidence_registry.jsonl", evidence)

@@ -8,7 +8,6 @@ from tjipto.core.manifest import read_json, read_jsonl
 def load_compatibility_seed(stage_dir: Path) -> dict:
     # ponytail: compatibility bridge until UUD extraction rebuilds these rows from source specs.
     return {
-        "manifest": read_json(stage_dir / "manifest.json"),
         "legal_units": read_jsonl(stage_dir / "legal_units.jsonl"),
         "chunks": read_jsonl(stage_dir / "chunks.jsonl"),
         "evidence": read_jsonl(stage_dir / "evidence_registry.jsonl"),
