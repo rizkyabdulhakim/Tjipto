@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import unittest
 
@@ -31,6 +32,28 @@ class MetadataBBoxContractTest(unittest.TestCase):
                 self.assertEqual(row["bbox_precision"], "page_grounded_only", row["metadata_grounding_id"])
                 self.assertIn("failure_reason", row, row["metadata_grounding_id"])
         self.assertTrue(exact_rows)
+
+    def test_fixture_metadata_rows_keep_stable_exact_grounding_ids(self) -> None:
+        rows = {
+            row["metadata_grounding_id"]: row
+            for row in read_jsonl(FINAL / "metadata_grounding.jsonl")
+        }
+        for case in _metadata_grounding_cases():
+            row = rows[case["metadata_grounding_id"]]
+            for field in (
+                "metadata_field",
+                "source_document_id",
+                "grounding_status",
+                "bbox_precision",
+                "text_span_ids",
+                "bbox_ids",
+            ):
+                self.assertEqual(row[field], case[field], case["metadata_grounding_id"])
+
+
+def _metadata_grounding_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/metadata_grounding_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
 if __name__ == "__main__":
