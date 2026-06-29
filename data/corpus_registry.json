@@ -76,6 +76,12 @@
       }
     },
     "intent_config": {
+      "document_target_words": [
+        "uud",
+        "perubahan",
+        "amendment",
+        "naskah"
+      ],
       "metadata_fields": {
         "penetapan": [
           "ditetapkan",
@@ -138,6 +144,71 @@
           "judul",
           "nama resmi",
           "naskah"
+        ]
+      },
+      "metadata_rules": {
+        "promulgation": [
+          "diundangkan",
+          "pengundangan",
+          "promulgation"
+        ],
+        "revocation": [
+          "dicabut",
+          "pencabutan",
+          "revocation"
+        ],
+        "signatories": [
+          "penanda tangan",
+          "ditandatangani",
+          "ketua",
+          "wakil ketua"
+        ],
+        "place_context": [
+          "tempat"
+        ],
+        "place_question": [
+          "di mana",
+          "dimana"
+        ],
+        "effective_rule": [
+          "berlaku"
+        ],
+        "decision_context": [
+          "diputuskan"
+        ],
+        "date_question": [
+          "tanggal",
+          "kapan",
+          "mulai"
+        ],
+        "session_question": [
+          "rapat apa",
+          "sidang apa",
+          "rapat",
+          "sidang"
+        ],
+        "institution": [
+          "lembaga",
+          "institusi",
+          "majelis",
+          "mpr",
+          "ditetapkan oleh"
+        ],
+        "institution_question": [
+          "yang menetapkan"
+        ],
+        "enactment_context": [
+          "penetapan",
+          "ditetapkan",
+          "menetapkan"
+        ],
+        "enactment_verbs": [
+          "ditetapkan"
+        ],
+        "enactment_date": [
+          "tanggal penetapan",
+          "tanggal ditetapkan",
+          "kapan ditetapkan"
         ]
       },
       "metadata_roles": [

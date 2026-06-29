@@ -4,7 +4,9 @@ import re
 
 
 _GENERIC = {
+    "document_target_words": (),
     "metadata_fields": {},
+    "metadata_rules": {},
     "metadata_roles": (),
     "relation_words": (),
     "direct_relation_words": (),
@@ -17,9 +19,14 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
     if not raw:
         return _GENERIC
     return {
+        "document_target_words": tuple(raw.get("document_target_words") or ()),
         "metadata_fields": {
             key: tuple(value)
             for key, value in (raw.get("metadata_fields") or {}).items()
+        },
+        "metadata_rules": {
+            key: tuple(value)
+            for key, value in (raw.get("metadata_rules") or {}).items()
         },
         "metadata_roles": tuple(
             (row["role"], re.compile(row["pattern"], re.IGNORECASE))

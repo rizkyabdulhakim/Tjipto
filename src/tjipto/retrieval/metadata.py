@@ -71,11 +71,12 @@ def public_filters(filters: dict) -> dict:
 def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     config = getattr(store, "config", None)
     strategy = getattr(config, "query_strategy", "generic")
+    intent = intent_config_for(strategy, config)
     field = _metadata_field(query, strategy=strategy, config=config)
     if field is None:
         return ()
     role = _source_role(query, strategy=strategy, config=config)
-    requires_penetapan = _asks_enactment_context((query or "").casefold())
+    requires_penetapan = _asks_enactment_context((query or "").casefold(), intent)
     rows = []
     grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}
     for row in store.document_metadata:
@@ -103,28 +104,29 @@ def has_metadata_target(query: str, *, strategy: str = "generic", config=None) -
 
 def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
     folded = (query or "").casefold()
-    patterns = intent_config_for(strategy, config)["metadata_fields"]
+    intent = intent_config_for(strategy, config)
+    patterns = intent["metadata_fields"]
     if not patterns:
         return None
-    if not any(word in folded for word in ("u" "ud", "perubahan", "amendment", "naskah")):
+    if not any(word in folded for word in intent["document_target_words"]):
         return None
-    if _asks_promulgation(folded):
+    if _asks_promulgation(folded, intent):
         return "promulgation"
-    if _asks_revocation(folded):
+    if _asks_revocation(folded, intent):
         return "revocation"
-    if _asks_signatories(folded):
+    if _asks_signatories(folded, intent):
         return "signatories"
-    if _asks_effective_rule(folded):
+    if _asks_effective_rule(folded, intent):
         return "effective_rule"
-    if _asks_decision_date(folded):
+    if _asks_decision_date(folded, intent):
         return "decision_date"
-    if _asks_decision_session(folded):
+    if _asks_decision_session(folded, intent):
         return "decision_session"
-    if _asks_enactment_place(folded):
+    if _asks_enactment_place(folded, intent):
         return "place"
-    if _asks_institution(folded):
+    if _asks_institution(folded, intent):
         return "institution"
-    if _asks_enactment_date(folded):
+    if _asks_enactment_date(folded, intent):
         return "penetapan"
     for field, field_patterns in patterns.items():
         if any(pattern in folded for pattern in field_patterns):
@@ -132,69 +134,73 @@ def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
     return None
 
 
-def _asks_promulgation(folded: str) -> bool:
-    return any(pattern in folded for pattern in ("diundangkan", "pengundangan", "promulgation"))
+def _asks_any(folded: str, intent: dict, rule: str) -> bool:
+    return any(pattern in folded for pattern in intent["metadata_rules"].get(rule, ()))
 
 
-def _asks_revocation(folded: str) -> bool:
-    return any(pattern in folded for pattern in ("dicabut", "pencabutan", "revocation"))
+def _asks_promulgation(folded: str, intent: dict) -> bool:
+    return _asks_any(folded, intent, "promulgation")
 
 
-def _asks_signatories(folded: str) -> bool:
-    return any(
-        pattern in folded
-        for pattern in ("penanda tangan", "ditandatangani", "ketua", "wakil ketua")
-    )
+def _asks_revocation(folded: str, intent: dict) -> bool:
+    return _asks_any(folded, intent, "revocation")
 
 
-def _asks_enactment_place(folded: str) -> bool:
+def _asks_signatories(folded: str, intent: dict) -> bool:
+    return _asks_any(folded, intent, "signatories")
+
+
+def _asks_enactment_place(folded: str, intent: dict) -> bool:
     return (
-        "tempat" in folded and any(pattern in folded for pattern in ("penetapan", "ditetapkan"))
+        _asks_any(folded, intent, "place_context")
+        and _asks_any(folded, intent, "enactment_context")
     ) or (
-        "ditetapkan" in folded and any(pattern in folded for pattern in ("di mana", "dimana"))
+        _asks_any(folded, intent, "enactment_verbs")
+        and _asks_any(folded, intent, "place_question")
     )
 
 
-def _asks_effective_rule(folded: str) -> bool:
+def _asks_effective_rule(folded: str, intent: dict) -> bool:
     return (
-        "berlaku" in folded
-        and any(pattern in folded for pattern in ("tanggal", "kapan", "mulai"))
+        _asks_any(folded, intent, "effective_rule")
+        and _asks_any(folded, intent, "date_question")
     )
 
 
-def _asks_decision_date(folded: str) -> bool:
+def _asks_decision_date(folded: str, intent: dict) -> bool:
     return (
-        "diputuskan" in folded
-        and any(pattern in folded for pattern in ("tanggal", "kapan"))
+        _asks_any(folded, intent, "decision_context")
+        and _asks_any(folded, intent, "date_question")
     )
 
 
-def _asks_decision_session(folded: str) -> bool:
+def _asks_decision_session(folded: str, intent: dict) -> bool:
     return (
-        "diputuskan" in folded
-        and any(pattern in folded for pattern in ("rapat apa", "sidang apa", "rapat", "sidang"))
+        _asks_any(folded, intent, "decision_context")
+        and _asks_any(folded, intent, "session_question")
     )
 
 
-def _asks_institution(folded: str) -> bool:
+def _asks_institution(folded: str, intent: dict) -> bool:
     return (
-        any(pattern in folded for pattern in ("lembaga", "institusi", "majelis", "mpr", "ditetapkan oleh"))
-        or "yang menetapkan" in folded
+        _asks_any(folded, intent, "institution")
+        or _asks_any(folded, intent, "institution_question")
         or re.search(r"\bpenetap\b", folded) is not None
     )
 
 
-def _asks_enactment_date(folded: str) -> bool:
+def _asks_enactment_date(folded: str, intent: dict) -> bool:
     return (
-        "tanggal penetapan" in folded
-        or "tanggal ditetapkan" in folded
-        or "kapan ditetapkan" in folded
-        or ("penetapan" in folded and any(pattern in folded for pattern in ("tanggal", "kapan")))
+        _asks_any(folded, intent, "enactment_date")
+        or (
+            _asks_any(folded, intent, "enactment_context")
+            and _asks_any(folded, intent, "date_question")
+        )
     )
 
 
-def _asks_enactment_context(folded: str) -> bool:
-    return any(pattern in folded for pattern in ("penetapan", "ditetapkan", "menetapkan")) or re.search(r"\bpenetap\b", folded) is not None
+def _asks_enactment_context(folded: str, intent: dict) -> bool:
+    return _asks_any(folded, intent, "enactment_context") or re.search(r"\bpenetap\b", folded) is not None
 
 
 def _source_role(query: str, *, strategy: str, config=None) -> str | None:
