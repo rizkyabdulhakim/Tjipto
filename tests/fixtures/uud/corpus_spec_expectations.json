@@ -21,8 +21,12 @@
     "metadata_rules": {"enactment_date": ["tanggal penetapan"]},
     "pasal_parent_words": ["berada di bab"],
     "relation_child_words": ["apa saja"],
+    "instrument_scope_queries": ["mengubah pasal apa"],
+    "instrument_deletion_words": ["dihapus"],
+    "instrument_change_context_words": ["perubahan"],
+    "source_role_labels": {"amendment_4_historical": "Keempat"},
     "unsupported_relation_context_words": ["perubahan"],
     "metadata_roles": [{"index": 1, "role": "amendment_2_historical"}]
   },
-  "generic_intent_source_absent": ["perubahan pertama", "berada di bab"]
+  "generic_intent_source_absent": ["perubahan pertama", "berada di bab", "mengubah pasal apa", "dihapus"]
 }

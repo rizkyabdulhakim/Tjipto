@@ -267,7 +267,26 @@
       ],
       "unsupported_relation_context_words": [
         "perubahan"
-      ]
+      ],
+      "instrument_scope_queries": [
+        "pasal apa saja",
+        "mengubah pasal apa",
+        "mengubah pasal apa saja",
+        "menambah pasal apa"
+      ],
+      "instrument_deletion_words": [
+        "dihapus",
+        "penghapusan"
+      ],
+      "instrument_change_context_words": [
+        "perubahan"
+      ],
+      "source_role_labels": {
+        "amendment_1_historical": "Pertama",
+        "amendment_2_historical": "Kedua",
+        "amendment_3_historical": "Ketiga",
+        "amendment_4_historical": "Keempat"
+      }
     },
     "source_conflict_intent": {
       "query_terms": [

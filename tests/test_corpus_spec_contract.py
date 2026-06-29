@@ -45,9 +45,20 @@ class CorpusSpecContractTest(unittest.TestCase):
         config = CorpusRegistry(ROOT).resolve("uud")
         intent = config.setting("intent_config")
         expected = _expectations()["intent_config"]
-        for field in ("document_target_words", "metadata_fields", "pasal_parent_words", "relation_child_words", "unsupported_relation_context_words"):
+        for field in (
+            "document_target_words",
+            "metadata_fields",
+            "pasal_parent_words",
+            "relation_child_words",
+            "instrument_scope_queries",
+            "instrument_deletion_words",
+            "instrument_change_context_words",
+            "unsupported_relation_context_words",
+        ):
             for value in expected[field]:
                 self.assertIn(value, intent[field])
+        for key, value in expected["source_role_labels"].items():
+            self.assertEqual(intent["source_role_labels"][key], value)
         for field, values in expected["metadata_rules"].items():
             for value in values:
                 self.assertIn(value, intent["metadata_rules"][field])

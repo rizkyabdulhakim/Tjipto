@@ -56,9 +56,14 @@ def _instrument_rows(
     probe_only: bool = False,
 ) -> tuple[dict, ...]:
     folded = (query or "").casefold()
+    intent = intent_config_for(strategy, config)
     role = _source_role(query, strategy=strategy, config=config)
     bab = BAB_RE.search(query or "")
-    if bab and any(pattern in folded for pattern in ("dihapus", "penghapusan")) and "perubahan" in folded:
+    if (
+        bab
+        and any(pattern in folded for pattern in intent["instrument_deletion_words"])
+        and any(pattern in folded for pattern in intent["instrument_change_context_words"])
+    ):
         if probe_only:
             return ({"probe": True},)
         target = f"BAB {bab.group(1).upper()}{bab.group(2).upper()}".strip()
@@ -73,16 +78,16 @@ def _instrument_rows(
         return tuple(matches[:limit])
     if role is None:
         return ()
-    if _scope_query(folded):
+    if _scope_query(folded, intent):
         if probe_only:
             return ({"probe": True},)
-        row = _instrument_evidence(store, role, f"Perubahan {_ordinal_label(role)} Scope")
+        row = _instrument_evidence(store, role, f"Perubahan {_ordinal_label(role, intent)} Scope")
         return (_candidate(row, "instrument_scope_candidate"),) if row else ()
     clause = _clause_letter(query)
     if clause:
         if probe_only:
             return ({"probe": True},)
-        row = _instrument_evidence(store, role, f"Perubahan {_ordinal_label(role)} Clause ({clause})")
+        row = _instrument_evidence(store, role, f"Perubahan {_ordinal_label(role, intent)} Clause ({clause})")
         return (_candidate(row, "instrument_clause_candidate"),) if row else ()
     return ()
 
@@ -132,8 +137,8 @@ def _label_keys(value: object) -> set[str]:
     return {label, compact_bab}
 
 
-def _scope_query(folded: str) -> bool:
-    return any(pattern in folded for pattern in ("pasal apa saja", "mengubah pasal apa", "mengubah pasal apa saja", "menambah pasal apa"))
+def _scope_query(folded: str, intent: dict) -> bool:
+    return any(pattern in folded for pattern in intent["instrument_scope_queries"])
 
 
 def _clause_letter(query: str) -> str | None:
@@ -150,13 +155,8 @@ def _source_role(query: str, *, strategy: str, config=None) -> str | None:
     return None
 
 
-def _ordinal_label(role: str) -> str:
-    return {
-        "amendment_1_historical": "Pertama",
-        "amendment_2_historical": "Kedua",
-        "amendment_3_historical": "Ketiga",
-        "amendment_4_historical": "Keempat",
-    }[role]
+def _ordinal_label(role: str, intent: dict) -> str:
+    return intent["source_role_labels"][role]
 
 
 def _instrument_evidence(store: EvidenceStore | None, source_role: str, citation: str) -> dict | None:

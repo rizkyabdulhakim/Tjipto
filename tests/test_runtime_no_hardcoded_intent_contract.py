@@ -23,6 +23,7 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
         generic = intent_config_for("uud_1945")
         self.assertFalse(generic["metadata_fields"])
         self.assertFalse(generic["relation_words"])
+        self.assertFalse(generic["instrument_scope_queries"])
 
         config = CorpusRegistry(ROOT).resolve("uud")
         configured = intent_config_for(config.query_strategy, config)
