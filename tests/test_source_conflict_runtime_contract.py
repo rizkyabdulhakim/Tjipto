@@ -32,17 +32,24 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
             self.assertFalse(result["viewer_refs"], query)
 
     def test_vague_source_conflict_query_fails_closed(self) -> None:
-        result = self.service.ask("uud", "Apa konflik sumber UUD?")
-        self.assertEqual(result["status"], "insufficient_evidence")
-        self.assertEqual(result["route"], "source_anomaly_explanation")
-        self.assertIn("source_anomaly_unresolved", result["insufficient_reasons"])
-        self.assertIsNone(result["source_conflict"])
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
+        for case in _source_conflict_negative_cases():
+            result = self.service.ask("uud", case["query"])
+            self.assertEqual(result["status"], case["status"], case["query"])
+            self.assertEqual(result["route"], case["route"], case["query"])
+            for reason in case["insufficient_reasons"]:
+                self.assertIn(reason, result["insufficient_reasons"], case["query"])
+            self.assertEqual(result["source_conflict"], case["source_conflict"], case["query"])
+            for field in case["expect_empty"]:
+                self.assertFalse(result[field], case["query"])
 
 
 def _source_conflict_cases() -> tuple[dict, ...]:
     path = ROOT / "tests/fixtures/uud/source_conflict_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
+def _source_conflict_negative_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/source_conflict_negative_cases.jsonl"
     return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
