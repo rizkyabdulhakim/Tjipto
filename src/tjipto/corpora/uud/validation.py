@@ -173,6 +173,17 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"pasal_missing_bab_parent:{row['legal_unit_id']}")
         if row["unit_type"] == "bab_record" and any(marker in row["text"] for marker in STRUCTURAL_FORBIDDEN_MARKERS):
             errors.append(f"structural_bab_contains_instrument_text:{row['legal_unit_id']}")
+        for text_span_id in row.get("text_span_ids") or ():
+            if text_span_id not in text_span_ids:
+                errors.append(f"orphan_legal_unit_text_span:{row['legal_unit_id']}:{text_span_id}")
+        for field in ("source_role", "temporal_context", "page_numbers", "text_span_ids", "bbox_ids", "grounding_status", "validation_status"):
+            if row.get("runtime_loadable") is True and field not in row:
+                errors.append(f"runtime_loadable_legal_unit_missing_{field}:{row['legal_unit_id']}")
+        if row.get("runtime_loadable") is True:
+            if not row.get("text_span_ids"):
+                errors.append(f"runtime_loadable_legal_unit_missing_text_span:{row['legal_unit_id']}")
+            if not row.get("bbox_ids"):
+                errors.append(f"runtime_loadable_legal_unit_missing_bbox:{row['legal_unit_id']}")
 
     for row in chunks:
         if row["chunk_id"] in seen_ids["chunk_id"]:
@@ -187,6 +198,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"runtime_loadable_chunk_missing_grounding:{row['chunk_id']}")
         if row.get("runtime_loadable") is True and not row.get("bbox_ids"):
             errors.append(f"runtime_loadable_chunk_missing_bbox:{row['chunk_id']}")
+        if row.get("runtime_loadable") is True and row.get("grounding_status") != "text_span_exact":
+            errors.append(f"runtime_loadable_chunk_not_text_exact:{row['chunk_id']}")
         if row["chunk_type"] == "bab_structural_context_record" and any(marker in row["text"] for marker in STRUCTURAL_FORBIDDEN_MARKERS):
             errors.append(f"structural_chunk_contains_instrument_text:{row['chunk_id']}")
     for row in evidence:

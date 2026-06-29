@@ -15,6 +15,10 @@ class ChunkGroundingContractTest(unittest.TestCase):
         text_span_ids = {row["text_span_id"] for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
         evidence_ids = {row["evidence_id"] for row in read_jsonl(FINAL / "evidence_registry.jsonl")}
         bbox_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
+        spans_by_page: dict[tuple[str, int], set[str]] = {}
+        units = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "legal_units.jsonl")}
+        for span in read_jsonl(FINAL / "page_text_spans.jsonl"):
+            spans_by_page.setdefault((span["source_document_id"], span["page_number"]), set()).add(span["text_span_id"])
         for row in read_jsonl(FINAL / "chunks.jsonl"):
             self.assertIn("text_span_ids", row)
             self.assertIn("evidence_ids", row)
@@ -28,6 +32,15 @@ class ChunkGroundingContractTest(unittest.TestCase):
             if row["runtime_loadable"]:
                 self.assertTrue(row["evidence_ids"], row["chunk_id"])
                 self.assertTrue(row["bbox_ids"], row["chunk_id"])
+                self.assertEqual(row["grounding_status"], "text_span_exact", row["chunk_id"])
+                unit = units[row["legal_unit_id"]]
+                page_span_ids = set().union(*[
+                    spans_by_page.get((unit["source_document_id"], page_number), set())
+                    for page_number in row["page_numbers"]
+                ])
+                if page_span_ids != set(row["text_span_ids"]):
+                    continue
+                self.assertLessEqual(len(page_span_ids), len(row["bbox_ids"]), row["chunk_id"])
 
 
 if __name__ == "__main__":

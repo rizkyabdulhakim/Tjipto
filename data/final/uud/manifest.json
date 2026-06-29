@@ -40,8 +40,8 @@
       "sha256": "83a3a2945b72ecc0629464778aa7f9b8d46f75822f9aa2fb067e27626fa6a786"
     },
     "chunks.jsonl": {
-      "bytes": 2108122,
-      "sha256": "293a0479c80178f99ef7b04d2912b63c342e94613ce9d00bc2c6bea72cade792"
+      "bytes": 930178,
+      "sha256": "70c5bdd1bfd8f34595d74ad2f0927f3f8c4c065afc23abccac223d5d1396d6d8"
     },
     "document_metadata.jsonl": {
       "bytes": 17656,
@@ -60,12 +60,12 @@
       "sha256": "5ebf4b5b910e24a7f8afe7cc45cd7f9ba652f55887fc8736e32b858bddec255c"
     },
     "graph_nodes.jsonl": {
-      "bytes": 1461569,
-      "sha256": "78287d920c80d9051b49af134399738153007aecbc13e438048eff6a8e1dac70"
+      "bytes": 1461752,
+      "sha256": "2e4677f3b0ce1567b8850c336470d271e7c3e524ad8faebc220e357edebde9a6"
     },
     "legal_units.jsonl": {
-      "bytes": 496589,
-      "sha256": "c5c8e9676539d9a9776365d7f93cc828ca5432ffcf6604c8fa706bb5c58eb73b"
+      "bytes": 983471,
+      "sha256": "3ee2b9c39d1abc63cf69061c46c3497303cf719658f211d7d3ba6d5c2056ad7e"
     },
     "metadata.jsonl": {
       "bytes": 1040292,
