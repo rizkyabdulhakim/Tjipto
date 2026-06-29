@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tjipto.core.manifest import read_json, read_jsonl
+from tjipto.core.manifest import read_jsonl
 
 
 def load_compatibility_seed(stage_dir: Path) -> dict:
@@ -12,5 +12,4 @@ def load_compatibility_seed(stage_dir: Path) -> dict:
         "chunks": read_jsonl(stage_dir / "chunks.jsonl"),
         "evidence": read_jsonl(stage_dir / "evidence_registry.jsonl"),
         "bbox_rows": read_jsonl(stage_dir / "bbox_registry.jsonl"),
-        "validation_report": read_json(stage_dir / "validation_report.json"),
     }

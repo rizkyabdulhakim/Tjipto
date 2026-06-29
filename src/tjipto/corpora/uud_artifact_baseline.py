@@ -33,7 +33,7 @@ from tjipto.corpora.uud.structure_builder import (
     trim_before,
 )
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
-from tjipto.corpora.uud.validation import update_validation_report, validate_uud_artifact_dir
+from tjipto.corpora.uud.validation import build_validation_report, validate_uud_artifact_dir
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
@@ -64,7 +64,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     evidence = seed["evidence"]
     bbox_rows = seed["bbox_rows"]
     retrieval_units: list[dict] = []
-    validation_report = seed["validation_report"]
 
     excluded_records = deepcopy(list(EXCLUDED_RECORD_SPECS))
     source_documents = {row["source_document_id"]: row for row in build_source_documents(repo_root)}
@@ -266,8 +265,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
 
-    update_validation_report(
-        validation_report,
+    validation_report = build_validation_report(
         chunks=chunks,
         legal_units=legal_units,
         excluded_records=excluded_records,

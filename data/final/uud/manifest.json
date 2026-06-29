@@ -116,8 +116,8 @@
       "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 23938,
-      "sha256": "84e0d9b7f5e92a73693cd3ae1a6e6c5ebba513abcf4406e1967bb0724f9b6e9f"
+      "bytes": 3060,
+      "sha256": "30305ebdc167245fd94fb6bfac1d123f0a44b8896653fb512d1105f4177c0651"
     },
     "page_text_spans.jsonl": {
       "bytes": 1366315,

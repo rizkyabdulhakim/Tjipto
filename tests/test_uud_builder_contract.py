@@ -12,6 +12,7 @@ from tjipto.corpora.uud.retrieval_builder import build_retrieval_units
 from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
+from tjipto.corpora.uud.validation import build_validation_report
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +42,7 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertNotIn("metadata.jsonl", seed)
         self.assertNotIn("metadata_graph_edges.jsonl", seed)
         self.assertNotIn("retrieval_units.jsonl", seed)
+        self.assertNotIn("validation_report.json", seed)
         self.assertIn("compatibility bridge", seed)
 
     def test_source_documents_rebuild_from_specs_and_pdfs(self) -> None:
@@ -168,6 +170,22 @@ class UudBuilderContractTest(unittest.TestCase):
                 read_jsonl(FINAL / "chunks.jsonl"),
             ),
             read_jsonl(FINAL / "retrieval_units.jsonl"),
+        )
+
+    def test_validation_report_rebuilds_from_artifact_rows(self) -> None:
+        self.assertEqual(
+            build_validation_report(
+                chunks=read_jsonl(FINAL / "chunks.jsonl"),
+                legal_units=read_jsonl(FINAL / "legal_units.jsonl"),
+                excluded_records=read_jsonl(FINAL / "excluded_records.jsonl"),
+                evidence=read_jsonl(FINAL / "evidence_registry.jsonl"),
+                bbox_rows=read_jsonl(FINAL / "bbox_registry.jsonl"),
+                retrieval_units=read_jsonl(FINAL / "retrieval_units.jsonl"),
+                graph_nodes=read_jsonl(FINAL / "graph_nodes.jsonl"),
+                graph_edges=read_jsonl(FINAL / "graph_edges.jsonl"),
+                page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
+            ),
+            read_json(FINAL / "validation_report.json"),
         )
 
     def test_source_conflicts_rebuild_from_specs_and_grounding(self) -> None:

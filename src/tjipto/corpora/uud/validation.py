@@ -41,8 +41,7 @@ LEGAL_EDGE_TYPES = {
 }
 
 
-def update_validation_report(
-    validation_report: dict,
+def build_validation_report(
     *,
     chunks: list[dict],
     legal_units: list[dict],
@@ -53,7 +52,37 @@ def update_validation_report(
     graph_nodes: list[dict],
     graph_edges: list[dict],
     page_text_spans: list[dict],
-) -> None:
+) -> dict:
+    validation_report = {
+        "artifact_governance": {
+            "status": "current_final_artifacts_present",
+            "excluded_chunk_policy": "records listed in excluded_records.jsonl are not runtime-loadable, not active canonical, and not canonical-use allowed",
+            "audited_excluded_chunks": [row["legacy_chunk_id"] for row in excluded_records],
+            "reviewed_exceptions_preserved": [
+                "Pasal 22D ayat (3) bbox/text exception remains tracked in structure_fidelity.reviewed_exception_unit"
+            ],
+        },
+        "corpus_id": "uud",
+        "referenced_artifacts": [
+            "document_metadata.jsonl",
+            "metadata_graph_edges.jsonl",
+            "metadata_grounding.jsonl",
+            "metadata_grounding_registry.jsonl",
+            "source_conflicts.jsonl",
+            "source_integrity.json",
+            "validation_alignment_results.jsonl",
+            "validation_exception_review_labels.jsonl",
+            "validation_exceptions.jsonl",
+            "page_text_spans.jsonl",
+        ],
+        "status": "valid",
+        "structure_fidelity": {
+            "status": "corrected",
+            "inserted_bab_heading_owner_policy": (
+                "inserted heading bboxes may stay exact, but they are viewer_highlightable only when owned by bab_record evidence"
+            ),
+        },
+    }
     validation_report["final_artifact_counts"] = {
         "chunks": len(chunks),
         "legal_units": len(legal_units),
@@ -70,7 +99,6 @@ def update_validation_report(
         "viewer_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is True),
         "non_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is not True),
     }
-    validation_report.setdefault("instrument_baseline", {})
     validation_report["instrument_baseline"] = {
         "status": "corrected",
         "instrument_unit_types": [
@@ -95,8 +123,6 @@ def update_validation_report(
         "status": "field_grounded",
         "note": "field-level metadata grounding preserves block-level rows and keeps metadata viewer highlights fail-closed unless exact accepted support exists",
     }
-    if "referenced_artifacts" in validation_report and "page_text_spans.jsonl" not in validation_report["referenced_artifacts"]:
-        validation_report["referenced_artifacts"].append("page_text_spans.jsonl")
     validation_report["legal_graph_baseline"] = {
         "status": "evidence_backed_minimal_baseline",
         "legal_edge_types": sorted(LEGAL_EDGE_TYPES),
@@ -106,10 +132,7 @@ def update_validation_report(
             if row.get("edge_type") in LEGAL_EDGE_TYPES and row.get("runtime_loadable") is True
         ),
     }
-    validation_report.setdefault("structure_fidelity", {})
-    validation_report["structure_fidelity"]["inserted_bab_heading_owner_policy"] = (
-        "inserted heading bboxes may stay exact, but they are viewer_highlightable only when owned by bab_record evidence"
-    )
+    return validation_report
 
 
 def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
