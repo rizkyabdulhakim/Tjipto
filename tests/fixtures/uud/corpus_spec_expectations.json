@@ -1,0 +1,24 @@
+{
+  "source_conflict_intent": {
+    "query_terms": ["pasal 25e"],
+    "type_anchors": ["source_marker_sequence_conflict"],
+    "role_labels": {"amendment_4_historical": "perubahan keempat"}
+  },
+  "schema": {
+    "unit_hierarchy": ["pasal_record"],
+    "metadata_fields": ["source_anomaly_status"],
+    "relation_types": ["HAS_SOURCE_ANOMALY"],
+    "source_conflict_types": ["article_renumbering_conflict"],
+    "chunk_policy": {"direct_grounding": "text_span_exact"}
+  },
+  "intent_config": {
+    "document_target_words": ["uud"],
+    "metadata_fields": ["penetapan"],
+    "metadata_rules": {"enactment_date": ["tanggal penetapan"]},
+    "pasal_parent_words": ["berada di bab"],
+    "relation_child_words": ["apa saja"],
+    "unsupported_relation_context_words": ["perubahan"],
+    "metadata_roles": [{"index": 1, "role": "amendment_2_historical"}]
+  },
+  "generic_intent_source_absent": ["perubahan pertama", "berada di bab"]
+}

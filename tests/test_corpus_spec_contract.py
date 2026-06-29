@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import unittest
 
@@ -9,38 +10,48 @@ from tjipto.corpora.registry import CorpusRegistry
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _expectations() -> dict:
+    path = ROOT / "tests/fixtures/uud/corpus_spec_expectations.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 class CorpusSpecContractTest(unittest.TestCase):
     def test_uud_registry_exposes_source_conflict_intent_spec(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
         self.assertIsNotNone(config)
         intent = config.setting("source_conflict_intent")
-        self.assertIn("pasal 25e", intent["query_terms"])
-        self.assertIn("source_marker_sequence_conflict", intent["type_anchors"])
-        self.assertEqual(intent["role_labels"]["amendment_4_historical"], "perubahan keempat")
+        expected = _expectations()["source_conflict_intent"]
+        for field in ("query_terms", "type_anchors"):
+            for value in expected[field]:
+                self.assertIn(value, intent[field])
+        for key, value in expected["role_labels"].items():
+            self.assertEqual(intent["role_labels"][key], value)
 
     def test_uud_registry_exposes_minimal_corpus_schema(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
         schema = config.setting("schema")
+        expected = _expectations()["schema"]
         self.assertIn(config.preferred_source_role, schema["document_roles"])
-        self.assertIn("pasal_record", schema["unit_hierarchy"])
-        self.assertIn("source_anomaly_status", schema["metadata_fields"])
-        self.assertIn("HAS_SOURCE_ANOMALY", schema["relation_types"])
-        self.assertIn("article_renumbering_conflict", schema["source_conflict_types"])
-        self.assertEqual(schema["chunk_policy"]["direct_grounding"], "text_span_exact")
+        for field in ("unit_hierarchy", "metadata_fields", "relation_types", "source_conflict_types"):
+            for value in expected[field]:
+                self.assertIn(value, schema[field])
+        self.assertEqual(schema["chunk_policy"]["direct_grounding"], expected["chunk_policy"]["direct_grounding"])
 
     def test_uud_registry_owns_runtime_intent_terms(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
         intent = config.setting("intent_config")
-        self.assertIn("uud", intent["document_target_words"])
-        self.assertIn("penetapan", intent["metadata_fields"])
-        self.assertIn("tanggal penetapan", intent["metadata_rules"]["enactment_date"])
-        self.assertIn("berada di bab", intent["pasal_parent_words"])
-        self.assertIn("apa saja", intent["relation_child_words"])
-        self.assertIn("perubahan", intent["unsupported_relation_context_words"])
-        self.assertEqual(intent["metadata_roles"][1]["role"], "amendment_2_historical")
+        expected = _expectations()["intent_config"]
+        for field in ("document_target_words", "metadata_fields", "pasal_parent_words", "relation_child_words", "unsupported_relation_context_words"):
+            for value in expected[field]:
+                self.assertIn(value, intent[field])
+        for field, values in expected["metadata_rules"].items():
+            for value in values:
+                self.assertIn(value, intent["metadata_rules"][field])
+        for row in expected["metadata_roles"]:
+            self.assertEqual(intent["metadata_roles"][row["index"]]["role"], row["role"])
         source = (ROOT / "src/tjipto/corpora/intent_config.py").read_text(encoding="utf-8")
-        self.assertNotIn("perubahan pertama", source)
-        self.assertNotIn("berada di bab", source)
+        for value in _expectations()["generic_intent_source_absent"]:
+            self.assertNotIn(value, source)
 
 
 if __name__ == "__main__":
