@@ -18,7 +18,7 @@ from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest, write_
 from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_assertions, build_metadata_block_grounding, build_metadata_graph_edges, rebuild_metadata_grounding
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
-from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, rebuild_retrieval
+from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, build_retrieval_units, rebuild_retrieval
 from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, FINAL_DIR, INSERTED_BAB_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
@@ -63,7 +63,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     chunks = seed["chunks"]
     evidence = seed["evidence"]
     bbox_rows = seed["bbox_rows"]
-    retrieval_units = seed["retrieval_units"]
+    retrieval_units: list[dict] = []
     validation_report = seed["validation_report"]
 
     excluded_records = deepcopy(list(EXCLUDED_RECORD_SPECS))
@@ -235,6 +235,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     legal_units.sort(key=lambda row: row["legal_unit_id"])
     chunks.sort(key=lambda row: row["chunk_id"])
     evidence.sort(key=lambda row: row["evidence_id"])
+    retrieval_units = build_retrieval_units(evidence, chunks)
     retrieval_units.sort(key=lambda row: row["retrieval_unit_id"])
     apply_chunk_grounding(chunks, legal_units, evidence, page_text_spans)
     metadata_graph_edges = build_metadata_graph_edges(metadata_assertions)

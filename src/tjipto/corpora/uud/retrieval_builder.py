@@ -5,6 +5,29 @@ from collections import defaultdict
 from tjipto.corpora.uud.structure_builder import compact
 
 
+def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict]:
+    chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
+    return [
+        {
+            "bbox_sample_refs": _bbox_sample_refs(row),
+            "bbox_total_count": len(row.get("bbox_refs", [])),
+            "chunk_id": chunks_by_unit[row["legal_unit_id"]]["chunk_id"],
+            "corpus_id": "uud",
+            "evidence_id": row["evidence_id"],
+            "legal_unit_id": row["legal_unit_id"],
+            "page_numbers": row["page_numbers"],
+            "retrieval_unit_id": f"uud_retrieval_unit::{row['evidence_id']}",
+            "source_pdf_path": row["source_pdf_path"],
+            "source_role": row["source_role"],
+            "source_sha256": row["source_sha256"],
+            "status": "accepted",
+            "temporal_context": row["temporal_context"],
+            "text": _retrieval_unit_text(row),
+        }
+        for row in sorted(evidence, key=lambda item: item["evidence_id"])
+    ]
+
+
 def apply_chunk_grounding(
     chunks: list[dict],
     legal_units: list[dict],
@@ -88,3 +111,20 @@ def rebuild_retrieval(existing: dict, chunk: dict, retrieval_units: list[dict]) 
 def retrieval_text(citation: str | None, hierarchy: list[str] | tuple[str, ...], quoted_text: str) -> str:
     prefix = " ".join([item for item in [citation, *hierarchy] if item])
     return f"{prefix}\n{quoted_text}".strip()
+
+
+def _retrieval_unit_text(row: dict) -> str:
+    hierarchy = row.get("hierarchy") or []
+    if row["evidence_id"].startswith("uud_instrument_final_citation_evidence::"):
+        if hierarchy == [row.get("citation")]:
+            hierarchy = []
+        return retrieval_text(row.get("citation"), hierarchy, row["quoted_text"])
+    first_line = row["quoted_text"].splitlines()[0]
+    prefix = " ".join([item for item in [row.get("citation"), *hierarchy] if item])
+    separator = "\n" if row["source_role"] == "current_consolidated" and "\u00a0" in first_line else " "
+    return f"{prefix}{separator}{row['quoted_text']}".strip()
+
+
+def _bbox_sample_refs(row: dict) -> list[str]:
+    refs = row.get("bbox_refs", [])
+    return [next((ref for ref in refs if ref.endswith("::0000")), refs[0])] if refs else []
