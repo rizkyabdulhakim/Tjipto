@@ -47,6 +47,11 @@ def _relation_cases() -> tuple[dict, ...]:
     return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
+def _metadata_runtime_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/metadata_runtime_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
 class RuntimeContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.service = LegalRuntimeService(ROOT)
@@ -255,82 +260,24 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(unsupported["intent"], "unsupported_corpus")
 
     def test_ask_answers_grounded_document_metadata(self) -> None:
-        result = self.service.ask("uud", "tanggal perubahan kedua UUD")
-        self.assertEqual(result["status"], "answer_ready")
-        self.assertEqual(result["route"], "metadata_fact")
-        self.assertEqual(result["intent"], "metadata_lookup")
-        self.assertEqual(result["answer_type"], "metadata_fact")
-        self.assertIn("18 Agustus 2000", result["answer"])
-        self.assertEqual(result["metadata_facts"][0]["field"], "date")
-        self.assertTrue(result["citations"])
-        self.assertEqual(result["citations"][0]["metadata_field"], "date")
-        self.assertEqual(result["citations"][0]["metadata_answer"], "18 Agustus 2000")
-        self.assertFalse(result["viewer_refs"][0]["can_resolve"])
-
-        penetapan = self.service.ask("uud", "tanggal penetapan perubahan kedua UUD")
-        self.assertEqual(penetapan["route"], "metadata_fact")
-        self.assertEqual(penetapan["metadata_facts"][0]["field"], "penetapan")
-        self.assertEqual(penetapan["metadata_facts"][0]["answer"], "18 Agustus 2000")
-
-        institution = self.service.ask("uud", "perubahan kedua UUD ditetapkan oleh siapa")
-        self.assertEqual(institution["route"], "metadata_fact")
-        self.assertEqual(institution["metadata_facts"][0]["field"], "institution")
-        self.assertIn("MAJELIS PERMUSYAWARATAN RAKYAT", institution["answer"])
-
-        generic_institution = self.service.ask("uud", "siapa yang menetapkan UUD")
-        self.assertEqual(generic_institution["status"], "answer_ready")
-        self.assertEqual(generic_institution["route"], "metadata_fact")
-        self.assertEqual(generic_institution["metadata_facts"][0]["field"], "institution")
-
-        first_institution = self.service.ask("uud", "lembaga penetap perubahan pertama UUD")
-        self.assertEqual(first_institution["status"], "answer_ready")
-        self.assertEqual(first_institution["metadata_facts"][0]["field"], "institution")
-        self.assertIn("MAJELIS PERMUSYAWARATAN RAKYAT", first_institution["answer"])
-
-        second_place = self.service.ask("uud", "tempat penetapan perubahan kedua UUD")
-        self.assertEqual(second_place["status"], "answer_ready")
-        self.assertEqual(second_place["metadata_facts"][0]["field"], "place")
-        self.assertEqual(second_place["metadata_facts"][0]["answer"], "Jakarta")
-        self.assertNotIn("18 Agustus 2000", second_place["answer"])
-
-        second_place_natural = self.service.ask("uud", "ditetapkan di mana perubahan kedua UUD")
-        self.assertEqual(second_place_natural["status"], "answer_ready")
-        self.assertEqual(second_place_natural["metadata_facts"][0]["field"], "place")
-        self.assertEqual(second_place_natural["metadata_facts"][0]["answer"], "Jakarta")
-
-        first_promulgation = self.service.ask("uud", "tanggal pengundangan perubahan pertama UUD")
-        self.assertEqual(first_promulgation["status"], "insufficient_evidence")
-        self.assertEqual(first_promulgation["route"], "metadata_fact")
-        self.assertEqual(first_promulgation["intent"], "metadata_lookup")
-        self.assertFalse(first_promulgation["metadata_facts"])
-        self.assertFalse(first_promulgation["citations"])
-        self.assertNotIn("19 Oktober 1999", first_promulgation["answer"])
-
-        effective = self.service.ask("uud", "tanggal berlaku perubahan ketiga UUD")
-        self.assertEqual(effective["status"], "answer_ready")
-        self.assertEqual(effective["route"], "metadata_fact")
-        self.assertEqual(effective["metadata_facts"][0]["field"], "effective_rule")
-        self.assertIn("mulai berlaku", effective["metadata_facts"][0]["answer"])
-
-        missing_effective = self.service.ask("uud", "tanggal berlaku perubahan kedua UUD")
-        self.assertEqual(missing_effective["status"], "insufficient_evidence")
-        self.assertEqual(missing_effective["route"], "metadata_fact")
-        self.assertFalse(missing_effective["metadata_facts"])
-
-        decision_date = self.service.ask("uud", "kapan diputuskan perubahan ketiga UUD")
-        self.assertEqual(decision_date["status"], "answer_ready")
-        self.assertEqual(decision_date["metadata_facts"][0]["field"], "decision_date")
-        self.assertEqual(decision_date["metadata_facts"][0]["answer"], "9 November 2001")
-
-        decision_session = self.service.ask("uud", "perubahan ketiga diputuskan dalam rapat apa")
-        self.assertEqual(decision_session["status"], "answer_ready")
-        self.assertEqual(decision_session["metadata_facts"][0]["field"], "decision_session")
-        self.assertIn("Rapat Paripurna", decision_session["metadata_facts"][0]["answer"])
-
-        revocation = self.service.ask("uud", "tanggal pencabutan perubahan kedua UUD")
-        self.assertEqual(revocation["status"], "insufficient_evidence")
-        self.assertEqual(revocation["route"], "metadata_fact")
-        self.assertFalse(revocation["metadata_facts"])
+        for case in _metadata_runtime_cases():
+            result = self.service.ask("uud", case["query"])
+            self.assertEqual(result["status"], case["status"], case["query"])
+            self.assertEqual(result["route"], case["route"], case["query"])
+            self.assertEqual(result["intent"], case["intent"], case["query"])
+            if case["status"] == "answer_ready":
+                self.assertEqual(result["answer_type"], "metadata_fact", case["query"])
+                self.assertEqual(result["metadata_facts"][0]["field"], case["field"], case["query"])
+                self.assertEqual(result["metadata_facts"][0]["answer"], case["answer"], case["query"])
+                self.assertEqual(result["citations"][0]["evidence_id"], case["evidence_id"], case["query"])
+                self.assertEqual(result["citations"][0]["metadata_field"], case["field"], case["query"])
+                self.assertEqual(result["citations"][0]["metadata_answer"], case["answer"], case["query"])
+                self.assertFalse(result["viewer_refs"][0]["can_resolve"], case["query"])
+            else:
+                self.assertFalse(result["metadata_facts"], case["query"])
+                self.assertFalse(result["citations"], case["query"])
+            for unexpected in case["not_contains"]:
+                self.assertNotIn(unexpected, result["answer"], case["query"])
 
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
         result = self.service.ask("uud", "apa saja ayat dalam Pasal 1", limit=5)
