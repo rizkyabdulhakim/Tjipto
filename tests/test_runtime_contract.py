@@ -280,27 +280,20 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertNotIn(unexpected, result["answer"], case["query"])
 
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
-        result = self.service.ask("uud", "apa saja ayat dalam Pasal 1", limit=5)
-        self.assertEqual(result["status"], "answer_ready")
-        self.assertEqual(result["route"], "legal_relation")
-        self.assertEqual(result["intent"], "legal_relation_lookup")
-        self.assertEqual(result["answer_type"], "legal_relation")
-        self.assertEqual({row["target_label"] for row in result["legal_relations"]}, {"(1)", "(2)", "(3)"})
-        self.assertEqual({row["candidate_type"] for row in result["evidence"]}, {"relation_candidate"})
-        self.assertTrue(result["citations"])
-        self.assertTrue(result["viewer_refs"])
-
-        bab = self.service.ask("uud", "apa saja pasal dalam BAB I", limit=5)
-        self.assertEqual(bab["status"], "answer_ready")
-        self.assertEqual(bab["route"], "legal_relation")
-        self.assertEqual(bab["legal_relations"][0]["target_label"], "Pasal 1")
-
-        parent = self.service.ask("uud", "Pasal 1 berada di BAB apa")
-        self.assertEqual(parent["status"], "answer_ready")
-        self.assertEqual(parent["route"], "legal_relation")
-        self.assertEqual(parent["intent"], "legal_relation_lookup")
-        self.assertEqual(parent["legal_relations"][0]["relation_type"], "pasal_parent_bab")
-        self.assertEqual(parent["legal_relations"][0]["target_label"], "BAB I")
+        for case in _relation_cases():
+            result = self.service.ask("uud", case["query"], limit=5)
+            self.assertEqual(result["status"], "answer_ready", case["query"])
+            self.assertEqual(result["route"], "legal_relation", case["query"])
+            self.assertEqual(result["intent"], "legal_relation_lookup", case["query"])
+            self.assertEqual(result["answer_type"], "legal_relation", case["query"])
+            self.assertEqual(
+                {row["target_label"] for row in result["legal_relations"]},
+                set(case["expected_target_labels"]),
+                case["query"],
+            )
+            self.assertEqual({row["candidate_type"] for row in result["evidence"]}, {"relation_candidate"}, case["query"])
+            self.assertTrue(result["citations"], case["query"])
+            self.assertTrue(result["viewer_refs"], case["query"])
 
     def test_relation_fixture_asserts_stable_runtime_and_graph_ids(self) -> None:
         from tjipto.core.manifest import read_jsonl
@@ -321,8 +314,8 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(relation["target_label"], case["target_label"], case["query"])
             edge = graph_edges[case["graph_edge_id"]]
             self.assertEqual(edge["relation_type"], case["graph_relation_type"], case["query"])
-            self.assertEqual(edge["source_id"], f"legal_unit::{case['source_legal_unit_id']}", case["query"])
-            self.assertEqual(edge["target_id"], f"legal_unit::{case['target_legal_unit_id']}", case["query"])
+            self.assertEqual(edge["source_id"], f"legal_unit::{case['graph_source_legal_unit_id']}", case["query"])
+            self.assertEqual(edge["target_id"], f"legal_unit::{case['graph_target_legal_unit_id']}", case["query"])
 
     def test_ask_does_not_promote_ungrounded_legal_relations(self) -> None:
         result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")
