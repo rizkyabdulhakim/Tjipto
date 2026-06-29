@@ -32,17 +32,22 @@ class BBoxContractTest(unittest.TestCase):
         metadata_grounding_ids = {
             row["bbox_id"] for row in read_jsonl(FINAL / "metadata_grounding_registry.jsonl")
         }
+        metadata_registry_rows = read_jsonl(FINAL / "metadata_grounding_registry.jsonl")
         rows = read_jsonl(FINAL / "metadata_grounding.jsonl")
         self.assertEqual(len(rows), 37)
-        self.assertEqual(len(metadata_grounding_ids), 37)
+        self.assertEqual(len(metadata_registry_rows), 112)
         for row in rows:
             self.assertEqual(row["status"], "accepted_metadata_grounding")
             self.assertFalse(row["viewer_highlightable"])
-            self.assertEqual(row["bbox_precision"], "page_grounded_only")
             self.assertTrue(row["quoted_text"])
             self.assertTrue(row["bbox_refs"])
-            self.assertTrue(set(row["bbox_refs"]).isdisjoint(legal_evidence_bbox_ids))
             self.assertTrue(set(row["bbox_refs"]) <= metadata_grounding_ids)
+            if row["bbox_precision"] == "exact":
+                self.assertTrue(set(row["bbox_refs"]) <= legal_evidence_bbox_ids)
+                self.assertTrue(row["text_span_ids"])
+            else:
+                self.assertEqual(row["bbox_precision"], "page_grounded_only")
+                self.assertTrue(set(row["bbox_refs"]).isdisjoint(legal_evidence_bbox_ids))
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())
 
     def test_inserted_bab_heading_bboxes_attach_to_matching_structure(self) -> None:

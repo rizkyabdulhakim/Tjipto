@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import defaultdict
 import re
 
+from tjipto.corpora.uud.structure_builder import compact
+
 
 def rebuild_metadata_grounding(
     *,
@@ -10,13 +12,19 @@ def rebuild_metadata_grounding(
     metadata_grounding: list[dict],
     metadata_grounding_registry: list[dict],
     evidence: list[dict],
+    bbox_rows: list[dict],
     legal_units: list[dict],
+    page_text_spans: list[dict],
     source_conflicts: list[dict],
 ) -> tuple[list[dict], list[dict], list[dict]]:
     evidence_by_key = {
         (row.get("source_role"), row.get("citation")): row
         for row in evidence
     }
+    evidence_by_id = {row["evidence_id"]: row for row in evidence}
+    bboxes_by_evidence: dict[str, list[dict]] = defaultdict(list)
+    for row in bbox_rows:
+        bboxes_by_evidence[row["evidence_id"]].append(row)
     units_by_key = {
         (row["source_document_id"].split("::", 1)[1], row.get("unit_label")): row
         for row in legal_units
@@ -24,6 +32,7 @@ def rebuild_metadata_grounding(
     block_rows = [
         row | {
             "bbox_precision": "page_grounded_only",
+            "failure_reason": row.get("failure_reason") or "metadata_exact_bbox_or_text_span_unavailable",
             "grounding_status": row.get("grounding_status") or "block_level_grounded",
             "viewer_highlightable": False,
         }
@@ -54,27 +63,43 @@ def rebuild_metadata_grounding(
         source_sha256: str,
     ) -> str:
         field_id = f"uud_metadata_field_grounding::{source_role}::{metadata_field}"
-        bbox_refs = []
-        for index, page_number in enumerate(page_numbers):
-            bbox_id = f"uud_metadata_field_bbox::{source_role}::{metadata_field}::{index:04d}"
-            bbox_refs.append(bbox_id)
+        donor = evidence_by_id.get(donor_id)
+        exact_bbox_rows = _exact_bbox_rows(quoted_text, bboxes_by_evidence.get(donor_id, []))
+        exact_bbox_refs = [row["bbox_id"] for row in exact_bbox_rows]
+        text_span_ids = _exact_text_span_ids(quoted_text, source_document_id, page_numbers, page_text_spans)
+        bbox_refs = exact_bbox_refs or [
+            f"uud_metadata_field_bbox::{source_role}::{metadata_field}::{index:04d}"
+            for index, _ in enumerate(page_numbers)
+        ]
+        bbox_precision = "exact" if exact_bbox_refs else "page_grounded_only"
+        grounding_status = "text_bbox_exact" if exact_bbox_refs and text_span_ids else "field_level_grounded"
+        registry_rows = exact_bbox_rows or [
+            {"bbox_id": bbox_id, "page_number": page_number}
+            for bbox_id, page_number in zip(bbox_refs, page_numbers)
+        ]
+        for registry_row in registry_rows:
             field_registry_rows.append({
-                "bbox_id": bbox_id,
+                "bbox_id": registry_row["bbox_id"],
+                "bbox_precision": bbox_precision,
                 "corpus_id": "uud",
                 "metadata_grounding_id": field_id,
                 "metadata_field": metadata_field,
-                "page_number": page_number,
+                "page_number": registry_row["page_number"],
                 "quoted_text": quoted_text,
                 "source_document_id": source_document_id,
                 "source_pdf_path": source_pdf_path,
                 "source_sha256": source_sha256,
                 "status": "accepted_metadata_grounding",
+                "text_span_ids": text_span_ids,
+                "viewer_highlightable": False,
             })
+        failure_reason = None if exact_bbox_refs and text_span_ids else "metadata_exact_bbox_or_text_span_unavailable"
         field_rows.append({
-            "bbox_precision": "page_grounded_only",
+            "bbox_ids": exact_bbox_refs,
+            "bbox_precision": bbox_precision,
             "bbox_refs": bbox_refs,
             "corpus_id": "uud",
-            "grounding_status": "field_level_grounded",
+            "grounding_status": grounding_status,
             "metadata_field": metadata_field,
             "metadata_grounding_id": field_id,
             "page_numbers": list(page_numbers),
@@ -88,8 +113,9 @@ def rebuild_metadata_grounding(
             "source_sha256": source_sha256,
             "status": "accepted_metadata_grounding",
             "temporal_context": source_role,
+            "text_span_ids": text_span_ids,
             "viewer_highlightable": False,
-        })
+        } | ({"failure_reason": failure_reason} if failure_reason else {}))
         return field_id
 
     for row in document_metadata:
@@ -287,6 +313,37 @@ def repair_metadata_graph_edges(edges: list[dict], metadata_assertions: list[dic
         if metadata_id:
             edge["target_id"] = metadata_id
     return edges
+
+
+def _exact_bbox_rows(quoted_text: str, bbox_rows: list[dict]) -> list[dict]:
+    if not bbox_rows or any(row.get("bbox_precision") != "exact" for row in bbox_rows):
+        return []
+    wanted = [compact(line) for line in quoted_text.splitlines() if compact(line)]
+    if not wanted:
+        return []
+    matched = [row for row in bbox_rows if compact(row.get("text")) in wanted]
+    matched_text = {compact(row.get("text")) for row in bbox_rows if compact(row.get("text")) in wanted}
+    return matched if set(wanted) <= matched_text else []
+
+
+def _exact_text_span_ids(
+    quoted_text: str,
+    source_document_id: str,
+    page_numbers: list[int] | tuple[int, ...],
+    page_text_spans: list[dict],
+) -> list[str]:
+    wanted = [compact(line) for line in quoted_text.splitlines() if compact(line)]
+    if not wanted:
+        return []
+    pages = set(page_numbers)
+    rows = [
+        row
+        for row in page_text_spans
+        if row["source_document_id"] == source_document_id and row["page_number"] in pages
+    ]
+    matched = [row["text_span_id"] for row in rows if compact(row.get("text")) in wanted]
+    matched_text = {compact(row.get("text")) for row in rows if compact(row.get("text")) in wanted}
+    return matched if set(wanted) <= matched_text else []
 
 
 def _ordinal_label(source_role: str) -> str:

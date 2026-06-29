@@ -11,13 +11,26 @@ FINAL = ROOT / "data/final/uud"
 
 
 class MetadataBBoxContractTest(unittest.TestCase):
-    def test_metadata_grounding_stays_fail_closed_until_exact_bbox_exists(self) -> None:
+    def test_metadata_grounding_distinguishes_exact_from_page_grounded(self) -> None:
         registry_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "metadata_grounding_registry.jsonl")}
+        bbox_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
+        text_span_ids = {row["text_span_id"] for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
+        exact_rows = []
         for row in read_jsonl(FINAL / "metadata_grounding.jsonl"):
-            self.assertEqual(row["bbox_precision"], "page_grounded_only", row["metadata_grounding_id"])
             self.assertFalse(row["viewer_highlightable"], row["metadata_grounding_id"])
             self.assertTrue(set(row["bbox_refs"]) <= registry_ids, row["metadata_grounding_id"])
             self.assertIn("grounding_status", row)
+            if row["bbox_precision"] == "exact":
+                exact_rows.append(row)
+                self.assertEqual(row["grounding_status"], "text_bbox_exact", row["metadata_grounding_id"])
+                self.assertTrue(set(row["bbox_ids"]) <= bbox_ids, row["metadata_grounding_id"])
+                self.assertTrue(set(row["text_span_ids"]) <= text_span_ids, row["metadata_grounding_id"])
+                self.assertTrue(row["bbox_ids"], row["metadata_grounding_id"])
+                self.assertTrue(row["text_span_ids"], row["metadata_grounding_id"])
+            else:
+                self.assertEqual(row["bbox_precision"], "page_grounded_only", row["metadata_grounding_id"])
+                self.assertIn("failure_reason", row, row["metadata_grounding_id"])
+        self.assertTrue(exact_rows)
 
 
 if __name__ == "__main__":

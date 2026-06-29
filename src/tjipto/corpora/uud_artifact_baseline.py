@@ -220,7 +220,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         metadata_grounding=metadata_grounding,
         metadata_grounding_registry=metadata_grounding_registry,
         evidence=evidence,
+        bbox_rows=bbox_rows,
         legal_units=legal_units,
+        page_text_spans=page_text_spans,
         source_conflicts=source_conflicts,
     )
 

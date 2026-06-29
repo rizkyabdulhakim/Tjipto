@@ -31,7 +31,7 @@ class ManifestContractTest(unittest.TestCase):
                 "legal_units": 651,
                 "metadata_assertions": 1319,
                 "metadata_grounding": 37,
-                "metadata_grounding_records": 37,
+                "metadata_grounding_records": 112,
                 "metadata_graph_edges": 449,
                 "page_text_spans": len((FINAL / "page_text_spans.jsonl").read_text(encoding="utf-8").splitlines()),
                 "pages": 63,

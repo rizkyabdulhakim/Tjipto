@@ -277,6 +277,17 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"metadata_grounding_highlightable_not_clarified:{row['metadata_grounding_id']}")
         if row.get("bbox_precision") not in {None, "coarse", "exact", "page_grounded_only"}:
             errors.append(f"invalid_metadata_bbox_precision:{row['metadata_grounding_id']}")
+        if row.get("bbox_precision") == "exact":
+            for bbox_id in row.get("bbox_ids") or ():
+                if bbox_id not in bbox_by_id:
+                    errors.append(f"orphan_metadata_bbox:{row['metadata_grounding_id']}:{bbox_id}")
+            for text_span_id in row.get("text_span_ids") or ():
+                if text_span_id not in text_span_ids:
+                    errors.append(f"orphan_metadata_text_span:{row['metadata_grounding_id']}:{text_span_id}")
+            if not row.get("bbox_ids") or not row.get("text_span_ids"):
+                errors.append(f"exact_metadata_missing_grounding_ids:{row['metadata_grounding_id']}")
+        if row.get("bbox_precision") == "page_grounded_only" and not row.get("failure_reason"):
+            errors.append(f"page_grounded_metadata_missing_failure_reason:{row['metadata_grounding_id']}")
     for row in graph_nodes:
         if row["node_id"] in seen_ids["node_id"]:
             errors.append(f"duplicate_graph_node_id:{row['node_id']}")
