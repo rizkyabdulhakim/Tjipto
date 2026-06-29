@@ -7,19 +7,52 @@ from tjipto.corpora.uud.specs import METADATA_BLOCK_SPECS
 from tjipto.corpora.uud.structure_builder import compact
 
 
+AMENDMENT_FIELD_STATUSES = {
+    "date": "grounded",
+    "institution": "grounded",
+    "ln_tln": "not_found_in_source",
+    "official_title": "not_found_in_source",
+    "penetapan": "grounded",
+    "pengundangan": "not_found_in_source",
+    "place": "grounded",
+    "promulgation": "not_found_in_source",
+    "signatories": "grounded",
+    "source_publication": "not_applicable",
+}
+
+GROUNDING_FIELD_ORDER = (
+    "date",
+    "institution",
+    "penetapan",
+    "place",
+    "signatories",
+    "decision_date",
+    "decision_session",
+    "effective_rule",
+    "official_title",
+    "source_publication",
+)
+
+
+def build_document_metadata(source_documents: dict[str, dict], metadata_grounding: list[dict]) -> list[dict]:
+    block_by_role = {row["source_role"]: row for row in metadata_grounding}
+    rows = [_amendment_document_metadata(source, block_by_role[source["source_role"]]) for source in source_documents.values() if source["source_role"].startswith("amendment_")]
+    rows.append(_current_document_metadata(source_documents["uud::current_consolidated"], block_by_role["current_consolidated"]))
+    rows.append(_original_document_metadata(source_documents["uud::original_historical"]))
+    return sorted(rows, key=lambda row: row["document_metadata_id"])
+
+
 def build_metadata_block_grounding(
     *,
-    document_metadata: list[dict],
     pages_by_source: dict[tuple[str, int], str],
     source_documents: dict[str, dict],
 ) -> list[dict]:
-    metadata_by_role = {row["source_role"]: row for row in document_metadata}
     source_by_role = {row["source_role"]: row for row in source_documents.values()}
     rows = []
     for spec in METADATA_BLOCK_SPECS:
         role = spec["source_role"]
         source = source_by_role[role]
-        quoted_text = _metadata_quote(spec, metadata_by_role[role], pages_by_source, source["source_document_id"])
+        quoted_text = _metadata_quote(spec, pages_by_source, source["source_document_id"])
         metadata_grounding_id = f"uud_metadata_block_final_evidence::{role}::{spec['slug']}"
         rows.append({
             "bbox_refs": [f"uud_metadata_block_bbox::{role}::{spec['slug']}::0000"],
@@ -321,7 +354,11 @@ def rebuild_metadata_grounding(
                 )]
                 field_statuses["source_publication"] = "grounded"
         row["field_statuses"] = field_statuses
-        row["grounded_fields"] = {key: tuple(value) for key, value in grounded_fields.items() if value}
+        row["grounded_fields"] = {
+            key: tuple(grounded_fields[key])
+            for key in GROUNDING_FIELD_ORDER
+            if grounded_fields.get(key)
+        }
         row["grounding_refs"] = tuple(dict.fromkeys(ref for refs in row["grounded_fields"].values() for ref in refs))
     all_grounding_rows = block_rows + field_rows
     all_registry_rows = block_registry_rows + field_registry_rows
@@ -371,16 +408,170 @@ def _block_registry_row(row: dict) -> dict:
 
 def _metadata_quote(
     spec: dict,
-    document_metadata: dict,
     pages_by_source: dict[tuple[str, int], str],
     source_document_id: str,
 ) -> str:
-    if spec.get("quote_from_metadata"):
-        publication = document_metadata["source_publication"]
-        return f"{publication['institution']} {publication['title_text']}"
+    if "title_text" in spec:
+        return f"{spec['institution']} {spec['title_text']}"
     lines = pages_by_source[(source_document_id, spec["page_number"])].splitlines()
     start = next(index for index, line in enumerate(lines) if spec["start_marker"] in line)
     return " ".join(line.strip() for line in lines[start:] if line.strip())
+
+
+def _amendment_document_metadata(source: dict, block: dict) -> dict:
+    date = _extract_metadata_date(block["quoted_text"])
+    grounding_ref = block["metadata_grounding_id"]
+    return {
+        "corpus_id": "uud",
+        "date": date,
+        "document_metadata_id": f"uud_document_metadata::{source['source_role']}",
+        "document_type": "uud_amendment_document",
+        "enactment": None,
+        "evidence_refs": [grounding_ref],
+        "field_statuses": dict(AMENDMENT_FIELD_STATUSES),
+        "grounded_fields": {},
+        "grounding_refs": [],
+        "institution": "MAJELIS PERMUSYAWARATAN RAKYAT REPUBLIK INDONESIA",
+        "ln_tln": None,
+        "official_title": None,
+        "officials": [],
+        "penetapan": {
+            "date_text": date,
+            "grounding_refs": [grounding_ref],
+            "institution": "MAJELIS PERMUSYAWARATAN RAKYAT REPUBLIK INDONESIA",
+            "place": "Jakarta",
+        },
+        "pengesahan": None,
+        "pengundangan": None,
+        "place": "Jakarta",
+        "promulgation": None,
+        "runtime_loadable": False,
+        "signatories": _signatories(block["quoted_text"]),
+        "source_document_id": source["source_document_id"],
+        "source_publication": None,
+        "source_role": source["source_role"],
+        "status": "evidence_grounded_partial_metadata",
+        "temporal_context": source["temporal_context"],
+    }
+
+
+def _current_document_metadata(source: dict, block: dict) -> dict:
+    title = "UNDANG\xadUNDANG DASAR NEGARA REPUBLIK INDONESIA TAHUN 1945 DALAM SATU NASKAH"
+    institution = block["quoted_text"].removesuffix(f" {title}")
+    return {
+        "corpus_id": "uud",
+        "date": None,
+        "document_metadata_id": "uud_document_metadata::current_consolidated",
+        "document_type": "uud_consolidated_source_publication",
+        "enactment": None,
+        "evidence_refs": [block["metadata_grounding_id"]],
+        "field_statuses": {
+            "date": "not_found_in_source",
+            "institution": "grounded",
+            "ln_tln": "not_found_in_source",
+            "official_title": "grounded",
+            "penetapan": "not_applicable",
+            "pengundangan": "not_found_in_source",
+            "place": "not_found_in_source",
+            "promulgation": "not_found_in_source",
+            "signatories": "not_applicable",
+            "source_publication": "grounded",
+            "decision_date": "not_found_in_source",
+            "decision_session": "not_found_in_source",
+            "effective_rule": "not_found_in_source",
+            "effective_date": "not_found_in_source",
+            "promulgation_date": "not_found_in_source",
+            "revocation_date": "not_found_in_source",
+            "source_anomaly_status": "not_found_in_source",
+        },
+        "grounded_fields": {},
+        "grounding_refs": [],
+        "institution": institution,
+        "ln_tln": None,
+        "official_title": title,
+        "officials": [],
+        "penetapan": None,
+        "pengesahan": None,
+        "pengundangan": None,
+        "place": None,
+        "promulgation": None,
+        "runtime_loadable": False,
+        "signatories": [],
+        "source_document_id": source["source_document_id"],
+        "source_publication": {
+            "grounding_refs": [block["metadata_grounding_id"]],
+            "institution": institution,
+            "title_text": title,
+        },
+        "source_role": source["source_role"],
+        "status": "evidence_grounded_partial_metadata",
+        "temporal_context": source["temporal_context"],
+    }
+
+
+def _original_document_metadata(source: dict) -> dict:
+    return {
+        "corpus_id": "uud",
+        "date": None,
+        "document_metadata_id": "uud_document_metadata::original_historical",
+        "document_type": "uud_source_document",
+        "enactment": None,
+        "evidence_refs": [],
+        "field_statuses": {
+            "metadata": "not_found_in_source",
+            "decision_date": "not_found_in_source",
+            "decision_session": "not_found_in_source",
+            "effective_rule": "not_found_in_source",
+            "effective_date": "not_found_in_source",
+            "promulgation_date": "not_found_in_source",
+            "revocation_date": "not_found_in_source",
+            "source_anomaly_status": "not_found_in_source",
+            "source_publication": "not_found_in_source",
+        },
+        "grounded_fields": {},
+        "grounding_refs": [],
+        "institution": None,
+        "ln_tln": None,
+        "official_title": None,
+        "officials": [],
+        "penetapan": None,
+        "pengesahan": None,
+        "pengundangan": None,
+        "place": None,
+        "promulgation": None,
+        "runtime_loadable": False,
+        "signatories": [],
+        "source_document_id": source["source_document_id"],
+        "source_publication": None,
+        "source_role": source["source_role"],
+        "status": "not_found_in_source",
+        "temporal_context": source["temporal_context"],
+    }
+
+
+def _signatories(text: str) -> list[dict]:
+    parts = [part.strip() for part in text.split()]
+    rows = []
+    role = None
+    name_parts: list[str] = []
+    index = 0
+    while index < len(parts):
+        token = parts[index]
+        spaced_chair = parts[index:index + 5] == ["K", "e", "t", "u", "a,"]
+        marker = token == "Ketua," or spaced_chair or (token == "Wakil" and index + 1 < len(parts) and parts[index + 1] == "Ketua,")
+        if marker:
+            if role and name_parts:
+                rows.append({"name_text": " ".join(name_parts), "role_text": role})
+            role = "Wakil Ketua" if token == "Wakil" else "Ketua"
+            name_parts = []
+            index += 2 if token == "Wakil" else 5 if spaced_chair else 1
+            continue
+        if role:
+            name_parts.append(token)
+        index += 1
+    if role and name_parts:
+        rows.append({"name_text": " ".join(name_parts), "role_text": role})
+    return rows
 
 
 def _exact_bbox_rows(quoted_text: str, bbox_rows: list[dict]) -> list[dict]:

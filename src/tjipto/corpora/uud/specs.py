@@ -360,6 +360,7 @@ METADATA_BLOCK_SPECS = (
         "source_role": "current_consolidated",
         "slug": "source_publication_page_0001",
         "page_number": 1,
-        "quote_from_metadata": True,
+        "institution": "MAJELIS PERMUSYAWARATAN RAKYAT SEKRETARIAT JENDERAL " + "\xad" * 18,
+        "title_text": "UNDANG\xadUNDANG DASAR NEGARA REPUBLIK INDONESIA TAHUN 1945 DALAM SATU NASKAH",
     },
 )
