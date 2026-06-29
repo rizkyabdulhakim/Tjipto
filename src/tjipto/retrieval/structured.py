@@ -14,7 +14,7 @@ PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?|[ivxlcdm]+)\b", re.IGNORECASE)
 def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, strategy: str = "uud_1945") -> tuple[dict, ...]:
     if strategy != "uud_1945":
         return ()
-    instrument = _instrument_rows(store, query, limit, strategy=strategy)
+    instrument = _instrument_rows(store, query, limit, strategy=strategy, config=getattr(store, "config", None))
     if instrument:
         return instrument
     targets = _targets(query)
@@ -34,16 +34,16 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
     return tuple(rows[:limit])
 
 
-def has_structured_target(query: str, *, strategy: str = "uud_1945") -> bool:
+def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None) -> bool:
     if strategy != "uud_1945":
         return False
-    if _instrument_target(query, strategy=strategy):
+    if _instrument_target(query, strategy=strategy, config=config):
         return True
     return bool(_targets(query))
 
 
-def _instrument_target(query: str, *, strategy: str) -> bool:
-    return bool(_instrument_rows(None, query, 1, strategy=strategy, probe_only=True))
+def _instrument_target(query: str, *, strategy: str, config=None) -> bool:
+    return bool(_instrument_rows(None, query, 1, strategy=strategy, config=config, probe_only=True))
 
 
 def _instrument_rows(
@@ -52,10 +52,11 @@ def _instrument_rows(
     limit: int,
     *,
     strategy: str,
+    config=None,
     probe_only: bool = False,
 ) -> tuple[dict, ...]:
     folded = (query or "").casefold()
-    role = _source_role(query, strategy=strategy)
+    role = _source_role(query, strategy=strategy, config=config)
     bab = BAB_RE.search(query or "")
     if bab and any(pattern in folded for pattern in ("dihapus", "penghapusan")) and "perubahan" in folded:
         if probe_only:
@@ -142,8 +143,8 @@ def _clause_letter(query: str) -> str | None:
     return match.group(1).lower() if match else None
 
 
-def _source_role(query: str, *, strategy: str) -> str | None:
-    for role, pattern in intent_config_for(strategy)["metadata_roles"]:
+def _source_role(query: str, *, strategy: str, config=None) -> str | None:
+    for role, pattern in intent_config_for(strategy, config)["metadata_roles"]:
         if pattern.search(query or ""):
             return role
     return None

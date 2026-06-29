@@ -87,7 +87,7 @@ def route_retrieval(
             "intent": "legal_relation_lookup",
             "reason": "filters_removed_all",
         }
-    if has_relation_target(normalized["normalized_query"], strategy=query_strategy):
+    if has_relation_target(normalized["normalized_query"], strategy=query_strategy, config=config):
         return envelope | {
             "status": "no_results",
             "route": "relation_not_found",
@@ -144,7 +144,7 @@ def route_retrieval(
             "intent": "no_results",
             "reason": "filters_removed_all",
         }
-    if has_structured_target(normalized["normalized_query"], strategy=structured_strategy):
+    if has_structured_target(normalized["normalized_query"], strategy=structured_strategy, config=config):
         return envelope | {
             "status": "no_results",
             "route": "structured_not_found",
@@ -170,7 +170,7 @@ def route_retrieval(
             "intent": "metadata_lookup",
             "reason": "filters_removed_all",
         }
-    if has_metadata_target(normalized["normalized_query"], strategy=query_strategy):
+    if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config):
         return envelope | {
             "status": "no_results",
             "route": "metadata_not_found",

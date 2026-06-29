@@ -75,6 +75,119 @@
         "fail_closed_without_text_span": true
       }
     },
+    "intent_config": {
+      "metadata_fields": {
+        "penetapan": [
+          "ditetapkan",
+          "penetapan",
+          "enactment"
+        ],
+        "promulgation": [
+          "diundangkan",
+          "pengundangan",
+          "promulgation"
+        ],
+        "revocation": [
+          "dicabut",
+          "pencabutan",
+          "revocation"
+        ],
+        "date": [
+          "tanggal",
+          "kapan"
+        ],
+        "institution": [
+          "lembaga",
+          "institusi",
+          "majelis",
+          "mpr",
+          "ditetapkan oleh"
+        ],
+        "place": [
+          "tempat",
+          "di mana",
+          "dimana"
+        ],
+        "signatories": [
+          "penanda tangan",
+          "ditandatangani",
+          "ketua",
+          "wakil ketua"
+        ],
+        "decision_date": [
+          "diputuskan"
+        ],
+        "decision_session": [
+          "rapat",
+          "sidang"
+        ],
+        "effective_rule": [
+          "berlaku"
+        ],
+        "source_publication": [
+          "satu naskah",
+          "source publication",
+          "publikasi"
+        ],
+        "source_anomaly_status": [
+          "konflik sumber",
+          "anomali sumber",
+          "typo sumber"
+        ],
+        "official_title": [
+          "judul",
+          "nama resmi",
+          "naskah"
+        ]
+      },
+      "metadata_roles": [
+        {
+          "role": "amendment_1_historical",
+          "pattern": "\\b(perubahan\\s*(pertama|1|i)|amendment\\s*1)\\b"
+        },
+        {
+          "role": "amendment_2_historical",
+          "pattern": "\\b(perubahan\\s*(kedua|2|ii)|amendment\\s*2)\\b"
+        },
+        {
+          "role": "amendment_3_historical",
+          "pattern": "\\b(perubahan\\s*(ketiga|3|iii)|amendment\\s*3)\\b"
+        },
+        {
+          "role": "amendment_4_historical",
+          "pattern": "\\b(perubahan\\s*(keempat|4|iv)|amendment\\s*4)\\b"
+        },
+        {
+          "role": "current_consolidated",
+          "pattern": "\\b(satu\\s+naskah|konsolidasi|current|berlaku)\\b"
+        },
+        {
+          "role": "original_historical",
+          "pattern": "\\b(naskah\\s+asli|original)\\b"
+        }
+      ],
+      "relation_words": [
+        "relasi",
+        "hubungan",
+        "naskah asli",
+        "versi",
+        "historis"
+      ],
+      "direct_relation_words": [
+        "mengubah",
+        "diubah",
+        "amandemen",
+        "amended",
+        "amends"
+      ],
+      "pasal_parent_words": [
+        "bagian dari",
+        "berada di bab",
+        "berada dalam bab",
+        "masuk bab",
+        "termasuk bab"
+      ]
+    },
     "source_conflict_intent": {
       "query_terms": [
         "konflik",

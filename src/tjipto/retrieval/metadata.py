@@ -69,11 +69,12 @@ def public_filters(filters: dict) -> dict:
 
 
 def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
-    strategy = getattr(getattr(store, "config", None), "query_strategy", "generic")
-    field = _metadata_field(query, strategy=strategy)
+    config = getattr(store, "config", None)
+    strategy = getattr(config, "query_strategy", "generic")
+    field = _metadata_field(query, strategy=strategy, config=config)
     if field is None:
         return ()
-    role = _source_role(query, strategy=strategy)
+    role = _source_role(query, strategy=strategy, config=config)
     requires_penetapan = _asks_enactment_context((query or "").casefold())
     rows = []
     grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}
@@ -96,13 +97,13 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     return tuple(rows[:limit])
 
 
-def has_metadata_target(query: str, *, strategy: str = "generic") -> bool:
-    return _metadata_field(query, strategy=strategy) is not None
+def has_metadata_target(query: str, *, strategy: str = "generic", config=None) -> bool:
+    return _metadata_field(query, strategy=strategy, config=config) is not None
 
 
-def _metadata_field(query: str, *, strategy: str) -> str | None:
+def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
     folded = (query or "").casefold()
-    patterns = intent_config_for(strategy)["metadata_fields"]
+    patterns = intent_config_for(strategy, config)["metadata_fields"]
     if not patterns:
         return None
     if not any(word in folded for word in ("u" "ud", "perubahan", "amendment", "naskah")):
@@ -196,8 +197,8 @@ def _asks_enactment_context(folded: str) -> bool:
     return any(pattern in folded for pattern in ("penetapan", "ditetapkan", "menetapkan")) or re.search(r"\bpenetap\b", folded) is not None
 
 
-def _source_role(query: str, *, strategy: str) -> str | None:
-    for role, pattern in intent_config_for(strategy)["metadata_roles"]:
+def _source_role(query: str, *, strategy: str, config=None) -> str | None:
+    for role, pattern in intent_config_for(strategy, config)["metadata_roles"]:
         if pattern.search(query or ""):
             return role
     return None

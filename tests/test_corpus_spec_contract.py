@@ -28,6 +28,16 @@ class CorpusSpecContractTest(unittest.TestCase):
         self.assertIn("article_renumbering_conflict", schema["source_conflict_types"])
         self.assertEqual(schema["chunk_policy"]["direct_grounding"], "text_span_exact")
 
+    def test_uud_registry_owns_runtime_intent_terms(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        intent = config.setting("intent_config")
+        self.assertIn("penetapan", intent["metadata_fields"])
+        self.assertIn("berada di bab", intent["pasal_parent_words"])
+        self.assertEqual(intent["metadata_roles"][1]["role"], "amendment_2_historical")
+        source = (ROOT / "src/tjipto/corpora/intent_config.py").read_text(encoding="utf-8")
+        self.assertNotIn("perubahan pertama", source)
+        self.assertNotIn("berada di bab", source)
+
 
 if __name__ == "__main__":
     unittest.main()

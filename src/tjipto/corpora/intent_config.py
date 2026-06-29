@@ -11,40 +11,21 @@ _GENERIC = {
     "pasal_parent_words": (),
 }
 
-_UUD_1945 = {
-    "metadata_fields": {
-        "penetapan": ("ditetapkan", "penetapan", "enactment"),
-        "promulgation": ("diundangkan", "pengundangan", "promulgation"),
-        "revocation": ("dicabut", "pencabutan", "revocation"),
-        "date": ("tanggal", "kapan"),
-        "institution": ("lembaga", "institusi", "majelis", "mpr", "ditetapkan oleh"),
-        "place": ("tempat", "di mana", "dimana"),
-        "signatories": ("penanda tangan", "ditandatangani", "ketua", "wakil ketua"),
-        "decision_date": ("diputuskan",),
-        "decision_session": ("rapat", "sidang"),
-        "effective_rule": ("berlaku",),
-        "source_publication": ("satu naskah", "source publication", "publikasi"),
-        "source_anomaly_status": ("konflik sumber", "anomali sumber", "typo sumber"),
-        "official_title": ("judul", "nama resmi", "naskah"),
-    },
-    "metadata_roles": (
-        ("amendment_1_historical", re.compile(r"\b(perubahan\s*(pertama|1|i)|amendment\s*1)\b", re.IGNORECASE)),
-        ("amendment_2_historical", re.compile(r"\b(perubahan\s*(kedua|2|ii)|amendment\s*2)\b", re.IGNORECASE)),
-        ("amendment_3_historical", re.compile(r"\b(perubahan\s*(ketiga|3|iii)|amendment\s*3)\b", re.IGNORECASE)),
-        ("amendment_4_historical", re.compile(r"\b(perubahan\s*(keempat|4|iv)|amendment\s*4)\b", re.IGNORECASE)),
-        ("current_consolidated", re.compile(r"\b(satu\s+naskah|konsolidasi|current|berlaku)\b", re.IGNORECASE)),
-        ("original_historical", re.compile(r"\b(naskah\s+asli|original)\b", re.IGNORECASE)),
-    ),
-    "relation_words": ("relasi", "hubungan", "naskah asli", "versi", "historis"),
-    "direct_relation_words": ("mengubah", "diubah", "amandemen", "amended", "amends"),
-    "pasal_parent_words": ("bagian dari", "berada di bab", "berada dalam bab", "masuk bab", "termasuk bab"),
-}
 
-_BY_STRATEGY = {
-    "generic": _GENERIC,
-    "uud_1945": _UUD_1945,
-}
-
-
-def intent_config_for(strategy: str | None) -> dict:
-    return _BY_STRATEGY.get(strategy or "generic", _GENERIC)
+def intent_config_for(strategy: str | None, config=None) -> dict:
+    raw = config.setting("intent_config") if config is not None else None
+    if not raw:
+        return _GENERIC
+    return {
+        "metadata_fields": {
+            key: tuple(value)
+            for key, value in (raw.get("metadata_fields") or {}).items()
+        },
+        "metadata_roles": tuple(
+            (row["role"], re.compile(row["pattern"], re.IGNORECASE))
+            for row in raw.get("metadata_roles", ())
+        ),
+        "relation_words": tuple(raw.get("relation_words") or ()),
+        "direct_relation_words": tuple(raw.get("direct_relation_words") or ()),
+        "pasal_parent_words": tuple(raw.get("pasal_parent_words") or ()),
+    }

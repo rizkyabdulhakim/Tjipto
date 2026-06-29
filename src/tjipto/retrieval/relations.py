@@ -10,10 +10,11 @@ PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\b", re.IGNORECASE)
 
 
 def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
-    strategy = getattr(getattr(store, "config", None), "query_strategy", "generic")
-    if not has_relation_target(query, strategy=strategy):
+    config = getattr(store, "config", None)
+    strategy = getattr(config, "query_strategy", "generic")
+    if not has_relation_target(query, strategy=strategy, config=config):
         return ()
-    relation = _relation(query, strategy=strategy)
+    relation = _relation(query, strategy=strategy, config=config)
     if relation is None:
         return ()
     descendants_by_parent, evidence_by_unit = _relation_indexes(store)
@@ -61,14 +62,14 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     return tuple(rows[:limit])
 
 
-def has_relation_target(query: str, *, strategy: str = "generic") -> bool:
+def has_relation_target(query: str, *, strategy: str = "generic", config=None) -> bool:
     folded = (query or "").casefold()
-    config = intent_config_for(strategy)
-    if not config["relation_words"] and not config["direct_relation_words"] and not config["pasal_parent_words"]:
+    intent = intent_config_for(strategy, config)
+    if not intent["relation_words"] and not intent["direct_relation_words"] and not intent["pasal_parent_words"]:
         return False
-    if _unsupported_relation_requested(query, folded, strategy=strategy):
+    if _unsupported_relation_requested(query, folded, strategy=strategy, config=config):
         return True
-    if _pasal_parent_requested(query, folded, strategy=strategy):
+    if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
         return True
     if PASAL_RE.search(query or "") and "ayat" in folded:
         return any(word in folded for word in ("apa saja", "daftar", "dalam", "anak", "child"))
@@ -77,25 +78,25 @@ def has_relation_target(query: str, *, strategy: str = "generic") -> bool:
     return False
 
 
-def _relation(query: str, *, strategy: str) -> str | None:
+def _relation(query: str, *, strategy: str, config=None) -> str | None:
     folded = (query or "").casefold()
-    if _pasal_parent_requested(query, folded, strategy=strategy):
+    if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
         return "pasal_parent_bab"
     if PASAL_RE.search(query or "") and "ayat" in folded:
         return "pasal_ayat_children"
     if BAB_RE.search(query or "") and "pasal" in folded:
         return "bab_pasal_children"
-    if _unsupported_relation_requested(query, folded, strategy=strategy):
+    if _unsupported_relation_requested(query, folded, strategy=strategy, config=config):
         return "unsupported_amendment_relation"
     return None
 
 
-def _unsupported_relation_requested(query: str, folded: str, *, strategy: str) -> bool:
-    config = intent_config_for(strategy)
+def _unsupported_relation_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
+    intent = intent_config_for(strategy, config)
     has_pasal = PASAL_RE.search(query or "") is not None
     has_bab = BAB_RE.search(query or "") is not None
-    direct_relation = any(pattern in folded for pattern in config["direct_relation_words"])
-    relation_words = any(pattern in folded for pattern in config["relation_words"])
+    direct_relation = any(pattern in folded for pattern in intent["direct_relation_words"])
+    relation_words = any(pattern in folded for pattern in intent["relation_words"])
     return (
         direct_relation and (has_pasal or has_bab or relation_words)
     ) or (
@@ -103,10 +104,10 @@ def _unsupported_relation_requested(query: str, folded: str, *, strategy: str) -
     )
 
 
-def _pasal_parent_requested(query: str, folded: str, *, strategy: str) -> bool:
+def _pasal_parent_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
     return PASAL_RE.search(query or "") is not None and any(
         pattern in folded
-        for pattern in intent_config_for(strategy)["pasal_parent_words"]
+        for pattern in intent_config_for(strategy, config)["pasal_parent_words"]
     )
 
 
