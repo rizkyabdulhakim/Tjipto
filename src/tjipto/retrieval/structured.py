@@ -17,7 +17,7 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
     instrument = _instrument_rows(store, query, limit, strategy=strategy, config=getattr(store, "config", None))
     if instrument:
         return instrument
-    targets = _targets(query)
+    targets = _targets(query, intent_config_for(strategy, getattr(store, "config", None)))
     if not targets:
         return ()
     legal_unit_ids = {
@@ -39,7 +39,7 @@ def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None
         return False
     if _instrument_target(query, strategy=strategy, config=config):
         return True
-    return bool(_targets(query))
+    return bool(_targets(query, intent_config_for(strategy, config)))
 
 
 def _instrument_target(query: str, *, strategy: str, config=None) -> bool:
@@ -92,15 +92,13 @@ def _instrument_rows(
     return ()
 
 
-def _targets(query: str) -> tuple[str, ...]:
+def _targets(query: str, intent: dict) -> tuple[str, ...]:
     text = query or ""
     folded = text.casefold()
-    if "pembukaan" in folded:
-        return ("pembukaan/preambule",)
-    if "aturan peralihan" in folded:
-        return _with_pasal("aturan peralihan", text)
-    if "aturan tambahan" in folded:
-        return _with_pasal("aturan tambahan", text)
+    for section in intent["structured_sections"]:
+        if any(alias in folded for alias in section.get("aliases", ())):
+            target = section["target"]
+            return _with_pasal(target, text) if section.get("with_pasal") else (target,)
     bab = BAB_RE.search(text)
     if bab:
         return (f"bab {bab.group(1)}{bab.group(2)}".casefold(),)

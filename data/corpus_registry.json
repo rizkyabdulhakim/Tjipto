@@ -286,7 +286,23 @@
         "amendment_2_historical": "Kedua",
         "amendment_3_historical": "Ketiga",
         "amendment_4_historical": "Keempat"
-      }
+      },
+      "structured_sections": [
+        {
+          "target": "pembukaan/preambule",
+          "aliases": ["pembukaan"]
+        },
+        {
+          "target": "aturan peralihan",
+          "aliases": ["aturan peralihan"],
+          "with_pasal": true
+        },
+        {
+          "target": "aturan tambahan",
+          "aliases": ["aturan tambahan"],
+          "with_pasal": true
+        }
+      ]
     },
     "source_conflict_intent": {
       "query_terms": [

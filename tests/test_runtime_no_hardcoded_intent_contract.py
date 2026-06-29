@@ -24,6 +24,7 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
         self.assertFalse(generic["metadata_fields"])
         self.assertFalse(generic["relation_words"])
         self.assertFalse(generic["instrument_scope_queries"])
+        self.assertFalse(generic["structured_sections"])
 
         config = CorpusRegistry(ROOT).resolve("uud")
         configured = intent_config_for(config.query_strategy, config)

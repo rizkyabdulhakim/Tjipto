@@ -26,8 +26,9 @@
     "instrument_deletion_words": ["dihapus"],
     "instrument_change_context_words": ["perubahan"],
     "source_role_labels": {"amendment_4_historical": "Keempat"},
+    "structured_sections": [{"target": "aturan tambahan", "aliases": ["aturan tambahan"], "with_pasal": true}],
     "unsupported_relation_context_words": ["perubahan"],
     "metadata_roles": [{"index": 1, "role": "amendment_2_historical"}]
   },
-  "generic_intent_source_absent": ["perubahan pertama", "berada di bab", "mengubah pasal apa", "dihapus"]
+  "generic_intent_source_absent": ["perubahan pertama", "berada di bab", "mengubah pasal apa", "dihapus", "aturan tambahan"]
 }
