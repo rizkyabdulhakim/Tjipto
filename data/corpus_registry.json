@@ -19,6 +19,38 @@
       "amendment_2_historical",
       "amendment_3_historical",
       "amendment_4_historical"
-    ]
+    ],
+    "source_conflict_intent": {
+      "query_terms": [
+        "konflik",
+        "anomali",
+        "tidak dipromosikan",
+        "promosikan",
+        "renumbering",
+        "penomoran",
+        "pasal iii",
+        "pasal 25e"
+      ],
+      "role_labels": {
+        "amendment_1_historical": "perubahan pertama",
+        "amendment_2_historical": "perubahan kedua",
+        "amendment_3_historical": "perubahan ketiga",
+        "amendment_4_historical": "perubahan keempat"
+      },
+      "type_anchors": {
+        "article_renumbering_conflict": [
+          "pasal 25e",
+          "pasal 25a",
+          "25e",
+          "25a"
+        ],
+        "source_marker_sequence_conflict": [
+          "aturan tambahan",
+          "pasal iii",
+          "pasal ii",
+          "pasal 3"
+        ]
+      }
+    }
   }
 }

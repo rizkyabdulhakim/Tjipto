@@ -326,7 +326,7 @@ def _metadata_fact(row: dict) -> dict:
 def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
     if store is None:
         return None
-    if not _is_source_anomaly_query(query):
+    if not _is_source_anomaly_query(store, query):
         return None
     conflict = _matched_source_conflict(store, query)
     if conflict is None:
@@ -359,12 +359,13 @@ def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
 
 def _matched_source_conflict(store, query: str) -> dict | None:
     folded = (query or "").casefold()
-    if not _is_source_anomaly_query(query):
+    if not _is_source_anomaly_query(store, query):
         return None
+    intent = _source_conflict_intent(store)
     matches = [
         (score, row)
         for row in store.source_conflicts
-        if (score := _source_conflict_match_score(row, folded)) > 0
+        if (score := _source_conflict_match_score(row, folded, intent)) > 0
     ]
     if not matches:
         return None
@@ -372,9 +373,10 @@ def _matched_source_conflict(store, query: str) -> dict | None:
     return matches[0][1]
 
 
-def _is_source_anomaly_query(query: str) -> bool:
+def _is_source_anomaly_query(store, query: str) -> bool:
     folded = (query or "").casefold()
-    return any(pattern in folded for pattern in ("konflik", "anomali", "tidak dipromosikan", "promosikan", "renumbering", "penomoran", "pasal iii", "pasal 25e"))
+    terms = _source_conflict_intent(store).get("query_terms") or ()
+    return any(str(term).casefold() in folded for term in terms)
 
 
 def _source_anomaly_fallback() -> dict:
@@ -397,13 +399,13 @@ def _source_anomaly_fallback() -> dict:
     }
 
 
-def _source_conflict_match_score(conflict: dict, folded_query: str) -> int:
+def _source_conflict_match_score(conflict: dict, folded_query: str, intent: dict) -> int:
     source_role = str(conflict.get("source_document_id") or "").split("::")[-1]
     score = 0
-    role_label = _source_role_label(source_role)
+    role_label = str((intent.get("role_labels") or {}).get(source_role) or source_role).casefold()
     if role_label and role_label in folded_query:
         score += 4
-    for token in _source_conflict_anchor_tokens(conflict):
+    for token in (intent.get("type_anchors") or {}).get(conflict.get("type"), ()):
         if token in folded_query:
             score += 3
     if score:
@@ -424,17 +426,13 @@ def _source_conflict_match_score(conflict: dict, folded_query: str) -> int:
     return len(overlap) if len(overlap) >= 2 else 0
 
 
-def _source_conflict_anchor_tokens(conflict: dict) -> tuple[str, ...]:
-    if conflict.get("type") == "article_renumbering_conflict":
-        return ("pasal 25e", "pasal 25a", "25e", "25a")
-    if conflict.get("type") == "source_marker_sequence_conflict":
-        return ("aturan tambahan", "pasal iii", "pasal ii", "pasal 3")
-    return ()
-
-
 def _meaningful_conflict_tokens(text: str) -> set[str]:
     generic = {"apa", "yang", "sumber", "konflik", "anomali", "status", "pasal"}
     return {token for token in re.findall(r"[a-z0-9]+", text) if len(token) > 2 and token not in generic}
+
+
+def _source_conflict_intent(store) -> dict:
+    return store.config.setting("source_conflict_intent", {})
 
 
 def _public_source_conflict(conflict: dict) -> dict:
@@ -445,15 +443,6 @@ def _public_source_conflict(conflict: dict) -> dict:
         "source_document_id": conflict.get("source_document_id"),
         "status": conflict.get("status"),
     }
-
-
-def _source_role_label(source_role: str) -> str:
-    return {
-        "amendment_1_historical": "perubahan pertama",
-        "amendment_2_historical": "perubahan kedua",
-        "amendment_3_historical": "perubahan ketiga",
-        "amendment_4_historical": "perubahan keempat",
-    }.get(source_role, source_role)
 
 
 def _source_anomaly_answer(conflict: dict, query: str) -> str:
