@@ -8,6 +8,7 @@ from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.retrieval.metadata import has_metadata_target
 from tjipto.retrieval.relations import has_relation_target
+from tjipto.retrieval.structured import has_structured_target
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,7 +45,7 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
                     case["configured_expected"],
                     case["query"],
                 )
-            else:
+            elif case["kind"] == "relation":
                 self.assertEqual(
                     has_relation_target(case["query"], strategy="uud_1945"),
                     case["generic_expected"],
@@ -52,6 +53,17 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     has_relation_target(case["query"], strategy=config.query_strategy, config=config),
+                    case["configured_expected"],
+                    case["query"],
+                )
+            else:
+                self.assertEqual(
+                    has_structured_target(case["query"], strategy="uud_1945"),
+                    case["generic_expected"],
+                    case["query"],
+                )
+                self.assertEqual(
+                    has_structured_target(case["query"], strategy=config.structured_strategy, config=config),
                     case["configured_expected"],
                     case["query"],
                 )
