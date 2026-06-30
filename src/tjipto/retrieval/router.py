@@ -38,6 +38,7 @@ def route_retrieval(
         normalized["normalized_query"],
         corpus_supported=corpus_supported,
         strategy=query_strategy,
+        config=config,
     )
     envelope = {
         "status": "no_results",

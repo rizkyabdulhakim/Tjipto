@@ -11,10 +11,10 @@ PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\b", re.IGNORECASE)
 AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
 
 
-def normalize_query(query: str, *, strategy: str = "uud_1945", config=None) -> dict:
+def normalize_query(query: str, *, strategy: str = "generic", config=None) -> dict:
     original = query or ""
     normalized = original.strip()
-    if strategy != "uud_1945":
+    if not _setting_enabled(config, "query_normalization_enabled"):
         return {
             "original_query": original,
             "normalized_query": re.sub(r"\s+", " ", normalized).strip(),
@@ -47,11 +47,16 @@ def classify_intent(
     query: str,
     *,
     corpus_supported: bool = True,
-    strategy: str = "uud_1945",
+    strategy: str = "generic",
+    config=None,
 ) -> dict:
     if not corpus_supported:
         return {"intent": "unsupported_corpus"}
-    if strategy != "uud_1945":
+    if not _setting_enabled(config, "exact_citation_intent_enabled"):
         return {"intent": "natural_language"}
     pasal, _ = parse_citation(query)
     return {"intent": "exact_citation" if pasal else "natural_language"}
+
+
+def _setting_enabled(config, key: str) -> bool:
+    return bool(getattr(config, "setting", lambda *_: False)(key, False))

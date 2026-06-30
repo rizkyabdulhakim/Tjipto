@@ -17,6 +17,8 @@
     "chunk_policy": {"direct_grounding": "text_span_exact"}
   },
   "normalization_aliases": [{"replacement": "UUD 1945"}],
+  "query_normalization_enabled": true,
+  "exact_citation_intent_enabled": true,
   "answer_templates": {"citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum."},
   "viewer_source_status_labels": {"current_consolidated": "Berlaku (konsolidasi saat ini)"},
   "intent_config": {

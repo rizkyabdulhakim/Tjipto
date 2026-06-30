@@ -3,6 +3,8 @@
     "manifest": "data/final/uud/manifest.json",
     "query_strategy": "uud_1945",
     "structured_strategy": "uud_1945",
+    "query_normalization_enabled": true,
+    "exact_citation_intent_enabled": true,
     "preferred_source_role": "current_consolidated",
     "normalization_aliases": [
       {

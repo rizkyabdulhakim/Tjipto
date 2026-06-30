@@ -43,6 +43,8 @@ class CorpusSpecContractTest(unittest.TestCase):
         aliases = config.setting("normalization_aliases")
         for alias in _expectations()["normalization_aliases"]:
             self.assertTrue(any(all(row.get(key) == value for key, value in alias.items()) for row in aliases))
+        self.assertEqual(config.setting("query_normalization_enabled"), _expectations()["query_normalization_enabled"])
+        self.assertEqual(config.setting("exact_citation_intent_enabled"), _expectations()["exact_citation_intent_enabled"])
         for key, value in _expectations()["answer_templates"].items():
             self.assertEqual(config.setting("answer_templates")[key], value)
         for key, value in _expectations()["viewer_source_status_labels"].items():

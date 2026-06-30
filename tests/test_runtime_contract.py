@@ -427,14 +427,16 @@ class RuntimeContractTest(unittest.TestCase):
         for case in _query_intent_cases():
             if "normalized_query" in case:
                 config = CorpusRegistry(ROOT).resolve("uud") if case.get("use_config") else None
-                result = normalize_query(case["query"], strategy=case.get("strategy", "uud_1945"), config=config)
+                result = normalize_query(case["query"], strategy=case.get("strategy", "generic"), config=config)
                 self.assertEqual(result["normalized_query"], case["normalized_query"], case["query"])
             if "intent" in case:
+                config = CorpusRegistry(ROOT).resolve("uud") if case.get("use_config") else None
                 result = classify_intent(
                     case["corpus_id"],
                     case["query"],
-                    strategy=case.get("strategy", "uud_1945"),
+                    strategy=case.get("strategy", "generic"),
                     corpus_supported=case.get("corpus_supported", True),
+                    config=config,
                 )
                 self.assertEqual(result["intent"], case["intent"], case["query"])
                 for field in case.get("not_in") or ():
