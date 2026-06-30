@@ -31,6 +31,9 @@ class UudBuilderContractTest(unittest.TestCase):
         seed = (ROOT / "src/tjipto/corpora/uud/compatibility_seed.py").read_text(encoding="utf-8")
         self.assertIn("load_compatibility_seed(final_dir)", source)
         self.assertNotIn("read_jsonl(final_dir", source)
+        bridge = read_json(FINAL / "validation_report.json")["artifact_governance"]["compatibility_seed_bridge"]
+        self.assertEqual(bridge["status"], "temporary_limitation")
+        self.assertIn("legal_units.jsonl", bridge["seeded_artifacts"])
         self.assertNotIn("manifest.json", seed)
         self.assertNotIn("source_documents.jsonl", seed)
         self.assertNotIn("pages.jsonl", seed)

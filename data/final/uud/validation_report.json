@@ -1,6 +1,17 @@
 {
   "artifact_governance": {
     "status": "current_final_artifacts_present",
+    "compatibility_seed_bridge": {
+      "status": "temporary_limitation",
+      "source": "existing_stage_artifacts",
+      "seeded_artifacts": [
+        "legal_units.jsonl",
+        "chunks.jsonl",
+        "evidence_registry.jsonl",
+        "bbox_registry.jsonl"
+      ],
+      "removal_condition": "UUD extraction rebuilds these rows from source PDFs and corpus specs"
+    },
     "excluded_chunk_policy": "records listed in excluded_records.jsonl are not runtime-loadable, not active canonical, and not canonical-use allowed",
     "audited_excluded_chunks": [
       "uud_chunk_00005",
