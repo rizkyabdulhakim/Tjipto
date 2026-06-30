@@ -329,6 +329,12 @@
       "instrument_change_context_words": [
         "perubahan"
       ],
+      "instrument_citation_templates": {
+        "prefix": "Perubahan ",
+        "scope": "Perubahan {ordinal} Scope",
+        "clause": "Perubahan {ordinal} Clause ({clause})",
+        "clause_marker": "Clause"
+      },
       "source_role_labels": {
         "amendment_1_historical": "Pertama",
         "amendment_2_historical": "Kedua",

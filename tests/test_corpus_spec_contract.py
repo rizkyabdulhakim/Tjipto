@@ -62,12 +62,15 @@ class CorpusSpecContractTest(unittest.TestCase):
             "instrument_deletion_words",
             "instrument_deletion_evidence_words",
             "instrument_change_context_words",
+            "instrument_citation_templates",
             "unsupported_relation_context_words",
         ):
             for value in expected[field]:
                 self.assertIn(value, intent[field])
         for key, value in expected["source_role_labels"].items():
             self.assertEqual(intent["source_role_labels"][key], value)
+        for key, value in expected["instrument_citation_templates"].items():
+            self.assertEqual(intent["instrument_citation_templates"][key], value)
         for key, value in expected["relation_routes"].items():
             for field, expected_value in value.items():
                 self.assertEqual(intent["relation_routes"][key][field], expected_value)

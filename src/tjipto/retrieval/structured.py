@@ -71,9 +71,11 @@ def _instrument_rows(
             return ({"probe": True},)
         target = f"BAB {bab.group(1).upper()}{bab.group(2).upper()}".strip()
         matches = []
+        prefix = intent["instrument_citation_templates"].get("prefix", "")
+        clause_marker = intent["instrument_citation_templates"].get("clause_marker", "")
         for row in getattr(store, "evidence", ()):
             citation = str(row.get("citation") or "")
-            if not (citation.startswith("Perubahan ") and "Clause" in citation):
+            if not (prefix and clause_marker and citation.startswith(prefix) and clause_marker in citation):
                 continue
             text = str(row.get("quoted_text") or "")
             if target.casefold() in text.casefold() and any(word in text.casefold() for word in intent["instrument_deletion_evidence_words"]):
@@ -84,13 +86,13 @@ def _instrument_rows(
     if _scope_query(folded, intent):
         if probe_only:
             return ({"probe": True},)
-        row = _instrument_evidence(store, role, f"Perubahan {_ordinal_label(role, intent)} Scope")
+        row = _instrument_evidence(store, role, _instrument_citation(intent, "scope", role))
         return (_candidate(row, "instrument_scope_candidate"),) if row else ()
     clause = _clause_letter(query)
     if clause:
         if probe_only:
             return ({"probe": True},)
-        row = _instrument_evidence(store, role, f"Perubahan {_ordinal_label(role, intent)} Clause ({clause})")
+        row = _instrument_evidence(store, role, _instrument_citation(intent, "clause", role, clause=clause))
         return (_candidate(row, "instrument_clause_candidate"),) if row else ()
     return ()
 
@@ -158,6 +160,11 @@ def _source_role(query: str, *, strategy: str, config=None) -> str | None:
 
 def _ordinal_label(role: str, intent: dict) -> str:
     return intent["source_role_labels"][role]
+
+
+def _instrument_citation(intent: dict, key: str, role: str, **values: str) -> str:
+    template = intent["instrument_citation_templates"].get(key, "")
+    return template.format(ordinal=_ordinal_label(role, intent), **values) if template else ""
 
 
 def _instrument_evidence(store: EvidenceStore | None, source_role: str, citation: str) -> dict | None:
