@@ -35,12 +35,15 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertIn("tjipto.artifacts.pipeline", pipeline_source)
 
     def test_generic_pdf_builders_are_not_owned_by_uud_adapter(self) -> None:
+        source_documents_source = (ROOT / "src/tjipto/corpora/uud/source_documents_builder.py").read_text(encoding="utf-8")
         pages_source = (ROOT / "src/tjipto/corpora/uud/pages_builder.py").read_text(encoding="utf-8")
         spans_source = (ROOT / "src/tjipto/corpora/uud/text_span_builder.py").read_text(encoding="utf-8")
         bbox_source = (ROOT / "src/tjipto/corpora/uud/bbox_builder.py").read_text(encoding="utf-8")
+        self.assertNotIn("import fitz", source_documents_source)
         self.assertNotIn("get_text(\"text\")", pages_source)
         self.assertNotIn("accepted_text_span", spans_source)
         self.assertNotIn("def pdf_lines", bbox_source)
+        self.assertIn("tjipto.ingestion.pdf.source_documents", source_documents_source)
         self.assertIn("tjipto.ingestion.pdf.pages", pages_source)
         self.assertIn("tjipto.ingestion.pdf.text_spans", spans_source)
         self.assertIn("tjipto.ingestion.pdf.bbox", bbox_source)
