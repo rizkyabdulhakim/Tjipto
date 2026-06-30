@@ -34,6 +34,17 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertIn("tjipto.artifacts.manifest", manifest_source)
         self.assertIn("tjipto.artifacts.pipeline", pipeline_source)
 
+    def test_generic_pdf_builders_are_not_owned_by_uud_adapter(self) -> None:
+        pages_source = (ROOT / "src/tjipto/corpora/uud/pages_builder.py").read_text(encoding="utf-8")
+        spans_source = (ROOT / "src/tjipto/corpora/uud/text_span_builder.py").read_text(encoding="utf-8")
+        bbox_source = (ROOT / "src/tjipto/corpora/uud/bbox_builder.py").read_text(encoding="utf-8")
+        self.assertNotIn("get_text(\"text\")", pages_source)
+        self.assertNotIn("accepted_text_span", spans_source)
+        self.assertNotIn("def pdf_lines", bbox_source)
+        self.assertIn("tjipto.ingestion.pdf.pages", pages_source)
+        self.assertIn("tjipto.ingestion.pdf.text_spans", spans_source)
+        self.assertIn("tjipto.ingestion.pdf.bbox", bbox_source)
+
     def test_builder_seed_dependency_is_isolated_as_compatibility_bridge(self) -> None:
         source = (ROOT / "src/tjipto/corpora/uud_artifact_baseline.py").read_text(encoding="utf-8")
         seed = (ROOT / "src/tjipto/corpora/uud/compatibility_seed.py").read_text(encoding="utf-8")
