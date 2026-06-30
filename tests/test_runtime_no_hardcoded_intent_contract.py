@@ -25,11 +25,13 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
         self.assertFalse(generic["relation_words"])
         self.assertFalse(generic["instrument_scope_queries"])
         self.assertFalse(generic["structured_sections"])
+        self.assertFalse(generic["structured_lookup_enabled"])
 
         config = CorpusRegistry(ROOT).resolve("uud")
         configured = intent_config_for(config.query_strategy, config)
         self.assertIn("penetapan", configured["metadata_fields"])
         self.assertIn("relasi", configured["relation_words"])
+        self.assertTrue(configured["structured_lookup_enabled"])
         for case in _intent_cases():
             if case["kind"] == "metadata":
                 self.assertEqual(

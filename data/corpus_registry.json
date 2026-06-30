@@ -337,7 +337,8 @@
           "aliases": ["aturan tambahan"],
           "with_pasal": true
         }
-      ]
+      ],
+      "structured_lookup_enabled": true
     },
     "source_conflict_intent": {
       "query_terms": [

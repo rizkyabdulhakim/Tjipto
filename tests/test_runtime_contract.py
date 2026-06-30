@@ -666,6 +666,7 @@ class RuntimeContractTest(unittest.TestCase):
             def bboxes_for(self, evidence_id):
                 return []
 
+        NoBBoxStore.config = config
         self.assertEqual(structured_lookup(NoBBoxStore(), "Pasal 1 ayat (1)"), ())
 
         class UnitBackedStore:
@@ -682,6 +683,7 @@ class RuntimeContractTest(unittest.TestCase):
             def bboxes_for(self, evidence_id):
                 return [{"bbox_id": "b2"}]
 
+        UnitBackedStore.config = config
         self.assertEqual(structured_lookup(UnitBackedStore(), "Pasal 9")[0]["evidence_id"], "e2")
         self.assertEqual(structured_lookup(UnitBackedStore(), "BAB XA")[0]["evidence_id"], "e3")
 

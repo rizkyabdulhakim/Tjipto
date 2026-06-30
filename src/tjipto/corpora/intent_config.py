@@ -20,6 +20,7 @@ _GENERIC = {
     "instrument_change_context_words": (),
     "source_role_labels": {},
     "structured_sections": (),
+    "structured_lookup_enabled": False,
 }
 
 
@@ -53,4 +54,5 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "instrument_change_context_words": tuple(raw.get("instrument_change_context_words") or ()),
         "source_role_labels": dict(raw.get("source_role_labels") or {}),
         "structured_sections": tuple(raw.get("structured_sections") or ()),
+        "structured_lookup_enabled": bool(raw.get("structured_lookup_enabled")),
     }

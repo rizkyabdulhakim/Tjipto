@@ -69,6 +69,7 @@ class CorpusSpecContractTest(unittest.TestCase):
                 self.assertEqual(intent["relation_routes"][key][field], expected_value)
         for expected_section in expected["structured_sections"]:
             self.assertIn(expected_section, intent["structured_sections"])
+        self.assertEqual(intent["structured_lookup_enabled"], expected["structured_lookup_enabled"])
         for field, values in expected["metadata_rules"].items():
             for value in values:
                 self.assertIn(value, intent["metadata_rules"][field])

@@ -33,6 +33,7 @@
     "instrument_change_context_words": ["perubahan"],
     "source_role_labels": {"amendment_4_historical": "Keempat"},
     "structured_sections": [{"target": "aturan tambahan", "aliases": ["aturan tambahan"], "with_pasal": true}],
+    "structured_lookup_enabled": true,
     "unsupported_relation_context_words": ["perubahan"],
     "metadata_roles": [{"index": 1, "role": "amendment_2_historical"}]
   },

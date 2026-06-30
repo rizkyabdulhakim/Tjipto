@@ -12,12 +12,14 @@ PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?|[ivxlcdm]+)\b", re.IGNORECASE)
 
 
 def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, strategy: str = "uud_1945") -> tuple[dict, ...]:
-    if strategy != "uud_1945":
+    config = getattr(store, "config", None)
+    intent = intent_config_for(strategy, config)
+    if not intent["structured_lookup_enabled"]:
         return ()
-    instrument = _instrument_rows(store, query, limit, strategy=strategy, config=getattr(store, "config", None))
+    instrument = _instrument_rows(store, query, limit, strategy=strategy, config=config)
     if instrument:
         return instrument
-    targets = _targets(query, intent_config_for(strategy, getattr(store, "config", None)))
+    targets = _targets(query, intent)
     if not targets:
         return ()
     legal_unit_ids = {
@@ -35,11 +37,12 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
 
 
 def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None) -> bool:
-    if strategy != "uud_1945":
+    intent = intent_config_for(strategy, config)
+    if not intent["structured_lookup_enabled"]:
         return False
     if _instrument_target(query, strategy=strategy, config=config):
         return True
-    return bool(_targets(query, intent_config_for(strategy, config)))
+    return bool(_targets(query, intent))
 
 
 def _instrument_target(query: str, *, strategy: str, config=None) -> bool:
