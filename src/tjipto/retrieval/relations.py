@@ -17,10 +17,12 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     relation = _relation(query, strategy=strategy, config=config)
     if relation is None:
         return ()
+    intent = intent_config_for(strategy, config)
+    route = intent["relation_routes"].get(relation, {})
     descendants_by_parent, evidence_by_unit = _relation_indexes(store)
-    if relation == "pasal_parent_bab":
-        source = _unit(store, query, "pasal_record")
-        target = _hierarchy_parent(store, source, "bab_record") if source else None
+    if route.get("mode") == "parent":
+        source = _unit(store, query, route["source_unit_type"])
+        target = _hierarchy_parent(store, source, route["target_unit_type"]) if source else None
         if source is None or target is None:
             return ()
         row = _evidence_for_unit(store, source, evidence_by_unit, descendants_by_parent)
@@ -35,10 +37,10 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
                 "target_label": target.get("unit_label"),
             },
         },)
-    parent = _parent_unit(store, query, relation)
+    parent = _parent_unit(store, query, route)
     if parent is None:
         return ()
-    child_type = "ayat_record" if relation == "pasal_ayat_children" else "pasal_record"
+    child_type = route.get("child_unit_type")
     children = [
         row
         for row in store.legal_units
@@ -80,14 +82,22 @@ def has_relation_target(query: str, *, strategy: str = "generic", config=None) -
 
 def _relation(query: str, *, strategy: str, config=None) -> str | None:
     folded = (query or "").casefold()
+    intent = intent_config_for(strategy, config)
     if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
-        return "pasal_parent_bab"
+        return _route_name(intent, "parent")
     if PASAL_RE.search(query or "") and "ayat" in folded:
-        return "pasal_ayat_children"
+        return _route_name(intent, "pasal_children")
     if BAB_RE.search(query or "") and "pasal" in folded:
-        return "bab_pasal_children"
+        return _route_name(intent, "bab_children")
     if _unsupported_relation_requested(query, folded, strategy=strategy, config=config):
-        return "unsupported_amendment_relation"
+        return _route_name(intent, "unsupported")
+    return None
+
+
+def _route_name(intent: dict, requested: str) -> str | None:
+    for name, route in intent["relation_routes"].items():
+        if requested == route.get("mode"):
+            return name
     return None
 
 
@@ -116,13 +126,11 @@ def _pasal_parent_requested(query: str, folded: str, *, strategy: str, config=No
     )
 
 
-def _parent_unit(store, query: str, relation: str) -> dict | None:
-    if relation == "unsupported_amendment_relation":
+def _parent_unit(store, query: str, route: dict) -> dict | None:
+    if route.get("mode") == "unsupported":
         return None
-    if relation == "pasal_ayat_children":
-        return _unit(store, query, "pasal_record")
-    else:
-        return _unit(store, query, "bab_record")
+    parent_type = route.get("parent_unit_type")
+    return _unit(store, query, parent_type) if parent_type else None
 
 
 def _unit(store, query: str, unit_type: str) -> dict | None:

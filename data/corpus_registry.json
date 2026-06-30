@@ -274,6 +274,26 @@
         "anak",
         "child"
       ],
+      "relation_routes": {
+        "pasal_parent_bab": {
+          "mode": "parent",
+          "source_unit_type": "pasal_record",
+          "target_unit_type": "bab_record"
+        },
+        "pasal_ayat_children": {
+          "mode": "pasal_children",
+          "parent_unit_type": "pasal_record",
+          "child_unit_type": "ayat_record"
+        },
+        "bab_pasal_children": {
+          "mode": "bab_children",
+          "parent_unit_type": "bab_record",
+          "child_unit_type": "pasal_record"
+        },
+        "unsupported_amendment_relation": {
+          "mode": "unsupported"
+        }
+      },
       "unsupported_relation_context_words": [
         "perubahan"
       ],

@@ -53,6 +53,7 @@ class CorpusSpecContractTest(unittest.TestCase):
             "metadata_fields",
             "pasal_parent_words",
             "relation_child_words",
+            "relation_routes",
             "instrument_scope_queries",
             "instrument_deletion_words",
             "instrument_deletion_evidence_words",
@@ -63,6 +64,8 @@ class CorpusSpecContractTest(unittest.TestCase):
                 self.assertIn(value, intent[field])
         for key, value in expected["source_role_labels"].items():
             self.assertEqual(intent["source_role_labels"][key], value)
+        for key, value in expected["relation_routes"].items():
+            self.assertEqual(intent["relation_routes"][key], value)
         for expected_section in expected["structured_sections"]:
             self.assertIn(expected_section, intent["structured_sections"])
         for field, values in expected["metadata_rules"].items():
@@ -75,6 +78,7 @@ class CorpusSpecContractTest(unittest.TestCase):
             for path in (
                 ROOT / "src/tjipto/corpora/intent_config.py",
                 ROOT / "src/tjipto/retrieval/metadata.py",
+                ROOT / "src/tjipto/retrieval/relations.py",
                 ROOT / "src/tjipto/retrieval/structured.py",
             )
         )

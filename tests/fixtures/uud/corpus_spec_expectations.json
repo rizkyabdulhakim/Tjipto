@@ -23,6 +23,7 @@
     "metadata_rules": {"enactment_date": ["tanggal penetapan"], "institution_tokens": ["penetap"]},
     "pasal_parent_words": ["berada di bab"],
     "relation_child_words": ["apa saja"],
+    "relation_routes": {"pasal_parent_bab": {"mode": "parent", "source_unit_type": "pasal_record", "target_unit_type": "bab_record"}},
     "instrument_scope_queries": ["mengubah pasal apa"],
     "instrument_deletion_words": ["dihapus"],
     "instrument_deletion_evidence_words": ["hapus"],
@@ -32,5 +33,5 @@
     "unsupported_relation_context_words": ["perubahan"],
     "metadata_roles": [{"index": 1, "role": "amendment_2_historical"}]
   },
-  "generic_intent_source_absent": ["perubahan pertama", "berada di bab", "mengubah pasal apa", "dihapus", "aturan tambahan"]
+  "generic_intent_source_absent": ["perubahan pertama", "berada di bab", "mengubah pasal apa", "dihapus", "aturan tambahan", "pasal_parent_bab"]
 }
