@@ -57,15 +57,9 @@ def build_validation_report(
         "artifact_governance": {
             "status": "current_final_artifacts_present",
             "compatibility_seed_bridge": {
-                "status": "temporary_limitation",
-                "source": "existing_stage_artifacts",
-                "seeded_artifacts": [
-                    "legal_units.jsonl",
-                    "chunks.jsonl",
-                    "evidence_registry.jsonl",
-                    "bbox_registry.jsonl",
-                ],
-                "removal_condition": "UUD extraction rebuilds these rows from source PDFs and corpus specs",
+                "status": "removed",
+                "source": "source_pdf_and_corpus_specs",
+                "seeded_artifacts": [],
             },
             "excluded_chunk_policy": "records listed in excluded_records.jsonl are not runtime-loadable, not active canonical, and not canonical-use allowed",
             "audited_excluded_chunks": [row["legacy_chunk_id"] for row in excluded_records],

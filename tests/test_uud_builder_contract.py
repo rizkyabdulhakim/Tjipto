@@ -5,6 +5,10 @@ from pathlib import Path
 import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
+from tjipto.corpora.uud.bbox_builder import pdf_lines
+from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
+from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
+from tjipto.corpora.uud.legal_unit_builder import build_legal_units_from_sources
 from tjipto.corpora.uud.manifest import build_manifest
 from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_assertions, build_metadata_block_grounding, build_metadata_graph_edges, rebuild_metadata_grounding
 from tjipto.corpora.uud.pages_builder import build_pages
@@ -48,14 +52,25 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertIn("tjipto.ingestion.pdf.text_spans", spans_source)
         self.assertIn("tjipto.ingestion.pdf.bbox", bbox_source)
 
-    def test_builder_seed_dependency_is_isolated_as_compatibility_bridge(self) -> None:
+    def test_builder_does_not_use_compatibility_seed_as_active_input(self) -> None:
         source = (ROOT / "src/tjipto/corpora/uud_artifact_baseline.py").read_text(encoding="utf-8")
         seed = (ROOT / "src/tjipto/corpora/uud/compatibility_seed.py").read_text(encoding="utf-8")
-        self.assertIn("load_compatibility_seed(final_dir)", source)
+        self.assertNotIn("load_compatibility_seed", source)
         self.assertNotIn("read_jsonl(final_dir", source)
+        self.assertNotIn('read_jsonl(stage_dir / "legal_units.jsonl")', source)
+        self.assertNotIn('read_jsonl(stage_dir / "chunks.jsonl")', source)
+        self.assertNotIn('read_jsonl(stage_dir / "evidence_registry.jsonl")', source)
+        self.assertNotIn('read_jsonl(stage_dir / "bbox_registry.jsonl")', source)
+        self.assertIn("compatibility bridge", seed)
+
+    def test_validation_report_does_not_report_active_compatibility_seed_bridge(self) -> None:
         bridge = read_json(FINAL / "validation_report.json")["artifact_governance"]["compatibility_seed_bridge"]
-        self.assertEqual(bridge["status"], "temporary_limitation")
-        self.assertIn("legal_units.jsonl", bridge["seeded_artifacts"])
+        self.assertNotEqual(bridge.get("status"), "temporary_limitation")
+        self.assertNotEqual(bridge.get("source"), "existing_stage_artifacts")
+        self.assertFalse(bridge.get("seeded_artifacts"))
+
+    def test_compatibility_seed_file_remains_narrow_if_present(self) -> None:
+        seed = (ROOT / "src/tjipto/corpora/uud/compatibility_seed.py").read_text(encoding="utf-8")
         self.assertNotIn("manifest.json", seed)
         self.assertNotIn("source_documents.jsonl", seed)
         self.assertNotIn("pages.jsonl", seed)
@@ -68,7 +83,6 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertNotIn("metadata_graph_edges.jsonl", seed)
         self.assertNotIn("retrieval_units.jsonl", seed)
         self.assertNotIn("validation_report.json", seed)
-        self.assertIn("compatibility bridge", seed)
 
     def test_source_documents_rebuild_from_specs_and_pdfs(self) -> None:
         self.assertEqual(
@@ -99,6 +113,99 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertEqual(
             build_pages(ROOT, source_documents),
             read_jsonl(FINAL / "pages.jsonl"),
+        )
+
+    def test_legal_units_rebuild_identity_from_specs_and_pages_without_seed(self) -> None:
+        builder_source = (ROOT / "src/tjipto/corpora/uud/legal_unit_builder.py").read_text(encoding="utf-8")
+        self.assertNotIn("compatibility_seed", builder_source)
+        self.assertNotIn("read_jsonl", builder_source)
+        source_documents = {
+            row["source_document_id"]: row
+            for row in build_source_documents(ROOT)
+        }
+        pages_by_source = {
+            (row["source_document_id"], row["page_number"]): row["text"]
+            for row in build_pages(ROOT, source_documents)
+        }
+        rebuilt = build_legal_units_from_sources(
+            pages_by_source=pages_by_source,
+            source_documents=source_documents,
+        )
+        expected = read_jsonl(FINAL / "legal_units.jsonl")
+        self.assertEqual(len(rebuilt), len(expected))
+        self.assertEqual(
+            [(row["legal_unit_id"], row["source_document_id"], row["unit_label"], row["unit_type"]) for row in rebuilt],
+            [(row["legal_unit_id"], row["source_document_id"], row["unit_label"], row["unit_type"]) for row in expected],
+        )
+
+    def test_chunks_rebuild_identity_from_rebuilt_legal_units_without_seed(self) -> None:
+        builder_source = (ROOT / "src/tjipto/corpora/uud/chunk_builder.py").read_text(encoding="utf-8")
+        self.assertNotIn("compatibility_seed", builder_source)
+        self.assertNotIn("read_jsonl", builder_source)
+        source_documents = {
+            row["source_document_id"]: row
+            for row in build_source_documents(ROOT)
+        }
+        pages_by_source = {
+            (row["source_document_id"], row["page_number"]): row["text"]
+            for row in build_pages(ROOT, source_documents)
+        }
+        legal_units = build_legal_units_from_sources(
+            pages_by_source=pages_by_source,
+            source_documents=source_documents,
+        )
+        rebuilt = build_chunks_from_legal_units(legal_units)
+        expected = read_jsonl(FINAL / "chunks.jsonl")
+        self.assertEqual(len(rebuilt), len(expected))
+        self.assertEqual(
+            [(row["chunk_id"], row["legal_unit_id"], row["chunk_type"]) for row in rebuilt],
+            [(row["chunk_id"], row["legal_unit_id"], row["chunk_type"]) for row in expected],
+        )
+
+    def test_evidence_rebuild_identity_from_rebuilt_chunks_without_seed(self) -> None:
+        import fitz
+
+        builder_source = (ROOT / "src/tjipto/corpora/uud/evidence_bbox_builder.py").read_text(encoding="utf-8")
+        self.assertNotIn("compatibility_seed", builder_source)
+        self.assertNotIn("read_jsonl", builder_source)
+        source_documents = {
+            row["source_document_id"]: row
+            for row in build_source_documents(ROOT)
+        }
+        pages_by_source = {
+            (row["source_document_id"], row["page_number"]): row["text"]
+            for row in build_pages(ROOT, source_documents)
+        }
+        legal_units = build_legal_units_from_sources(
+            pages_by_source=pages_by_source,
+            source_documents=source_documents,
+        )
+        chunks = build_chunks_from_legal_units(legal_units)
+        docs = {
+            source_id: fitz.open(ROOT / meta["path"])
+            for source_id, meta in source_documents.items()
+        }
+        try:
+            evidence, bbox_rows = build_evidence_and_bboxes(
+                legal_units=legal_units,
+                chunks=chunks,
+                source_documents=source_documents,
+                pdf_lines_by_source={source_id: pdf_lines(doc) for source_id, doc in docs.items()},
+            )
+        finally:
+            for doc in docs.values():
+                doc.close()
+        expected = read_jsonl(FINAL / "evidence_registry.jsonl")
+        self.assertEqual(len(evidence), len(expected))
+        self.assertEqual(
+            [(row["evidence_id"], row["legal_unit_id"], row["citation"], row["source_document_id"]) for row in evidence],
+            [(row["evidence_id"], row["legal_unit_id"], row["citation"], row["source_document_id"]) for row in expected],
+        )
+        expected_bbox = read_jsonl(FINAL / "bbox_registry.jsonl")
+        self.assertEqual(len(bbox_rows), len(expected_bbox))
+        self.assertEqual(
+            [row["bbox_id"] for row in bbox_rows],
+            [row["bbox_id"] for row in expected_bbox],
         )
 
     def test_metadata_block_grounding_rebuilds_from_specs_and_pages(self) -> None:

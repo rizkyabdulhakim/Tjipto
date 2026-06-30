@@ -6,7 +6,7 @@ from tjipto.core.manifest import read_jsonl
 
 
 def load_compatibility_seed(stage_dir: Path) -> dict:
-    # ponytail: compatibility bridge until UUD extraction rebuilds these rows from source specs.
+    # ponytail: inactive compatibility bridge kept only for old migration audits.
     return {
         "legal_units": read_jsonl(stage_dir / "legal_units.jsonl"),
         "chunks": read_jsonl(stage_dir / "chunks.jsonl"),
