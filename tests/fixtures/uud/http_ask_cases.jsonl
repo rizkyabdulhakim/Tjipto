@@ -1,0 +1,8 @@
+{"query":"Pasal 1 ayat (3)","status":"answer_ready","route":"legal_reference","intent":"exact_citation","has_citations":true,"has_viewer_refs":true,"public_keys":["answer","answer_scope","citations","insufficient_reasons","intent","legal_relations","metadata_facts","route","status","viewer_refs","warnings"],"absent_top_level":["matches","context_pack","evidence","answer_type","reason","applied_filters"],"absent_citation_fields":["source_sha256","source_pdf_path"],"absent_viewer_ref_fields":["source_sha256","source_pdf_path"]}
+{"query":"negara hukum","status":"limited_answer","route":"lexical_fallback","has_citations":true,"has_viewer_refs":true}
+{"query":"tanggal perubahan kedua UUD","status":"answer_ready","route":"metadata_fact","metadata_field":"date"}
+{"query":"tempat penetapan perubahan kedua UUD","status":"answer_ready","route":"metadata_fact","metadata_field":"place","metadata_answer":"Jakarta"}
+{"query":"apa saja ayat dalam Pasal 1","status":"answer_ready","route":"legal_relation","relation_target_labels":["(1)","(2)","(3)"]}
+{"query":"relasi amandemen Pasal 1","status":"insufficient_evidence","route":"legal_relation","intent":"legal_relation_lookup","citations":[],"viewer_refs":[],"insufficient_reasons":["insufficient_evidence"]}
+{"query":"aturan KUHP tentang pencurian","status":"insufficient_evidence","route":"lexical_fallback","citations":[],"viewer_refs":[]}
+{"query":"Pasal 999","status":"citation_not_found","route":"legal_reference","citations":[]}

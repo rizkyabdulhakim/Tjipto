@@ -69,11 +69,14 @@ class NoSlopLeakageTest(unittest.TestCase):
         self.assertFalse((ROOT / "src/tjipto/retrieval/structure.py").exists())
 
     def test_git_archive_handoff_excludes_local_artifacts(self) -> None:
-        archive = subprocess.check_output(
-            ["git", "archive", "--format=tar", "--worktree-attributes", "HEAD"],
-            cwd=ROOT,
-        )
-        names = set(tarfile.open(fileobj=io.BytesIO(archive)).getnames())
+        if (ROOT / ".git").exists():
+            archive = subprocess.check_output(
+                ["git", "archive", "--format=tar", "--worktree-attributes", "HEAD"],
+                cwd=ROOT,
+            )
+            names = set(tarfile.open(fileobj=io.BytesIO(archive)).getnames())
+        else:
+            names = {path.relative_to(ROOT).as_posix() for path in ROOT.rglob("*")}
         forbidden = (
             ".git",
             "node_modules",

@@ -27,6 +27,11 @@ def _page_grounded_decision_evidence_id() -> str:
     raise AssertionError("missing page-grounded decision evidence")
 
 
+def _http_ask_cases() -> tuple[dict, ...]:
+    path = ROOT / "tests/fixtures/uud/http_ask_cases.jsonl"
+    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
 class RuntimeHttpContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -140,76 +145,37 @@ class RuntimeHttpContractTest(unittest.TestCase):
                 os.environ["TJIPTO_MODE"] = old
 
     def test_uud_ask_examples(self) -> None:
-        ready = self._post("/legal/uud/ask", {"query": "Pasal 1 ayat (3)"})
-        self.assertEqual(ready["status"], "answer_ready")
-        self.assertEqual(ready["route"], "legal_reference")
-        self.assertEqual(ready["intent"], "exact_citation")
-        self.assertTrue(ready["citations"])
-        self.assertTrue(ready["viewer_refs"])
-        self.assertEqual(
-            set(ready),
-            {
-                "status",
-                "answer",
-                "intent",
-                "route",
-                "citations",
-                "viewer_refs",
-                "metadata_facts",
-                "legal_relations",
-                "answer_scope",
-                "warnings",
-                "insufficient_reasons",
-            },
-        )
-        for internal in ("matches", "context_pack", "evidence", "answer_type", "reason", "applied_filters"):
-            self.assertNotIn(internal, ready)
-        self.assertNotIn("source_sha256", ready["citations"][0])
-        self.assertNotIn("source_pdf_path", ready["citations"][0])
-        self.assertNotIn("source_sha256", ready["viewer_refs"][0])
-        self.assertNotIn("source_pdf_path", ready["viewer_refs"][0])
-
-        limited = self._post("/legal/uud/ask", {"query": "negara hukum"})
-        self.assertEqual(limited["status"], "limited_answer")
-        self.assertEqual(limited["route"], "lexical_fallback")
-        self.assertTrue(limited["citations"])
-        self.assertTrue(limited["viewer_refs"])
-
-        metadata = self._post("/legal/uud/ask", {"query": "tanggal perubahan kedua UUD"})
-        self.assertEqual(metadata["status"], "answer_ready")
-        self.assertEqual(metadata["route"], "metadata_fact")
-        self.assertEqual(metadata["metadata_facts"][0]["field"], "date")
-
-        place = self._post("/legal/uud/ask", {"query": "tempat penetapan perubahan kedua UUD"})
-        self.assertEqual(place["status"], "answer_ready")
-        self.assertEqual(place["route"], "metadata_fact")
-        self.assertEqual(place["metadata_facts"][0]["field"], "place")
-        self.assertEqual(place["metadata_facts"][0]["answer"], "Jakarta")
-
-        relation = self._post("/legal/uud/ask", {"query": "apa saja ayat dalam Pasal 1"})
-        self.assertEqual(relation["status"], "answer_ready")
-        self.assertEqual(relation["route"], "legal_relation")
-        self.assertEqual({row["target_label"] for row in relation["legal_relations"]}, {"(1)", "(2)", "(3)"})
-
-        unsupported_relation = self._post("/legal/uud/ask", {"query": "relasi amandemen Pasal 1"})
-        self.assertEqual(unsupported_relation["status"], "insufficient_evidence")
-        self.assertEqual(unsupported_relation["route"], "legal_relation")
-        self.assertEqual(unsupported_relation["intent"], "legal_relation_lookup")
-        self.assertEqual(unsupported_relation["citations"], [])
-        self.assertEqual(unsupported_relation["viewer_refs"], [])
-        self.assertEqual(unsupported_relation["insufficient_reasons"], ["insufficient_evidence"])
-
-        weak = self._post("/legal/uud/ask", {"query": "aturan KUHP tentang pencurian"})
-        self.assertEqual(weak["status"], "insufficient_evidence")
-        self.assertEqual(weak["route"], "lexical_fallback")
-        self.assertEqual(weak["citations"], [])
-        self.assertEqual(weak["viewer_refs"], [])
-
-        missing = self._post("/legal/uud/ask", {"query": "Pasal 999"})
-        self.assertEqual(missing["status"], "citation_not_found")
-        self.assertEqual(missing["route"], "legal_reference")
-        self.assertEqual(missing["citations"], [])
-        self.assertEqual(missing["viewer_refs"], [])
+        for case in _http_ask_cases():
+            result = self._post("/legal/uud/ask", {"query": case["query"]})
+            self.assertEqual(result["status"], case["status"], case["query"])
+            self.assertEqual(result["route"], case["route"], case["query"])
+            if "intent" in case:
+                self.assertEqual(result["intent"], case["intent"], case["query"])
+            if "has_citations" in case:
+                self.assertEqual(bool(result["citations"]), case["has_citations"], case["query"])
+            if "has_viewer_refs" in case:
+                self.assertEqual(bool(result["viewer_refs"]), case["has_viewer_refs"], case["query"])
+            if "public_keys" in case:
+                self.assertEqual(set(result), set(case["public_keys"]), case["query"])
+            for field in case.get("absent_top_level", ()):
+                self.assertNotIn(field, result, case["query"])
+            for field in case.get("absent_citation_fields", ()):
+                self.assertNotIn(field, result["citations"][0], case["query"])
+            for field in case.get("absent_viewer_ref_fields", ()):
+                self.assertNotIn(field, result["viewer_refs"][0], case["query"])
+            if "metadata_field" in case:
+                self.assertEqual(result["metadata_facts"][0]["field"], case["metadata_field"], case["query"])
+            if "metadata_answer" in case:
+                self.assertEqual(result["metadata_facts"][0]["answer"], case["metadata_answer"], case["query"])
+            if "relation_target_labels" in case:
+                self.assertEqual(
+                    {row["target_label"] for row in result["legal_relations"]},
+                    set(case["relation_target_labels"]),
+                    case["query"],
+                )
+            for field in ("citations", "viewer_refs", "insufficient_reasons"):
+                if field in case:
+                    self.assertEqual(result[field], case[field], case["query"])
 
     def test_local_dev_cors_only(self) -> None:
         request = Request(
