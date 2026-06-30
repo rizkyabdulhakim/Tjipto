@@ -14,6 +14,14 @@ from tjipto.runtime.viewer import resolve_pdf_access, viewer_payload
 
 _BOOKMARKS: dict[str, dict] = {}
 
+_ANSWER_TEMPLATES = {
+    "insufficient": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
+    "metadata": "{answer} (from grounded document metadata).",
+    "legal_relation": "Dukungan relasi hukum berbasis bukti tersedia; sistem tidak menghasilkan kesimpulan hukum.",
+    "citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum.",
+    "limited": "Dukungan bukti terbatas tersedia; sistem tidak menghasilkan kesimpulan hukum.",
+}
+
 
 class LegalRuntimeService:
     def __init__(self, repo_root: Path | None = None):
@@ -199,6 +207,7 @@ class LegalRuntimeService:
             return anomaly
         routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         ask_route = _ask_route(routed["route"])
+        templates = _answer_templates(store)
         if routed["status"] != "found":
             public_status = "insufficient_evidence" if routed.get("route") in {"metadata_not_found", "relation_not_found"} else routed["status"]
             context_pack = empty_context_pack(routed.get("reason") or routed["status"])
@@ -206,7 +215,7 @@ class LegalRuntimeService:
                 "status": public_status,
                 "route": ask_route,
                 "answer_type": "none",
-                "answer": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
+                "answer": templates["insufficient"],
                 "context_pack": context_pack,
                 "evidence": (),
                 "citations": (),
@@ -224,7 +233,7 @@ class LegalRuntimeService:
                 "status": "insufficient_evidence",
                 "route": ask_route,
                 "answer_type": "none",
-                "answer": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
+                "answer": templates["insufficient"],
                 "context_pack": context_pack,
                 "evidence": (),
                 "citations": (),
@@ -240,7 +249,7 @@ class LegalRuntimeService:
             "status": status,
             "route": ask_route,
             "answer_type": _answer_type(ask_route, status),
-            "answer": self._answer_text(status, evidence),
+            "answer": self._answer_text(status, evidence, templates),
             "context_pack": context_pack,
             "evidence": evidence,
             "citations": context_pack["citation_payloads"],
@@ -252,19 +261,24 @@ class LegalRuntimeService:
             "insufficient_reasons": (),
         }
 
-    def _answer_text(self, status: str, evidence: tuple[dict, ...]) -> str:
+    def _answer_text(self, status: str, evidence: tuple[dict, ...], templates: dict[str, str]) -> str:
         if evidence[0].get("metadata_answer"):
-            return f"{evidence[0]['metadata_answer']} (from grounded document metadata)."
+            return templates["metadata"].format(answer=evidence[0]["metadata_answer"])
         if evidence[0].get("legal_relation"):
-            return "Dukungan relasi hukum berbasis bukti tersedia; sistem tidak menghasilkan kesimpulan hukum."
+            return templates["legal_relation"]
         citation = evidence[0].get("label") or evidence[0].get("citation") or "evidence"
         if status == "answer_ready":
-            return f"Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum."
-        return "Dukungan bukti terbatas tersedia; sistem tidak menghasilkan kesimpulan hukum."
+            return templates["citation"].format(citation=citation)
+        return templates["limited"]
 
 
 def _empty_citation_fields() -> dict:
     return {"citation_payloads": (), "viewer_refs": (), "validation_reasons": {}}
+
+
+def _answer_templates(store) -> dict[str, str]:
+    configured = getattr(getattr(store, "config", None), "setting", lambda *args: {})("answer_templates", {})
+    return _ANSWER_TEMPLATES | dict(configured or {})
 
 
 def _search_result(row: dict, routed: dict, context_pack: dict) -> dict:

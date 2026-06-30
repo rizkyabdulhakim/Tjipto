@@ -43,6 +43,8 @@ class CorpusSpecContractTest(unittest.TestCase):
         aliases = config.setting("normalization_aliases")
         for alias in _expectations()["normalization_aliases"]:
             self.assertTrue(any(all(row.get(key) == value for key, value in alias.items()) for row in aliases))
+        for key, value in _expectations()["answer_templates"].items():
+            self.assertEqual(config.setting("answer_templates")[key], value)
 
     def test_uud_registry_owns_runtime_intent_terms(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")

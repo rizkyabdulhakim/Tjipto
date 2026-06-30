@@ -17,6 +17,7 @@
     "chunk_policy": {"direct_grounding": "text_span_exact"}
   },
   "normalization_aliases": [{"replacement": "UUD 1945"}],
+  "answer_templates": {"citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum."},
   "intent_config": {
     "document_target_words": ["uud"],
     "metadata_fields": ["penetapan"],

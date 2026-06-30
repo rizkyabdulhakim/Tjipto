@@ -26,6 +26,13 @@
       "amendment_3_historical",
       "amendment_4_historical"
     ],
+    "answer_templates": {
+      "insufficient": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
+      "metadata": "{answer} (from grounded document metadata).",
+      "legal_relation": "Dukungan relasi hukum berbasis bukti tersedia; sistem tidak menghasilkan kesimpulan hukum.",
+      "citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum.",
+      "limited": "Dukungan bukti terbatas tersedia; sistem tidak menghasilkan kesimpulan hukum."
+    },
     "schema": {
       "document_roles": [
         "current_consolidated",
