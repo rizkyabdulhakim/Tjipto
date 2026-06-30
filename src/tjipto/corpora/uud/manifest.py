@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import json
-import shutil
-import tempfile
-from collections.abc import Callable
 from pathlib import Path
 
-from tjipto.core.manifest import file_sha256, read_jsonl
+from tjipto.artifacts.manifest import refresh_manifest as refresh_artifact_manifest
 
 
 ARTIFACT_FILES = (
@@ -115,55 +111,10 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
     return manifest
 
 
-def write_json(path: Path, data: dict) -> None:
-    path.write_bytes((json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
-
-
-def write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.write_bytes("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows).encode("utf-8"))
-
-
 def refresh_manifest(final_dir: Path, manifest: dict) -> None:
-    counts = manifest.setdefault("counts", {})
-    for key, filename in COUNT_FILES:
-        path = final_dir / filename
-        if path.exists():
-            counts[key] = len(read_jsonl(path))
-        elif key in LEGACY_COUNTS:
-            counts[key] = LEGACY_COUNTS[key]
-    for rel in manifest["files"]:
-        path = final_dir / rel
-        if path.exists():
-            manifest["files"][rel]["bytes"] = path.stat().st_size
-            manifest["files"][rel]["sha256"] = file_sha256(path)
-    write_json(final_dir / "manifest.json", manifest)
-
-
-def atomic_promote_artifacts(
-    *,
-    final_dir: Path,
-    build: Callable[[Path], None],
-    validate: Callable[[Path], tuple[str, ...]],
-) -> None:
-    final_dir = final_dir.resolve()
-    with tempfile.TemporaryDirectory(prefix=".uud-stage-", dir=final_dir.parent) as tmp:
-        tmp_dir = Path(tmp)
-        stage_dir = tmp_dir / "stage"
-        snapshot_dir = tmp_dir / "snapshot"
-        shutil.copytree(final_dir, stage_dir)
-        shutil.copytree(final_dir, snapshot_dir)
-        build(stage_dir)
-        errors = validate(stage_dir)
-        if errors:
-            raise ValueError(";".join(errors))
-        promoted: list[str] = []
-        try:
-            for path in sorted(stage_dir.iterdir()):
-                if path.is_file():
-                    target = final_dir / path.name
-                    path.replace(target)
-                    promoted.append(path.name)
-        except Exception:
-            for name in promoted:
-                (snapshot_dir / name).replace(final_dir / name)
-            raise
+    refresh_artifact_manifest(
+        final_dir,
+        manifest,
+        count_files=COUNT_FILES,
+        legacy_counts=LEGACY_COUNTS,
+    )

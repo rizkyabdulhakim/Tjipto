@@ -5,7 +5,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tjipto.corpora.uud.manifest import atomic_promote_artifacts, write_jsonl
+from tjipto.artifacts.pipeline import atomic_promote_artifacts
+from tjipto.artifacts.writer import write_jsonl
 
 
 class AtomicArtifactWriterContractTest(unittest.TestCase):

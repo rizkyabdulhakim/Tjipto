@@ -14,7 +14,8 @@ from tjipto.corpora.uud.bbox_builder import (
 from tjipto.corpora.uud.compatibility_seed import load_compatibility_seed
 from tjipto.corpora.uud.evidence_builder import append_instrument_unit as append_instrument_record, rebuild_evidence
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
-from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest, write_json, write_jsonl
+from tjipto.artifacts.writer import write_json, write_jsonl
+from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest
 from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_assertions, build_metadata_block_grounding, build_metadata_graph_edges, rebuild_metadata_grounding
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
