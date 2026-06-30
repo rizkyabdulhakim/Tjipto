@@ -29,7 +29,7 @@ def route_retrieval(
     config = getattr(store, "config", None)
     query_strategy = getattr(config, "query_strategy", "generic")
     structured_strategy = getattr(config, "structured_strategy", "generic")
-    normalized = normalize_query(query, strategy=query_strategy)
+    normalized = normalize_query(query, strategy=query_strategy, config=config)
     filters = normalize_filters(metadata_filters, config=config)
     applied_filters = public_filters(filters)
     corpus_supported = store is not None

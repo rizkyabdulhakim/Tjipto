@@ -9,10 +9,9 @@ PASAL_LETTER_RE = re.compile(r"\bpasal\s+([0-9]+)\s+([a-z])\b", re.IGNORECASE)
 PASAL_SHORTHAND_AYAT_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\s*\(\s*([0-9]+)\s*\)", re.IGNORECASE)
 PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\b", re.IGNORECASE)
 AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
-UUD_45_RE = re.compile(r"\bu\s*u\s*d\s+45\b", re.IGNORECASE)
 
 
-def normalize_query(query: str, *, strategy: str = "uud_1945") -> dict:
+def normalize_query(query: str, *, strategy: str = "uud_1945", config=None) -> dict:
     original = query or ""
     normalized = original.strip()
     if strategy != "uud_1945":
@@ -20,7 +19,7 @@ def normalize_query(query: str, *, strategy: str = "uud_1945") -> dict:
             "original_query": original,
             "normalized_query": re.sub(r"\s+", " ", normalized).strip(),
         }
-    normalized = UUD_45_RE.sub("UUD 1945", normalized)
+    normalized = _apply_alias_rules(normalized, config)
     normalized = PASAL_LETTER_RE.sub(
         lambda match: f"Pasal {match.group(1)}{match.group(2).upper()}",
         normalized,
@@ -33,6 +32,14 @@ def normalize_query(query: str, *, strategy: str = "uud_1945") -> dict:
     normalized = AYAT_RE.sub(lambda match: f"ayat ({match.group(1)})", normalized)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     return {"original_query": original, "normalized_query": normalized}
+
+
+def _apply_alias_rules(text: str, config=None) -> str:
+    if config is None:
+        return text
+    for rule in config.setting("normalization_aliases", ()):
+        text = re.sub(rule["pattern"], rule["replacement"], text, flags=re.IGNORECASE)
+    return text
 
 
 def classify_intent(

@@ -16,6 +16,7 @@
     "source_conflict_types": ["article_renumbering_conflict"],
     "chunk_policy": {"direct_grounding": "text_span_exact"}
   },
+  "normalization_aliases": [{"replacement": "UUD 1945"}],
   "intent_config": {
     "document_target_words": ["uud"],
     "metadata_fields": ["penetapan"],

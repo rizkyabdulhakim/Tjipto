@@ -426,7 +426,8 @@ class RuntimeContractTest(unittest.TestCase):
     def test_query_normalization_and_intent_classification(self) -> None:
         for case in _query_intent_cases():
             if "normalized_query" in case:
-                result = normalize_query(case["query"], strategy=case.get("strategy", "uud_1945"))
+                config = CorpusRegistry(ROOT).resolve("uud") if case.get("use_config") else None
+                result = normalize_query(case["query"], strategy=case.get("strategy", "uud_1945"), config=config)
                 self.assertEqual(result["normalized_query"], case["normalized_query"], case["query"])
             if "intent" in case:
                 result = classify_intent(

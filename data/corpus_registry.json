@@ -4,6 +4,12 @@
     "query_strategy": "uud_1945",
     "structured_strategy": "uud_1945",
     "preferred_source_role": "current_consolidated",
+    "normalization_aliases": [
+      {
+        "pattern": "\\bu\\s*u\\s*d\\s+45\\b",
+        "replacement": "UUD 1945"
+      }
+    ],
     "source_roles": [
       "current_consolidated",
       "original_historical",
