@@ -65,7 +65,8 @@ class CorpusSpecContractTest(unittest.TestCase):
         for key, value in expected["source_role_labels"].items():
             self.assertEqual(intent["source_role_labels"][key], value)
         for key, value in expected["relation_routes"].items():
-            self.assertEqual(intent["relation_routes"][key], value)
+            for field, expected_value in value.items():
+                self.assertEqual(intent["relation_routes"][key][field], expected_value)
         for expected_section in expected["structured_sections"]:
             self.assertIn(expected_section, intent["structured_sections"])
         for field, values in expected["metadata_rules"].items():
@@ -84,6 +85,9 @@ class CorpusSpecContractTest(unittest.TestCase):
         )
         for value in _expectations()["generic_intent_source_absent"]:
             self.assertNotIn(value, source)
+        relation_source = (ROOT / "src/tjipto/retrieval/relations.py").read_text(encoding="utf-8")
+        for value in _expectations()["relation_source_absent"]:
+            self.assertNotIn(value, relation_source)
 
 
 if __name__ == "__main__":

@@ -73,9 +73,9 @@ def has_relation_target(query: str, *, strategy: str = "generic", config=None) -
         return True
     if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
         return True
-    if PASAL_RE.search(query or "") and "ayat" in folded:
+    if PASAL_RE.search(query or "") and _route_terms_match(intent, "pasal_children", folded):
         return _child_relation_requested(folded, intent)
-    if BAB_RE.search(query or "") and "pasal" in folded:
+    if BAB_RE.search(query or "") and _route_terms_match(intent, "bab_children", folded):
         return _child_relation_requested(folded, intent)
     return False
 
@@ -85,9 +85,9 @@ def _relation(query: str, *, strategy: str, config=None) -> str | None:
     intent = intent_config_for(strategy, config)
     if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
         return _route_name(intent, "parent")
-    if PASAL_RE.search(query or "") and "ayat" in folded:
+    if PASAL_RE.search(query or "") and _route_terms_match(intent, "pasal_children", folded):
         return _route_name(intent, "pasal_children")
-    if BAB_RE.search(query or "") and "pasal" in folded:
+    if BAB_RE.search(query or "") and _route_terms_match(intent, "bab_children", folded):
         return _route_name(intent, "bab_children")
     if _unsupported_relation_requested(query, folded, strategy=strategy, config=config):
         return _route_name(intent, "unsupported")
@@ -99,6 +99,12 @@ def _route_name(intent: dict, requested: str) -> str | None:
         if requested == route.get("mode"):
             return name
     return None
+
+
+def _route_terms_match(intent: dict, mode: str, folded: str) -> bool:
+    route = next((row for row in intent["relation_routes"].values() if row.get("mode") == mode), {})
+    terms = route.get("required_terms") or ()
+    return any(term in folded for term in terms)
 
 
 def _unsupported_relation_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
