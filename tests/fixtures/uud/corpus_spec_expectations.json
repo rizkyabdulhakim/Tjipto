@@ -18,6 +18,7 @@
   },
   "normalization_aliases": [{"replacement": "UUD 1945"}],
   "answer_templates": {"citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum."},
+  "viewer_source_status_labels": {"current_consolidated": "Berlaku (konsolidasi saat ini)"},
   "intent_config": {
     "document_target_words": ["uud"],
     "metadata_fields": ["penetapan"],

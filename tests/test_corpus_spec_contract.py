@@ -45,6 +45,8 @@ class CorpusSpecContractTest(unittest.TestCase):
             self.assertTrue(any(all(row.get(key) == value for key, value in alias.items()) for row in aliases))
         for key, value in _expectations()["answer_templates"].items():
             self.assertEqual(config.setting("answer_templates")[key], value)
+        for key, value in _expectations()["viewer_source_status_labels"].items():
+            self.assertEqual(config.setting("viewer_source_status_labels")[key], value)
 
     def test_uud_registry_owns_runtime_intent_terms(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")

@@ -4,6 +4,13 @@ from urllib.parse import quote, urlencode
 
 from tjipto.core.manifest import file_sha256
 
+_SOURCE_STATUS_LABELS = {
+    "current_consolidated": "Berlaku (konsolidasi saat ini)",
+    "amendment_*": "Historis (sumber perubahan)",
+    "original_historical": "Historis (naskah asli)",
+    "default": "Status sumber tidak tersedia",
+}
+
 
 def viewer_payload(
     store,
@@ -16,7 +23,7 @@ def viewer_payload(
     bbox_id: str | None = None,
     source_pdf_path: str | None = None,
 ) -> dict:
-    base = _base_payload(corpus_id, evidence, bboxes)
+    base = _base_payload(store, corpus_id, evidence, bboxes)
     pdf = resolve_pdf_access(
         store,
         corpus_id,
@@ -96,7 +103,7 @@ def resolve_pdf_access(
     }
 
 
-def _base_payload(corpus_id: str, evidence: dict, bboxes: list[dict]) -> dict:
+def _base_payload(store, corpus_id: str, evidence: dict, bboxes: list[dict]) -> dict:
     return {
         "status": "viewer_payload_ready",
         "corpus_id": corpus_id,
@@ -107,7 +114,7 @@ def _base_payload(corpus_id: str, evidence: dict, bboxes: list[dict]) -> dict:
         "quoted_text": evidence["quoted_text"],
         "source_role": evidence.get("source_role"),
         "temporal_context": evidence.get("temporal_context"),
-        "source_status_label": _source_status_label(evidence),
+        "source_status_label": _source_status_label(evidence, store),
         "page_numbers": evidence["page_numbers"],
         "bbox_count": len(bboxes),
         "bbox_rectangles": tuple(bboxes),
@@ -184,12 +191,14 @@ def _pdf_access_url(corpus_id: str, evidence: dict, page_number: int, bbox_id: s
     return f"/legal/{quote(corpus_id, safe='')}/pdf?{urlencode(query)}"
 
 
-def _source_status_label(evidence: dict) -> str:
+def _source_status_label(evidence: dict, store=None) -> str:
     role = str(evidence.get("source_role") or evidence.get("temporal_context") or "")
-    if role == "current_consolidated":
-        return "Berlaku (konsolidasi saat ini)"
+    labels = _SOURCE_STATUS_LABELS | dict(
+        getattr(getattr(store, "config", None), "setting", lambda *args: {})("viewer_source_status_labels", {})
+        or {}
+    )
+    if role in labels:
+        return labels[role]
     if role.startswith("amendment_"):
-        return "Historis (sumber perubahan)"
-    if role == "original_historical":
-        return "Historis (naskah asli)"
-    return "Status sumber tidak tersedia"
+        return labels["amendment_*"]
+    return labels["default"]

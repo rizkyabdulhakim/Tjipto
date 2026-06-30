@@ -33,6 +33,12 @@
       "citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum.",
       "limited": "Dukungan bukti terbatas tersedia; sistem tidak menghasilkan kesimpulan hukum."
     },
+    "viewer_source_status_labels": {
+      "current_consolidated": "Berlaku (konsolidasi saat ini)",
+      "amendment_*": "Historis (sumber perubahan)",
+      "original_historical": "Historis (naskah asli)",
+      "default": "Status sumber tidak tersedia"
+    },
     "schema": {
       "document_roles": [
         "current_consolidated",
