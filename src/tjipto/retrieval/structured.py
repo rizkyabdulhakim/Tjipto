@@ -73,7 +73,7 @@ def _instrument_rows(
             if not (citation.startswith("Perubahan ") and "Clause" in citation):
                 continue
             text = str(row.get("quoted_text") or "")
-            if target.casefold() in text.casefold() and ("hapus" in text.casefold() or "penghapusan" in text.casefold()):
+            if target.casefold() in text.casefold() and any(word in text.casefold() for word in intent["instrument_deletion_evidence_words"]):
                 matches.append(_candidate(row, "instrument_clause_candidate"))
         return tuple(matches[:limit])
     if role is None:

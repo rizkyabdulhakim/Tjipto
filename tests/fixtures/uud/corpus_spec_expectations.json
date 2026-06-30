@@ -24,6 +24,7 @@
     "relation_child_words": ["apa saja"],
     "instrument_scope_queries": ["mengubah pasal apa"],
     "instrument_deletion_words": ["dihapus"],
+    "instrument_deletion_evidence_words": ["hapus"],
     "instrument_change_context_words": ["perubahan"],
     "source_role_labels": {"amendment_4_historical": "Keempat"},
     "structured_sections": [{"target": "aturan tambahan", "aliases": ["aturan tambahan"], "with_pasal": true}],

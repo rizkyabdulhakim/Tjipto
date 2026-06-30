@@ -281,6 +281,10 @@
         "dihapus",
         "penghapusan"
       ],
+      "instrument_deletion_evidence_words": [
+        "hapus",
+        "penghapusan"
+      ],
       "instrument_change_context_words": [
         "perubahan"
       ],

@@ -52,6 +52,7 @@ class CorpusSpecContractTest(unittest.TestCase):
             "relation_child_words",
             "instrument_scope_queries",
             "instrument_deletion_words",
+            "instrument_deletion_evidence_words",
             "instrument_change_context_words",
             "unsupported_relation_context_words",
         ):
