@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import re
 
-from tjipto.corpora.uud.legal_unit_builder import CHUNK_STARTS, SOURCE_ORDER
-from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
+from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, UUD_CHUNK_ID_STARTS, UUD_LEGAL_UNIT_SOURCE_ORDER
 
 
 def build_chunks_from_legal_units(legal_units: list[dict]) -> list[dict]:
-    by_source = {source_id: 0 for source_id in SOURCE_ORDER}
+    by_source = {source_id: 0 for source_id in UUD_LEGAL_UNIT_SOURCE_ORDER}
     excluded = {row["legacy_chunk_id"]: row for row in EXCLUDED_RECORD_SPECS}
     rows = []
     for unit in _chunk_ordered_units(legal_units):
@@ -43,7 +42,7 @@ def build_chunks_from_legal_units(legal_units: list[dict]) -> list[dict]:
 
 
 def _chunk_ordered_units(legal_units: list[dict]) -> list[dict]:
-    source_rank = {source_id: index for index, source_id in enumerate(SOURCE_ORDER)}
+    source_rank = {source_id: index for index, source_id in enumerate(UUD_LEGAL_UNIT_SOURCE_ORDER)}
     return sorted(
         legal_units,
         key=lambda row: (
@@ -57,7 +56,7 @@ def _chunk_number(source_id: str, source_index: int, unit: dict) -> int:
     legal_number = int(unit["legal_unit_id"].rsplit("_", 1)[1])
     if legal_number >= 610:
         return legal_number
-    return CHUNK_STARTS[source_id] + source_index
+    return UUD_CHUNK_ID_STARTS[source_id] + source_index
 
 
 def _chunk_type(unit: dict) -> str:

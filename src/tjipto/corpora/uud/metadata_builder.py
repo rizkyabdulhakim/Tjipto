@@ -179,8 +179,12 @@ def rebuild_metadata_grounding(
     bboxes_by_evidence: dict[str, list[dict]] = defaultdict(list)
     for row in bbox_rows:
         bboxes_by_evidence[row["evidence_id"]].append(row)
+    source_role_by_id = {
+        row["source_document_id"]: row["source_role"]
+        for row in document_metadata
+    }
     units_by_key = {
-        (row["source_document_id"].split("::", 1)[1], row.get("unit_label")): row
+        (source_role_by_id[row["source_document_id"]], row.get("unit_label")): row
         for row in legal_units
     }
     block_rows = [
@@ -196,7 +200,7 @@ def rebuild_metadata_grounding(
     block_registry_rows = [_block_registry_row(row) for row in block_rows]
     source_conflicts_by_role: dict[str, list[dict]] = defaultdict(list)
     for row in source_conflicts:
-        source_conflicts_by_role[row["source_document_id"].split("::", 1)[1]].append(row)
+        source_conflicts_by_role[source_role_by_id[row["source_document_id"]]].append(row)
     field_rows: list[dict] = []
     field_registry_rows: list[dict] = []
 

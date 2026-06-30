@@ -120,8 +120,8 @@
       "sha256": "e63f75eb5e83609112fc41f4c8f1f10f0fdb455ee167237a44f8bfa25b9cb4d7"
     },
     "page_text_spans.jsonl": {
-      "bytes": 1366315,
-      "sha256": "dc42279a8efd6e011fc4f90b96a37b257253724a24e360c2b7b848bc3964cb13"
+      "bytes": 1464117,
+      "sha256": "f48d357aa21e255050c7a1ee29bea3197f029a233d06bbd73f0adf46f08e8c3c"
     }
   },
   "fixtures": {

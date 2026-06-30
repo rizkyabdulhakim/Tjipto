@@ -90,6 +90,36 @@ PAGE_ID_PREFIXES = {
 }
 
 
+UUD_LEGAL_UNIT_SOURCE_ORDER = (
+    "uud::amendment_1_historical",
+    "uud::amendment_2_historical",
+    "uud::amendment_3_historical",
+    "uud::amendment_4_historical",
+    "uud::current_consolidated",
+    "uud::original_historical",
+)
+
+
+UUD_LEGAL_UNIT_ID_STARTS = {
+    "uud::amendment_1_historical": 379,
+    "uud::amendment_2_historical": 401,
+    "uud::amendment_3_historical": 480,
+    "uud::amendment_4_historical": 567,
+    "uud::current_consolidated": 1,
+    "uud::original_historical": 268,
+}
+
+
+UUD_CHUNK_ID_STARTS = {
+    "uud::amendment_1_historical": 1,
+    "uud::amendment_2_historical": 23,
+    "uud::amendment_3_historical": 102,
+    "uud::amendment_4_historical": 189,
+    "uud::current_consolidated": 232,
+    "uud::original_historical": 499,
+}
+
+
 INSERTED_BAB_SPECS = (
     {
         "source_document_id": "uud::current_consolidated",

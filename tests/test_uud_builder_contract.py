@@ -52,6 +52,30 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertIn("tjipto.ingestion.pdf.text_spans", spans_source)
         self.assertIn("tjipto.ingestion.pdf.bbox", bbox_source)
 
+    def test_uud_policy_lives_in_specs_and_parser(self) -> None:
+        legal_unit_source = (ROOT / "src/tjipto/corpora/uud/legal_unit_builder.py").read_text(encoding="utf-8")
+        specs_source = (ROOT / "src/tjipto/corpora/uud/specs.py").read_text(encoding="utf-8")
+        parser_source = (ROOT / "src/tjipto/corpora/uud/parser.py").read_text(encoding="utf-8")
+        for name in ("SOURCE_ORDER", "LEGAL_STARTS", "CHUNK_STARTS", "TOKEN_RE"):
+            self.assertNotIn(f"{name} =", legal_unit_source)
+        self.assertIn("UUD_LEGAL_UNIT_SOURCE_ORDER", specs_source)
+        self.assertIn("UUD_LEGAL_UNIT_ID_STARTS", specs_source)
+        self.assertIn("UUD_CHUNK_ID_STARTS", specs_source)
+        self.assertIn("UUD_LEGAL_TOKEN_RE", parser_source)
+
+    def test_uud_builders_do_not_derive_source_role_from_source_id_shape(self) -> None:
+        for relative_path in (
+            "src/tjipto/corpora/uud/evidence_bbox_builder.py",
+            "src/tjipto/corpora/uud/evidence_builder.py",
+            "src/tjipto/corpora/uud/graph_builder.py",
+            "src/tjipto/corpora/uud/metadata_builder.py",
+            "src/tjipto/corpora/uud/retrieval_builder.py",
+            "src/tjipto/ingestion/pdf/text_spans.py",
+        ):
+            source = (ROOT / relative_path).read_text(encoding="utf-8")
+            self.assertNotIn('.split("::"', source, relative_path)
+            self.assertNotIn(".split('::'", source, relative_path)
+
     def test_builder_does_not_use_compatibility_seed_as_active_input(self) -> None:
         source = (ROOT / "src/tjipto/corpora/uud_artifact_baseline.py").read_text(encoding="utf-8")
         seed = (ROOT / "src/tjipto/corpora/uud/compatibility_seed.py").read_text(encoding="utf-8")

@@ -37,10 +37,12 @@ def apply_chunk_grounding(
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     evidence_by_unit: dict[str, list[dict]] = defaultdict(list)
     spans_by_page: dict[tuple[str, int], list[dict]] = defaultdict(list)
+    source_meta = {}
     for row in evidence:
         evidence_by_unit[row["legal_unit_id"]].append(row)
     for row in page_text_spans:
         spans_by_page[(row["source_document_id"], row["page_number"])].append(row)
+        source_meta.setdefault(row["source_document_id"], row)
     for chunk in chunks:
         unit = units_by_id[chunk["legal_unit_id"]]
         page_range = chunk["page_range"]
@@ -60,8 +62,9 @@ def apply_chunk_grounding(
         unit_evidence = evidence_by_unit.get(unit["legal_unit_id"], [])
         page_numbers = list(range(unit["page_start"], unit["page_end"] + 1))
         text_span_ids = _text_span_ids_for_text(spans_by_page, unit["source_document_id"], page_numbers, unit["text"])
-        unit["source_role"] = unit["source_document_id"].split("::", 1)[1]
-        unit["temporal_context"] = unit["source_role"]
+        source = source_meta[unit["source_document_id"]]
+        unit["source_role"] = source["source_role"]
+        unit["temporal_context"] = source.get("temporal_context", unit["source_role"])
         unit["page_numbers"] = page_numbers
         unit["text_span_ids"] = text_span_ids
         unit["bbox_ids"] = [bbox_id for row in unit_evidence for bbox_id in row.get("bbox_refs") or ()]

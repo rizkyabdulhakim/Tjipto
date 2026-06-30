@@ -24,9 +24,10 @@ def build_evidence_and_bboxes(
         unit = units_by_id[chunk["legal_unit_id"]]
         if unit["unit_type"] == "effective_clause_record":
             continue
-        evidence_id, next_instrument_id = _evidence_id(chunk, unit, next_instrument_id)
         source_id = unit["source_document_id"]
         source_meta = source_documents[source_id]
+        source_role = source_meta["source_role"]
+        evidence_id, next_instrument_id = _evidence_id(chunk, unit, source_role, next_instrument_id)
         bbox_records = build_bbox_rows(
             evidence_id=evidence_id,
             source_meta=source_meta,
@@ -37,7 +38,6 @@ def build_evidence_and_bboxes(
             line_entries=pdf_lines_by_source[source_id],
         )
         quoted_text = "\n".join(row["text"] for row in bbox_records)
-        source_role = source_id.split("::", 1)[1]
         evidence.append({
             "bbox_refs": [row["bbox_id"] for row in bbox_records],
             "bbox_precision": aggregate_bbox_precision(bbox_records),
@@ -54,7 +54,7 @@ def build_evidence_and_bboxes(
             "source_role": source_role,
             "source_sha256": source_meta["sha256"],
             "status": "final",
-            "temporal_context": source_role,
+            "temporal_context": source_meta.get("temporal_context", source_role),
             "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
         })
         bbox_rows.extend(bbox_records)
@@ -72,8 +72,7 @@ def build_evidence_and_bboxes(
     return evidence, bbox_rows
 
 
-def _evidence_id(chunk: dict, unit: dict, next_instrument_id: int) -> tuple[str, int]:
-    source_role = unit["source_document_id"].split("::", 1)[1]
+def _evidence_id(chunk: dict, unit: dict, source_role: str, next_instrument_id: int) -> tuple[str, int]:
     if unit["unit_type"] in {
         "amendment_recital_record",
         "amendment_scope_record",

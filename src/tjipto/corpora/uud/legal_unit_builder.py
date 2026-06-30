@@ -5,37 +5,9 @@ import re
 import unicodedata
 
 from tjipto.corpora.uud.anomaly_builder import append_amendment_instrument_units
-from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, INSERTED_BAB_SPECS
+from tjipto.corpora.uud.parser import UUD_LEGAL_TOKEN_RE
+from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, INSERTED_BAB_SPECS, UUD_LEGAL_UNIT_ID_STARTS, UUD_LEGAL_UNIT_SOURCE_ORDER, UUD_CHUNK_ID_STARTS
 from tjipto.corpora.uud.structure_builder import page_span_for_text, slice_between, trim_before
-
-
-SOURCE_ORDER = (
-    "uud::amendment_1_historical",
-    "uud::amendment_2_historical",
-    "uud::amendment_3_historical",
-    "uud::amendment_4_historical",
-    "uud::current_consolidated",
-    "uud::original_historical",
-)
-LEGAL_STARTS = {
-    "uud::amendment_1_historical": 379,
-    "uud::amendment_2_historical": 401,
-    "uud::amendment_3_historical": 480,
-    "uud::amendment_4_historical": 567,
-    "uud::current_consolidated": 1,
-    "uud::original_historical": 268,
-}
-CHUNK_STARTS = {
-    "uud::amendment_1_historical": 1,
-    "uud::amendment_2_historical": 23,
-    "uud::amendment_3_historical": 102,
-    "uud::amendment_4_historical": 189,
-    "uud::current_consolidated": 232,
-    "uud::original_historical": 499,
-}
-TOKEN_RE = re.compile(
-    r"(?m)^(BAB\s+[IVXLCDM]+[A-Z]?|ATURAN PERALIHAN|ATURAN TAMBAHAN|PEMBUKAAN|Pasal\s+(?:[0-9]+[A-Z]?|[IVX]+)|\([0-9]+\)|UNDANG-?UNDANG DASAR)"
-)
 
 
 def build_legal_units_from_sources(
@@ -45,7 +17,7 @@ def build_legal_units_from_sources(
 ) -> list[dict]:
     rows: list[dict] = []
     chunk_by_unit: dict[str, str] = {}
-    for source_id in SOURCE_ORDER:
+    for source_id in UUD_LEGAL_UNIT_SOURCE_ORDER:
         _append_source_units(source_id, pages_by_source, source_documents, rows, chunk_by_unit)
     _append_inserted_bab_units(pages_by_source, source_documents, rows)
     _append_instrument_units(pages_by_source, source_documents, rows)
@@ -62,7 +34,7 @@ def _append_source_units(
 ) -> None:
     source_meta = source_documents[source_id]
     source_text, page_ranges = _source_text(source_id, pages_by_source)
-    tokens = list(TOKEN_RE.finditer(source_text))
+    tokens = list(UUD_LEGAL_TOKEN_RE.finditer(source_text))
     skipped_babs = {spec["label"] for spec in INSERTED_BAB_SPECS if spec["source_document_id"] == source_id}
     inserted_children = {
         spec["label"]: set(spec["child_labels"])
@@ -91,8 +63,8 @@ def _append_source_units(
         end = _unit_end(source_text, tokens, index, unit_type)
         text = source_text[token.start():end]
         page_start, page_end = _span_pages(token.start(), end, page_ranges)
-        legal_id = f"uud_legal_unit_{LEGAL_STARTS[source_id] + source_count:05d}"
-        chunk_id = f"uud_chunk_{CHUNK_STARTS[source_id] + source_count:05d}"
+        legal_id = f"uud_legal_unit_{UUD_LEGAL_UNIT_ID_STARTS[source_id] + source_count:05d}"
+        chunk_id = f"uud_chunk_{UUD_CHUNK_ID_STARTS[source_id] + source_count:05d}"
         source_count += 1
         if unit_type == "pembukaan_record":
             label = "PEMBUKAAN/Preambule"

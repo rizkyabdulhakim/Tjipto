@@ -11,7 +11,8 @@ def build_pdf_text_spans(
     rows: list[dict] = []
     for source_id, pages in sorted(pdf_lines.items()):
         source = source_documents[source_id]
-        source_role = source_id.split("::", 1)[1]
+        source_role = source["source_role"]
+        temporal_context = source.get("temporal_context", source_role)
         for page_number, lines in sorted(pages.items()):
             for index, line in enumerate(lines):
                 rows.append({
@@ -24,6 +25,7 @@ def build_pdf_text_spans(
                     "source_role": source_role,
                     "source_sha256": source["sha256"],
                     "status": "accepted_text_span",
+                    "temporal_context": temporal_context,
                     "text": line["text"],
                     "text_span_id": f"{text_span_id_prefix}::{source_role}::{page_number:04d}::{index:04d}",
                     "viewer_highlightable": False,

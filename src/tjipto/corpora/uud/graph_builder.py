@@ -48,7 +48,7 @@ def build_graph_artifacts(
         })
 
     for row in source_documents:
-        source_role = row["source_document_id"].split("::", 1)[1]
+        source_role = row["source_role"]
         add_node(
             f"source_role::{source_role}",
             node_type="source_role",
@@ -73,12 +73,12 @@ def build_graph_artifacts(
             source_document_id=row["source_document_id"],
             source_pdf=source_meta["filename"],
             source_pdf_path=source_meta["path"],
-            source_role=row["source_document_id"].split("::", 1)[1],
+            source_role=source_meta["source_role"],
             source_sha256=source_meta["sha256"],
         )
 
     for row in legal_units:
-        source_role = row["source_document_id"].split("::", 1)[1]
+        source_role = row.get("source_role") or source_by_id[row["source_document_id"]]["source_role"]
         node_id = f"legal_unit::{row['legal_unit_id']}"
         unit_node_ids[row["legal_unit_id"]] = node_id
         add_node(
@@ -107,6 +107,7 @@ def build_graph_artifacts(
         )
 
     for row in bbox_rows:
+        source_meta = source_by_id[row["source_document_id"]]
         add_node(
             f"bbox::{row['bbox_id']}",
             node_type="bbox",
@@ -118,7 +119,7 @@ def build_graph_artifacts(
             source_document_id=row["source_document_id"],
             source_pdf=row["source_pdf"],
             source_pdf_path=row["source_pdf_path"],
-            source_role=row["source_document_id"].split("::", 1)[1],
+            source_role=source_meta["source_role"],
             source_sha256=row["source_sha256"],
         )
 
@@ -133,12 +134,13 @@ def build_graph_artifacts(
         )
 
     for row in source_conflicts:
+        source_meta = source_by_id[row["source_document_id"]]
         add_node(
             f"source_conflict::{row['source_conflict_id']}",
             node_type="source_conflict",
             source_conflict_id=row["source_conflict_id"],
             source_document_id=row["source_document_id"],
-            source_role=row["source_document_id"].split("::", 1)[1],
+            source_role=source_meta["source_role"],
             conflict_type=row["type"],
             classification=row["classification"],
             runtime_loadable=False,
@@ -265,7 +267,7 @@ def build_graph_artifacts(
             )
 
     for row in source_conflicts:
-        role = row["source_document_id"].split("::", 1)[1]
+        role = source_by_id[row["source_document_id"]]["source_role"]
         add_edge(
             f"source_role::{role}",
             f"source_conflict::{row['source_conflict_id']}",

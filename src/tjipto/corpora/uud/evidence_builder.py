@@ -51,7 +51,8 @@ def append_instrument_unit(
     legal_unit_id = allocate_legal_id()
     chunk_id = allocate_chunk_id()
     source_meta = source_documents[source_id]
-    source_role = source_id.split("::", 1)[1]
+    source_role = source_meta["source_role"]
+    temporal_context = source_meta.get("temporal_context", source_role)
     unit = {
         "corpus_id": "uud",
         "hierarchy": hierarchy or [],
@@ -119,7 +120,7 @@ def append_instrument_unit(
         "source_role": source_role,
         "source_sha256": source_meta["sha256"],
         "status": "final",
-        "temporal_context": source_role,
+        "temporal_context": temporal_context,
         "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
     }
     evidence.append(evidence_row)
@@ -138,7 +139,7 @@ def append_instrument_unit(
         "source_role": source_role,
         "source_sha256": source_meta["sha256"],
         "status": "accepted",
-        "temporal_context": source_role,
+        "temporal_context": temporal_context,
         "text": retrieval_text(unit_label, hierarchy or [], quoted_text),
     })
     return legal_unit_id
