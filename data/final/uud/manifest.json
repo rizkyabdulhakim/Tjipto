@@ -196,16 +196,16 @@
       "origin_reason": "human-reviewed exception records preserved for audit and validation context",
       "producer": "manual_review",
       "build_stage": "manual_review",
-      "bytes": 18622,
-      "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
+      "bytes": 18794,
+      "sha256": "c841d105c99eef59d75e6a817f45539cd9f31301ed04535ef508d742a92a2e55"
     },
     "validation_report.json": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 5500,
-      "sha256": "563032724cdf440a75193889cf2a86f13a104d60ccdd182da111c853e71feae9"
+      "bytes": 5835,
+      "sha256": "d859793e390316696c31f82ed0e300ad31e9aa69d7bfecbf90ccbb7e7202e61e"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

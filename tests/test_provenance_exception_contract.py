@@ -107,6 +107,41 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
 
     def test_unresolved_needs_review_count_is_zero_or_explicitly_tracked(self) -> None:
         self.assertEqual(self.report["provenance_exception_health"]["unresolved_needs_review_count"], 0)
+        unresolved = [
+            row
+            for row in read_jsonl(FINAL / "validation_exceptions.jsonl")
+            if row.get("status") == "unresolved_manual_review_required"
+        ]
+        self.assertFalse(unresolved)
+
+    def test_validation_exception_source_conflict_is_reviewed_nonruntime(self) -> None:
+        row = next(
+            row
+            for row in read_jsonl(FINAL / "validation_exceptions.jsonl")
+            if row["exception_id"] == "excluded_conflict_scope::uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict_v1"
+        )
+        self.assertEqual(row["status"], ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY)
+        self.assertFalse(row["runtime_loadable"])
+        self.assertFalse(row["canonical_use_allowed"])
+        self.assertNotIn("evidence_id", row)
+        self.assertNotIn("bbox_id", row)
+        self.assertNotIn("text_span_id", row)
+
+    def test_all_text_disposition_health_is_reported_without_fake_classification(self) -> None:
+        spans = read_jsonl(FINAL / "page_text_spans.jsonl")
+        referenced = {
+            span_id
+            for row in (*self.units.values(), *self.chunks.values())
+            for span_id in row.get("text_span_ids") or ()
+        }
+        health = self.report["all_text_disposition_health"]
+        self.assertEqual(health["page_text_span_count"], len(spans))
+        self.assertEqual(health["span_disposition_present_count"], 0)
+        self.assertEqual(health["span_disposition_missing_count"], len(spans))
+        self.assertEqual(health["known_unreferenced_span_count"], len({row["text_span_id"] for row in spans} - referenced))
+        self.assertEqual(health["promotion_status_present_count"], 0)
+        self.assertEqual(health["legal_force_present_count"], 0)
+        self.assertEqual(health["status"], "not_started")
 
     def test_artifact_rebuild_is_idempotent(self) -> None:
         self.assertEqual(read_json(FINAL / "manifest.json")["files"]["validation_report.json"]["origin"], "generated")

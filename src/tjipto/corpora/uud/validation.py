@@ -12,6 +12,7 @@ from tjipto.corpora.uud.provenance_exceptions import (
     DUPLICATED_HEADING_ARTIFACT_ISSUE_CONFIRMED,
     SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
     UNRESOLVED_NEEDS_REVIEW,
+    UNRESOLVED_MANUAL_REVIEW_REQUIRED,
     needs_review,
     review_category,
 )
@@ -134,6 +135,11 @@ def build_validation_report(
         legal_units,
         source_conflicts,
     )
+    validation_report["all_text_disposition_health"] = _all_text_disposition_health(
+        page_text_spans,
+        legal_units,
+        chunks,
+    )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
@@ -186,6 +192,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     graph_nodes = read_jsonl(final_dir / "graph_nodes.jsonl")
     graph_edges = read_jsonl(final_dir / "graph_edges.jsonl")
     source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
+    validation_exceptions = read_jsonl(final_dir / "validation_exceptions.jsonl")
     page_text_spans = read_jsonl(final_dir / "page_text_spans.jsonl") if (final_dir / "page_text_spans.jsonl").exists() else []
 
     errors: list[str] = []
@@ -363,6 +370,13 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"noncanonical_conflict_trace_runtime_loadable:{row['source_conflict_id']}")
             if row.get("canonical_use_allowed") is True:
                 errors.append(f"noncanonical_conflict_trace_canonical_use_allowed:{row['source_conflict_id']}")
+    uncounted_unresolved_exceptions = [
+        row
+        for row in validation_exceptions
+        if row.get("status") == UNRESOLVED_MANUAL_REVIEW_REQUIRED
+    ]
+    for row in uncounted_unresolved_exceptions:
+        errors.append(f"unresolved_validation_exception:{row['exception_id']}")
     for row in metadata_grounding:
         if row.get("viewer_highlightable") is not False:
             errors.append(f"metadata_grounding_highlightable_not_clarified:{row['metadata_grounding_id']}")
@@ -459,6 +473,26 @@ def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox
         "unresolved_exact_metadata_bbox_rows": len(unresolved_exact),
         "page_grounded_only_metadata_rows": len(page_rows),
         "metadata_bbox_false_exact_claims": len(unresolved_exact),
+    }
+
+
+def _all_text_disposition_health(page_text_spans: list[dict], legal_units: list[dict], chunks: list[dict]) -> dict:
+    referenced_span_ids = {
+        text_span_id
+        for row in (*legal_units, *chunks)
+        for text_span_id in row.get("text_span_ids") or ()
+    }
+    span_ids = {row["text_span_id"] for row in page_text_spans}
+    disposition_keys = ("legal_disposition", "span_disposition", "disposition")
+    return {
+        "page_text_span_count": len(page_text_spans),
+        "span_disposition_present_count": sum(1 for row in page_text_spans if any(key in row for key in disposition_keys)),
+        "span_disposition_missing_count": sum(1 for row in page_text_spans if not any(key in row for key in disposition_keys)),
+        "known_unreferenced_span_count": len(span_ids - referenced_span_ids),
+        "promotion_status_present_count": sum(1 for row in page_text_spans if "promotion_status" in row),
+        "legal_force_present_count": sum(1 for row in page_text_spans if "legal_force" in row),
+        "needs_review_count": sum(1 for row in page_text_spans if row.get("disposition") == UNRESOLVED_NEEDS_REVIEW),
+        "status": "not_started" if page_text_spans else "empty",
     }
 
 

@@ -6,6 +6,7 @@ BUILDER_SLICING_LABEL_ISSUE_CONFIRMED = "builder_slicing_label_issue_confirmed"
 DUPLICATED_HEADING_ARTIFACT_ISSUE_CONFIRMED = "duplicated_heading_artifact_issue_confirmed"
 SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX = "source_text_accepted_nonruntime_no_evidence_bbox"
 UNRESOLVED_NEEDS_REVIEW = "unresolved_needs_review"
+UNRESOLVED_MANUAL_REVIEW_REQUIRED = "unresolved_manual_review_required"
 
 NONCANONICAL_SOURCE_TYPO_REF = "source_typo_reference::uud_source_typo_reference_00001"
 SEGMENTATION_BOUNDARY_LABELS = {
