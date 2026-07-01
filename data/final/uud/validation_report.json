@@ -111,6 +111,15 @@
     "source_conflict_runtime_or_canonical_count": 0,
     "status": "complete"
   },
+  "instrument_runtime_safety_health": {
+    "nonruntime_evidence_public_answerable_count": 0,
+    "page_grounded_only_answer_evidence_count": 0,
+    "nonhighlightable_viewer_resolvable_count": 0,
+    "retrieval_units_accepted_for_nonruntime_chunks_count": 0,
+    "retrieval_units_accepted_for_page_grounded_only_evidence_count": 0,
+    "instrument_records_unresolved_count": 0,
+    "status": "complete"
+  },
   "artifact_origin_health": {
     "manifest_file_rows": 23,
     "files_with_origin": 23,

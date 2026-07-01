@@ -150,6 +150,12 @@ def build_validation_report(
         legal_units,
         source_conflicts,
     )
+    validation_report["instrument_runtime_safety_health"] = _instrument_runtime_safety_health(
+        evidence,
+        legal_units,
+        chunks,
+        retrieval_units,
+    )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
@@ -379,6 +385,12 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"semantic_precedence_{key}:{value}")
     if semantic_precedence["status"] != "complete":
         errors.append("semantic_precedence_incomplete")
+    instrument_safety = _instrument_runtime_safety_health(evidence, legal_units, chunks, retrieval_units)
+    for key, value in instrument_safety.items():
+        if key.endswith("_count") and value:
+            errors.append(f"instrument_runtime_safety_{key}:{value}")
+    if instrument_safety["status"] != "complete":
+        errors.append("instrument_runtime_safety_incomplete")
     for row in retrieval_units:
         if row["retrieval_unit_id"] in seen_ids["retrieval_unit_id"]:
             errors.append(f"duplicate_retrieval_unit_id:{row['retrieval_unit_id']}")
@@ -623,6 +635,65 @@ def _semantic_precedence_health(page_text_spans: list[dict], legal_units: list[d
         "source_conflict_runtime_or_canonical_count": len(source_conflict_runtime_or_canonical),
     }
     return {**counts, "status": "complete" if page_text_spans and not any(counts.values()) else "incomplete"}
+
+
+def _instrument_runtime_safety_health(
+    evidence: list[dict],
+    legal_units: list[dict],
+    chunks: list[dict],
+    retrieval_units: list[dict],
+) -> dict:
+    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
+    evidence_by_id = {row["evidence_id"]: row for row in evidence}
+    accepted_retrieval = [row for row in retrieval_units if row.get("status") == "accepted"]
+    accepted_evidence_ids = {row["evidence_id"] for row in accepted_retrieval}
+    nonruntime_accepted = [
+        row
+        for row in evidence
+        if row["evidence_id"] in accepted_evidence_ids
+        and (
+            units_by_id.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
+            or chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
+        )
+    ]
+    page_grounded_accepted = [
+        row for row in evidence if row["evidence_id"] in accepted_evidence_ids and row.get("bbox_precision") == "page_grounded_only"
+    ]
+    nonhighlightable_viewer_resolvable = [
+        row
+        for row in evidence
+        if row["evidence_id"] in accepted_evidence_ids
+        and row.get("viewer_highlightable") is False
+        and row.get("status") == "final"
+        and bool(row.get("bbox_refs"))
+    ]
+    accepted_for_nonruntime_chunks = [
+        row
+        for row in accepted_retrieval
+        if chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
+    ]
+    accepted_for_page_grounded = [
+        row
+        for row in accepted_retrieval
+        if evidence_by_id.get(row.get("evidence_id"), {}).get("bbox_precision") == "page_grounded_only"
+    ]
+    unresolved_instrument = [
+        row
+        for row in retrieval_units
+        if row.get("status") != "accepted"
+        and not row.get("rejection_reason")
+        and units_by_id.get(row.get("legal_unit_id"), {}).get("unit_type", "").endswith("_record")
+    ]
+    counts = {
+        "nonruntime_evidence_public_answerable_count": len(nonruntime_accepted),
+        "page_grounded_only_answer_evidence_count": len(page_grounded_accepted),
+        "nonhighlightable_viewer_resolvable_count": len(nonhighlightable_viewer_resolvable),
+        "retrieval_units_accepted_for_nonruntime_chunks_count": len(accepted_for_nonruntime_chunks),
+        "retrieval_units_accepted_for_page_grounded_only_evidence_count": len(accepted_for_page_grounded),
+        "instrument_records_unresolved_count": len(unresolved_instrument),
+    }
+    return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
 
 
 def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], source_conflicts: list[dict]) -> dict:

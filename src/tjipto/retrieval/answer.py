@@ -9,6 +9,16 @@ REQUIRED_FIELDS = (
     "source_role",
     "temporal_context",
 )
+PUBLIC_REJECTION_REASONS = {
+    "runtime_not_loadable",
+    "linked_legal_unit_not_runtime_loadable",
+    "linked_chunk_not_runtime_loadable",
+    "page_grounded_only_not_answerable",
+    "viewer_not_highlightable",
+    "missing_exact_text_span_support",
+    "retrieval_unit_backing_record_not_answerable",
+    "noncanonical_trace_not_answerable",
+}
 
 
 def assemble_context_pack(store, matches: tuple[dict, ...]) -> dict:
@@ -50,6 +60,24 @@ def empty_context_pack(reason: str | None) -> dict:
 def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
     if row.get("runtime_loadable") is False:
         return False, "runtime_not_loadable"
+    legal_unit = _legal_unit(store, row.get("legal_unit_id"))
+    chunk = _chunk_for_unit(store, row.get("legal_unit_id"))
+    retrieval_unit = _retrieval_unit(store, row.get("evidence_id"))
+    if not row.get("metadata_grounding"):
+        if row.get("bbox_precision") == "page_grounded_only":
+            return False, "page_grounded_only_not_answerable"
+        if row.get("viewer_highlightable") is False:
+            return False, "viewer_not_highlightable"
+        if legal_unit and legal_unit.get("runtime_loadable") is False:
+            return False, "linked_legal_unit_not_runtime_loadable"
+        if chunk and chunk.get("runtime_loadable") is False:
+            return False, "linked_chunk_not_runtime_loadable"
+        if (legal_unit or chunk) and not ((legal_unit and legal_unit.get("text_span_ids")) or (chunk and chunk.get("text_span_ids"))):
+            return False, "missing_exact_text_span_support"
+        if retrieval_unit and retrieval_unit.get("status") != "accepted":
+            return False, "retrieval_unit_backing_record_not_answerable"
+        if _noncanonical_trace(legal_unit, chunk, row):
+            return False, "noncanonical_trace_not_answerable"
     if not (DIRECT_ROUTES & set(row.get("route_sources") or ())):
         return False, "graph_only"
     if (
@@ -80,7 +108,7 @@ def _payload(store, row: dict) -> dict:
     )
     label = _evidence_label(row)
     hierarchy = _evidence_hierarchy(row)
-    can_resolve = row.get("status") == "final" and bool(bboxes) and (
+    can_resolve = row.get("status") == "final" and row.get("viewer_highlightable") is not False and bool(bboxes) and (
         not row.get("metadata_grounding") or row.get("metadata_viewer_resolvable") is True
     )
     return {
@@ -148,3 +176,33 @@ def _evidence_label(row: dict) -> str | None:
 
 def _evidence_hierarchy(row: dict) -> tuple:
     return tuple(item for item in (row.get("hierarchy") or ()) if item)
+
+
+def _legal_unit(store, legal_unit_id: str | None) -> dict | None:
+    return next((row for row in _optional_rows(store, "legal_units") if row.get("legal_unit_id") == legal_unit_id), None)
+
+
+def _chunk_for_unit(store, legal_unit_id: str | None) -> dict | None:
+    return next((row for row in _optional_rows(store, "chunks") if row.get("legal_unit_id") == legal_unit_id), None)
+
+
+def _retrieval_unit(store, evidence_id: str | None) -> dict | None:
+    return next((row for row in _optional_rows(store, "retrieval_units") if row.get("evidence_id") == evidence_id), None)
+
+
+def _noncanonical_trace(legal_unit: dict | None, chunk: dict | None, row: dict) -> bool:
+    return any(
+        item
+        and (
+            item.get("canonical_use_allowed") is False
+            or item.get("provenance_exception_category") == "accepted_noncanonical_source_conflict_trace_only"
+        )
+        for item in (legal_unit, chunk, row)
+    )
+
+
+def _optional_rows(store, attr: str) -> tuple | list:
+    try:
+        return getattr(store, attr, ())
+    except (KeyError, OSError, ValueError):
+        return ()

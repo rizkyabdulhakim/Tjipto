@@ -43,6 +43,21 @@ def _page_grounded_decision_evidence_id() -> str:
     raise AssertionError("missing page-grounded decision evidence")
 
 
+UNSAFE_INSTRUMENT_EVIDENCE = {
+    "00623": "uud_instrument_final_citation_evidence::amendment_1_historical::00004::perubahan_pertama_decision",
+    "00632": "uud_instrument_final_citation_evidence::amendment_3_historical::00012::perubahan_ketiga_scope",
+    "00634": "uud_instrument_final_citation_evidence::amendment_3_historical::00014::perubahan_ketiga_decision",
+    "00639": "uud_instrument_final_citation_evidence::amendment_4_historical::00018::perubahan_keempat_scope",
+    "00648": "uud_instrument_final_citation_evidence::amendment_4_historical::00024::perubahan_keempat_decision",
+}
+
+SAFE_INSTRUMENT_EVIDENCE = {
+    "00621": "uud_instrument_final_citation_evidence::amendment_1_historical::00002::perubahan_pertama_scope",
+    "00628": "uud_instrument_final_citation_evidence::amendment_2_historical::00008::perubahan_kedua_scope",
+    "00638": "uud_instrument_final_citation_evidence::amendment_4_historical::00017::perubahan_keempat_recital",
+}
+
+
 def _relation_cases() -> tuple[dict, ...]:
     path = ROOT / "tests/fixtures/uud/relation_cases.jsonl"
     return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
@@ -835,12 +850,17 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_answer_context_validator_explains_inclusion_and_exclusion(self) -> None:
         class Store:
+            legal_units = ({"legal_unit_id": "lu", "runtime_loadable": True, "text_span_ids": ("s1",)},)
+            chunks = ({"legal_unit_id": "lu", "runtime_loadable": True, "text_span_ids": ("s1",)},)
+            retrieval_units = ()
+
             def bboxes_for(self, evidence_id):
                 return [] if evidence_id == "missing_bbox" else [{"bbox_id": evidence_id}]
 
         store = Store()
         base = {
             "evidence_id": "direct",
+            "legal_unit_id": "lu",
             "status": "final",
             "citation": "Pasal 1",
             "quoted_text": "quoted",
@@ -867,6 +887,107 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(pack["validation_reasons"]["missing_bbox"], "missing_bbox")
         self.assertEqual(pack["validation_reasons"]["not_loadable"], "runtime_not_loadable")
         self.assertFalse(any(row["evidence_id"] == "not_loadable" for row in pack["citation_payloads"]))
+
+    def test_public_answerability_rejects_unsafe_instrument_records(self) -> None:
+        class Store:
+            legal_units = (
+                {"legal_unit_id": "lu_runtime", "runtime_loadable": True, "text_span_ids": ("s1",)},
+                {"legal_unit_id": "lu_blocked", "runtime_loadable": False, "text_span_ids": ("s1",)},
+            )
+            chunks = (
+                {"legal_unit_id": "lu_runtime", "runtime_loadable": True, "text_span_ids": ("s1",)},
+                {"legal_unit_id": "lu_blocked", "runtime_loadable": False, "text_span_ids": ("s1",)},
+            )
+            retrieval_units = (
+                {"evidence_id": "not_accepted", "status": "excluded_public_answer"},
+            )
+
+            def bboxes_for(self, evidence_id):
+                return [{"bbox_id": evidence_id}]
+
+        store = Store()
+        base = {
+            "evidence_id": "safe",
+            "legal_unit_id": "lu_runtime",
+            "status": "final",
+            "citation": "Perubahan",
+            "quoted_text": "quoted",
+            "source_pdf_path": "source.pdf",
+            "source_sha256": "sha",
+            "source_role": "amendment_1_historical",
+            "temporal_context": "amendment_1_historical",
+            "page_numbers": (1,),
+            "route_sources": ("bm25",),
+            "bbox_precision": "exact",
+            "viewer_highlightable": True,
+        }
+        self.assertEqual(validate_answer_candidate(store, base), (True, "answer_evidence"))
+        self.assertEqual(
+            validate_answer_candidate(store, base | {"evidence_id": "page", "bbox_precision": "page_grounded_only"}),
+            (False, "page_grounded_only_not_answerable"),
+        )
+        self.assertEqual(
+            validate_answer_candidate(store, base | {"evidence_id": "viewer", "viewer_highlightable": False}),
+            (False, "viewer_not_highlightable"),
+        )
+        self.assertEqual(
+            validate_answer_candidate(store, base | {"evidence_id": "blocked_unit", "legal_unit_id": "lu_blocked"}),
+            (False, "linked_legal_unit_not_runtime_loadable"),
+        )
+        self.assertEqual(
+            validate_answer_candidate(store, base | {"evidence_id": "not_accepted"}),
+            (False, "retrieval_unit_backing_record_not_answerable"),
+        )
+
+    def test_instrument_page_grounded_records_do_not_leak_publicly(self) -> None:
+        cases = (
+            ("Perubahan Pertama Decision", "00623"),
+            ("Perubahan Ketiga Decision", "00634"),
+            ("Perubahan Keempat Decision", "00648"),
+            ("Perubahan Ketiga Scope", "00632"),
+            ("Perubahan Keempat Scope", "00639"),
+        )
+        for query, key in cases:
+            evidence_id = UNSAFE_INSTRUMENT_EVIDENCE[key]
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertNotIn(evidence_id, {row["evidence_id"] for row in ask["evidence"]}, query)
+            self.assertNotIn(evidence_id, {row["evidence_id"] for row in search["results"]}, query)
+            excluded = {
+                row["evidence_id"]: row
+                for row in (*ask["context_pack"]["excluded_results"], *search["context_pack"]["excluded_results"])
+            }
+            if evidence_id in excluded:
+                self.assertEqual(excluded[evidence_id]["reason"], "page_grounded_only_not_answerable", query)
+                self.assertFalse(excluded[evidence_id]["viewer_ref"]["can_resolve"], query)
+
+    def test_safe_and_fail_closed_instrument_records_keep_policy(self) -> None:
+        safety = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "instrument_runtime_safety_health"
+        ]
+        self.assertEqual(safety["status"], "complete")
+        for key, value in safety.items():
+            if key.endswith("_count"):
+                self.assertEqual(value, 0, key)
+        for query, evidence_id in (
+            ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),
+            ("Perubahan Kedua Scope", SAFE_INSTRUMENT_EVIDENCE["00628"]),
+            ("Perubahan Keempat Recital", SAFE_INSTRUMENT_EVIDENCE["00638"]),
+        ):
+            result = self.service.search("uud", query, limit=10)
+            self.assertIn(evidence_id, {row["evidence_id"] for row in result["results"]}, query)
+        chunks = {
+            row["chunk_id"]: row
+            for row in (json.loads(line) for line in (ROOT / "data/final/uud/chunks.jsonl").read_text(encoding="utf-8").splitlines())
+        }
+        retrieval_chunk_ids = {
+            row["chunk_id"]
+            for row in (json.loads(line) for line in (ROOT / "data/final/uud/retrieval_units.jsonl").read_text(encoding="utf-8").splitlines())
+        }
+        for chunk_id in ("uud_chunk_00646", "uud_chunk_00647"):
+            self.assertFalse(chunks[chunk_id]["runtime_loadable"])
+            self.assertFalse(chunks[chunk_id]["canonical_use_allowed"])
+            self.assertNotIn(chunk_id, retrieval_chunk_ids)
 
     def test_failure_ask_context_pack_has_no_final_payloads(self) -> None:
         for result in (

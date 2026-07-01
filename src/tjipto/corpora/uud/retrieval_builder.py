@@ -21,12 +21,22 @@ def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict
             "source_pdf_path": row["source_pdf_path"],
             "source_role": row["source_role"],
             "source_sha256": row["source_sha256"],
-            "status": "accepted",
+            **_retrieval_answerability(row, chunks_by_unit[row["legal_unit_id"]]),
             "temporal_context": row["temporal_context"],
             "text": _retrieval_unit_text(row),
         }
         for row in sorted(evidence, key=lambda item: item["evidence_id"])
     ]
+
+
+def _retrieval_answerability(evidence: dict, chunk: dict) -> dict:
+    if evidence.get("bbox_precision") == "page_grounded_only":
+        return {"status": "excluded_public_answer", "rejection_reason": "page_grounded_only_not_answerable"}
+    if evidence.get("viewer_highlightable") is False:
+        return {"status": "excluded_public_answer", "rejection_reason": "viewer_not_highlightable"}
+    if chunk.get("runtime_loadable") is False:
+        return {"status": "excluded_public_answer", "rejection_reason": "linked_chunk_not_runtime_loadable"}
+    return {"status": "accepted"}
 
 
 def apply_chunk_grounding(

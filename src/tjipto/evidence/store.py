@@ -6,6 +6,7 @@ class EvidenceStore:
         self._evidence: list[dict] | None = None
         self._legal_units: list[dict] | None = None
         self._chunks: list[dict] | None = None
+        self._retrieval_units: list[dict] | None = None
         self._source_documents: list[dict] | None = None
         self._document_metadata: list[dict] | None = None
         self._metadata_grounding: list[dict] | None = None
@@ -31,6 +32,12 @@ class EvidenceStore:
         if self._chunks is None:
             self._chunks = self.config.jsonl("chunks")
         return self._chunks
+
+    @property
+    def retrieval_units(self) -> list[dict]:
+        if self._retrieval_units is None:
+            self._retrieval_units = self.config.jsonl("retrieval_units")
+        return self._retrieval_units
 
     @property
     def graph_edges(self) -> list[dict]:
