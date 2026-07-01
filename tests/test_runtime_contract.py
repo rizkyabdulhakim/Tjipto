@@ -1011,6 +1011,12 @@ class RuntimeContractTest(unittest.TestCase):
             ("perubahan ke 4 scope", "Perubahan Keempat Scope"),
             ("amandemen IV scope", "Perubahan Keempat Scope"),
             ("scope: perubahan keempat", "Perubahan Keempat Scope"),
+            ("lingkup perubahan keempat", "Perubahan Keempat Scope"),
+            ("cakupan amandemen keempat", "Perubahan Keempat Scope"),
+            ("apa yang diubah perubahan keempat", "Perubahan Keempat Scope"),
+            ("perubahan keempat mengubah apa", "Perubahan Keempat Scope"),
+            ("materi perubahan keempat", "Perubahan Keempat Scope"),
+            ("substansi amandemen keempat", "Perubahan Keempat Scope"),
             ("decision, perubahan ketiga", "Perubahan Ketiga Decision"),
             ("decision: perubahan ketiga", "Perubahan Ketiga Decision"),
         )

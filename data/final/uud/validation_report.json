@@ -138,6 +138,10 @@
     "amandemen_alias_miss_count": 0,
     "ordinal_alias_miss_count": 0,
     "safe_exact_label_punctuation_rank_miss_count": 0,
+    "role_family_neighbor_answer_count": 0,
+    "role_family_neighbor_search_count": 0,
+    "scope_family_alias_miss_count": 0,
+    "target_fail_closed_fallback_count": 0,
     "status": "complete"
   },
   "artifact_origin_health": {

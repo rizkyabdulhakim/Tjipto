@@ -792,6 +792,9 @@ def _instrument_natural_query_precision_health(evidence: list[dict], legal_units
             "punctuation_boundary_miss",
             "amandemen_alias_miss",
             "ordinal_alias_miss",
+            "role_family_neighbor_substitution",
+            "scope_family_alias_miss",
+            "target_fail_closed_fallback",
         }
     ]
     counts = {
@@ -805,6 +808,10 @@ def _instrument_natural_query_precision_health(evidence: list[dict], legal_units
         "amandemen_alias_miss_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "amandemen_alias_miss"),
         "ordinal_alias_miss_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "ordinal_alias_miss"),
         "safe_exact_label_punctuation_rank_miss_count": len(safe_not_accepted),
+        "role_family_neighbor_answer_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "role_family_neighbor_substitution"),
+        "role_family_neighbor_search_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "role_family_neighbor_substitution"),
+        "scope_family_alias_miss_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "scope_family_alias_miss"),
+        "target_fail_closed_fallback_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "target_fail_closed_fallback"),
     }
     return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
 

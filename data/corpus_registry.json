@@ -347,7 +347,9 @@
           "decision",
           "keputusan",
           "putusan",
-          "diputuskan"
+          "diputuskan",
+          "memutuskan",
+          "hasil putusan"
         ],
         "recital": [
           "recital",
@@ -366,6 +368,7 @@
         "signatories": [
           "signatories",
           "tanda tangan",
+          "penandatangan",
           "pengesah",
           "pejabat penandatangan"
         ],
@@ -377,7 +380,18 @@
         "scope": [
           "scope",
           "ruang lingkup",
-          "mengubah"
+          "lingkup",
+          "cakupan",
+          "mencakup",
+          "mengubah",
+          "diubah",
+          "apa yang diubah",
+          "yang diubah",
+          "perubahan apa",
+          "materi",
+          "materi perubahan",
+          "substansi",
+          "substansi perubahan"
         ]
       },
       "instrument_intent_blocking_queries": [
