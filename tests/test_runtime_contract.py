@@ -1025,14 +1025,55 @@ class RuntimeContractTest(unittest.TestCase):
             ask = self.service.ask("uud", query, limit=10)
             search = self.service.search("uud", query, limit=10)
             self.assertEqual(ask["status"], "insufficient_evidence", query)
-            self.assertEqual(ask["route"], "instrument_natural_intent_fail_closed", query)
+            self.assertEqual(ask["route"], "instrument_intent_fail_closed", query)
             self.assertFalse(ask["evidence"], query)
             self.assertFalse(search["results"], query)
             self.assertEqual(search["public_status"], "no_results", query)
             self.assertEqual(ask["context_pack"]["excluded_results"][0]["citation"], citation, query)
-            self.assertEqual(ask["context_pack"]["excluded_results"][0]["reason"], "natural_instrument_intent_fail_closed", query)
+            self.assertEqual(ask["context_pack"]["excluded_results"][0]["reason"], "instrument_target_fail_closed", query)
             for row in (*ask["evidence"], *search["results"]):
                 self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
+
+    def test_instrument_intent_matrix_blocks_neighbor_fallback(self) -> None:
+        intent = CorpusRegistry(ROOT).resolve("uud").setting("intent_config")
+        matrix = intent["instrument_intent_matrix"]
+        queries = [
+            template.format(role=role, amendment=amendment)
+            for role in matrix["role_family_terms"]
+            for amendment in matrix["amendment_terms"]
+            for template in matrix["word_orders"]
+        ]
+        self.assertGreater(len(queries), 0)
+        forbidden = ("Determination", "Recital", "Closing", "Signatories", "Clause")
+        for query in queries:
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertFalse(ask["route"] == "lexical_fallback" and ask["evidence"], query)
+            self.assertFalse(search["route"] == "bm25" and search["results"], query)
+            for row in (*ask["evidence"], *search["results"]):
+                citation = row.get("citation") or ""
+                self.assertIn("Scope", citation, query)
+                self.assertFalse(any(token in citation for token in forbidden), query)
+
+        for query in (
+            "daftar pasal perubahan pertama",
+            "perubahan pertama daftar pasal",
+            "daftar pasal amandemen keempat",
+            "ruanglingkup perubahan pertama",
+        ):
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertFalse(ask["route"] == "lexical_fallback" and ask["evidence"], query)
+            self.assertFalse(search["route"] == "bm25" and search["results"], query)
+            for row in (*ask["evidence"], *search["results"]):
+                self.assertIn("Scope", row.get("citation") or "", query)
+
+        ask = self.service.ask("uud", "huruf perubahan keempat", limit=10)
+        search = self.service.search("uud", "huruf perubahan keempat", limit=10)
+        self.assertEqual(ask["route"], "instrument_like_unresolved")
+        self.assertFalse(ask["evidence"])
+        self.assertEqual(search["public_status"], "no_results")
+        self.assertFalse(search["results"])
 
     def test_natural_instrument_exact_labels_rank_first(self) -> None:
         for query, evidence_id in (
@@ -1068,12 +1109,17 @@ class RuntimeContractTest(unittest.TestCase):
         natural_precision = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "instrument_natural_query_precision_health"
         ]
+        matrix = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "instrument_intent_matrix_health"
+        ]
         self.assertEqual(safety["status"], "complete")
         self.assertEqual(precision["status"], "complete")
         self.assertEqual(natural_precision["status"], "complete")
-        for health in (safety, precision, natural_precision):
+        self.assertEqual(matrix["status"], "complete")
+        self.assertGreater(matrix["matrix_query_count"], 0)
+        for health in (safety, precision, natural_precision, matrix):
             for key, value in health.items():
-                if key.endswith("_count"):
+                if key.endswith("_count") and key != "matrix_query_count":
                     self.assertEqual(value, 0, key)
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),

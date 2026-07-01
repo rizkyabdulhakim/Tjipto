@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 from uuid import uuid4
 
-from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
+from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval import answer as answer_policy
@@ -56,6 +56,21 @@ class LegalRuntimeService:
         instrument = _instrument_intent_context(store, query)
         if instrument:
             row, route, reason = instrument
+            if row is None:
+                context_pack = empty_context_pack(reason)
+                return {
+                    "status": "found",
+                    "public_status": "no_results",
+                    "route": route,
+                    "intent": "instrument_unit_lookup",
+                    "corpus_id": corpus_id,
+                    "original_query": query,
+                    "normalized_query": query.strip(),
+                    "matches": (),
+                    "reason": reason,
+                    "results": (),
+                    "context_pack": context_pack,
+                }
             context_pack = assemble_context_pack(store, (row,))
             return {
                 "status": "found",
@@ -269,6 +284,29 @@ class LegalRuntimeService:
         if instrument:
             row, route, reason = instrument
             templates = _answer_templates(store)
+            if row is None:
+                context_pack = empty_context_pack(reason)
+                return {
+                    "status": "insufficient_evidence",
+                    "route": route,
+                    "intent": "instrument_unit_lookup",
+                    "corpus_id": corpus_id,
+                    "original_query": query,
+                    "normalized_query": query.strip(),
+                    "matches": (),
+                    "reason": reason,
+                    "answer_type": "none",
+                    "answer": templates["insufficient"],
+                    "context_pack": context_pack,
+                    "evidence": (),
+                    "citations": (),
+                    "viewer_refs": (),
+                    "metadata_facts": (),
+                    "legal_relations": (),
+                    "answer_scope": "insufficient_evidence",
+                    "warnings": (),
+                    "insufficient_reasons": (reason,),
+                }
             context_pack = assemble_context_pack(store, (row,))
             evidence = context_pack["answer_evidence"]
             if not evidence:
@@ -446,56 +484,35 @@ def _metadata_fact(row: dict) -> dict:
     }
 
 
-def _instrument_intent_context(store, query: str) -> tuple[dict, str, str] | None:
+def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str] | None:
     if store is None:
         return None
     config = getattr(store, "config", None)
     intent = intent_config_for(getattr(config, "structured_strategy", "generic"), config)
-    if contains_intent_phrase(query, intent.get("instrument_intent_blocking_queries", ())):
+    decision = resolve_instrument_intent(query, intent, corpus=getattr(config, "corpus_id", ""))
+    if decision.target_status == "not_instrument_intent":
         return None
-    role = _instrument_source_role(intent, query)
-    key = _instrument_role_key(intent, query)
-    if role is None or key is None:
-        return None
-    citation = _instrument_intent_citation(intent, role, key, query)
-    if not citation:
-        return None
-    row = next((item for item in store.evidence if item.get("source_role") == role and item.get("citation") == citation), None)
+    if decision.target_status == "instrument_like_unresolved":
+        return None, "instrument_like_unresolved", "instrument_like_unresolved"
+    row = next(
+        (
+            item for item in store.evidence
+            if item.get("source_role") == decision.amendment
+            and item.get("citation") == decision.target_citation
+        ),
+        None,
+    )
     if row is None:
-        return None
+        return None, "instrument_like_unresolved", "instrument_like_unresolved"
     row = row | {"route_sources": ("structured",)}
     accepted, _ = _answer_validator()(store, row)
     if accepted:
         return row, "instrument_natural_intent", "answer_evidence"
     return (
-        row | {"forced_rejection_reason": "natural_instrument_intent_fail_closed"},
-        "instrument_natural_intent_fail_closed",
-        "natural_instrument_intent_fail_closed",
+        row | {"forced_rejection_reason": "instrument_target_fail_closed"},
+        "instrument_intent_fail_closed",
+        "instrument_target_fail_closed",
     )
-
-
-def _instrument_source_role(intent: dict, query: str) -> str | None:
-    return next((role for role, pattern in intent.get("metadata_roles", ()) if pattern.search(query or "")), None)
-
-
-def _instrument_role_key(intent: dict, query: str) -> str | None:
-    for key, aliases in intent.get("instrument_role_queries", {}).items():
-        if contains_intent_phrase(query, aliases):
-            return key
-    return None
-
-
-def _instrument_intent_citation(intent: dict, role: str, key: str, query: str) -> str:
-    template = intent.get("instrument_citation_templates", {}).get(key, "")
-    if not template:
-        return ""
-    values = {"ordinal": intent.get("source_role_labels", {}).get(role, "")}
-    if "{clause}" in template:
-        match = re.search(r"\b(?:clause|klausul|huruf)\s*\(?([a-e])\)?|\(([a-e])\)", query or "", re.IGNORECASE)
-        if not match:
-            return ""
-        values["clause"] = (match.group(1) or match.group(2)).lower()
-    return template.format(**values)
 
 
 def _exact_fail_closed_instrument_context(store, query: str) -> dict | None:

@@ -1,6 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
+
+
+@dataclass(frozen=True)
+class InstrumentIntentDecision:
+    corpus: str
+    normalized_query: str
+    role_family: str | None
+    amendment: str | None
+    target_status: str
+    fallback_permission: bool
+    reason: str
+    target_citation: str | None = None
 
 
 _GENERIC = {
@@ -21,6 +34,7 @@ _GENERIC = {
     "instrument_citation_templates": {},
     "instrument_role_queries": {},
     "instrument_intent_blocking_queries": (),
+    "instrument_intent_matrix": {},
     "source_role_labels": {},
     "structured_sections": (),
     "structured_lookup_enabled": False,
@@ -61,6 +75,7 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
             for key, value in (raw.get("instrument_role_queries") or {}).items()
         },
         "instrument_intent_blocking_queries": tuple(raw.get("instrument_intent_blocking_queries") or ()),
+        "instrument_intent_matrix": dict(raw.get("instrument_intent_matrix") or {}),
         "source_role_labels": dict(raw.get("source_role_labels") or {}),
         "structured_sections": tuple(raw.get("structured_sections") or ()),
         "structured_lookup_enabled": bool(raw.get("structured_lookup_enabled")),
@@ -77,3 +92,33 @@ def normalize_intent_text(value: object) -> str:
 def contains_intent_phrase(text: str, aliases: tuple[str, ...] | list[str]) -> bool:
     haystack = f" {normalize_intent_text(text)} "
     return any(f" {normalize_intent_text(alias)} " in haystack for alias in aliases)
+
+
+def resolve_instrument_intent(query: str, intent: dict, *, corpus: str = "") -> InstrumentIntentDecision:
+    normalized = normalize_intent_text(query)
+    if not normalized or contains_intent_phrase(query, intent.get("instrument_intent_blocking_queries", ())):
+        return InstrumentIntentDecision(corpus, normalized, None, None, "not_instrument_intent", True, "not_instrument_intent")
+    role = next(
+        (key for key, aliases in intent.get("instrument_role_queries", {}).items() if contains_intent_phrase(query, aliases)),
+        None,
+    )
+    amendment = next((source_role for source_role, pattern in intent.get("metadata_roles", ()) if pattern.search(query or "")), None)
+    if role is None or amendment is None:
+        return InstrumentIntentDecision(corpus, normalized, role, amendment, "not_instrument_intent", True, "not_instrument_intent")
+    citation = _instrument_citation(intent, amendment, role, query)
+    if not citation:
+        return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_like_unresolved", False, "instrument_like_unresolved")
+    return InstrumentIntentDecision(corpus, normalized, role, amendment, "resolved_target_fail_closed", False, "instrument_target_fail_closed", citation)
+
+
+def _instrument_citation(intent: dict, role: str, key: str, query: str) -> str:
+    template = intent.get("instrument_citation_templates", {}).get(key, "")
+    if not template:
+        return ""
+    values = {"ordinal": intent.get("source_role_labels", {}).get(role, "")}
+    if "{clause}" in template:
+        match = re.search(r"\b(?:clause|klausul|huruf)\s*\(?([a-e])\)?|\(([a-e])\)", query or "", re.IGNORECASE)
+        if not match:
+            return ""
+        values["clause"] = (match.group(1) or match.group(2)).lower()
+    return template.format(**values)

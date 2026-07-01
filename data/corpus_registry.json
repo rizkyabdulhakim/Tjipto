@@ -380,11 +380,21 @@
         "scope": [
           "scope",
           "ruang lingkup",
+          "ruanglingkup",
           "lingkup",
           "cakupan",
           "mencakup",
           "mengubah",
           "diubah",
+          "daftar pasal",
+          "pasal apa saja",
+          "mengubah pasal apa",
+          "mengubah pasal apa saja",
+          "menambah pasal apa",
+          "pasal yang diubah",
+          "pasal-pasal yang berubah",
+          "apa saja yang berubah",
+          "apa yang berubah",
           "apa yang diubah",
           "yang diubah",
           "perubahan apa",
@@ -392,6 +402,39 @@
           "materi perubahan",
           "substansi",
           "substansi perubahan"
+        ]
+      },
+      "instrument_intent_matrix": {
+        "role_family_terms": [
+          "scope",
+          "lingkup",
+          "ruang lingkup",
+          "ruanglingkup",
+          "cakupan",
+          "materi",
+          "substansi",
+          "daftar pasal",
+          "pasal yang diubah",
+          "pasal-pasal yang berubah",
+          "apa saja yang berubah",
+          "apa yang berubah",
+          "apa yang diubah"
+        ],
+        "amendment_terms": [
+          "perubahan pertama",
+          "perubahan ketiga",
+          "perubahan keempat",
+          "amandemen pertama",
+          "amandemen ketiga",
+          "amandemen keempat",
+          "perubahan ke-1",
+          "perubahan ke-3",
+          "perubahan ke-4",
+          "amandemen IV"
+        ],
+        "word_orders": [
+          "{role} {amendment}",
+          "{amendment} {role}"
         ]
       },
       "instrument_intent_blocking_queries": [

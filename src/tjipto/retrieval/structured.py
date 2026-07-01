@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
 from tjipto.corpora.parser_dispatch import (
     DEFAULT_CORPUS_ID,
     label_keys,
@@ -85,7 +85,7 @@ def _instrument_rows(
         return tuple(matches[:limit])
     if role is None:
         return ()
-    if _scope_query(folded, intent):
+    if _scope_query(query, intent):
         if probe_only:
             return ({"probe": True},)
         row = _instrument_evidence(store, role, _instrument_citation(intent, "scope", role))
@@ -145,7 +145,7 @@ def _corpus_id(config) -> str:
 
 
 def _scope_query(folded: str, intent: dict) -> bool:
-    return any(pattern in folded for pattern in intent["instrument_scope_queries"])
+    return contains_intent_phrase(folded, intent.get("instrument_role_queries", {}).get("scope", ()))
 
 
 def _clause_letter(query: str) -> str | None:

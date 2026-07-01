@@ -164,6 +164,8 @@ def _public_reason(reason):
         "viewer_not_highlightable",
         "missing_exact_grounding",
         "natural_instrument_intent_fail_closed",
+        "instrument_target_fail_closed",
+        "instrument_like_unresolved",
         "exact_label_target_not_answerable",
         "lexical_fallback_blocked_by_instrument_intent",
     } else None

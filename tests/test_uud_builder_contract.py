@@ -5,6 +5,8 @@ from pathlib import Path
 import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
+from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.uud.bbox_builder import pdf_lines
 from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
 from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
@@ -344,6 +346,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 graph_nodes=read_jsonl(FINAL / "graph_nodes.jsonl"),
                 graph_edges=read_jsonl(FINAL / "graph_edges.jsonl"),
                 page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
+                intent_config=intent_config_for("uud_1945", CorpusRegistry(ROOT).resolve("uud")),
             ),
             read_json(FINAL / "validation_report.json"),
         )

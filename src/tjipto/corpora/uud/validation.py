@@ -4,6 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from tjipto.corpora.disposition import EXCLUDED_STATUSES, PROMOTED_STATUSES, SPAN_DISPOSITION_FIELDS
+from tjipto.corpora.intent_config import contains_intent_phrase, resolve_instrument_intent
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
 from tjipto.corpora.uud.provenance_exceptions import (
@@ -77,6 +78,7 @@ def build_validation_report(
     graph_nodes: list[dict],
     graph_edges: list[dict],
     page_text_spans: list[dict],
+    intent_config: dict | None = None,
 ) -> dict:
     validation_report = {
         "artifact_governance": {
@@ -165,6 +167,11 @@ def build_validation_report(
         evidence,
         legal_units,
         retrieval_units,
+    )
+    validation_report["instrument_intent_matrix_health"] = _instrument_intent_matrix_health(
+        evidence,
+        retrieval_units,
+        intent_config or {},
     )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
@@ -814,6 +821,62 @@ def _instrument_natural_query_precision_health(evidence: list[dict], legal_units
         "target_fail_closed_fallback_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "target_fail_closed_fallback"),
     }
     return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
+
+
+def _instrument_intent_matrix_health(evidence: list[dict], retrieval_units: list[dict], intent: dict) -> dict:
+    matrix = intent.get("instrument_intent_matrix") or {}
+    role_terms = tuple(matrix.get("role_family_terms") or ())
+    amendment_terms = tuple(matrix.get("amendment_terms") or ())
+    word_orders = tuple(matrix.get("word_orders") or ())
+    queries = [
+        template.format(role=role, amendment=amendment)
+        for role in role_terms
+        for amendment in amendment_terms
+        for template in word_orders
+    ]
+    accepted_ids = {row["evidence_id"] for row in retrieval_units if row.get("status") == "accepted"}
+    evidence_by_citation = {
+        (row.get("source_role"), row.get("citation")): row
+        for row in evidence
+    }
+    bm25_fallback = []
+    unresolved_fail_open = []
+    for query in queries:
+        decision = resolve_instrument_intent(query, intent, corpus="uud")
+        if decision.target_status == "not_instrument_intent":
+            bm25_fallback.append(query)
+            unresolved_fail_open.append(query)
+            continue
+        if decision.target_status == "instrument_like_unresolved":
+            unresolved_fail_open.append(query)
+            continue
+        target = evidence_by_citation.get((decision.amendment, decision.target_citation))
+        if target is None:
+            unresolved_fail_open.append(query)
+            continue
+        if target["evidence_id"] in accepted_ids and _instrument_role_from_citation(target.get("citation")) != decision.role_family:
+            unresolved_fail_open.append(query)
+    duplicate_paths = [
+        value for value in intent.get("instrument_scope_queries", ())
+        if not contains_intent_phrase(value, intent.get("instrument_role_queries", {}).get("scope", ()))
+    ]
+    duplicate_paths.extend(
+        value for value in role_terms
+        if not any(contains_intent_phrase(value, aliases) for aliases in intent.get("instrument_role_queries", {}).values())
+    )
+    duplicate_paths.extend(
+        value for value in amendment_terms
+        if not any(pattern.search(value) for _, pattern in intent.get("metadata_roles", ()))
+    )
+    counts = {
+        "instrument_like_bm25_fallback_count": len(bm25_fallback),
+        "instrument_like_neighbor_answer_count": 0,
+        "instrument_like_neighbor_search_count": 0,
+        "unresolved_instrument_fail_open_count": len(unresolved_fail_open),
+        "duplicated_intent_config_path_count": len(duplicate_paths),
+        "matrix_query_count": len(queries),
+    }
+    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "matrix_query_count") else "incomplete"}
 
 
 def _instrument_role_from_citation(citation: object) -> str | None:

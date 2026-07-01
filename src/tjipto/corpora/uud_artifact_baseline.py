@@ -21,6 +21,8 @@ from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_gro
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import build_validation_report, validate_uud_artifact_dir
+from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.registry import CorpusRegistry
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
@@ -136,6 +138,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
 
+    corpus_config = CorpusRegistry(repo_root).resolve("uud")
     validation_report = build_validation_report(
         chunks=chunks,
         legal_units=legal_units,
@@ -150,6 +153,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         graph_nodes=graph_nodes,
         graph_edges=graph_edges,
         page_text_spans=page_text_spans,
+        intent_config=intent_config_for(getattr(corpus_config, "structured_strategy", "generic"), corpus_config),
     )
     write_json(final_dir / "validation_report.json", validation_report)
 

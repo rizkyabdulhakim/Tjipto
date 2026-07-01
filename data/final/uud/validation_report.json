@@ -144,6 +144,15 @@
     "target_fail_closed_fallback_count": 0,
     "status": "complete"
   },
+  "instrument_intent_matrix_health": {
+    "instrument_like_bm25_fallback_count": 0,
+    "instrument_like_neighbor_answer_count": 0,
+    "instrument_like_neighbor_search_count": 0,
+    "unresolved_instrument_fail_open_count": 0,
+    "duplicated_intent_config_path_count": 0,
+    "matrix_query_count": 260,
+    "status": "complete"
+  },
   "artifact_origin_health": {
     "manifest_file_rows": 23,
     "files_with_origin": 23,
