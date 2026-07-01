@@ -127,6 +127,13 @@
     "nonhighlightable_exact_viewer_ready_count": 0,
     "status": "complete"
   },
+  "instrument_natural_query_precision_health": {
+    "natural_fail_closed_query_neighbor_answer_count": 0,
+    "natural_fail_closed_query_neighbor_search_count": 0,
+    "safe_exact_label_not_rank_first_count": 0,
+    "lexical_fallback_overrode_instrument_intent_count": 0,
+    "status": "complete"
+  },
   "artifact_origin_health": {
     "manifest_file_rows": 23,
     "files_with_origin": 23,

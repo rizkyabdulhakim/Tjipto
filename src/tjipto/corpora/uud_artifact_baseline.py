@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import sys
 
 from tjipto.corpora.uud.bbox_builder import pdf_lines
 from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
@@ -167,3 +168,23 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
 def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
     final_dir = (repo_root / FINAL_DIR).resolve()
     return validate_uud_artifact_dir(final_dir)
+
+
+def main(argv: list[str] | None = None) -> int:
+    command = (argv or sys.argv[1:] or ["validate"])[0]
+    if command == "validate":
+        errors = validate_uud_artifact_baseline(Path.cwd())
+        if errors:
+            print("\n".join(errors))
+            return 1
+        print("PASS")
+        return 0
+    if command == "rebuild":
+        print(rebuild_uud_artifact_baseline(Path.cwd()))
+        return 0
+    print("usage: python -m tjipto.corpora.uud_artifact_baseline [validate|rebuild]")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

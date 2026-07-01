@@ -161,6 +161,11 @@ def build_validation_report(
         legal_units,
         retrieval_units,
     )
+    validation_report["instrument_natural_query_precision_health"] = _instrument_natural_query_precision_health(
+        evidence,
+        legal_units,
+        retrieval_units,
+    )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
@@ -402,6 +407,12 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"instrument_query_precision_{key}:{value}")
     if query_precision["status"] != "complete":
         errors.append("instrument_query_precision_incomplete")
+    natural_precision = _instrument_natural_query_precision_health(evidence, legal_units, retrieval_units)
+    for key, value in natural_precision.items():
+        if key.endswith("_count") and value:
+            errors.append(f"instrument_natural_query_precision_{key}:{value}")
+    if natural_precision["status"] != "complete":
+        errors.append("instrument_natural_query_precision_incomplete")
     for row in retrieval_units:
         if row["retrieval_unit_id"] in seen_ids["retrieval_unit_id"]:
             errors.append(f"duplicate_retrieval_unit_id:{row['retrieval_unit_id']}")
@@ -736,6 +747,57 @@ def _instrument_query_precision_health(evidence: list[dict], legal_units: list[d
         "nonhighlightable_exact_viewer_ready_count": len(nonhighlightable_exact_ready),
     }
     return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
+
+
+def _instrument_natural_query_precision_health(evidence: list[dict], legal_units: list[dict], retrieval_units: list[dict]) -> dict:
+    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    accepted_evidence_ids = {row["evidence_id"] for row in retrieval_units if row.get("status") == "accepted"}
+    instrument_evidence = [
+        row
+        for row in evidence
+        if _is_instrument_unit(units_by_id.get(row.get("legal_unit_id"), {}))
+    ]
+    fail_closed_targets = [
+        row
+        for row in instrument_evidence
+        if _instrument_role_from_citation(row.get("citation")) in {"decision", "scope"}
+        and row["evidence_id"] not in accepted_evidence_ids
+    ]
+    answerable_fail_closed_targets = [
+        row for row in fail_closed_targets if row["evidence_id"] in accepted_evidence_ids
+    ]
+    safe_exact_targets = [
+        row
+        for row in instrument_evidence
+        if _instrument_role_from_citation(row.get("citation")) in {"scope", "recital"}
+        and row.get("bbox_precision") == "exact"
+        and row.get("viewer_highlightable") is True
+    ]
+    safe_not_accepted = [row for row in safe_exact_targets if row["evidence_id"] not in accepted_evidence_ids]
+    fallback_overrides = [
+        row
+        for row in retrieval_units
+        if row.get("status") == "accepted"
+        and row.get("rejection_reason") in {
+            "neighbor_substitution_not_allowed",
+            "lexical_fallback_blocked_by_instrument_intent",
+        }
+    ]
+    counts = {
+        "natural_fail_closed_query_neighbor_answer_count": len(answerable_fail_closed_targets),
+        "natural_fail_closed_query_neighbor_search_count": len(answerable_fail_closed_targets),
+        "safe_exact_label_not_rank_first_count": len(safe_not_accepted),
+        "lexical_fallback_overrode_instrument_intent_count": len(fallback_overrides),
+    }
+    return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
+
+
+def _instrument_role_from_citation(citation: object) -> str | None:
+    text = str(citation or "").casefold()
+    for key in ("decision", "scope", "recital", "determination", "closing", "signatories", "clause"):
+        if key in text:
+            return key
+    return None
 
 
 def _is_instrument_unit(unit: dict) -> bool:

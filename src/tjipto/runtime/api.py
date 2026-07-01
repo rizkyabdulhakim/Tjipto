@@ -163,6 +163,9 @@ def _public_reason(reason):
         "page_grounded_only_not_answerable",
         "viewer_not_highlightable",
         "missing_exact_grounding",
+        "natural_instrument_intent_fail_closed",
+        "exact_label_target_not_answerable",
+        "lexical_fallback_blocked_by_instrument_intent",
     } else None
 
 

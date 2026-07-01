@@ -998,6 +998,39 @@ class RuntimeContractTest(unittest.TestCase):
             for row in (*ask["evidence"], *search["results"]):
                 self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
 
+    def test_natural_instrument_queries_do_not_substitute_neighbors(self) -> None:
+        cases = (
+            ("decision perubahan ketiga", "Perubahan Ketiga Decision"),
+            ("Perubahan Ketiga Decision dalam UUD", "Perubahan Ketiga Decision"),
+            ("decision perubahan keempat", "Perubahan Keempat Decision"),
+            ("scope perubahan ketiga", "Perubahan Ketiga Scope"),
+            ("scope perubahan keempat", "Perubahan Keempat Scope"),
+        )
+        forbidden = ("Determination", "Recital", "Closing", "Signatories", "Clause")
+        for query, citation in cases:
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertEqual(ask["status"], "insufficient_evidence", query)
+            self.assertEqual(ask["route"], "instrument_natural_intent_fail_closed", query)
+            self.assertFalse(ask["evidence"], query)
+            self.assertFalse(search["results"], query)
+            self.assertEqual(search["public_status"], "no_results", query)
+            self.assertEqual(ask["context_pack"]["excluded_results"][0]["citation"], citation, query)
+            self.assertEqual(ask["context_pack"]["excluded_results"][0]["reason"], "natural_instrument_intent_fail_closed", query)
+            for row in (*ask["evidence"], *search["results"]):
+                self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
+
+    def test_natural_instrument_exact_labels_rank_first(self) -> None:
+        for query, evidence_id in (
+            ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),
+            ("Perubahan Kedua Scope", SAFE_INSTRUMENT_EVIDENCE["00628"]),
+            ("Perubahan Keempat Recital", SAFE_INSTRUMENT_EVIDENCE["00638"]),
+        ):
+            result = self.service.search("uud", query, limit=10)
+            self.assertEqual(result["route"], "instrument_natural_intent", query)
+            self.assertTrue(result["results"], query)
+            self.assertEqual(result["results"][0]["evidence_id"], evidence_id, query)
+
     def test_page_grounded_instrument_viewer_is_trace_only(self) -> None:
         for evidence_id in UNSAFE_INSTRUMENT_EVIDENCE.values():
             viewer = self.service.viewer("uud", evidence_id)
@@ -1015,9 +1048,13 @@ class RuntimeContractTest(unittest.TestCase):
         precision = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "instrument_query_precision_health"
         ]
+        natural_precision = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "instrument_natural_query_precision_health"
+        ]
         self.assertEqual(safety["status"], "complete")
         self.assertEqual(precision["status"], "complete")
-        for health in (safety, precision):
+        self.assertEqual(natural_precision["status"], "complete")
+        for health in (safety, precision, natural_precision):
             for key, value in health.items():
                 if key.endswith("_count"):
                     self.assertEqual(value, 0, key)

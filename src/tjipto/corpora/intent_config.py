@@ -19,6 +19,7 @@ _GENERIC = {
     "instrument_deletion_evidence_words": (),
     "instrument_change_context_words": (),
     "instrument_citation_templates": {},
+    "instrument_role_queries": {},
     "source_role_labels": {},
     "structured_sections": (),
     "structured_lookup_enabled": False,
@@ -54,6 +55,10 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "instrument_deletion_evidence_words": tuple(raw.get("instrument_deletion_evidence_words") or ()),
         "instrument_change_context_words": tuple(raw.get("instrument_change_context_words") or ()),
         "instrument_citation_templates": dict(raw.get("instrument_citation_templates") or {}),
+        "instrument_role_queries": {
+            key: tuple(value)
+            for key, value in (raw.get("instrument_role_queries") or {}).items()
+        },
         "source_role_labels": dict(raw.get("source_role_labels") or {}),
         "structured_sections": tuple(raw.get("structured_sections") or ()),
         "structured_lookup_enabled": bool(raw.get("structured_lookup_enabled")),

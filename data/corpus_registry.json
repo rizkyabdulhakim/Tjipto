@@ -333,9 +333,52 @@
       ],
       "instrument_citation_templates": {
         "prefix": "Perubahan ",
+        "recital": "Perubahan {ordinal} Recital",
         "scope": "Perubahan {ordinal} Scope",
+        "decision": "Perubahan {ordinal} Decision",
+        "determination": "Perubahan {ordinal} Determination",
+        "closing": "Perubahan {ordinal} Closing",
+        "signatories": "Perubahan {ordinal} Signatories",
         "clause": "Perubahan {ordinal} Clause ({clause})",
         "clause_marker": "Clause"
+      },
+      "instrument_role_queries": {
+        "decision": [
+          "decision",
+          "keputusan",
+          "putusan",
+          "diputuskan"
+        ],
+        "recital": [
+          "recital",
+          "menimbang",
+          "konsiderans"
+        ],
+        "determination": [
+          "determination",
+          "menetapkan",
+          "penetapan"
+        ],
+        "closing": [
+          "closing",
+          "penutup"
+        ],
+        "signatories": [
+          "signatories",
+          "tanda tangan",
+          "pengesah",
+          "pejabat penandatangan"
+        ],
+        "clause": [
+          "clause",
+          "klausul",
+          "huruf"
+        ],
+        "scope": [
+          "scope",
+          "ruang lingkup",
+          "mengubah"
+        ]
       },
       "source_role_labels": {
         "amendment_1_historical": "Pertama",
