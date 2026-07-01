@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 from uuid import uuid4
 
-from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval import answer as answer_policy
@@ -449,11 +449,10 @@ def _metadata_fact(row: dict) -> dict:
 def _instrument_intent_context(store, query: str) -> tuple[dict, str, str] | None:
     if store is None:
         return None
-    folded = f" {(query or '').casefold()} "
-    if any(term in folded for term in (" tanggal ", " tempat ", " di mana ", " dimana ", " kapan ", " lembaga ", " institusi ", " rapat ", " sidang ", " pasal apa ")):
-        return None
     config = getattr(store, "config", None)
     intent = intent_config_for(getattr(config, "structured_strategy", "generic"), config)
+    if contains_intent_phrase(query, intent.get("instrument_intent_blocking_queries", ())):
+        return None
     role = _instrument_source_role(intent, query)
     key = _instrument_role_key(intent, query)
     if role is None or key is None:
@@ -480,9 +479,8 @@ def _instrument_source_role(intent: dict, query: str) -> str | None:
 
 
 def _instrument_role_key(intent: dict, query: str) -> str | None:
-    folded = f" {(query or '').casefold()} "
     for key, aliases in intent.get("instrument_role_queries", {}).items():
-        if any(f" {alias.casefold()} " in folded for alias in aliases):
+        if contains_intent_phrase(query, aliases):
             return key
     return None
 

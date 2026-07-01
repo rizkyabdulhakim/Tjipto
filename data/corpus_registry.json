@@ -238,19 +238,19 @@
       "metadata_roles": [
         {
           "role": "amendment_1_historical",
-          "pattern": "\\b(perubahan\\s*(pertama|1|i)|amendment\\s*1)\\b"
+          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(pertama|1|i)|amendment\\s*1)\\b"
         },
         {
           "role": "amendment_2_historical",
-          "pattern": "\\b(perubahan\\s*(kedua|2|ii)|amendment\\s*2)\\b"
+          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(kedua|2|ii)|amendment\\s*2)\\b"
         },
         {
           "role": "amendment_3_historical",
-          "pattern": "\\b(perubahan\\s*(ketiga|3|iii)|amendment\\s*3)\\b"
+          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(ketiga|3|iii)|amendment\\s*3)\\b"
         },
         {
           "role": "amendment_4_historical",
-          "pattern": "\\b(perubahan\\s*(keempat|4|iv)|amendment\\s*4)\\b"
+          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(keempat|4|iv)|amendment\\s*4)\\b"
         },
         {
           "role": "current_consolidated",
@@ -380,6 +380,18 @@
           "mengubah"
         ]
       },
+      "instrument_intent_blocking_queries": [
+        "tanggal",
+        "tempat",
+        "di mana",
+        "dimana",
+        "kapan",
+        "lembaga",
+        "institusi",
+        "rapat",
+        "sidang",
+        "pasal apa"
+      ],
       "source_role_labels": {
         "amendment_1_historical": "Pertama",
         "amendment_2_historical": "Kedua",

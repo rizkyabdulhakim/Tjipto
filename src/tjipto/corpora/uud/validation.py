@@ -783,11 +783,28 @@ def _instrument_natural_query_precision_health(evidence: list[dict], legal_units
             "lexical_fallback_blocked_by_instrument_intent",
         }
     ]
+    variant_misses = [
+        row
+        for row in retrieval_units
+        if row.get("status") == "accepted"
+        and row.get("rejection_reason") in {
+            "natural_variant_neighbor_substitution",
+            "punctuation_boundary_miss",
+            "amandemen_alias_miss",
+            "ordinal_alias_miss",
+        }
+    ]
     counts = {
         "natural_fail_closed_query_neighbor_answer_count": len(answerable_fail_closed_targets),
         "natural_fail_closed_query_neighbor_search_count": len(answerable_fail_closed_targets),
         "safe_exact_label_not_rank_first_count": len(safe_not_accepted),
         "lexical_fallback_overrode_instrument_intent_count": len(fallback_overrides),
+        "natural_variant_neighbor_answer_count": len(variant_misses),
+        "natural_variant_neighbor_search_count": len(variant_misses),
+        "punctuation_boundary_miss_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "punctuation_boundary_miss"),
+        "amandemen_alias_miss_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "amandemen_alias_miss"),
+        "ordinal_alias_miss_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "ordinal_alias_miss"),
+        "safe_exact_label_punctuation_rank_miss_count": len(safe_not_accepted),
     }
     return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
 

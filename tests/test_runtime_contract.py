@@ -1005,6 +1005,14 @@ class RuntimeContractTest(unittest.TestCase):
             ("decision perubahan keempat", "Perubahan Keempat Decision"),
             ("scope perubahan ketiga", "Perubahan Ketiga Scope"),
             ("scope perubahan keempat", "Perubahan Keempat Scope"),
+            ("amandemen keempat scope", "Perubahan Keempat Scope"),
+            ("apa scope amandemen keempat", "Perubahan Keempat Scope"),
+            ("perubahan ke-4 scope", "Perubahan Keempat Scope"),
+            ("perubahan ke 4 scope", "Perubahan Keempat Scope"),
+            ("amandemen IV scope", "Perubahan Keempat Scope"),
+            ("scope: perubahan keempat", "Perubahan Keempat Scope"),
+            ("decision, perubahan ketiga", "Perubahan Ketiga Decision"),
+            ("decision: perubahan ketiga", "Perubahan Ketiga Decision"),
         )
         forbidden = ("Determination", "Recital", "Closing", "Signatories", "Clause")
         for query, citation in cases:
@@ -1025,6 +1033,9 @@ class RuntimeContractTest(unittest.TestCase):
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),
             ("Perubahan Kedua Scope", SAFE_INSTRUMENT_EVIDENCE["00628"]),
             ("Perubahan Keempat Recital", SAFE_INSTRUMENT_EVIDENCE["00638"]),
+            ("Perubahan Pertama Scope?", SAFE_INSTRUMENT_EVIDENCE["00621"]),
+            ("Perubahan Kedua Scope?", SAFE_INSTRUMENT_EVIDENCE["00628"]),
+            ("Perubahan Keempat Recital?", SAFE_INSTRUMENT_EVIDENCE["00638"]),
         ):
             result = self.service.search("uud", query, limit=10)
             self.assertEqual(result["route"], "instrument_natural_intent", query)

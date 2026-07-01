@@ -20,6 +20,7 @@ _GENERIC = {
     "instrument_change_context_words": (),
     "instrument_citation_templates": {},
     "instrument_role_queries": {},
+    "instrument_intent_blocking_queries": (),
     "source_role_labels": {},
     "structured_sections": (),
     "structured_lookup_enabled": False,
@@ -59,7 +60,20 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
             key: tuple(value)
             for key, value in (raw.get("instrument_role_queries") or {}).items()
         },
+        "instrument_intent_blocking_queries": tuple(raw.get("instrument_intent_blocking_queries") or ()),
         "source_role_labels": dict(raw.get("source_role_labels") or {}),
         "structured_sections": tuple(raw.get("structured_sections") or ()),
         "structured_lookup_enabled": bool(raw.get("structured_lookup_enabled")),
     }
+
+
+def normalize_intent_text(value: object) -> str:
+    text = str(value or "").casefold()
+    text = re.sub(r"(?<=\bke)-(?=\d+\b)", " ", text)
+    text = re.sub(r"[^0-9a-z]+", " ", text)
+    return " ".join(text.split())
+
+
+def contains_intent_phrase(text: str, aliases: tuple[str, ...] | list[str]) -> bool:
+    haystack = f" {normalize_intent_text(text)} "
+    return any(f" {normalize_intent_text(alias)} " in haystack for alias in aliases)
