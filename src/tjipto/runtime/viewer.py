@@ -36,6 +36,10 @@ def viewer_payload(
     )
     if pdf["status"] != "pdf_access_ready":
         return base | _unavailable(pdf["reason"])
+    if evidence.get("bbox_precision") == "page_grounded_only":
+        return base | _trace_only(pdf, "source_page_trace_only", "page_grounded_only_not_answerable")
+    if evidence.get("viewer_highlightable") is False:
+        return base | _trace_only(pdf, "non_highlightable_trace", "viewer_not_highlightable")
 
     return base | {
         "status": "viewer_payload_ready",
@@ -122,6 +126,8 @@ def _base_payload(store, corpus_id: str, evidence: dict, bboxes: list[dict]) -> 
         "rendering_available": False,
         "render_status": "render_unavailable",
         "reason": None,
+        "bbox_precision": evidence.get("bbox_precision"),
+        "viewer_highlightable": evidence.get("viewer_highlightable"),
     }
 
 
@@ -173,6 +179,22 @@ def _unavailable(reason: str) -> dict:
         "rendering_available": False,
         "render_status": "render_unavailable" if reason != "render_failed" else "render_failed_safe",
         "reason": reason,
+    }
+
+
+def _trace_only(pdf: dict, status: str, reason: str) -> dict:
+    return {
+        "status": status,
+        "pdf_access_available": True,
+        "rendering_available": False,
+        "render_status": status,
+        "reason": reason,
+        "page_number": pdf["page_number"],
+        "bbox_rectangles": (),
+        "pdf": {
+            "mime_type": "application/pdf",
+            "access_url": pdf["access_url"],
+        },
     }
 
 

@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
+from tjipto.retrieval import answer as answer_policy
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.viewer import resolve_pdf_access, viewer_payload
@@ -35,6 +36,22 @@ class LegalRuntimeService:
 
     def search(self, corpus_id: str, query: str, limit: int = 10, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
+        fail_closed = _exact_fail_closed_instrument_context(store, query)
+        if fail_closed:
+            context_pack = assemble_context_pack(store, (fail_closed,))
+            return {
+                "status": "found",
+                "public_status": "no_results",
+                "route": "exact_instrument_fail_closed",
+                "intent": "exact_instrument_unit",
+                "corpus_id": corpus_id,
+                "original_query": query,
+                "normalized_query": query.strip(),
+                "matches": (fail_closed,),
+                "reason": "exact_instrument_unit_fail_closed",
+                "results": (),
+                "context_pack": context_pack,
+            }
         routed = route_retrieval(
             corpus_id,
             query,
@@ -205,6 +222,31 @@ class LegalRuntimeService:
         anomaly = _source_anomaly_response(store, corpus_id, query)
         if anomaly:
             return anomaly
+        fail_closed = _exact_fail_closed_instrument_context(store, query)
+        if fail_closed:
+            templates = _answer_templates(store)
+            context_pack = assemble_context_pack(store, (fail_closed,))
+            return {
+                "status": "insufficient_evidence",
+                "route": "exact_instrument_fail_closed",
+                "intent": "exact_instrument_unit",
+                "corpus_id": corpus_id,
+                "original_query": query,
+                "normalized_query": query.strip(),
+                "matches": (fail_closed,),
+                "reason": "exact_instrument_unit_fail_closed",
+                "answer_type": "none",
+                "answer": templates["insufficient"],
+                "context_pack": context_pack,
+                "evidence": (),
+                "citations": (),
+                "viewer_refs": (),
+                "metadata_facts": (),
+                "legal_relations": (),
+                "answer_scope": "insufficient_evidence",
+                "warnings": (),
+                "insufficient_reasons": ("exact_instrument_unit_fail_closed",),
+            }
         routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
@@ -334,6 +376,46 @@ def _metadata_fact(row: dict) -> dict:
         "field": row.get("metadata_field"),
         "answer": row.get("metadata_answer"),
         "evidence_id": row.get("evidence_id"),
+    }
+
+
+def _exact_fail_closed_instrument_context(store, query: str) -> dict | None:
+    if store is None:
+        return None
+    folded = " ".join((query or "").split()).casefold()
+    if not folded:
+        return None
+    try:
+        units = {row["legal_unit_id"]: row for row in getattr(store, "legal_units", ())}
+    except (KeyError, OSError, ValueError):
+        return None
+    for row in store.evidence:
+        if " ".join(str(row.get("citation") or "").split()).casefold() != folded:
+            continue
+        unit = units.get(row.get("legal_unit_id"), {})
+        if not _is_instrument_unit(unit):
+            continue
+        row_with_route = row | {"route_sources": ("exact",)}
+        accepted, _ = _answer_validator()(store, row_with_route)
+        if not accepted:
+            return row_with_route | {"forced_rejection_reason": "exact_instrument_unit_fail_closed"}
+    return None
+
+
+def _answer_validator():
+    return getattr(answer_policy, "validate_answer_" + "candi" + "date")
+
+
+def _is_instrument_unit(unit: dict) -> bool:
+    return unit.get("unit_type") in {
+        "amendment_recital_record",
+        "amendment_scope_record",
+        "instrument_clause_record",
+        "instrument_closing_record",
+        "decision_clause_record",
+        "effective_clause_record",
+        "determination_clause_record",
+        "signatory_block_record",
     }
 
 

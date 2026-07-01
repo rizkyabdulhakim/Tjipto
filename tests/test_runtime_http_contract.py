@@ -111,9 +111,12 @@ class RuntimeHttpContractTest(unittest.TestCase):
             "/legal/uud/viewer",
             {"evidence_id": _page_grounded_decision_evidence_id()},
         )
-        self.assertEqual(decision["status"], "viewer_payload_ready")
-        self.assertEqual(decision["bbox_rectangles"][0]["bbox_precision"], "page_grounded_only")
-        self.assertFalse(decision["bbox_rectangles"][0]["viewer_highlightable"])
+        self.assertEqual(decision["status"], "source_page_trace_only")
+        self.assertTrue(decision["pdf_access_available"])
+        self.assertFalse(decision["rendering_available"])
+        self.assertFalse(decision["bbox_rectangles"])
+        self.assertEqual(decision["bbox_precision"], "page_grounded_only")
+        self.assertFalse(decision["viewer_highlightable"])
 
         saved = self._post("/legal/uud/bookmarks", {"evidence_id": evidence_id, "note": "cek lagi"})
         self.assertEqual(saved["status"], "saved")

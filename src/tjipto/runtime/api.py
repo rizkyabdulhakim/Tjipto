@@ -112,6 +112,8 @@ def _public_viewer(result: dict) -> dict:
         "source_status_label": result.get("source_status_label"),
         "page_numbers": result.get("page_numbers", ()),
         "bbox_count": result.get("bbox_count"),
+        "bbox_precision": result.get("bbox_precision"),
+        "viewer_highlightable": result.get("viewer_highlightable"),
         "bbox_rectangles": tuple(_public_bbox(row) for row in result.get("bbox_rectangles", ())),
         "pdf_access_available": result.get("pdf_access_available", False),
         "rendering_available": result.get("rendering_available", False),
@@ -151,7 +153,17 @@ def _public_viewer_highlightable(precision: str, value) -> bool:
 def _public_reason(reason):
     if reason in {"metadata_not_found", "relation_not_found"}:
         return "insufficient_evidence"
-    return reason if reason in {"invalid_query", "unsupported_corpus", "citation_not_found", "insufficient_evidence"} else None
+    return reason if reason in {
+        "invalid_query",
+        "unsupported_corpus",
+        "citation_not_found",
+        "insufficient_evidence",
+        "exact_instrument_unit_fail_closed",
+        "neighbor_substitution_not_allowed",
+        "page_grounded_only_not_answerable",
+        "viewer_not_highlightable",
+        "missing_exact_grounding",
+    } else None
 
 
 def _public_search_result(row: dict) -> dict:

@@ -156,6 +156,11 @@ def build_validation_report(
         chunks,
         retrieval_units,
     )
+    validation_report["instrument_query_precision_health"] = _instrument_query_precision_health(
+        evidence,
+        legal_units,
+        retrieval_units,
+    )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
@@ -391,6 +396,12 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"instrument_runtime_safety_{key}:{value}")
     if instrument_safety["status"] != "complete":
         errors.append("instrument_runtime_safety_incomplete")
+    query_precision = _instrument_query_precision_health(evidence, legal_units, retrieval_units)
+    for key, value in query_precision.items():
+        if key.endswith("_count") and value:
+            errors.append(f"instrument_query_precision_{key}:{value}")
+    if query_precision["status"] != "complete":
+        errors.append("instrument_query_precision_incomplete")
     for row in retrieval_units:
         if row["retrieval_unit_id"] in seen_ids["retrieval_unit_id"]:
             errors.append(f"duplicate_retrieval_unit_id:{row['retrieval_unit_id']}")
@@ -694,6 +705,50 @@ def _instrument_runtime_safety_health(
         "instrument_records_unresolved_count": len(unresolved_instrument),
     }
     return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
+
+
+def _instrument_query_precision_health(evidence: list[dict], legal_units: list[dict], retrieval_units: list[dict]) -> dict:
+    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    accepted_evidence_ids = {row["evidence_id"] for row in retrieval_units if row.get("status") == "accepted"}
+    fail_closed_citations = {
+        row.get("citation")
+        for row in evidence
+        if _is_instrument_unit(units_by_id.get(row.get("legal_unit_id"), {}))
+        and row.get("citation")
+        and row["evidence_id"] not in accepted_evidence_ids
+    }
+    same_citation_answerable = [
+        row
+        for row in evidence
+        if row.get("citation") in fail_closed_citations and row["evidence_id"] in accepted_evidence_ids
+    ]
+    accepted_neighbor_substitution = [
+        row
+        for row in retrieval_units
+        if row.get("status") == "accepted" and row.get("rejection_reason") == "neighbor_substitution_not_allowed"
+    ]
+    page_grounded_ready = [row for row in evidence if row.get("bbox_precision") == "page_grounded_only" and row.get("viewer_highlightable") is True]
+    nonhighlightable_exact_ready = [row for row in evidence if row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is False]
+    counts = {
+        "exact_fail_closed_query_neighbor_answer_count": len(same_citation_answerable),
+        "instrument_neighbor_substitution_count": len(accepted_neighbor_substitution),
+        "page_grounded_only_viewer_payload_ready_count": len(page_grounded_ready),
+        "nonhighlightable_exact_viewer_ready_count": len(nonhighlightable_exact_ready),
+    }
+    return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
+
+
+def _is_instrument_unit(unit: dict) -> bool:
+    return unit.get("unit_type") in {
+        "amendment_recital_record",
+        "amendment_scope_record",
+        "instrument_clause_record",
+        "instrument_closing_record",
+        "decision_clause_record",
+        "effective_clause_record",
+        "determination_clause_record",
+        "signatory_block_record",
+    }
 
 
 def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], source_conflicts: list[dict]) -> dict:

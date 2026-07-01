@@ -426,10 +426,12 @@ class RuntimeContractTest(unittest.TestCase):
             {"evidence_id": _page_grounded_decision_evidence_id()},
             ROOT,
         )
-        self.assertEqual(decision["status"], "viewer_payload_ready")
-        self.assertTrue(decision["bbox_rectangles"])
-        self.assertEqual(decision["bbox_rectangles"][0]["bbox_precision"], "page_grounded_only")
-        self.assertFalse(decision["bbox_rectangles"][0]["viewer_highlightable"])
+        self.assertEqual(decision["status"], "source_page_trace_only")
+        self.assertTrue(decision["pdf_access_available"])
+        self.assertFalse(decision["rendering_available"])
+        self.assertFalse(decision["bbox_rectangles"])
+        self.assertEqual(decision["bbox_precision"], "page_grounded_only")
+        self.assertFalse(decision["viewer_highlightable"])
 
     def test_public_bbox_defaults_fail_closed(self) -> None:
         for value in (None, "oops"):
@@ -958,17 +960,67 @@ class RuntimeContractTest(unittest.TestCase):
                 for row in (*ask["context_pack"]["excluded_results"], *search["context_pack"]["excluded_results"])
             }
             if evidence_id in excluded:
-                self.assertEqual(excluded[evidence_id]["reason"], "page_grounded_only_not_answerable", query)
+                self.assertIn(
+                    excluded[evidence_id]["reason"],
+                    {"page_grounded_only_not_answerable", "exact_instrument_unit_fail_closed"},
+                    query,
+                )
                 self.assertFalse(excluded[evidence_id]["viewer_ref"]["can_resolve"], query)
+
+    def test_exact_fail_closed_instrument_queries_do_not_substitute_neighbors(self) -> None:
+        forbidden = (
+            "Recital",
+            "Determination",
+            "Closing",
+            "Signatories",
+            "Clause (a)",
+            "Clause (b)",
+            "Clause (c)",
+            "Clause (d)",
+        )
+        for query in (
+            "Perubahan Pertama Decision",
+            "Perubahan Ketiga Decision",
+            "Perubahan Keempat Decision",
+            "Perubahan Ketiga Scope",
+            "Perubahan Keempat Scope",
+        ):
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertEqual(ask["status"], "insufficient_evidence", query)
+            self.assertEqual(ask["route"], "exact_instrument_fail_closed", query)
+            self.assertFalse(ask["evidence"], query)
+            self.assertFalse(search["results"], query)
+            self.assertEqual(search["public_status"], "no_results", query)
+            self.assertIn("exact_instrument_unit_fail_closed", ask["insufficient_reasons"], query)
+            self.assertTrue(ask["context_pack"]["excluded_results"], query)
+            self.assertEqual(ask["context_pack"]["excluded_results"][0]["reason"], "exact_instrument_unit_fail_closed", query)
+            for row in (*ask["evidence"], *search["results"]):
+                self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
+
+    def test_page_grounded_instrument_viewer_is_trace_only(self) -> None:
+        for evidence_id in UNSAFE_INSTRUMENT_EVIDENCE.values():
+            viewer = self.service.viewer("uud", evidence_id)
+            self.assertIn(viewer["status"], {"source_page_trace_only", "non_highlightable_trace"}, evidence_id)
+            self.assertTrue(viewer["pdf_access_available"], evidence_id)
+            self.assertFalse(viewer["rendering_available"], evidence_id)
+            self.assertFalse(viewer["bbox_rectangles"], evidence_id)
+            self.assertEqual(viewer["bbox_precision"], "page_grounded_only", evidence_id)
+            self.assertFalse(viewer["viewer_highlightable"], evidence_id)
 
     def test_safe_and_fail_closed_instrument_records_keep_policy(self) -> None:
         safety = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "instrument_runtime_safety_health"
         ]
+        precision = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "instrument_query_precision_health"
+        ]
         self.assertEqual(safety["status"], "complete")
-        for key, value in safety.items():
-            if key.endswith("_count"):
-                self.assertEqual(value, 0, key)
+        self.assertEqual(precision["status"], "complete")
+        for health in (safety, precision):
+            for key, value in health.items():
+                if key.endswith("_count"):
+                    self.assertEqual(value, 0, key)
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),
             ("Perubahan Kedua Scope", SAFE_INSTRUMENT_EVIDENCE["00628"]),

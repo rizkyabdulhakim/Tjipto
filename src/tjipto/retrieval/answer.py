@@ -58,6 +58,8 @@ def empty_context_pack(reason: str | None) -> dict:
 
 
 def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
+    if row.get("forced_rejection_reason"):
+        return False, row["forced_rejection_reason"]
     if row.get("runtime_loadable") is False:
         return False, "runtime_not_loadable"
     legal_unit = _legal_unit(store, row.get("legal_unit_id"))
