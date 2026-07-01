@@ -4,6 +4,15 @@ import hashlib
 import re
 
 
+INSERTED_BAB_PREDECESSORS = {
+    "BAB VIIA": ("BAB VII",),
+    "BAB VIIB": ("BAB VIIA", "BAB VII"),
+    "BAB VIIIA": ("BAB VIII",),
+    "BAB IXA": ("BAB IX",),
+    "BAB XA": ("BAB X",),
+}
+
+
 def build_graph_artifacts(
     *,
     source_documents: list[dict],
@@ -20,6 +29,8 @@ def build_graph_artifacts(
     seen_nodes: set[str] = set()
     seen_edges: set[str] = set()
     unit_node_ids: dict[str, str] = {}
+    bab_nodes_by_source_label: dict[tuple[str, str], str] = {}
+    legal_units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     evidence_by_unit = {row["legal_unit_id"]: row for row in evidence}
     source_by_id = {row["source_document_id"]: row for row in source_documents}
     metadata_by_key = {
@@ -81,6 +92,8 @@ def build_graph_artifacts(
         source_role = row.get("source_role") or source_by_id[row["source_document_id"]]["source_role"]
         node_id = f"legal_unit::{row['legal_unit_id']}"
         unit_node_ids[row["legal_unit_id"]] = node_id
+        if row.get("unit_type") == "bab_record" and row.get("unit_label"):
+            bab_nodes_by_source_label[(row["source_document_id"], row["unit_label"])] = node_id
         add_node(
             node_id,
             node_type="legal_unit",
@@ -178,6 +191,8 @@ def build_graph_artifacts(
             parent_node = unit_node_ids.get(parent_id)
             if not parent_node:
                 continue
+            if _is_false_inserted_bab_parent(row, legal_units_by_id[parent_id]):
+                continue
             payload = {
                 "source_document_id": row["source_document_id"],
                 "evidence_ref": evidence_ref,
@@ -187,6 +202,22 @@ def build_graph_artifacts(
             }
             add_edge(parent_node, child_node, "CONTAINS", **payload)
             add_edge(child_node, parent_node, "PART_OF", **payload)
+
+    for (source_document_id, inserted_label), inserted_node in bab_nodes_by_source_label.items():
+        for predecessor_label in INSERTED_BAB_PREDECESSORS.get(inserted_label, ()):
+            predecessor_node = bab_nodes_by_source_label.get((source_document_id, predecessor_label))
+            if not predecessor_node:
+                continue
+            payload = {
+                "source_document_id": source_document_id,
+                "runtime_loadable": False,
+                "validation_status": "accepted_structural_sequence",
+                "confidence_policy": "inserted_bab_sibling_sequence_artifact",
+            }
+            add_edge(predecessor_node, inserted_node, "PRECEDES", **payload)
+            add_edge(inserted_node, predecessor_node, "FOLLOWS", **payload)
+            add_edge(inserted_node, predecessor_node, "INSERTED_AFTER", **payload)
+            break
 
     for row in evidence:
         if row.get("citation", "").endswith(" Scope"):
@@ -287,6 +318,14 @@ def build_graph_artifacts(
 def _edge_id(edge_type: str, source_id: str, target_id: str, evidence_ref: str | None) -> str:
     digest = hashlib.md5(f"{edge_type}|{source_id}|{target_id}|{evidence_ref or ''}".encode("utf-8")).hexdigest()
     return f"edge::{digest}"
+
+
+def _is_false_inserted_bab_parent(child: dict, parent: dict) -> bool:
+    if child.get("unit_type") != "bab_record" or parent.get("unit_type") != "bab_record":
+        return False
+    if child.get("source_document_id") != parent.get("source_document_id"):
+        return False
+    return parent.get("unit_label") in INSERTED_BAB_PREDECESSORS.get(child.get("unit_label"), ())
 
 
 def _numeric_suffix(value: str) -> int:

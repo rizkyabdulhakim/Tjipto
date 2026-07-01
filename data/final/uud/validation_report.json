@@ -45,7 +45,7 @@
     "bbox_records": 1542,
     "retrieval_units": 464,
     "graph_nodes": 2740,
-    "graph_edges": 5122,
+    "graph_edges": 5131,
     "page_text_spans": 2193
   },
   "bbox_precision_counts": {
@@ -89,12 +89,15 @@
       "AMENDS",
       "CONTAINS",
       "DELETES",
+      "FOLLOWS",
       "HAS_DECISION_SESSION",
       "HAS_EFFECTIVE_RULE",
       "HAS_SIGNATORY",
       "HAS_SOURCE_ANOMALY",
+      "INSERTED_AFTER",
       "MODIFIES",
       "PART_OF",
+      "PRECEDES",
       "RENAMES",
       "SUPPLEMENTS"
     ],

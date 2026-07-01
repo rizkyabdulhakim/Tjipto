@@ -17,6 +17,13 @@ from tjipto.corpora.uud_reproducibility import validate_uud_ingestion_artifacts
 
 
 ROOT = Path(__file__).resolve().parents[1]
+INSERTED_BAB_PREDECESSORS = {
+    "BAB VIIA": ("BAB VII",),
+    "BAB VIIB": ("BAB VIIA", "BAB VII"),
+    "BAB VIIIA": ("BAB VIII",),
+    "BAB IXA": ("BAB IX",),
+    "BAB XA": ("BAB X",),
+}
 
 
 def _article_for(row: dict) -> str | None:
@@ -132,6 +139,65 @@ class GraphContractTest(unittest.TestCase):
             if key in expected:
                 self.assertIn(expected[key], row["text"], row["retrieval_unit_id"])
                 self.assertEqual(chunks[row["chunk_id"]]["hierarchy"][0], expected[key], row["chunk_id"])
+
+    def test_inserted_bab_graph_uses_sibling_sequence_not_parent_child(self) -> None:
+        final = ROOT / "data/final/uud"
+        nodes = {
+            row["node_id"]: row
+            for row in read_jsonl(final / "graph_nodes.jsonl")
+        }
+        bab_nodes = {
+            (row["source_document_id"], row["unit_label"]): row["node_id"]
+            for row in nodes.values()
+            if row.get("node_type") == "legal_unit" and row.get("unit_type") == "bab_record"
+        }
+        edges = read_jsonl(final / "graph_edges.jsonl")
+        edge_ids = [row["edge_id"] for row in edges]
+        self.assertEqual(len(edge_ids), len(set(edge_ids)))
+        for edge in edges:
+            self.assertIn(edge["source_id"], nodes, edge["edge_id"])
+            self.assertIn(edge["target_id"], nodes, edge["edge_id"])
+
+        false_contains = []
+        false_part_of = []
+        for edge in edges:
+            source = nodes[edge["source_id"]]
+            target = nodes[edge["target_id"]]
+            if source.get("source_document_id") != target.get("source_document_id"):
+                continue
+            source_label = source.get("unit_label")
+            target_label = target.get("unit_label")
+            if edge["edge_type"] == "CONTAINS" and source_label in INSERTED_BAB_PREDECESSORS.get(target_label, ()):
+                false_contains.append(edge)
+            if edge["edge_type"] == "PART_OF" and target_label in INSERTED_BAB_PREDECESSORS.get(source_label, ()):
+                false_part_of.append(edge)
+        self.assertEqual(false_contains, [])
+        self.assertEqual(false_part_of, [])
+
+        edge_keys = {
+            (row["edge_type"], row["source_id"], row["target_id"], row.get("source_document_id"))
+            for row in edges
+        }
+        for (source_document_id, inserted_label), inserted_node in bab_nodes.items():
+            predecessors = INSERTED_BAB_PREDECESSORS.get(inserted_label)
+            if not predecessors:
+                continue
+            predecessor_node = next(
+                (
+                    bab_nodes[(source_document_id, label)]
+                    for label in predecessors
+                    if (source_document_id, label) in bab_nodes
+                ),
+                None,
+            )
+            if not predecessor_node:
+                continue
+            self.assertIn(("PRECEDES", predecessor_node, inserted_node, source_document_id), edge_keys)
+            self.assertIn(("FOLLOWS", inserted_node, predecessor_node, source_document_id), edge_keys)
+            self.assertIn(("INSERTED_AFTER", inserted_node, predecessor_node, source_document_id), edge_keys)
+
+        self._assert_contains(final, "current_consolidated", "BAB VIIA", "Pasal 22C")
+        self._assert_contains(final, "current_consolidated", "BAB VIIA", "Pasal 22D")
 
     def test_amendment_4_does_not_invent_missing_bab_headings(self) -> None:
         for filename in ("legal_units.jsonl", "chunks.jsonl", "evidence_registry.jsonl"):
@@ -367,6 +433,31 @@ class GraphContractTest(unittest.TestCase):
     def _compact_text(self, text: str) -> str:
         text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "")
         return "".join(re.findall(r"\w+", text.casefold()))
+
+    def _assert_contains(self, final: Path, source_role: str, parent_label: str, child_label: str) -> None:
+        units = {
+            row["legal_unit_id"]: row
+            for row in read_jsonl(final / "legal_units.jsonl")
+        }
+        nodes = {
+            row["legal_unit_id"]: row["node_id"]
+            for row in read_jsonl(final / "graph_nodes.jsonl")
+            if row.get("node_type") == "legal_unit"
+        }
+        parent = next(
+            row for row in units.values()
+            if row.get("source_role") == source_role and row.get("unit_label") == parent_label
+        )
+        child = next(
+            row for row in units.values()
+            if row.get("source_role") == source_role and row.get("unit_label") == child_label
+        )
+        edge_keys = {
+            (row["edge_type"], row["source_id"], row["target_id"])
+            for row in read_jsonl(final / "graph_edges.jsonl")
+        }
+        self.assertIn(("CONTAINS", nodes[parent["legal_unit_id"]], nodes[child["legal_unit_id"]]), edge_keys)
+        self.assertIn(("PART_OF", nodes[child["legal_unit_id"]], nodes[parent["legal_unit_id"]]), edge_keys)
 
 
 if __name__ == "__main__":

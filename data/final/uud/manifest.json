@@ -10,7 +10,7 @@
     "document_metadata": 6,
     "evidence_records": 464,
     "excluded_records": 6,
-    "graph_edges": 5122,
+    "graph_edges": 5131,
     "graph_nodes": 2740,
     "legal_units": 651,
     "metadata_assertions": 1319,
@@ -56,8 +56,8 @@
       "sha256": "ad8b77fd73c46374e37938aeef7727c24a6d4987df2e664c3771bebf10ce49d0"
     },
     "graph_edges.jsonl": {
-      "bytes": 1756980,
-      "sha256": "5ebf4b5b910e24a7f8afe7cc45cd7f9ba652f55887fc8736e32b858bddec255c"
+      "bytes": 1760466,
+      "sha256": "1158e900d62d78c35782af47509c8efba35f2dfe777dfee20e1a84a5710841fd"
     },
     "graph_nodes.jsonl": {
       "bytes": 1461752,
@@ -116,8 +116,8 @@
       "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 3205,
-      "sha256": "e63f75eb5e83609112fc41f4c8f1f10f0fdb455ee167237a44f8bfa25b9cb4d7"
+      "bytes": 3264,
+      "sha256": "560afdc64455add4f432257789f5f1af6de95b00405b6f1bb26d6846a706cdbb"
     },
     "page_text_spans.jsonl": {
       "bytes": 1464117,
