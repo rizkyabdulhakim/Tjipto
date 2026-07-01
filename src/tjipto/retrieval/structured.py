@@ -3,11 +3,12 @@ from __future__ import annotations
 import re
 
 from tjipto.corpora.intent_config import intent_config_for
-from tjipto.corpora.uud.parser import (
-    parse_uud_ayat_reference,
-    parse_uud_bab_reference,
-    parse_uud_pasal_reference,
-    uud_label_keys,
+from tjipto.corpora.parser_dispatch import (
+    DEFAULT_CORPUS_ID,
+    label_keys,
+    parse_ayat_reference,
+    parse_bab_reference,
+    parse_pasal_reference,
 )
 from tjipto.evidence.store import EvidenceStore
 
@@ -20,7 +21,7 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
     instrument = _instrument_rows(store, query, limit, strategy=strategy, config=config)
     if instrument:
         return instrument
-    targets = _targets(query, intent)
+    targets = _targets(query, intent, _corpus_id(config))
     if not targets:
         return ()
     legal_unit_ids = {
@@ -43,7 +44,7 @@ def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None
         return False
     if _instrument_target(query, strategy=strategy, config=config):
         return True
-    return bool(_targets(query, intent))
+    return bool(_targets(query, intent, _corpus_id(config)))
 
 
 def _instrument_target(query: str, *, strategy: str, config=None) -> bool:
@@ -62,7 +63,8 @@ def _instrument_rows(
     folded = (query or "").casefold()
     intent = intent_config_for(strategy, config)
     role = _source_role(query, strategy=strategy, config=config)
-    bab = parse_uud_bab_reference(query)
+    corpus_id = _corpus_id(config)
+    bab = parse_bab_reference(corpus_id, query)
     if (
         bab
         and any(pattern in folded for pattern in intent["instrument_deletion_words"])
@@ -97,28 +99,28 @@ def _instrument_rows(
     return ()
 
 
-def _targets(query: str, intent: dict) -> tuple[str, ...]:
+def _targets(query: str, intent: dict, corpus_id: str) -> tuple[str, ...]:
     text = query or ""
     folded = text.casefold()
     for section in intent["structured_sections"]:
         if any(alias in folded for alias in section.get("aliases", ())):
             target = section["target"]
-            return _with_pasal(target, text) if section.get("with_pasal") else (target,)
-    bab = parse_uud_bab_reference(text)
+            return _with_pasal(target, text, corpus_id) if section.get("with_pasal") else (target,)
+    bab = parse_bab_reference(corpus_id, text)
     if bab:
         return (bab.casefold(),)
-    pasal = parse_uud_pasal_reference(text, allow_roman=True)
+    pasal = parse_pasal_reference(corpus_id, text, allow_roman=True)
     if pasal:
         targets = [pasal.casefold()]
-        ayat = parse_uud_ayat_reference(text)
+        ayat = parse_ayat_reference(corpus_id, text)
         if ayat:
             targets.append(ayat)
         return tuple(targets)
     return ()
 
 
-def _with_pasal(section: str, text: str) -> tuple[str, ...]:
-    pasal = parse_uud_pasal_reference(text, allow_roman=True)
+def _with_pasal(section: str, text: str, corpus_id: str) -> tuple[str, ...]:
+    pasal = parse_pasal_reference(corpus_id, text, allow_roman=True)
     return (section, pasal.casefold()) if pasal else (section,)
 
 
@@ -135,7 +137,11 @@ def _matches_unit(row: dict, targets: tuple[str, ...]) -> bool:
 
 
 def _label_keys(value: object) -> set[str]:
-    return uud_label_keys(value)
+    return label_keys(DEFAULT_CORPUS_ID, value)
+
+
+def _corpus_id(config) -> str:
+    return getattr(config, "corpus_id", DEFAULT_CORPUS_ID)
 
 
 def _scope_query(folded: str, intent: dict) -> bool:

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from tjipto.corpora.intent_config import intent_config_for
-from tjipto.corpora.uud.parser import (
-    has_uud_bab_reference,
-    has_uud_pasal_reference,
-    parse_uud_bab_reference,
-    parse_uud_pasal_reference,
+from tjipto.corpora.parser_dispatch import (
+    DEFAULT_CORPUS_ID,
+    parse_bab_reference,
+    parse_pasal_reference,
 )
 
 
@@ -73,9 +72,10 @@ def has_relation_target(query: str, *, strategy: str = "generic", config=None) -
         return True
     if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
         return True
-    if has_uud_pasal_reference(query) and _route_terms_match(intent, "pasal_children", folded):
+    corpus_id = _corpus_id(config)
+    if _has_pasal(query, corpus_id) and _route_terms_match(intent, "pasal_children", folded):
         return _child_relation_requested(folded, intent)
-    if has_uud_bab_reference(query) and _route_terms_match(intent, "bab_children", folded):
+    if _has_bab(query, corpus_id) and _route_terms_match(intent, "bab_children", folded):
         return _child_relation_requested(folded, intent)
     return False
 
@@ -85,9 +85,10 @@ def _relation(query: str, *, strategy: str, config=None) -> str | None:
     intent = intent_config_for(strategy, config)
     if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
         return _route_name(intent, "parent")
-    if has_uud_pasal_reference(query) and _route_terms_match(intent, "pasal_children", folded):
+    corpus_id = _corpus_id(config)
+    if _has_pasal(query, corpus_id) and _route_terms_match(intent, "pasal_children", folded):
         return _route_name(intent, "pasal_children")
-    if has_uud_bab_reference(query) and _route_terms_match(intent, "bab_children", folded):
+    if _has_bab(query, corpus_id) and _route_terms_match(intent, "bab_children", folded):
         return _route_name(intent, "bab_children")
     if _unsupported_relation_requested(query, folded, strategy=strategy, config=config):
         return _route_name(intent, "unsupported")
@@ -109,8 +110,9 @@ def _route_terms_match(intent: dict, mode: str, folded: str) -> bool:
 
 def _unsupported_relation_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
     intent = intent_config_for(strategy, config)
-    has_pasal = has_uud_pasal_reference(query)
-    has_bab = has_uud_bab_reference(query)
+    corpus_id = _corpus_id(config)
+    has_pasal = _has_pasal(query, corpus_id)
+    has_bab = _has_bab(query, corpus_id)
     direct_relation = any(pattern in folded for pattern in intent["direct_relation_words"])
     relation_words = any(pattern in folded for pattern in intent["relation_words"])
     unsupported_context = any(pattern in folded for pattern in intent["unsupported_relation_context_words"])
@@ -126,7 +128,7 @@ def _child_relation_requested(folded: str, intent: dict) -> bool:
 
 
 def _pasal_parent_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
-    return has_uud_pasal_reference(query) and any(
+    return _has_pasal(query, _corpus_id(config)) and any(
         pattern in folded
         for pattern in intent_config_for(strategy, config)["pasal_parent_words"]
     )
@@ -140,10 +142,11 @@ def _parent_unit(store, query: str, route: dict) -> dict | None:
 
 
 def _unit(store, query: str, unit_type: str) -> dict | None:
+    corpus_id = _corpus_id(getattr(store, "config", None))
     if unit_type == "pasal_record":
-        label = parse_uud_pasal_reference(query)
+        label = parse_pasal_reference(corpus_id, query)
     else:
-        label = parse_uud_bab_reference(query)
+        label = parse_bab_reference(corpus_id, query)
     if label is None:
         return None
     preferred = getattr(store.config, "preferred_source_role", None)
@@ -179,6 +182,18 @@ def _relation_indexes(store) -> tuple[dict[str, list[dict]], dict[str, list[dict
 
 def _source_role(row: dict) -> str | None:
     return row.get("source_role")
+
+
+def _has_pasal(query: str, corpus_id: str) -> bool:
+    return parse_pasal_reference(corpus_id, query) is not None
+
+
+def _has_bab(query: str, corpus_id: str) -> bool:
+    return parse_bab_reference(corpus_id, query) is not None
+
+
+def _corpus_id(config) -> str:
+    return getattr(config, "corpus_id", DEFAULT_CORPUS_ID)
 
 
 def _evidence_for_unit(store, unit: dict, evidence_by_unit: dict[str, list[dict]], descendants_by_parent: dict[str, list[dict]]) -> dict | None:

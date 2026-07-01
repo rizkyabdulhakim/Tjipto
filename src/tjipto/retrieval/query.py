@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from tjipto.corpora.uud.parser import normalize_uud_query_reference
+from tjipto.corpora.parser_dispatch import DEFAULT_CORPUS_ID, normalize_query_reference
 from tjipto.evidence.citation import parse_citation
 
 
@@ -15,7 +15,7 @@ def normalize_query(query: str, *, strategy: str = "generic", config=None) -> di
             "normalized_query": re.sub(r"\s+", " ", normalized).strip(),
         }
     normalized = _apply_alias_rules(normalized, config)
-    normalized = normalize_uud_query_reference(normalized)
+    normalized = normalize_query_reference(getattr(config, "corpus_id", DEFAULT_CORPUS_ID), normalized)
     return {"original_query": original, "normalized_query": normalized}
 
 
