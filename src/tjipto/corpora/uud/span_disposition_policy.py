@@ -26,6 +26,23 @@ INSTRUMENT_ROLE_CLASSIFICATION = {
     "source_conflict_trace": "source_conflict_trace",
 }
 
+UNIT_SPECIFICITY = {
+    "ayat_record": 70,
+    "pasal_record": 60,
+    "aturan_tambahan_record": 50,
+    "aturan_peralihan_record": 50,
+    "pembukaan_record": 45,
+    "amendment_recital_record": 40,
+    "amendment_scope_record": 40,
+    "instrument_clause_record": 40,
+    "instrument_closing_record": 40,
+    "decision_clause_record": 40,
+    "effective_clause_record": 40,
+    "determination_clause_record": 40,
+    "signatory_block_record": 40,
+    "bab_record": 10,
+}
+
 
 def role_for_legal_unit(unit: dict) -> str:
     if unit.get("exclusion_ref") == "source_typo_reference::uud_source_typo_reference_00001":
@@ -36,6 +53,12 @@ def role_for_legal_unit(unit: dict) -> str:
     if unit_type in {"bab_record", "aturan_peralihan_record", "aturan_tambahan_record"}:
         return "structural_heading"
     return INSTRUMENT_UNIT_ROLES.get(unit_type, "needs_review")
+
+
+def specificity_for_legal_unit(unit: dict) -> int:
+    if role_for_legal_unit(unit) == "source_conflict_trace":
+        return 80
+    return UNIT_SPECIFICITY.get(unit.get("unit_type"), 0)
 
 
 def classification_for_role(role: str) -> str:

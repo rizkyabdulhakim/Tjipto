@@ -17,6 +17,7 @@ from tjipto.corpora.uud.provenance_exceptions import (
     needs_review,
     review_category,
 )
+from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.core.manifest import read_jsonl
 
@@ -143,6 +144,11 @@ def build_validation_report(
         chunks,
         metadata_grounding=metadata_grounding,
         source_conflicts=source_conflicts,
+    )
+    validation_report["semantic_precedence_health"] = _semantic_precedence_health(
+        page_text_spans,
+        legal_units,
+        source_conflicts,
     )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
@@ -367,6 +373,12 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"text_span_unknown_metadata_target:{row['text_span_id']}:{target_id}")
             elif target_type == "source_conflict" and target_id not in source_conflict_ids:
                 errors.append(f"text_span_unknown_source_conflict_target:{row['text_span_id']}:{target_id}")
+    semantic_precedence = _semantic_precedence_health(page_text_spans, legal_units, source_conflicts)
+    for key, value in semantic_precedence.items():
+        if key.endswith("_count") and value:
+            errors.append(f"semantic_precedence_{key}:{value}")
+    if semantic_precedence["status"] != "complete":
+        errors.append("semantic_precedence_incomplete")
     for row in retrieval_units:
         if row["retrieval_unit_id"] in seen_ids["retrieval_unit_id"]:
             errors.append(f"duplicate_retrieval_unit_id:{row['retrieval_unit_id']}")
@@ -556,6 +568,61 @@ def _target_exists(row: dict, legal_targets: set[str], metadata_targets: set[str
     if target_type == "source_conflict":
         return target_id in conflict_targets
     return False
+
+
+def _semantic_precedence_health(page_text_spans: list[dict], legal_units: list[dict], source_conflicts: list[dict]) -> dict:
+    spans_by_id = {row["text_span_id"]: row for row in page_text_spans}
+    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    unit_refs_by_span: dict[str, list[dict]] = defaultdict(list)
+    for unit in legal_units:
+        for span_id in unit.get("text_span_ids") or ():
+            unit_refs_by_span[span_id].append(unit)
+
+    normative_spans_classified_structural = []
+    pasal_ayat_spans_classified_structural = []
+    parent_structural_overrides = []
+    structural_spans_with_normative_target = []
+    for span_id, refs in unit_refs_by_span.items():
+        span = spans_by_id.get(span_id)
+        if not span:
+            continue
+        unit_types = {row.get("unit_type") for row in refs}
+        has_normative = bool(unit_types & {"ayat_record", "pasal_record", "pembukaan_record"})
+        has_pasal_ayat = bool(unit_types & {"ayat_record", "pasal_record"})
+        has_structural_parent = bool(unit_types & {"bab_record", "aturan_tambahan_record", "aturan_peralihan_record"})
+        is_structural_disposition = span.get("span_role") == "structural_heading" or span.get("promotion_status") == "excluded_structural"
+        if has_normative and is_structural_disposition:
+            normative_spans_classified_structural.append(span_id)
+        if has_pasal_ayat and is_structural_disposition:
+            pasal_ayat_spans_classified_structural.append(span_id)
+        target = units_by_id.get(span.get("promotion_target_id"))
+        if has_structural_parent and any(role_for_legal_unit(row) != "structural_heading" for row in refs):
+            if is_structural_disposition or (target and role_for_legal_unit(target) == "structural_heading"):
+                parent_structural_overrides.append(span_id)
+        if is_structural_disposition and target and role_for_legal_unit(target) == "normative_text":
+            structural_spans_with_normative_target.append(span_id)
+
+    source_conflict_ids = {row["source_conflict_id"] for row in source_conflicts}
+    source_conflict_runtime_or_canonical = [
+        row["text_span_id"]
+        for row in page_text_spans
+        if row.get("span_role") == "source_conflict_trace"
+        and (
+            row.get("legal_force") == "canonical_normative"
+            or row.get("promotion_status") == "promoted_legal_unit"
+            or row.get("runtime_loadable") is True
+            or row.get("canonical_use_allowed") is True
+            or (row.get("promotion_target_type") == "source_conflict" and row.get("promotion_target_id") not in source_conflict_ids)
+        )
+    ]
+    counts = {
+        "normative_spans_classified_structural_count": len(normative_spans_classified_structural),
+        "pasal_ayat_spans_classified_structural_count": len(pasal_ayat_spans_classified_structural),
+        "parent_structural_override_count": len(parent_structural_overrides),
+        "structural_spans_with_normative_target_count": len(structural_spans_with_normative_target),
+        "source_conflict_runtime_or_canonical_count": len(source_conflict_runtime_or_canonical),
+    }
+    return {**counts, "status": "complete" if page_text_spans and not any(counts.values()) else "incomplete"}
 
 
 def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], source_conflicts: list[dict]) -> dict:

@@ -26,6 +26,10 @@ class TextSpanDispositionContractTest(unittest.TestCase):
         self.chunks = {row["chunk_id"]: row for row in read_jsonl(FINAL / "chunks.jsonl")}
         self.metadata = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}
         self.source_conflicts = {row["source_conflict_id"]: row for row in read_jsonl(FINAL / "source_conflicts.jsonl")}
+        self.refs_by_span: dict[str, list[dict]] = {}
+        for unit in self.units.values():
+            for span_id in unit.get("text_span_ids") or ():
+                self.refs_by_span.setdefault(span_id, []).append(unit)
 
     def test_every_page_text_span_has_disposition(self) -> None:
         for span in self.spans:
@@ -49,8 +53,8 @@ class TextSpanDispositionContractTest(unittest.TestCase):
             target_type = span["promotion_target_type"]
             target_id = span["promotion_target_id"]
             if span["promotion_status"] == "promoted_legal_unit":
-                self.assertIn(target_type, {"chunk", "legal_unit"})
-                self.assertIn(target_id, self.chunks if target_type == "chunk" else self.units)
+                self.assertEqual(target_type, "legal_unit")
+                self.assertIn(target_id, self.units)
             elif span["promotion_status"] == "promoted_metadata":
                 self.assertIn(target_id, self.metadata)
             elif span["promotion_status"] == "promoted_source_conflict":
@@ -64,6 +68,25 @@ class TextSpanDispositionContractTest(unittest.TestCase):
             if span["span_role"] == "source_conflict_trace":
                 self.assertNotEqual(span["legal_force"], "canonical_normative")
                 self.assertNotEqual(span["promotion_status"], "promoted_legal_unit")
+
+    def test_normative_spans_are_not_stolen_by_parent_structural_units(self) -> None:
+        for span in self.spans:
+            unit_types = {row["unit_type"] for row in self.refs_by_span.get(span["text_span_id"], [])}
+            if unit_types & {"pasal_record", "ayat_record", "pembukaan_record"}:
+                self.assertNotEqual(span["span_role"], "structural_heading", span["text_span_id"])
+                self.assertNotEqual(span["promotion_status"], "excluded_structural", span["text_span_id"])
+            if unit_types & {"ayat_record"}:
+                self.assertEqual(self.units[span["promotion_target_id"]]["unit_type"], "ayat_record", span["text_span_id"])
+            elif unit_types & {"pasal_record"}:
+                self.assertIn(self.units[span["promotion_target_id"]]["unit_type"], {"pasal_record", "ayat_record"}, span["text_span_id"])
+
+    def test_representative_semantic_precedence_examples(self) -> None:
+        self.assert_span("Negara Indonesia ialah Negara Kesatuan", "normative_text", "promoted_legal_unit", "ayat_record")
+        self.assert_span("Segala warga negara bersamaan kedudukannya", "normative_text", "promoted_legal_unit", "ayat_record")
+        self.assert_span("Bahwa sesungguhnya kemerdekaan", "normative_text", "promoted_legal_unit", "pembukaan_record")
+        self.assert_span("BAB IXA", "structural_heading", "excluded_structural", "bab_record")
+        self.assert_span("ATURAN TAMBAHAN", "source_conflict_trace", "promoted_source_conflict", None)
+        self.assert_span("Peralihan Pasal I, II, dan III", "instrument_scope", "nonruntime_instrument_text", None)
 
     def test_known_instrument_text_gaps_remain_nonruntime(self) -> None:
         for chunk_id in (
@@ -94,6 +117,27 @@ class TextSpanDispositionContractTest(unittest.TestCase):
         self.assertEqual(health["legal_force_present_count"], len(self.spans))
         self.assertEqual(health["needs_review_count"], 0)
         self.assertEqual(health["status"], "complete")
+
+        semantic = read_json(FINAL / "validation_report.json")["semantic_precedence_health"]
+        self.assertEqual(semantic["normative_spans_classified_structural_count"], 0)
+        self.assertEqual(semantic["pasal_ayat_spans_classified_structural_count"], 0)
+        self.assertEqual(semantic["parent_structural_override_count"], 0)
+        self.assertEqual(semantic["structural_spans_with_normative_target_count"], 0)
+        self.assertEqual(semantic["source_conflict_runtime_or_canonical_count"], 0)
+        self.assertEqual(semantic["status"], "complete")
+
+    def assert_span(
+        self,
+        text: str,
+        role: str,
+        status: str,
+        target_unit_type: str | None,
+    ) -> None:
+        span = next(row for row in self.spans if text in row["text"])
+        self.assertEqual(span["span_role"], role, span["text_span_id"])
+        self.assertEqual(span["promotion_status"], status, span["text_span_id"])
+        if target_unit_type:
+            self.assertEqual(self.units[span["promotion_target_id"]]["unit_type"], target_unit_type, span["text_span_id"])
 
 
 if __name__ == "__main__":

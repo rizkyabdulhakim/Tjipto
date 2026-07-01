@@ -103,6 +103,14 @@
     "fake_grounding_id_count": 0,
     "status": "complete"
   },
+  "semantic_precedence_health": {
+    "normative_spans_classified_structural_count": 0,
+    "pasal_ayat_spans_classified_structural_count": 0,
+    "parent_structural_override_count": 0,
+    "structural_spans_with_normative_target_count": 0,
+    "source_conflict_runtime_or_canonical_count": 0,
+    "status": "complete"
+  },
   "artifact_origin_health": {
     "manifest_file_rows": 23,
     "files_with_origin": 23,

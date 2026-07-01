@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import re
 
-from tjipto.corpora.uud.span_disposition_policy import classification_for_role, role_for_legal_unit, unreferenced_role
+from tjipto.corpora.uud.span_disposition_policy import (
+    classification_for_role,
+    role_for_legal_unit,
+    specificity_for_legal_unit,
+    unreferenced_role,
+)
 
 
 def apply_page_text_span_dispositions(
@@ -38,7 +43,11 @@ def _legal_span_refs(legal_units: list[dict], chunks_by_unit: dict[str, dict]) -
         chunk = chunks_by_unit.get(unit["legal_unit_id"], {})
         role = role_for_legal_unit(unit)
         for span_id in unit.get("text_span_ids") or chunk.get("text_span_ids") or ():
-            refs.setdefault(span_id, _legal_disposition(unit, chunk, role))
+            candidate = _legal_disposition(unit, chunk, role)
+            if span_id not in refs or specificity_for_legal_unit(unit) > refs[span_id]["specificity"]:
+                refs[span_id] = {"specificity": specificity_for_legal_unit(unit), **candidate}
+    for ref in refs.values():
+        ref.pop("specificity", None)
     return refs
 
 
@@ -74,8 +83,8 @@ def _legal_disposition(unit: dict, chunk: dict, role: str) -> dict:
         "semantic_classification": classification_for_role(role),
         "legal_force": _legal_force_for_source(unit.get("source_role")),
         "promotion_status": "promoted_legal_unit",
-        "promotion_target_type": "chunk" if chunk else "legal_unit",
-        "promotion_target_id": chunk.get("chunk_id") or unit["legal_unit_id"],
+        "promotion_target_type": "legal_unit",
+        "promotion_target_id": unit["legal_unit_id"],
         "exclusion_reason": None,
         "validation_basis": "legal_unit_text_span",
         "review_status": "accepted",
