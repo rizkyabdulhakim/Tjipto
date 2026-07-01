@@ -3,14 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 
-
-INSERTED_BAB_PREDECESSORS = {
-    "BAB VIIA": ("BAB VII",),
-    "BAB VIIB": ("BAB VIIA", "BAB VII"),
-    "BAB VIIIA": ("BAB VIII",),
-    "BAB IXA": ("BAB IX",),
-    "BAB XA": ("BAB X",),
-}
+from tjipto.corpora.uud.specs import UUD_INSERTED_BAB_PREDECESSORS, UUD_LEGAL_GRAPH_EDGE_SCHEMA
 
 
 def build_graph_artifacts(
@@ -204,19 +197,19 @@ def build_graph_artifacts(
             add_edge(child_node, parent_node, "PART_OF", **payload)
 
     for (source_document_id, inserted_label), inserted_node in bab_nodes_by_source_label.items():
-        for predecessor_label in INSERTED_BAB_PREDECESSORS.get(inserted_label, ()):
+        source_meta = source_by_id[source_document_id]
+        sequence_payload = {
+            "source_document_id": source_document_id,
+            "source_role": source_meta["source_role"],
+            "temporal_context": source_meta.get("temporal_context"),
+        }
+        for predecessor_label in UUD_INSERTED_BAB_PREDECESSORS.get(inserted_label, ()):
             predecessor_node = bab_nodes_by_source_label.get((source_document_id, predecessor_label))
             if not predecessor_node:
                 continue
-            payload = {
-                "source_document_id": source_document_id,
-                "runtime_loadable": False,
-                "validation_status": "accepted_structural_sequence",
-                "confidence_policy": "inserted_bab_sibling_sequence_artifact",
-            }
-            add_edge(predecessor_node, inserted_node, "PRECEDES", **payload)
-            add_edge(inserted_node, predecessor_node, "FOLLOWS", **payload)
-            add_edge(inserted_node, predecessor_node, "INSERTED_AFTER", **payload)
+            _add_structural_sequence_edge(add_edge, predecessor_node, inserted_node, "PRECEDES", sequence_payload)
+            _add_structural_sequence_edge(add_edge, inserted_node, predecessor_node, "FOLLOWS", sequence_payload)
+            _add_structural_sequence_edge(add_edge, inserted_node, predecessor_node, "INSERTED_AFTER", sequence_payload)
             break
 
     for row in evidence:
@@ -325,7 +318,21 @@ def _is_false_inserted_bab_parent(child: dict, parent: dict) -> bool:
         return False
     if child.get("source_document_id") != parent.get("source_document_id"):
         return False
-    return parent.get("unit_label") in INSERTED_BAB_PREDECESSORS.get(child.get("unit_label"), ())
+    return parent.get("unit_label") in UUD_INSERTED_BAB_PREDECESSORS.get(child.get("unit_label"), ())
+
+
+def _add_structural_sequence_edge(add_edge, source_id: str, target_id: str, edge_type: str, payload: dict) -> None:
+    schema = UUD_LEGAL_GRAPH_EDGE_SCHEMA[edge_type]
+    add_edge(
+        source_id,
+        target_id,
+        edge_type,
+        **payload,
+        runtime_loadable=schema["runtime_loadable"],
+        validation_status=schema["validation_status"],
+        confidence_policy=schema["confidence_policy"],
+        derivation_basis=schema["derivation_basis"],
+    )
 
 
 def _numeric_suffix(value: str) -> int:

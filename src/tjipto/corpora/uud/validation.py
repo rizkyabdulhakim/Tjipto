@@ -4,6 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
+from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.core.manifest import read_jsonl
 
 
@@ -24,6 +25,11 @@ PROVENANCE_EDGE_TYPES = {
     "HAS_BBOX",
     "EXCLUDED_BECAUSE",
 }
+STRUCTURAL_SEQUENCE_EDGE_TYPES = {
+    edge_type
+    for edge_type, schema in UUD_LEGAL_GRAPH_EDGE_SCHEMA.items()
+    if schema.get("category") == "structural_sequence"
+}
 LEGAL_EDGE_TYPES = {
     "CONTAINS",
     "PART_OF",
@@ -34,9 +40,7 @@ LEGAL_EDGE_TYPES = {
     "DELETES",
     "RENAMES",
     "SUPPLEMENTS",
-    "PRECEDES",
-    "FOLLOWS",
-    "INSERTED_AFTER",
+    *STRUCTURAL_SEQUENCE_EDGE_TYPES,
     "HAS_EFFECTIVE_RULE",
     "HAS_SIGNATORY",
     "HAS_DECISION_SESSION",
@@ -344,6 +348,18 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                     errors.append(f"runtime_loadable_legal_edge_missing_confidence:{row['edge_id']}")
             if edge_type in {"AMENDS", "AMENDED_BY"} and row["source_id"].startswith("source_role::"):
                 errors.append(f"source_role_amends_promoted:{row['edge_id']}")
+            if edge_type in STRUCTURAL_SEQUENCE_EDGE_TYPES:
+                schema = UUD_LEGAL_GRAPH_EDGE_SCHEMA[edge_type]
+                if row.get("runtime_loadable") != schema["runtime_loadable"]:
+                    errors.append(f"structural_sequence_runtime_loadable:{row['edge_id']}")
+                if row.get("validation_status") != schema["validation_status"]:
+                    errors.append(f"structural_sequence_validation_status:{row['edge_id']}")
+                if row.get("derivation_basis") != schema["derivation_basis"]:
+                    errors.append(f"structural_sequence_derivation_basis:{row['edge_id']}")
+                if not row.get("source_role"):
+                    errors.append(f"structural_sequence_missing_source_role:{row['edge_id']}")
+                if not row.get("temporal_context"):
+                    errors.append(f"structural_sequence_missing_temporal_context:{row['edge_id']}")
             evidence_ref = row.get("evidence_ref")
             if evidence_ref and evidence_ref not in evidence_by_id and evidence_ref not in metadata_grounding_ids and evidence_ref not in source_conflict_ids:
                 errors.append(f"legal_edge_unknown_evidence_ref:{row['edge_id']}:{evidence_ref}")

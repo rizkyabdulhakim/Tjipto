@@ -120,6 +120,49 @@ UUD_CHUNK_ID_STARTS = {
 }
 
 
+UUD_INSERTED_BAB_PREDECESSORS = {
+    "BAB VIIA": ("BAB VII",),
+    "BAB VIIB": ("BAB VIIA", "BAB VII"),
+    "BAB VIIIA": ("BAB VIII",),
+    "BAB IXA": ("BAB IX",),
+    "BAB XA": ("BAB X",),
+}
+
+
+UUD_LEGAL_GRAPH_EDGE_SCHEMA = {
+    "INSERTED_AFTER": {
+        "category": "structural_sequence",
+        "source": "inserted_structural_unit",
+        "target": "predecessor_structural_unit",
+        "hierarchy_edge": False,
+        "runtime_loadable": False,
+        "validation_status": "accepted_structural_sequence",
+        "derivation_basis": "structural_order",
+        "confidence_policy": "inserted_bab_sibling_sequence_artifact",
+    },
+    "PRECEDES": {
+        "category": "structural_sequence",
+        "source": "predecessor_structural_unit",
+        "target": "following_structural_unit",
+        "hierarchy_edge": False,
+        "runtime_loadable": False,
+        "validation_status": "accepted_structural_sequence",
+        "derivation_basis": "structural_order",
+        "confidence_policy": "inserted_bab_sibling_sequence_artifact",
+    },
+    "FOLLOWS": {
+        "category": "structural_sequence",
+        "source": "following_structural_unit",
+        "target": "predecessor_structural_unit",
+        "hierarchy_edge": False,
+        "runtime_loadable": False,
+        "validation_status": "accepted_structural_sequence",
+        "derivation_basis": "structural_order",
+        "confidence_policy": "inserted_bab_sibling_sequence_artifact",
+    },
+}
+
+
 INSERTED_BAB_SPECS = (
     {
         "source_document_id": "uud::current_consolidated",

@@ -9,6 +9,7 @@ import unittest
 
 from tjipto.corpora.adapter import config_for
 from tjipto.corpora.uud_artifact_baseline import validate_uud_artifact_baseline
+from tjipto.corpora.uud.specs import UUD_INSERTED_BAB_PREDECESSORS, UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.core.manifest import file_sha256
 from tjipto.graph.store import GraphStore
 from tjipto.core.manifest import read_jsonl
@@ -24,6 +25,7 @@ INSERTED_BAB_PREDECESSORS = {
     "BAB IXA": ("BAB IX",),
     "BAB XA": ("BAB X",),
 }
+SEQUENCE_EDGE_TYPES = {"INSERTED_AFTER", "PRECEDES", "FOLLOWS"}
 
 
 def _article_for(row: dict) -> str | None:
@@ -75,6 +77,18 @@ class GraphContractTest(unittest.TestCase):
         for row in rows:
             self.assertIn(row["source_document_id"], source_ids)
             self.assertNotEqual(row["status"], "unresolved_review_required_required")
+
+    def test_inserted_bab_policy_and_schema_live_in_specs(self) -> None:
+        graph_builder_source = (ROOT / "src/tjipto/corpora/uud/graph_builder.py").read_text(encoding="utf-8")
+        self.assertNotIn("INSERTED_BAB_PREDECESSORS = {", graph_builder_source)
+        self.assertEqual(UUD_INSERTED_BAB_PREDECESSORS, INSERTED_BAB_PREDECESSORS)
+        for edge_type in SEQUENCE_EDGE_TYPES:
+            schema = UUD_LEGAL_GRAPH_EDGE_SCHEMA[edge_type]
+            self.assertEqual(schema["category"], "structural_sequence")
+            self.assertFalse(schema["hierarchy_edge"])
+            self.assertFalse(schema["runtime_loadable"])
+            self.assertEqual(schema["validation_status"], "accepted_structural_sequence")
+            self.assertEqual(schema["derivation_basis"], "structural_order")
 
     def test_inserted_bab_hierarchy_is_consistent(self) -> None:
         final = ROOT / "data/final/uud"
@@ -198,6 +212,36 @@ class GraphContractTest(unittest.TestCase):
 
         self._assert_contains(final, "current_consolidated", "BAB VIIA", "Pasal 22C")
         self._assert_contains(final, "current_consolidated", "BAB VIIA", "Pasal 22D")
+
+    def test_inserted_bab_sequence_edges_follow_schema_and_source_scope(self) -> None:
+        final = ROOT / "data/final/uud"
+        nodes = {
+            row["node_id"]: row
+            for row in read_jsonl(final / "graph_nodes.jsonl")
+        }
+        edges = [
+            row for row in read_jsonl(final / "graph_edges.jsonl")
+            if row["edge_type"] in SEQUENCE_EDGE_TYPES
+        ]
+        self.assertEqual(len(edges), 21)
+        edge_keys = {(row["edge_type"], row["source_id"], row["target_id"]) for row in edges}
+        for edge in edges:
+            source = nodes[edge["source_id"]]
+            target = nodes[edge["target_id"]]
+            self.assertEqual(edge["relation_type"], edge["edge_type"])
+            self.assertEqual(edge["source_document_id"], source["source_document_id"])
+            self.assertEqual(edge["source_document_id"], target["source_document_id"])
+            self.assertEqual(edge["source_role"], source["source_role"])
+            self.assertEqual(edge["temporal_context"], source["source_role"])
+            self.assertFalse(edge["runtime_loadable"])
+            self.assertEqual(edge["validation_status"], "accepted_structural_sequence")
+            self.assertEqual(edge["derivation_basis"], "structural_order")
+            self.assertEqual(edge["confidence_policy"], "inserted_bab_sibling_sequence_artifact")
+            if edge["edge_type"] == "INSERTED_AFTER":
+                self.assertIn(("FOLLOWS", edge["source_id"], edge["target_id"]), edge_keys)
+                self.assertIn(("PRECEDES", edge["target_id"], edge["source_id"]), edge_keys)
+            if edge["edge_type"] == "PRECEDES":
+                self.assertIn(("FOLLOWS", edge["target_id"], edge["source_id"]), edge_keys)
 
     def test_amendment_4_does_not_invent_missing_bab_headings(self) -> None:
         for filename in ("legal_units.jsonl", "chunks.jsonl", "evidence_registry.jsonl"):
