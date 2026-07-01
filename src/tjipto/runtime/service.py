@@ -374,7 +374,7 @@ def _matched_source_conflict(store, query: str) -> dict | None:
     matches = [
         (score, row)
         for row in store.source_conflicts
-        if (score := _source_conflict_match_score(row, folded, intent)) > 0
+        if (score := _source_conflict_match_score(store, row, folded, intent)) > 0
     ]
     if not matches:
         return None
@@ -421,8 +421,8 @@ def _source_conflict_reasons(store, query: str) -> list[str]:
     return reasons
 
 
-def _source_conflict_match_score(conflict: dict, folded_query: str, intent: dict) -> int:
-    source_role = str(conflict.get("source_document_id") or "").split("::")[-1]
+def _source_conflict_match_score(store, conflict: dict, folded_query: str, intent: dict) -> int:
+    source_role = str(_source_document_meta(store, conflict.get("source_document_id")).get("source_role") or "")
     score = 0
     role_label = str((intent.get("role_labels") or {}).get(source_role) or source_role).casefold()
     if role_label and role_label in folded_query:
@@ -446,6 +446,13 @@ def _source_conflict_match_score(conflict: dict, folded_query: str, intent: dict
     conflict_tokens = {token for token in re.findall(r"[a-z0-9]+", haystack) if len(token) > 2}
     overlap = query_tokens & conflict_tokens
     return len(overlap) if len(overlap) >= 2 else 0
+
+
+def _source_document_meta(store, source_document_id: object) -> dict:
+    return next(
+        (row for row in store.source_documents if row.get("source_document_id") == source_document_id),
+        {},
+    )
 
 
 def _meaningful_conflict_tokens(text: str, intent: dict) -> set[str]:

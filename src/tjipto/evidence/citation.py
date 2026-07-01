@@ -1,19 +1,10 @@
 from __future__ import annotations
 
-import re
-
-
-PASAL_RE = re.compile(r"pasal\s+([0-9]+[A-Z]?)", re.IGNORECASE)
-AYAT_RE = re.compile(r"ayat\s*\(?([0-9]+)\)?", re.IGNORECASE)
+from tjipto.corpora.uud.parser import parse_uud_ayat_reference, parse_uud_pasal_reference
 
 
 def parse_citation(text: str) -> tuple[str | None, str | None]:
-    pasal = PASAL_RE.search(text or "")
-    ayat = AYAT_RE.search(text or "")
-    return (
-        f"Pasal {pasal.group(1).upper()}" if pasal else None,
-        f"({ayat.group(1)})" if ayat else None,
-    )
+    return parse_uud_pasal_reference(text), parse_uud_ayat_reference(text)
 
 
 def evidence_matches_citation(row: dict, pasal: str | None, ayat: str | None) -> bool:

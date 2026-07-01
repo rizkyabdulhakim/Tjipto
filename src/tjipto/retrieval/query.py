@@ -2,13 +2,8 @@ from __future__ import annotations
 
 import re
 
+from tjipto.corpora.uud.parser import normalize_uud_query_reference
 from tjipto.evidence.citation import parse_citation
-
-
-PASAL_LETTER_RE = re.compile(r"\bpasal\s+([0-9]+)\s+([a-z])\b", re.IGNORECASE)
-PASAL_SHORTHAND_AYAT_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\s*\(\s*([0-9]+)\s*\)", re.IGNORECASE)
-PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\b", re.IGNORECASE)
-AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
 
 
 def normalize_query(query: str, *, strategy: str = "generic", config=None) -> dict:
@@ -20,17 +15,7 @@ def normalize_query(query: str, *, strategy: str = "generic", config=None) -> di
             "normalized_query": re.sub(r"\s+", " ", normalized).strip(),
         }
     normalized = _apply_alias_rules(normalized, config)
-    normalized = PASAL_LETTER_RE.sub(
-        lambda match: f"Pasal {match.group(1)}{match.group(2).upper()}",
-        normalized,
-    )
-    normalized = PASAL_SHORTHAND_AYAT_RE.sub(
-        lambda match: f"Pasal {match.group(1).upper()} ayat ({match.group(2)})",
-        normalized,
-    )
-    normalized = PASAL_RE.sub(lambda match: f"Pasal {match.group(1).upper()}", normalized)
-    normalized = AYAT_RE.sub(lambda match: f"ayat ({match.group(1)})", normalized)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
+    normalized = normalize_uud_query_reference(normalized)
     return {"original_query": original, "normalized_query": normalized}
 
 

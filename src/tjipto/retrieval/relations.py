@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import re
-
 from tjipto.corpora.intent_config import intent_config_for
-
-
-BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s*([a-z]?)\b", re.IGNORECASE)
-PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\b", re.IGNORECASE)
+from tjipto.corpora.uud.parser import (
+    has_uud_bab_reference,
+    has_uud_pasal_reference,
+    parse_uud_bab_reference,
+    parse_uud_pasal_reference,
+)
 
 
 def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
@@ -73,9 +73,9 @@ def has_relation_target(query: str, *, strategy: str = "generic", config=None) -
         return True
     if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
         return True
-    if PASAL_RE.search(query or "") and _route_terms_match(intent, "pasal_children", folded):
+    if has_uud_pasal_reference(query) and _route_terms_match(intent, "pasal_children", folded):
         return _child_relation_requested(folded, intent)
-    if BAB_RE.search(query or "") and _route_terms_match(intent, "bab_children", folded):
+    if has_uud_bab_reference(query) and _route_terms_match(intent, "bab_children", folded):
         return _child_relation_requested(folded, intent)
     return False
 
@@ -85,9 +85,9 @@ def _relation(query: str, *, strategy: str, config=None) -> str | None:
     intent = intent_config_for(strategy, config)
     if _pasal_parent_requested(query, folded, strategy=strategy, config=config):
         return _route_name(intent, "parent")
-    if PASAL_RE.search(query or "") and _route_terms_match(intent, "pasal_children", folded):
+    if has_uud_pasal_reference(query) and _route_terms_match(intent, "pasal_children", folded):
         return _route_name(intent, "pasal_children")
-    if BAB_RE.search(query or "") and _route_terms_match(intent, "bab_children", folded):
+    if has_uud_bab_reference(query) and _route_terms_match(intent, "bab_children", folded):
         return _route_name(intent, "bab_children")
     if _unsupported_relation_requested(query, folded, strategy=strategy, config=config):
         return _route_name(intent, "unsupported")
@@ -109,8 +109,8 @@ def _route_terms_match(intent: dict, mode: str, folded: str) -> bool:
 
 def _unsupported_relation_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
     intent = intent_config_for(strategy, config)
-    has_pasal = PASAL_RE.search(query or "") is not None
-    has_bab = BAB_RE.search(query or "") is not None
+    has_pasal = has_uud_pasal_reference(query)
+    has_bab = has_uud_bab_reference(query)
     direct_relation = any(pattern in folded for pattern in intent["direct_relation_words"])
     relation_words = any(pattern in folded for pattern in intent["relation_words"])
     unsupported_context = any(pattern in folded for pattern in intent["unsupported_relation_context_words"])
@@ -126,7 +126,7 @@ def _child_relation_requested(folded: str, intent: dict) -> bool:
 
 
 def _pasal_parent_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
-    return PASAL_RE.search(query or "") is not None and any(
+    return has_uud_pasal_reference(query) and any(
         pattern in folded
         for pattern in intent_config_for(strategy, config)["pasal_parent_words"]
     )
@@ -141,11 +141,9 @@ def _parent_unit(store, query: str, route: dict) -> dict | None:
 
 def _unit(store, query: str, unit_type: str) -> dict | None:
     if unit_type == "pasal_record":
-        match = PASAL_RE.search(query or "")
-        label = f"Pasal {match.group(1).upper()}" if match else None
+        label = parse_uud_pasal_reference(query)
     else:
-        match = BAB_RE.search(query or "")
-        label = f"BAB {match.group(1).upper()}{match.group(2).upper()}" if match else None
+        label = parse_uud_bab_reference(query)
     if label is None:
         return None
     preferred = getattr(store.config, "preferred_source_role", None)
@@ -180,8 +178,7 @@ def _relation_indexes(store) -> tuple[dict[str, list[dict]], dict[str, list[dict
 
 
 def _source_role(row: dict) -> str | None:
-    source = str(row.get("source_document_id") or "")
-    return source.split("::", 1)[1] if "::" in source else None
+    return row.get("source_role")
 
 
 def _evidence_for_unit(store, unit: dict, evidence_by_unit: dict[str, list[dict]], descendants_by_parent: dict[str, list[dict]]) -> dict | None:
