@@ -230,12 +230,14 @@ def rebuild_metadata_grounding(
             {"bbox_id": bbox_id, "page_number": page_number}
             for bbox_id, page_number in zip(bbox_refs, page_numbers)
         ]
-        for registry_row in registry_rows:
+        for index, registry_row in enumerate(registry_rows):
             field_registry_rows.append({
                 "bbox_id": registry_row["bbox_id"],
                 "bbox_precision": bbox_precision,
                 "corpus_id": "uud",
+                "failure_reason": None if bbox_precision == "exact" else "metadata_bbox_reference_unresolved",
                 "metadata_grounding_id": field_id,
+                "metadata_grounding_ref_id": _metadata_grounding_ref_id(field_id, metadata_field, registry_row["bbox_id"], index),
                 "metadata_field": metadata_field,
                 "page_number": registry_row["page_number"],
                 "quoted_text": quoted_text,
@@ -459,17 +461,26 @@ def rebuild_metadata_grounding(
 
 
 def _block_registry_row(row: dict) -> dict:
+    bbox_id = row["bbox_refs"][0]
     return {
-        "bbox_id": row["bbox_refs"][0],
+        "bbox_id": bbox_id,
+        "bbox_precision": "page_grounded_only",
         "corpus_id": row["corpus_id"],
+        "failure_reason": "metadata_bbox_reference_unresolved",
         "metadata_grounding_id": row["metadata_grounding_id"],
+        "metadata_grounding_ref_id": _metadata_grounding_ref_id(row["metadata_grounding_id"], "block", bbox_id, 0),
         "page_number": row["page_numbers"][0],
         "quoted_text": row["quoted_text"],
         "source_document_id": row["source_document_id"],
         "source_pdf_path": row["source_pdf_path"],
         "source_sha256": row["source_sha256"],
         "status": row["status"],
+        "viewer_highlightable": False,
     }
+
+
+def _metadata_grounding_ref_id(metadata_grounding_id: str, metadata_field: str, bbox_id: str, index: int) -> str:
+    return f"metadata_grounding_ref::{metadata_grounding_id}::{metadata_field}::{bbox_id}::{index:04d}"
 
 
 def _evidence_metadata_assertions(row: dict, bbox_by_id: dict[str, dict]) -> list[dict]:

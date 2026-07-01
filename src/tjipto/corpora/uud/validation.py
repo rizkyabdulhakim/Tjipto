@@ -56,6 +56,7 @@ def build_validation_report(
     evidence: list[dict],
     bbox_rows: list[dict],
     retrieval_units: list[dict],
+    metadata_grounding_registry: list[dict],
     graph_nodes: list[dict],
     graph_edges: list[dict],
     page_text_spans: list[dict],
@@ -135,6 +136,10 @@ def build_validation_report(
         "status": "field_grounded",
         "note": "field-level metadata grounding preserves block-level rows and keeps metadata viewer highlights fail-closed unless exact accepted support exists",
     }
+    validation_report["metadata_bbox_registry_health"] = _metadata_bbox_registry_health(
+        metadata_grounding_registry,
+        {row["bbox_id"]: row for row in bbox_rows},
+    )
     validation_report["legal_graph_baseline"] = {
         "status": "evidence_backed_minimal_baseline",
         "legal_edge_types": sorted(LEGAL_EDGE_TYPES),
@@ -154,6 +159,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     bbox_rows = read_jsonl(final_dir / "bbox_registry.jsonl")
     retrieval_units = read_jsonl(final_dir / "retrieval_units.jsonl")
     metadata_grounding = read_jsonl(final_dir / "metadata_grounding.jsonl")
+    metadata_grounding_registry = read_jsonl(final_dir / "metadata_grounding_registry.jsonl")
     graph_nodes = read_jsonl(final_dir / "graph_nodes.jsonl")
     graph_edges = read_jsonl(final_dir / "graph_edges.jsonl")
     source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
@@ -168,6 +174,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     graph_node_ids = {row["node_id"] for row in graph_nodes}
     source_conflict_ids = {row["source_conflict_id"] for row in source_conflicts}
     metadata_grounding_ids = {row["metadata_grounding_id"] for row in metadata_grounding}
+    metadata_grounding_ref_ids: set[str] = set()
     text_span_ids = {row["text_span_id"] for row in page_text_spans}
     bbox_by_evidence: dict[str, list[dict]] = defaultdict(list)
     for row in bbox_rows:
@@ -323,6 +330,25 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"exact_metadata_missing_grounding_ids:{row['metadata_grounding_id']}")
         if row.get("bbox_precision") == "page_grounded_only" and not row.get("failure_reason"):
             errors.append(f"page_grounded_metadata_missing_failure_reason:{row['metadata_grounding_id']}")
+    for row in metadata_grounding_registry:
+        ref_id = row.get("metadata_grounding_ref_id")
+        if not ref_id:
+            errors.append(f"metadata_registry_missing_ref_id:{row.get('metadata_grounding_id')}:{row.get('bbox_id')}")
+        elif ref_id in metadata_grounding_ref_ids:
+            errors.append(f"duplicate_metadata_grounding_ref_id:{ref_id}")
+        else:
+            metadata_grounding_ref_ids.add(ref_id)
+        bbox_id = row.get("bbox_id")
+        bbox = bbox_by_id.get(bbox_id)
+        if row.get("bbox_precision") == "exact":
+            if not bbox:
+                errors.append(f"exact_metadata_registry_unresolved_bbox:{ref_id}:{bbox_id}")
+            elif not all(key in bbox for key in ("source_document_id", "page_number", "x0", "y0", "x1", "y1")):
+                errors.append(f"exact_metadata_registry_bbox_missing_coordinates:{ref_id}:{bbox_id}")
+        elif bbox_id and bbox_id not in bbox_by_id and not row.get("failure_reason"):
+            errors.append(f"unresolved_metadata_registry_missing_failure_reason:{ref_id}:{bbox_id}")
+        if row.get("viewer_highlightable") is not False:
+            errors.append(f"metadata_registry_highlightable_not_clarified:{ref_id}")
     for row in graph_nodes:
         if row["node_id"] in seen_ids["node_id"]:
             errors.append(f"duplicate_graph_node_id:{row['node_id']}")
@@ -365,3 +391,23 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"legal_edge_unknown_evidence_ref:{row['edge_id']}:{evidence_ref}")
 
     return tuple(sorted(set(errors)))
+
+
+def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox_by_id: dict[str, dict]) -> dict:
+    bbox_ids = [row.get("bbox_id") for row in metadata_grounding_registry if row.get("bbox_id")]
+    ref_ids = [row.get("metadata_grounding_ref_id") for row in metadata_grounding_registry if row.get("metadata_grounding_ref_id")]
+    exact_rows = [row for row in metadata_grounding_registry if row.get("bbox_precision") == "exact"]
+    page_rows = [row for row in metadata_grounding_registry if row.get("bbox_precision") == "page_grounded_only"]
+    unresolved = [row for row in metadata_grounding_registry if row.get("bbox_id") and row.get("bbox_id") not in bbox_by_id]
+    unresolved_exact = [row for row in exact_rows if row.get("bbox_id") not in bbox_by_id]
+    return {
+        "metadata_grounding_registry_rows": len(metadata_grounding_registry),
+        "metadata_grounding_ref_id_count": len(ref_ids),
+        "metadata_grounding_ref_id_unique_count": len(set(ref_ids)),
+        "duplicate_bbox_id_reference_count": len(bbox_ids) - len(set(bbox_ids)),
+        "unresolved_bbox_id_count": len(unresolved),
+        "exact_metadata_bbox_rows": len(exact_rows),
+        "unresolved_exact_metadata_bbox_rows": len(unresolved_exact),
+        "page_grounded_only_metadata_rows": len(page_rows),
+        "metadata_bbox_false_exact_claims": len(unresolved_exact),
+    }

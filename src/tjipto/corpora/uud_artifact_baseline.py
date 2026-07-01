@@ -133,6 +133,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         evidence=evidence,
         bbox_rows=bbox_rows,
         retrieval_units=retrieval_units,
+        metadata_grounding_registry=metadata_grounding_registry,
         graph_nodes=graph_nodes,
         graph_edges=graph_edges,
         page_text_spans=page_text_spans,

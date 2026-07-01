@@ -80,8 +80,8 @@
       "sha256": "7744ea5ddf0469cd6040056c83a10941ff494addad02e1473653fce0c2853391"
     },
     "metadata_grounding_registry.jsonl": {
-      "bytes": 170643,
-      "sha256": "6eb8aec0f16c42f1ef8775023f2b0f185c149fd2d31ed604958979dd20ddb513"
+      "bytes": 203314,
+      "sha256": "783a11d42565ef53a97a93398014b55d2f169cdb4fec8ac58a9dd69673d55ce7"
     },
     "pages.jsonl": {
       "bytes": 116591,
@@ -116,8 +116,8 @@
       "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 3264,
-      "sha256": "560afdc64455add4f432257789f5f1af6de95b00405b6f1bb26d6846a706cdbb"
+      "bytes": 3695,
+      "sha256": "ccec41bdb3ab1ece99f06048ea1cb44ee20c4a0e5dd4f4a28bbda81145bd8c46"
     },
     "page_text_spans.jsonl": {
       "bytes": 1464117,

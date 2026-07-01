@@ -337,6 +337,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 evidence=read_jsonl(FINAL / "evidence_registry.jsonl"),
                 bbox_rows=read_jsonl(FINAL / "bbox_registry.jsonl"),
                 retrieval_units=read_jsonl(FINAL / "retrieval_units.jsonl"),
+                metadata_grounding_registry=read_jsonl(FINAL / "metadata_grounding_registry.jsonl"),
                 graph_nodes=read_jsonl(FINAL / "graph_nodes.jsonl"),
                 graph_edges=read_jsonl(FINAL / "graph_edges.jsonl"),
                 page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),

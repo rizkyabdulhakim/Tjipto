@@ -81,6 +81,17 @@
     "status": "field_grounded",
     "note": "field-level metadata grounding preserves block-level rows and keeps metadata viewer highlights fail-closed unless exact accepted support exists"
   },
+  "metadata_bbox_registry_health": {
+    "metadata_grounding_registry_rows": 112,
+    "metadata_grounding_ref_id_count": 112,
+    "metadata_grounding_ref_id_unique_count": 112,
+    "duplicate_bbox_id_reference_count": 16,
+    "unresolved_bbox_id_count": 17,
+    "exact_metadata_bbox_rows": 95,
+    "unresolved_exact_metadata_bbox_rows": 0,
+    "page_grounded_only_metadata_rows": 17,
+    "metadata_bbox_false_exact_claims": 0
+  },
   "legal_graph_baseline": {
     "status": "evidence_backed_minimal_baseline",
     "legal_edge_types": [
