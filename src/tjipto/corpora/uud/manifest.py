@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tjipto.artifacts.manifest import refresh_manifest as refresh_artifact_manifest
+from tjipto.corpora.uud.artifact_policy import UUD_ARTIFACT_ORIGIN_POLICY
 
 
 ARTIFACT_FILES = (
@@ -82,7 +83,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "document_metadata": "document_metadata.jsonl",
         "evidence_registry": "evidence_registry.jsonl",
         "excluded_records": "excluded_records.jsonl",
-        "files": {filename: {} for _, filename in ARTIFACT_FILES},
+        "files": {filename: dict(UUD_ARTIFACT_ORIGIN_POLICY[filename]) for _, filename in ARTIFACT_FILES},
         "fixtures": FIXTURES,
         "graph_edges": "graph_edges.jsonl",
         "graph_nodes": "graph_nodes.jsonl",

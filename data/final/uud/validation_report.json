@@ -75,6 +75,19 @@
     "runtime_chunks_missing_text_span_ids": 0,
     "non_runtime_chunks_missing_status_or_reason": 0
   },
+  "artifact_origin_health": {
+    "manifest_file_rows": 23,
+    "files_with_origin": 23,
+    "files_missing_origin": 0,
+    "invalid_origin_values": 0,
+    "generated_count": 18,
+    "carried_forward_count": 3,
+    "manual_review_artifact_count": 2,
+    "deprecated_count": 0,
+    "generated_missing_producer_count": 0,
+    "generated_missing_build_stage_count": 0,
+    "non_generated_missing_origin_reason_count": 0
+  },
   "instrument_baseline": {
     "status": "corrected",
     "instrument_unit_types": [

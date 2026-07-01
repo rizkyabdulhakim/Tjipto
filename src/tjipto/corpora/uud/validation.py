@@ -4,6 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
+from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.core.manifest import read_jsonl
 
@@ -57,6 +58,7 @@ def build_validation_report(
     bbox_rows: list[dict],
     retrieval_units: list[dict],
     metadata_grounding_registry: list[dict],
+    manifest_files: dict[str, dict],
     graph_nodes: list[dict],
     graph_edges: list[dict],
     page_text_spans: list[dict],
@@ -116,6 +118,7 @@ def build_validation_report(
         chunks,
         {row["legal_unit_id"]: row for row in legal_units},
     )
+    validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
         "instrument_unit_types": [
@@ -454,4 +457,23 @@ def _chunk_self_contained_health(chunks: list[dict], units_by_id: dict[str, dict
         "runtime_chunks_missing_bbox_ids": sum(1 for row in runtime_chunks if not row.get("bbox_ids")),
         "runtime_chunks_missing_text_span_ids": sum(1 for row in runtime_chunks if not row.get("text_span_ids")),
         "non_runtime_chunks_missing_status_or_reason": sum(1 for row in non_runtime_chunks if not (row.get("validation_basis") or row.get("failure_reason") or row.get("grounding_status"))),
+    }
+
+
+def _artifact_origin_health(manifest_files: dict[str, dict]) -> dict:
+    rows = list(manifest_files.values())
+    generated = [row for row in rows if row.get("origin") == "generated"]
+    non_generated = [row for row in rows if row.get("origin") in {"carried_forward", "manual_review_artifact", "deprecated"}]
+    return {
+        "manifest_file_rows": len(rows),
+        "files_with_origin": sum(1 for row in rows if row.get("origin")),
+        "files_missing_origin": sum(1 for row in rows if not row.get("origin")),
+        "invalid_origin_values": sum(1 for row in rows if row.get("origin") not in ALLOWED_ARTIFACT_ORIGINS),
+        "generated_count": len(generated),
+        "carried_forward_count": sum(1 for row in rows if row.get("origin") == "carried_forward"),
+        "manual_review_artifact_count": sum(1 for row in rows if row.get("origin") == "manual_review_artifact"),
+        "deprecated_count": sum(1 for row in rows if row.get("origin") == "deprecated"),
+        "generated_missing_producer_count": sum(1 for row in generated if not str(row.get("producer") or "").strip()),
+        "generated_missing_build_stage_count": sum(1 for row in generated if not str(row.get("build_stage") or "").strip()),
+        "non_generated_missing_origin_reason_count": sum(1 for row in non_generated if not str(row.get("origin_reason") or "").strip()),
     }

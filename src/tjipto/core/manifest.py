@@ -16,6 +16,12 @@ FORBIDDEN_ACTIVE_PATH_PARTS = (
     "v1",
     "v2",
 )
+ALLOWED_ARTIFACT_ORIGINS = {
+    "generated",
+    "carried_forward",
+    "manual_review_artifact",
+    "deprecated",
+}
 
 
 def read_json(path: Path) -> dict:
@@ -42,7 +48,7 @@ def validate_manifest(final_dir: Path) -> tuple[str, ...]:
     manifest_path = final_dir / "manifest.json"
     manifest = read_json(manifest_path)
     errors: list[str] = []
-    for rel in manifest["files"]:
+    for rel, record in manifest["files"].items():
         lowered = rel.casefold()
         for part in FORBIDDEN_ACTIVE_PATH_PARTS:
             if part in lowered:
@@ -50,6 +56,19 @@ def validate_manifest(final_dir: Path) -> tuple[str, ...]:
         path = final_dir / rel
         if not path.exists():
             errors.append(f"missing:{rel}")
-        elif file_sha256(path) != manifest["files"][rel]["sha256"]:
+        elif file_sha256(path) != record["sha256"]:
             errors.append(f"sha256_mismatch:{rel}")
+        origin = record.get("origin")
+        if origin not in ALLOWED_ARTIFACT_ORIGINS:
+            errors.append(f"invalid_artifact_origin:{rel}:{origin}")
+        for field in ("origin", "producer", "build_stage"):
+            if not str(record.get(field) or "").strip():
+                errors.append(f"manifest_file_missing_{field}:{rel}")
+        if origin == "generated":
+            if not str(record.get("producer") or "").strip():
+                errors.append(f"generated_artifact_missing_producer:{rel}")
+            if not str(record.get("build_stage") or "").strip():
+                errors.append(f"generated_artifact_missing_build_stage:{rel}")
+        elif not str(record.get("origin_reason") or "").strip():
+            errors.append(f"non_generated_artifact_missing_origin_reason:{rel}")
     return tuple(errors)
