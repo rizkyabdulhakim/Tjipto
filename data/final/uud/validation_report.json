@@ -57,6 +57,24 @@
     "viewer_highlightable": 1532,
     "non_highlightable": 10
   },
+  "chunk_self_contained_health": {
+    "chunk_rows": 651,
+    "chunk_runtime_loadable_true": 459,
+    "chunk_runtime_loadable_false": 192,
+    "chunk_source_document_id_count": 651,
+    "chunk_source_role_count": 651,
+    "chunk_temporal_context_count": 651,
+    "chunk_validation_status_count": 651,
+    "chunk_validation_basis_count": 651,
+    "chunk_missing_legal_unit_ref_count": 0,
+    "runtime_chunks_missing_source_context": 0,
+    "runtime_chunks_missing_validation_status": 0,
+    "runtime_chunks_missing_validation_basis": 0,
+    "runtime_chunks_missing_evidence_ids": 0,
+    "runtime_chunks_missing_bbox_ids": 0,
+    "runtime_chunks_missing_text_span_ids": 0,
+    "non_runtime_chunks_missing_status_or_reason": 0
+  },
   "instrument_baseline": {
     "status": "corrected",
     "instrument_unit_types": [

@@ -112,6 +112,10 @@ def build_validation_report(
         "viewer_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is True),
         "non_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is not True),
     }
+    validation_report["chunk_self_contained_health"] = _chunk_self_contained_health(
+        chunks,
+        {row["legal_unit_id"]: row for row in legal_units},
+    )
     validation_report["instrument_baseline"] = {
         "status": "corrected",
         "instrument_unit_types": [
@@ -231,8 +235,16 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         if row["chunk_id"] in seen_ids["chunk_id"]:
             errors.append(f"duplicate_chunk_id:{row['chunk_id']}")
         seen_ids["chunk_id"].add(row["chunk_id"])
-        if row["legal_unit_id"] not in units_by_id:
+        unit = units_by_id.get(row["legal_unit_id"])
+        if not unit:
             errors.append(f"orphan_chunk:{row['chunk_id']}")
+        else:
+            for field in ("source_document_id", "source_role", "temporal_context"):
+                if row.get(field) != unit.get(field):
+                    errors.append(f"chunk_{field}_mismatch:{row['chunk_id']}")
+        for field in ("source_document_id", "source_role", "temporal_context", "validation_status", "validation_basis"):
+            if not row.get(field):
+                errors.append(f"chunk_missing_{field}:{row['chunk_id']}")
         for text_span_id in row.get("text_span_ids") or ():
             if text_span_id not in text_span_ids:
                 errors.append(f"orphan_chunk_text_span:{row['chunk_id']}:{text_span_id}")
@@ -242,6 +254,15 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"runtime_loadable_chunk_missing_bbox:{row['chunk_id']}")
         if row.get("runtime_loadable") is True and row.get("grounding_status") != "text_span_exact":
             errors.append(f"runtime_loadable_chunk_not_text_exact:{row['chunk_id']}")
+        if row.get("runtime_loadable") is True:
+            if not row.get("evidence_ids"):
+                errors.append(f"runtime_loadable_chunk_missing_evidence:{row['chunk_id']}")
+            if not row.get("text_span_ids"):
+                errors.append(f"runtime_loadable_chunk_missing_text_span:{row['chunk_id']}")
+            if row.get("validation_status") == "validation_error_missing_grounding":
+                errors.append(f"runtime_loadable_chunk_validation_error:{row['chunk_id']}")
+        if row.get("runtime_loadable") is False and not (row.get("validation_basis") or row.get("failure_reason") or row.get("grounding_status")):
+            errors.append(f"non_runtime_chunk_missing_status_or_reason:{row['chunk_id']}")
         if row["chunk_type"] == "bab_structural_context_record" and any(marker in row["text"] for marker in STRUCTURAL_FORBIDDEN_MARKERS):
             errors.append(f"structural_chunk_contains_instrument_text:{row['chunk_id']}")
     for row in evidence:
@@ -410,4 +431,27 @@ def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox
         "unresolved_exact_metadata_bbox_rows": len(unresolved_exact),
         "page_grounded_only_metadata_rows": len(page_rows),
         "metadata_bbox_false_exact_claims": len(unresolved_exact),
+    }
+
+
+def _chunk_self_contained_health(chunks: list[dict], units_by_id: dict[str, dict]) -> dict:
+    runtime_chunks = [row for row in chunks if row.get("runtime_loadable") is True]
+    non_runtime_chunks = [row for row in chunks if row.get("runtime_loadable") is False]
+    return {
+        "chunk_rows": len(chunks),
+        "chunk_runtime_loadable_true": len(runtime_chunks),
+        "chunk_runtime_loadable_false": len(non_runtime_chunks),
+        "chunk_source_document_id_count": sum(1 for row in chunks if row.get("source_document_id")),
+        "chunk_source_role_count": sum(1 for row in chunks if row.get("source_role")),
+        "chunk_temporal_context_count": sum(1 for row in chunks if row.get("temporal_context")),
+        "chunk_validation_status_count": sum(1 for row in chunks if row.get("validation_status")),
+        "chunk_validation_basis_count": sum(1 for row in chunks if row.get("validation_basis")),
+        "chunk_missing_legal_unit_ref_count": sum(1 for row in chunks if row.get("legal_unit_id") not in units_by_id),
+        "runtime_chunks_missing_source_context": sum(1 for row in runtime_chunks if not all(row.get(field) for field in ("source_document_id", "source_role", "temporal_context"))),
+        "runtime_chunks_missing_validation_status": sum(1 for row in runtime_chunks if not row.get("validation_status")),
+        "runtime_chunks_missing_validation_basis": sum(1 for row in runtime_chunks if not row.get("validation_basis")),
+        "runtime_chunks_missing_evidence_ids": sum(1 for row in runtime_chunks if not row.get("evidence_ids")),
+        "runtime_chunks_missing_bbox_ids": sum(1 for row in runtime_chunks if not row.get("bbox_ids")),
+        "runtime_chunks_missing_text_span_ids": sum(1 for row in runtime_chunks if not row.get("text_span_ids")),
+        "non_runtime_chunks_missing_status_or_reason": sum(1 for row in non_runtime_chunks if not (row.get("validation_basis") or row.get("failure_reason") or row.get("grounding_status"))),
     }

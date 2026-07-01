@@ -40,8 +40,8 @@
       "sha256": "f9a369587324b21f63e535e754e0fd692f08dc8df09f4e42f1a246435344b8f9"
     },
     "chunks.jsonl": {
-      "bytes": 931673,
-      "sha256": "b30ccd9b033ff2d9e85ec4d645b90b146d9d5d5dbfc0960a203da16e3ae238b5"
+      "bytes": 1084263,
+      "sha256": "45a554679d304825099875c2667fb72f95a6cf5f73167566039e73e055e54148"
     },
     "document_metadata.jsonl": {
       "bytes": 17656,
@@ -116,8 +116,8 @@
       "sha256": "e5871df1807b4ece7b250ce3304c41095ea0f823f3d8cecdc88d6a23d3a0e303"
     },
     "validation_report.json": {
-      "bytes": 3695,
-      "sha256": "ccec41bdb3ab1ece99f06048ea1cb44ee20c4a0e5dd4f4a28bbda81145bd8c46"
+      "bytes": 4424,
+      "sha256": "2d865a4756efddccc2c2d9ffa4105fd01ef05f78687cf8c3e621b6034717a935"
     },
     "page_text_spans.jsonl": {
       "bytes": 1464117,

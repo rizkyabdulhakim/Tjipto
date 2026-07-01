@@ -12,6 +12,32 @@ FINAL = ROOT / "data/final/uud"
 
 
 class ChunkGroundingContractTest(unittest.TestCase):
+    def test_chunks_are_self_contained_and_match_legal_units(self) -> None:
+        chunks = read_jsonl(FINAL / "chunks.jsonl")
+        units = {
+            row["legal_unit_id"]: row
+            for row in read_jsonl(FINAL / "legal_units.jsonl")
+        }
+        self.assertEqual(len(chunks), 651)
+        self.assertEqual(sum(1 for row in chunks if row["runtime_loadable"] is True), 459)
+        self.assertEqual(sum(1 for row in chunks if row["runtime_loadable"] is False), 192)
+        self.assertEqual(sum(1 for row in chunks if row.get("source_document_id")), len(chunks))
+        self.assertEqual(sum(1 for row in chunks if row.get("source_role")), len(chunks))
+        self.assertEqual(sum(1 for row in chunks if row.get("temporal_context")), len(chunks))
+        self.assertEqual(sum(1 for row in chunks if row.get("validation_status")), len(chunks))
+        self.assertEqual(sum(1 for row in chunks if row.get("validation_basis")), len(chunks))
+        self.assertFalse([row for row in chunks if row["legal_unit_id"] not in units])
+        for row in chunks:
+            unit = units[row["legal_unit_id"]]
+            self.assertEqual(row["source_document_id"], unit["source_document_id"], row["chunk_id"])
+            self.assertEqual(row["source_role"], unit["source_role"], row["chunk_id"])
+            self.assertEqual(row["temporal_context"], unit["temporal_context"], row["chunk_id"])
+            if row["runtime_loadable"]:
+                self.assertTrue(row["evidence_ids"], row["chunk_id"])
+                self.assertTrue(row["bbox_ids"], row["chunk_id"])
+                self.assertTrue(row["text_span_ids"], row["chunk_id"])
+                self.assertNotEqual(row["validation_status"], "validation_error_missing_grounding", row["chunk_id"])
+
     def test_chunks_have_direct_grounding_fields(self) -> None:
         text_span_ids = {row["text_span_id"] for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
         evidence_ids = {row["evidence_id"] for row in read_jsonl(FINAL / "evidence_registry.jsonl")}

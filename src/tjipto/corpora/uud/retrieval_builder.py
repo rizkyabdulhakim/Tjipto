@@ -45,10 +45,14 @@ def apply_chunk_grounding(
         source_meta.setdefault(row["source_document_id"], row)
     for chunk in chunks:
         unit = units_by_id[chunk["legal_unit_id"]]
+        source = source_meta[unit["source_document_id"]]
         page_range = chunk["page_range"]
         page_numbers = list(range(page_range["start_page_number"], page_range["end_page_number"] + 1))
         chunk_evidence = evidence_by_unit.get(chunk["legal_unit_id"], [])
         chunk["page_numbers"] = page_numbers
+        chunk["source_document_id"] = unit["source_document_id"]
+        chunk["source_role"] = source["source_role"]
+        chunk["temporal_context"] = source.get("temporal_context", source["source_role"])
         chunk["evidence_ids"] = [row["evidence_id"] for row in chunk_evidence]
         chunk["bbox_ids"] = [bbox_id for row in chunk_evidence for bbox_id in row.get("bbox_refs") or ()]
         chunk["text_span_ids"] = _text_span_ids_for_text(spans_by_page, unit["source_document_id"], page_numbers, chunk["text"])
@@ -56,6 +60,7 @@ def apply_chunk_grounding(
         if not chunk["text_span_ids"]:
             chunk["failure_reason"] = "text_span_exact_match_unavailable"
         chunk["runtime_loadable"] = unit.get("runtime_loadable") is not False and bool(chunk_evidence) and bool(chunk["text_span_ids"])
+        chunk["validation_status"], chunk["validation_basis"] = _chunk_validation(chunk)
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     for unit in legal_units:
         chunk = chunks_by_unit.get(unit["legal_unit_id"])
@@ -97,6 +102,16 @@ def _text_span_ids_for_text(
         if target_index >= len(expected):
             return matched
     return []
+
+
+def _chunk_validation(chunk: dict) -> tuple[str, str]:
+    if chunk.get("runtime_loadable") is True:
+        if chunk.get("evidence_ids") and chunk.get("bbox_ids") and chunk.get("text_span_ids"):
+            return "validated_grounded_chunk", "evidence_bbox_text_span"
+        return "validation_error_missing_grounding", "missing_required_grounding"
+    if chunk.get("failure_reason"):
+        return "excluded_or_non_runtime_chunk", "failure_reason"
+    return "structural_context_validated", "legal_unit_text_span_context"
 
 
 def rebuild_retrieval(existing: dict, chunk: dict, retrieval_units: list[dict]) -> None:

@@ -246,6 +246,8 @@ class GraphContractTest(unittest.TestCase):
     def test_amendment_4_does_not_invent_missing_bab_headings(self) -> None:
         for filename in ("legal_units.jsonl", "chunks.jsonl", "evidence_registry.jsonl"):
             for row in read_jsonl(ROOT / "data/final/uud" / filename):
+                if row.get("chunk_type") == "bab_structural_context_record":
+                    continue
                 role = row.get("source_role") or row.get("temporal_context") or row.get("source_document_id", "").split("::")[-1]
                 article = _article_for(row)
                 if role == "amendment_4_historical" and article in {"Pasal 23B", "Pasal 23D", "Pasal 24", "Pasal 37"}:
