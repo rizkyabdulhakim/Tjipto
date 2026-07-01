@@ -136,12 +136,14 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         }
         health = self.report["all_text_disposition_health"]
         self.assertEqual(health["page_text_span_count"], len(spans))
-        self.assertEqual(health["span_disposition_present_count"], 0)
-        self.assertEqual(health["span_disposition_missing_count"], len(spans))
+        self.assertEqual(health["span_disposition_present_count"], len(spans))
+        self.assertEqual(health["span_disposition_missing_count"], 0)
         self.assertEqual(health["known_unreferenced_span_count"], len({row["text_span_id"] for row in spans} - referenced))
-        self.assertEqual(health["promotion_status_present_count"], 0)
-        self.assertEqual(health["legal_force_present_count"], 0)
-        self.assertEqual(health["status"], "not_started")
+        self.assertEqual(health["promotion_status_present_count"], len(spans))
+        self.assertEqual(health["legal_force_present_count"], len(spans))
+        self.assertEqual(health["needs_review_count"], 0)
+        self.assertEqual(health["fake_grounding_id_count"], 0)
+        self.assertEqual(health["status"], "complete")
 
     def test_artifact_rebuild_is_idempotent(self) -> None:
         self.assertEqual(read_json(FINAL / "manifest.json")["files"]["validation_report.json"]["origin"], "generated")

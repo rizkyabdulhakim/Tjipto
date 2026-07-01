@@ -90,13 +90,18 @@
   },
   "all_text_disposition_health": {
     "page_text_span_count": 2193,
-    "span_disposition_present_count": 0,
-    "span_disposition_missing_count": 2193,
+    "span_disposition_present_count": 2193,
+    "span_disposition_missing_count": 0,
+    "semantic_classification_present_count": 2193,
     "known_unreferenced_span_count": 396,
-    "promotion_status_present_count": 0,
-    "legal_force_present_count": 0,
+    "promotion_status_present_count": 2193,
+    "legal_force_present_count": 2193,
+    "exclusion_reason_missing_for_excluded_count": 0,
     "needs_review_count": 0,
-    "status": "not_started"
+    "runtime_loadable_needs_review_count": 0,
+    "canonical_use_allowed_needs_review_count": 0,
+    "fake_grounding_id_count": 0,
+    "status": "complete"
   },
   "artifact_origin_health": {
     "manifest_file_rows": 23,

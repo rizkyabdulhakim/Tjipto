@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
+from tjipto.corpora.disposition import EXCLUDED_STATUSES, PROMOTED_STATUSES, SPAN_DISPOSITION_FIELDS
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
 from tjipto.corpora.uud.provenance_exceptions import (
@@ -69,6 +70,7 @@ def build_validation_report(
     evidence: list[dict],
     bbox_rows: list[dict],
     retrieval_units: list[dict],
+    metadata_grounding: list[dict],
     metadata_grounding_registry: list[dict],
     manifest_files: dict[str, dict],
     graph_nodes: list[dict],
@@ -139,6 +141,8 @@ def build_validation_report(
         page_text_spans,
         legal_units,
         chunks,
+        metadata_grounding=metadata_grounding,
+        source_conflicts=source_conflicts,
     )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
@@ -342,6 +346,27 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"empty_text_span:{row['text_span_id']}")
         if row.get("bbox_precision") != "exact":
             errors.append(f"text_span_missing_exact_bbox:{row['text_span_id']}")
+        for field in SPAN_DISPOSITION_FIELDS:
+            if field not in row:
+                errors.append(f"text_span_missing_disposition_field:{row['text_span_id']}:{field}")
+        if row.get("promotion_status") in EXCLUDED_STATUSES and not row.get("exclusion_reason"):
+            errors.append(f"excluded_text_span_missing_reason:{row['text_span_id']}")
+        if row.get("promotion_status") == "needs_review":
+            if row.get("runtime_loadable") is True:
+                errors.append(f"runtime_loadable_needs_review_text_span:{row['text_span_id']}")
+            if row.get("canonical_use_allowed") is True:
+                errors.append(f"canonical_needs_review_text_span:{row['text_span_id']}")
+        if row.get("promotion_status") in PROMOTED_STATUSES:
+            target_type = row.get("promotion_target_type")
+            target_id = row.get("promotion_target_id")
+            if target_type == "legal_unit" and target_id not in units_by_id:
+                errors.append(f"text_span_unknown_legal_unit_target:{row['text_span_id']}:{target_id}")
+            elif target_type == "chunk" and target_id not in chunks_by_id:
+                errors.append(f"text_span_unknown_chunk_target:{row['text_span_id']}:{target_id}")
+            elif target_type == "metadata_grounding" and target_id not in metadata_grounding_ids:
+                errors.append(f"text_span_unknown_metadata_target:{row['text_span_id']}:{target_id}")
+            elif target_type == "source_conflict" and target_id not in source_conflict_ids:
+                errors.append(f"text_span_unknown_source_conflict_target:{row['text_span_id']}:{target_id}")
     for row in retrieval_units:
         if row["retrieval_unit_id"] in seen_ids["retrieval_unit_id"]:
             errors.append(f"duplicate_retrieval_unit_id:{row['retrieval_unit_id']}")
@@ -476,24 +501,61 @@ def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox
     }
 
 
-def _all_text_disposition_health(page_text_spans: list[dict], legal_units: list[dict], chunks: list[dict]) -> dict:
+def _all_text_disposition_health(
+    page_text_spans: list[dict],
+    legal_units: list[dict],
+    chunks: list[dict],
+    metadata_grounding: list[dict],
+    source_conflicts: list[dict],
+) -> dict:
     referenced_span_ids = {
         text_span_id
         for row in (*legal_units, *chunks)
         for text_span_id in row.get("text_span_ids") or ()
     }
     span_ids = {row["text_span_id"] for row in page_text_spans}
-    disposition_keys = ("legal_disposition", "span_disposition", "disposition")
+    legal_targets = {row["legal_unit_id"] for row in legal_units} | {row["chunk_id"] for row in chunks}
+    metadata_targets = {row["metadata_grounding_id"] for row in metadata_grounding}
+    conflict_targets = {row["source_conflict_id"] for row in source_conflicts}
+    missing_fields = [row for row in page_text_spans if any(field not in row for field in SPAN_DISPOSITION_FIELDS)]
+    excluded_missing_reason = [
+        row
+        for row in page_text_spans
+        if row.get("promotion_status") in EXCLUDED_STATUSES and not row.get("exclusion_reason")
+    ]
+    fake_grounding_ids = [
+        row
+        for row in page_text_spans
+        if row.get("promotion_status") in PROMOTED_STATUSES and not _target_exists(row, legal_targets, metadata_targets, conflict_targets)
+    ]
+    needs_review_rows = [row for row in page_text_spans if row.get("promotion_status") == "needs_review"]
     return {
         "page_text_span_count": len(page_text_spans),
-        "span_disposition_present_count": sum(1 for row in page_text_spans if any(key in row for key in disposition_keys)),
-        "span_disposition_missing_count": sum(1 for row in page_text_spans if not any(key in row for key in disposition_keys)),
+        "span_disposition_present_count": len(page_text_spans) - len(missing_fields),
+        "span_disposition_missing_count": len(missing_fields),
+        "semantic_classification_present_count": sum(1 for row in page_text_spans if bool(row.get("semantic_classification"))),
         "known_unreferenced_span_count": len(span_ids - referenced_span_ids),
         "promotion_status_present_count": sum(1 for row in page_text_spans if "promotion_status" in row),
         "legal_force_present_count": sum(1 for row in page_text_spans if "legal_force" in row),
-        "needs_review_count": sum(1 for row in page_text_spans if row.get("disposition") == UNRESOLVED_NEEDS_REVIEW),
-        "status": "not_started" if page_text_spans else "empty",
+        "exclusion_reason_missing_for_excluded_count": len(excluded_missing_reason),
+        "needs_review_count": len(needs_review_rows),
+        "runtime_loadable_needs_review_count": sum(1 for row in needs_review_rows if row.get("runtime_loadable") is True),
+        "canonical_use_allowed_needs_review_count": sum(1 for row in needs_review_rows if row.get("canonical_use_allowed") is True),
+        "fake_grounding_id_count": len(fake_grounding_ids),
+        "status": "complete" if page_text_spans and not missing_fields and not excluded_missing_reason and not fake_grounding_ids else "incomplete",
     }
+
+
+def _target_exists(row: dict, legal_targets: set[str], metadata_targets: set[str], conflict_targets: set[str]) -> bool:
+    target_type = row.get("promotion_target_type")
+    target_id = row.get("promotion_target_id")
+    if target_type in {"legal_unit", "chunk"}:
+        return target_id in legal_targets
+    if target_type == "metadata_grounding":
+        return target_id in metadata_targets
+    if target_type == "source_conflict":
+        return target_id in conflict_targets
+    return False
 
 
 def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], source_conflicts: list[dict]) -> dict:

@@ -15,6 +15,7 @@ from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, build_retrieval_units
 from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, FINAL_DIR
+from tjipto.corpora.uud.span_disposition_builder import apply_page_text_span_dispositions
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
@@ -98,6 +99,13 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     retrieval_units = build_retrieval_units(evidence, chunks)
     retrieval_units.sort(key=lambda row: row["retrieval_unit_id"])
     apply_chunk_grounding(chunks, legal_units, evidence, page_text_spans)
+    apply_page_text_span_dispositions(
+        page_text_spans=page_text_spans,
+        legal_units=legal_units,
+        chunks=chunks,
+        metadata_grounding=metadata_grounding,
+        source_conflicts=source_conflicts,
+    )
     metadata_graph_edges = build_metadata_graph_edges(metadata_assertions)
     graph_nodes, graph_edges = build_graph_artifacts(
         source_documents=list(source_documents.values()),
@@ -135,6 +143,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         evidence=evidence,
         bbox_rows=bbox_rows,
         retrieval_units=retrieval_units,
+        metadata_grounding=metadata_grounding,
         metadata_grounding_registry=metadata_grounding_registry,
         manifest_files=manifest["files"],
         graph_nodes=graph_nodes,
