@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from tjipto.corpora.uud.provenance_exceptions import apply_review_category
 from tjipto.corpora.uud.structure_builder import compact
 
 
@@ -61,6 +62,7 @@ def apply_chunk_grounding(
             chunk["failure_reason"] = "text_span_exact_match_unavailable"
         chunk["runtime_loadable"] = unit.get("runtime_loadable") is not False and bool(chunk_evidence) and bool(chunk["text_span_ids"])
         chunk["validation_status"], chunk["validation_basis"] = _chunk_validation(chunk)
+        apply_review_category(chunk)
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     for unit in legal_units:
         chunk = chunks_by_unit.get(unit["legal_unit_id"])
@@ -78,6 +80,7 @@ def apply_chunk_grounding(
         if not text_span_ids:
             unit["failure_reason"] = "text_span_exact_match_unavailable"
         unit["runtime_loadable"] = unit.get("runtime_loadable") is not False and bool(text_span_ids) and bool(unit_evidence or (chunk and chunk.get("runtime_loadable")))
+        apply_review_category(unit)
 
 
 def _text_span_ids_for_text(

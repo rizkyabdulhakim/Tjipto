@@ -334,6 +334,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 chunks=read_jsonl(FINAL / "chunks.jsonl"),
                 legal_units=read_jsonl(FINAL / "legal_units.jsonl"),
                 excluded_records=read_jsonl(FINAL / "excluded_records.jsonl"),
+                source_conflicts=read_jsonl(FINAL / "source_conflicts.jsonl"),
                 evidence=read_jsonl(FINAL / "evidence_registry.jsonl"),
                 bbox_rows=read_jsonl(FINAL / "bbox_registry.jsonl"),
                 retrieval_units=read_jsonl(FINAL / "retrieval_units.jsonl"),

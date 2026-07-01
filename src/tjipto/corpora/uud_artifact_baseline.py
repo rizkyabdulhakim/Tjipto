@@ -120,6 +120,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "metadata.jsonl", metadata_assertions)
     write_jsonl(final_dir / "metadata_graph_edges.jsonl", metadata_graph_edges)
     write_jsonl(final_dir / "source_conflicts.jsonl", source_conflicts)
+    write_jsonl(final_dir / "excluded_records.jsonl", excluded_records)
     write_jsonl(final_dir / "source_documents.jsonl", list(source_documents.values()))
     write_jsonl(final_dir / "pages.jsonl", pages)
     write_jsonl(final_dir / "graph_nodes.jsonl", graph_nodes)
@@ -130,6 +131,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         chunks=chunks,
         legal_units=legal_units,
         excluded_records=excluded_records,
+        source_conflicts=source_conflicts,
         evidence=evidence,
         bbox_rows=bbox_rows,
         retrieval_units=retrieval_units,

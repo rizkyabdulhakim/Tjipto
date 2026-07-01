@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tjipto.corpora.uud.provenance_exceptions import (
+    ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
+    SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
+)
+
 
 FINAL_DIR = Path("data/final/uud")
 
@@ -310,7 +315,7 @@ SOURCE_CONFLICT_SPECS = (
         "runtime_loadable": False,
         "source_conflict_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict",
         "source_document_id": "uud::amendment_4_historical",
-        "status": "unresolved_review_required",
+        "status": ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
         "type": "source_marker_sequence_conflict",
     },
     {
@@ -340,10 +345,10 @@ EXCLUDED_RECORD_SPECS = (
         "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00005",
         "legacy_chunk_id": "uud_chunk_00005",
         "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00005",
-        "reason": "review_scope_record_pending_review_required",
+        "reason": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
         "runtime_loadable": False,
         "source_role": "amendment_1_historical",
-        "status": "not_finalizable_needs_review_required",
+        "status": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
         "unit_label": "(1)",
     },
     {
@@ -351,10 +356,10 @@ EXCLUDED_RECORD_SPECS = (
         "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00022",
         "legacy_chunk_id": "uud_chunk_00022",
         "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00022",
-        "reason": "review_scope_record_pending_review_required",
+        "reason": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
         "runtime_loadable": False,
         "source_role": "amendment_1_historical",
-        "status": "not_finalizable_needs_review_required",
+        "status": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
         "unit_label": "Pasal 21",
     },
     {
@@ -373,10 +378,10 @@ EXCLUDED_RECORD_SPECS = (
         "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00101",
         "legacy_chunk_id": "uud_chunk_00101",
         "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00101",
-        "reason": "one_or_more_items_remain_ambiguous_or_layout_risky",
+        "reason": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
         "runtime_loadable": False,
         "source_role": "amendment_2_historical",
-        "status": "still_needs_review_required",
+        "status": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
         "unit_label": "Pasal 36C",
     },
     {
@@ -395,10 +400,10 @@ EXCLUDED_RECORD_SPECS = (
         "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00188",
         "legacy_chunk_id": "uud_chunk_00188",
         "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00188",
-        "reason": "one_or_more_items_remain_ambiguous_or_layout_risky",
+        "reason": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
         "runtime_loadable": False,
         "source_role": "amendment_3_historical",
-        "status": "still_needs_review_required",
+        "status": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
         "unit_label": "(6)",
     },
 )

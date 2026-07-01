@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from tjipto.corpora.uud.provenance_exceptions import ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
 from tjipto.corpora.uud.specs import SOURCE_CONFLICT_SPECS
 
 
@@ -29,8 +30,12 @@ def apply_source_conflict_grounding(
         row["text_span_ids"] = _matching_text_spans(row, page_text_spans)
         row["evidence_ids"] = evidence_ids
         row["bbox_ids"] = [bbox_id for evidence_id in evidence_ids for bbox_id in bbox_by_evidence.get(evidence_id, [])]
+        row["canonical_use_allowed"] = False
         row["grounding_status"] = "text_span_exact" if row["text_span_ids"] else "grounding_unavailable"
         row["validation_status"] = "accepted_source_conflict_record" if row["text_span_ids"] else "grounding_unavailable"
+        if row.get("type") == "source_marker_sequence_conflict":
+            row["provenance_exception_category"] = ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
+            row["provenance_review_status"] = "reviewed"
         if not row["evidence_ids"] or not row["bbox_ids"]:
             row["failure_reason"] = "source_conflict_evidence_or_bbox_unavailable"
 

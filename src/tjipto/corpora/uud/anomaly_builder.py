@@ -90,14 +90,15 @@ def append_amendment_instrument_units(
             parent_legal_unit_ids=[scope_unit_id],
         )
     aturan_text = slice_between(page5 + "\n" + page6, "ATURAN TAMBAHAN", "Perubahan tersebut diputuskan").strip()
-    pasal_i_text = slice_between(page5, "Pasal I", "Pasal III").strip()
+    aturan_page5_text = page5[page5.index("ATURAN TAMBAHAN"):]
+    pasal_i_text = aturan_page5_text[aturan_page5_text.index("Pasal I"):].strip()
     pasal_iii_text = slice_between(page6, "Pasal III", "Perubahan tersebut diputuskan").strip()
     anomaly_ref = "source_typo_reference::uud_source_typo_reference_00001"
     aturan_unit_id = append_instrument_unit(
         source_id,
         "aturan_tambahan_record",
         "ATURAN TAMBAHAN source typo reference",
-        "ATURAN TAMBAHAN\n" + aturan_text,
+        aturan_text,
         5,
         6,
         hierarchy=["ATURAN TAMBAHAN"],
@@ -112,7 +113,7 @@ def append_amendment_instrument_units(
         source_id,
         "pasal_record",
         "Pasal I",
-        "Pasal I\n" + pasal_i_text,
+        pasal_i_text,
         5,
         5,
         hierarchy=["ATURAN TAMBAHAN", "Pasal I"],
@@ -128,7 +129,7 @@ def append_amendment_instrument_units(
         source_id,
         "pasal_record",
         "Pasal III",
-        "Pasal III\n" + pasal_iii_text,
+        pasal_iii_text,
         6,
         6,
         hierarchy=["ATURAN TAMBAHAN", "Pasal III"],

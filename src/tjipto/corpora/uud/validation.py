@@ -5,6 +5,16 @@ from pathlib import Path
 
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
+from tjipto.corpora.uud.provenance_exceptions import (
+    ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
+    ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
+    BUILDER_SLICING_LABEL_ISSUE_CONFIRMED,
+    DUPLICATED_HEADING_ARTIFACT_ISSUE_CONFIRMED,
+    SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
+    UNRESOLVED_NEEDS_REVIEW,
+    needs_review,
+    review_category,
+)
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.core.manifest import read_jsonl
 
@@ -54,6 +64,7 @@ def build_validation_report(
     chunks: list[dict],
     legal_units: list[dict],
     excluded_records: list[dict],
+    source_conflicts: list[dict],
     evidence: list[dict],
     bbox_rows: list[dict],
     retrieval_units: list[dict],
@@ -117,6 +128,11 @@ def build_validation_report(
     validation_report["chunk_self_contained_health"] = _chunk_self_contained_health(
         chunks,
         {row["legal_unit_id"]: row for row in legal_units},
+    )
+    validation_report["provenance_exception_health"] = _provenance_exception_health(
+        chunks,
+        legal_units,
+        source_conflicts,
     )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
@@ -233,6 +249,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"runtime_loadable_legal_unit_missing_text_span:{row['legal_unit_id']}")
             if not row.get("bbox_ids"):
                 errors.append(f"runtime_loadable_legal_unit_missing_bbox:{row['legal_unit_id']}")
+        if row.get("runtime_loadable") is True and needs_review(row):
+            errors.append(f"runtime_loadable_needs_review_legal_unit:{row['legal_unit_id']}")
 
     for row in chunks:
         if row["chunk_id"] in seen_ids["chunk_id"]:
@@ -268,6 +286,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"non_runtime_chunk_missing_status_or_reason:{row['chunk_id']}")
         if row["chunk_type"] == "bab_structural_context_record" and any(marker in row["text"] for marker in STRUCTURAL_FORBIDDEN_MARKERS):
             errors.append(f"structural_chunk_contains_instrument_text:{row['chunk_id']}")
+        if row.get("runtime_loadable") is True and needs_review(row):
+            errors.append(f"runtime_loadable_needs_review_chunk:{row['chunk_id']}")
     for row in evidence:
         if row["evidence_id"] in seen_ids["evidence_id"]:
             errors.append(f"duplicate_evidence_id:{row['evidence_id']}")
@@ -338,6 +358,11 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"orphan_source_conflict_evidence:{row['source_conflict_id']}:{evidence_id}")
         if (not row.get("evidence_ids") or not row.get("bbox_ids")) and not row.get("failure_reason"):
             errors.append(f"source_conflict_missing_failure_reason:{row['source_conflict_id']}")
+        if row.get("provenance_exception_category") == ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY:
+            if row.get("runtime_loadable") is True:
+                errors.append(f"noncanonical_conflict_trace_runtime_loadable:{row['source_conflict_id']}")
+            if row.get("canonical_use_allowed") is True:
+                errors.append(f"noncanonical_conflict_trace_canonical_use_allowed:{row['source_conflict_id']}")
     for row in metadata_grounding:
         if row.get("viewer_highlightable") is not False:
             errors.append(f"metadata_grounding_highlightable_not_clarified:{row['metadata_grounding_id']}")
@@ -434,6 +459,49 @@ def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox
         "unresolved_exact_metadata_bbox_rows": len(unresolved_exact),
         "page_grounded_only_metadata_rows": len(page_rows),
         "metadata_bbox_false_exact_claims": len(unresolved_exact),
+    }
+
+
+def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], source_conflicts: list[dict]) -> dict:
+    rows = [*legal_units, *chunks]
+    needs_review_rows = [row for row in rows if needs_review(row)]
+    category_counts = {
+        category: sum(1 for row in rows if review_category(row) == category)
+        for category in (
+            ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
+            ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
+            BUILDER_SLICING_LABEL_ISSUE_CONFIRMED,
+            DUPLICATED_HEADING_ARTIFACT_ISSUE_CONFIRMED,
+            SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
+            UNRESOLVED_NEEDS_REVIEW,
+        )
+    }
+    noncanonical_conflicts = [
+        row
+        for row in source_conflicts
+        if row.get("provenance_exception_category") == ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
+    ]
+    validate_text_reviewed = [
+        row
+        for row in rows
+        if review_category(row) == ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION
+        and not row.get("text_span_ids")
+        and bool(row.get("bbox_ids") or row.get("evidence_ids"))
+    ]
+    return {
+        "total_reviewed_exceptions": sum(count for category, count in category_counts.items() if category != UNRESOLVED_NEEDS_REVIEW)
+        + len(noncanonical_conflicts),
+        "validate_text_provenance_needs_review_count": len(validate_text_reviewed),
+        "accepted_false_positive_segmentation_punctuation_count": category_counts[ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION],
+        "accepted_noncanonical_source_conflict_trace_only_count": category_counts[ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY]
+        + len(noncanonical_conflicts),
+        "builder_slicing_label_issue_confirmed_count": category_counts[BUILDER_SLICING_LABEL_ISSUE_CONFIRMED],
+        "duplicated_heading_artifact_issue_confirmed_count": category_counts[DUPLICATED_HEADING_ARTIFACT_ISSUE_CONFIRMED],
+        "source_text_accepted_nonruntime_no_evidence_bbox_count": category_counts[SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX],
+        "unresolved_needs_review_count": category_counts[UNRESOLVED_NEEDS_REVIEW],
+        "runtime_loadable_needs_review_count": sum(1 for row in needs_review_rows if row.get("runtime_loadable") is True),
+        "noncanonical_conflict_trace_runtime_loadable_count": sum(1 for row in noncanonical_conflicts if row.get("runtime_loadable") is True),
+        "noncanonical_conflict_trace_canonical_use_allowed_count": sum(1 for row in noncanonical_conflicts if row.get("canonical_use_allowed") is True),
     }
 
 

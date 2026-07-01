@@ -75,6 +75,19 @@
     "runtime_chunks_missing_text_span_ids": 0,
     "non_runtime_chunks_missing_status_or_reason": 0
   },
+  "provenance_exception_health": {
+    "total_reviewed_exceptions": 31,
+    "validate_text_provenance_needs_review_count": 10,
+    "accepted_false_positive_segmentation_punctuation_count": 16,
+    "accepted_noncanonical_source_conflict_trace_only_count": 3,
+    "builder_slicing_label_issue_confirmed_count": 2,
+    "duplicated_heading_artifact_issue_confirmed_count": 2,
+    "source_text_accepted_nonruntime_no_evidence_bbox_count": 8,
+    "unresolved_needs_review_count": 0,
+    "runtime_loadable_needs_review_count": 0,
+    "noncanonical_conflict_trace_runtime_loadable_count": 0,
+    "noncanonical_conflict_trace_canonical_use_allowed_count": 0
+  },
   "artifact_origin_health": {
     "manifest_file_rows": 23,
     "files_with_origin": 23,

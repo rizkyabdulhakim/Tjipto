@@ -605,14 +605,16 @@ class RuntimeContractTest(unittest.TestCase):
     def test_provenance_validation_reports_header_stripped_uud_matches(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
         report = validate_corpus_provenance(config)
-        self.assertEqual(report["status"], "needs_review")
+        self.assertEqual(report["status"], "pass")
         for key in ("legal_units", "chunks"):
             self.assertEqual(report[key]["total"], 651)
-            self.assertEqual(report[key]["raw_pdf_match"], 621)
-            self.assertEqual(report[key]["normalized_pdf_match"], 621)
-            self.assertEqual(report[key]["header_stripped_pdf_match"], 645)
+            self.assertEqual(report[key]["raw_pdf_match"], 624)
+            self.assertEqual(report[key]["normalized_pdf_match"], 624)
+            self.assertEqual(report[key]["header_stripped_pdf_match"], 648)
             self.assertEqual(report[key]["evidence_grounded_match"], 464)
-            self.assertEqual(report[key]["needs_review"], 6)
+            self.assertEqual(report[key]["needs_review"], 3)
+            self.assertEqual(report[key]["status"], "pass_with_reviewed_exceptions")
+        self.assertEqual(report["provenance_exception_health"]["unresolved_needs_review_count"], 0)
 
     def test_structured_lookup_is_evidence_and_bbox_backed(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
