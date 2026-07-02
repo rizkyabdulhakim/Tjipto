@@ -375,7 +375,8 @@
         "clause": [
           "clause",
           "klausul",
-          "huruf"
+          "huruf",
+          "butir"
         ],
         "scope": [
           "scope",
@@ -397,7 +398,6 @@
           "apa yang berubah",
           "apa yang diubah",
           "yang diubah",
-          "perubahan apa",
           "materi",
           "materi perubahan",
           "substansi",
@@ -437,6 +437,71 @@
           "{amendment} {role}"
         ]
       },
+      "partial_signal_instrument_matrix": {
+        "legal_object_terms": [
+          "pasal",
+          "ketentuan",
+          "norma",
+          "isi",
+          "objek",
+          "sasaran",
+          "bagian"
+        ],
+        "change_terms": [
+          "berubah",
+          "diubah",
+          "mengubah",
+          "diganti",
+          "terdampak"
+        ],
+        "source_terms": [
+          "perubahan pertama",
+          "perubahan ketiga",
+          "perubahan keempat",
+          "amandemen pertama",
+          "amandemen ketiga",
+          "amandemen keempat"
+        ],
+        "word_orders": [
+          "{object} yang {change} {source}",
+          "{change} {object} apa {source}",
+          "{source} {object} yang {change}"
+        ]
+      },
+      "instrument_source_signals": [
+        "amandemen",
+        "perubahan",
+        "pertama",
+        "kedua",
+        "ketiga",
+        "keempat",
+        "ke 1",
+        "ke 2",
+        "ke 3",
+        "ke 4"
+      ],
+      "instrument_legal_object_signals": [
+        "pasal",
+        "ayat",
+        "ketentuan",
+        "norma",
+        "materi",
+        "substansi",
+        "isi",
+        "objek",
+        "sasaran",
+        "bagian",
+        "hal"
+      ],
+      "instrument_change_signals": [
+          "ubah",
+          "berubah",
+          "diubah",
+          "mengubah",
+          "diganti",
+          "terdampak",
+          "hasil perubahan"
+      ],
       "instrument_intent_blocking_queries": [
         "tanggal",
         "tempat",
@@ -446,8 +511,7 @@
         "lembaga",
         "institusi",
         "rapat",
-        "sidang",
-        "pasal apa"
+        "sidang"
       ],
       "source_role_labels": {
         "amendment_1_historical": "Pertama",

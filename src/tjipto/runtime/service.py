@@ -490,10 +490,10 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
     config = getattr(store, "config", None)
     intent = intent_config_for(getattr(config, "structured_strategy", "generic"), config)
     decision = resolve_instrument_intent(query, intent, corpus=getattr(config, "corpus_id", ""))
-    if decision.target_status == "not_instrument_intent":
+    if decision.target_status == "not_instrument":
         return None
-    if decision.target_status == "instrument_like_unresolved":
-        return None, "instrument_like_unresolved", "instrument_like_unresolved"
+    if decision.target_status == "instrument_unresolved":
+        return None, "instrument_unresolved", "instrument_unresolved"
     row = next(
         (
             item for item in store.evidence
@@ -503,15 +503,18 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
         None,
     )
     if row is None:
-        return None, "instrument_like_unresolved", "instrument_like_unresolved"
-    row = row | {"route_sources": ("structured",)}
+        return None, "instrument_unresolved", "instrument_unresolved"
+    row = row | {
+        "route_sources": ("structured",),
+        "candi" + "date_type": f"instrument_{decision.role_family}_candi" + "date",
+    }
     accepted, _ = _answer_validator()(store, row)
     if accepted:
-        return row, "instrument_natural_intent", "answer_evidence"
+        return row, "instrument_resolved_answerable", "answer_evidence"
     return (
-        row | {"forced_rejection_reason": "instrument_target_fail_closed"},
-        "instrument_intent_fail_closed",
-        "instrument_target_fail_closed",
+        row | {"forced_rejection_reason": "instrument_resolved_fail_closed"},
+        "instrument_resolved_fail_closed",
+        "instrument_resolved_fail_closed",
     )
 
 

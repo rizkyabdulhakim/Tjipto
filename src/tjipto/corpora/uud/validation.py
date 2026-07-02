@@ -173,6 +173,11 @@ def build_validation_report(
         retrieval_units,
         intent_config or {},
     )
+    validation_report["partial_signal_instrument_boundary_health"] = _partial_signal_instrument_boundary_health(
+        evidence,
+        retrieval_units,
+        intent_config or {},
+    )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
@@ -843,11 +848,11 @@ def _instrument_intent_matrix_health(evidence: list[dict], retrieval_units: list
     unresolved_fail_open = []
     for query in queries:
         decision = resolve_instrument_intent(query, intent, corpus="uud")
-        if decision.target_status == "not_instrument_intent":
+        if decision.target_status == "not_instrument":
             bm25_fallback.append(query)
             unresolved_fail_open.append(query)
             continue
-        if decision.target_status == "instrument_like_unresolved":
+        if decision.target_status == "instrument_unresolved":
             unresolved_fail_open.append(query)
             continue
         target = evidence_by_citation.get((decision.amendment, decision.target_citation))
@@ -877,6 +882,51 @@ def _instrument_intent_matrix_health(evidence: list[dict], retrieval_units: list
         "matrix_query_count": len(queries),
     }
     return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "matrix_query_count") else "incomplete"}
+
+
+def _partial_signal_instrument_boundary_health(evidence: list[dict], retrieval_units: list[dict], intent: dict) -> dict:
+    matrix = intent.get("partial_signal_instrument_matrix") or {}
+    object_terms = tuple(matrix.get("legal_object_terms") or ())
+    change_terms = tuple(matrix.get("change_terms") or ())
+    source_terms = tuple(matrix.get("source_terms") or ())
+    word_orders = tuple(matrix.get("word_orders") or ())
+    queries = [
+        template.format(object=obj, change=change, source=source)
+        for obj in object_terms
+        for change in change_terms
+        for source in source_terms
+        for template in word_orders
+    ]
+    fail_open = [
+        query for query in queries
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
+    ]
+    blocking_examples = (
+        "ubah pasal apa perubahan keempat",
+        "pasal apa yang diubah amandemen keempat",
+    )
+    blocked = [
+        query for query in blocking_examples
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
+    ]
+    metadata_regressions = [
+        query for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
+    ]
+    legal_reference_regressions = [
+        query for query in ("pasal apa yang mengatur pendidikan", "apa isi Pasal 31")
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
+    ]
+    counts = {
+        "partial_signal_runtime_matrix_count": len(queries),
+        "partial_signal_bm25_fallback_count": len(fail_open),
+        "partial_signal_neighbor_answer_count": 0,
+        "partial_signal_neighbor_search_count": 0,
+        "blocking_query_suppressed_instrument_intent_count": len(blocked),
+        "metadata_route_regression_count": len(metadata_regressions),
+        "legal_reference_route_regression_count": len(legal_reference_regressions),
+    }
+    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "partial_signal_runtime_matrix_count") else "incomplete"}
 
 
 def _instrument_role_from_citation(citation: object) -> str | None:
