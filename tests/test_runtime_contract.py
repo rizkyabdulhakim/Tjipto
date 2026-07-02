@@ -1222,6 +1222,7 @@ class RuntimeContractTest(unittest.TestCase):
         for query in (
             "kapan perubahan keempat ditetapkan",
             "tanggal perubahan keempat",
+            "siapa menetapkan perubahan keempat",
             "lembaga yang menetapkan perubahan keempat",
             "rapat apa yang menetapkan perubahan keempat",
             "sidang yang menetapkan perubahan keempat",
@@ -1316,7 +1317,12 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(invariant["status"], "complete")
         self.assertEqual(arbitration["status"], "complete")
         self.assertEqual(default_boundary["status"], "complete")
-        self.assertEqual(default_boundary["rebuild_runtime_budget_status"], "pass")
+        self.assertEqual(default_boundary["runtime_health_mode"], "capped_canary")
+        self.assertGreater(default_boundary["runtime_check_count"], 0)
+        self.assertGreaterEqual(default_boundary["runtime_check_elapsed_ms"], 0)
+        self.assertGreater(default_boundary["runtime_check_budget_ms"], 0)
+        self.assertLessEqual(default_boundary["runtime_check_elapsed_ms"], default_boundary["runtime_check_budget_ms"])
+        self.assertEqual(default_boundary["runtime_check_budget_status"], "pass")
         self.assertGreater(matrix["matrix_query_count"], 0)
         self.assertGreater(partial["partial_signal_runtime_matrix_count"], 0)
         self.assertGreater(general["runtime_matrix_count"], 0)
@@ -1325,7 +1331,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertGreater(arbitration["conflict_matrix_count"], 0)
         for health in (safety, precision, natural_precision, matrix, partial, general, invariant, arbitration, default_boundary):
             for key, value in health.items():
-                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count", "runtime_matrix_count", "heldout_analysis_probe_count", "conflict_matrix_count"}:
+                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count", "runtime_matrix_count", "heldout_analysis_probe_count", "conflict_matrix_count", "runtime_check_count"}:
                     self.assertEqual(value, 0, key)
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),

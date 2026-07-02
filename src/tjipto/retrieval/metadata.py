@@ -190,6 +190,7 @@ def _asks_institution(folded: str, intent: dict) -> bool:
         _asks_any(folded, intent, "institution")
         or _asks_any(folded, intent, "institution_question")
         or _asks_token(folded, intent, "institution_tokens")
+        or (_asks_any(folded, intent, "who_question") and _asks_any(folded, intent, "enactment_context"))
     )
 
 

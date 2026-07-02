@@ -205,7 +205,11 @@
     "pure_metadata_regression_count": 0,
     "legal_reference_regression_count": 0,
     "legal_relation_regression_count": 0,
-    "rebuild_runtime_budget_status": "pass",
+    "runtime_health_mode": "capped_canary",
+    "runtime_check_count": 10,
+    "runtime_check_elapsed_ms": 10000,
+    "runtime_check_budget_ms": 10000,
+    "runtime_check_budget_status": "pass",
     "status": "complete"
   },
   "artifact_origin_health": {

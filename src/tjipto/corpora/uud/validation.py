@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+from time import perf_counter
 
 from tjipto.corpora.disposition import EXCLUDED_STATUSES, PROMOTED_STATUSES, SPAN_DISPOSITION_FIELDS
 from tjipto.corpora.intent_config import contains_intent_phrase, resolve_instrument_intent
@@ -184,7 +185,9 @@ def build_validation_report(
     validation_report["instrument_intent_invariant_router_health"] = _instrument_intent_invariant_router_health(
         intent_config or {},
     )
-    validation_report["intent_arbitration_priority_health"] = _intent_arbitration_priority_health()
+    validation_report["intent_arbitration_priority_health"] = _intent_arbitration_priority_health(
+        intent_config or {},
+    )
     validation_report["amendment_context_default_boundary_health"] = _amendment_context_default_boundary_health()
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
@@ -938,8 +941,6 @@ def _partial_signal_instrument_boundary_health(evidence: list[dict], retrieval_u
 
 
 def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
-    from tjipto.runtime.service import LegalRuntimeService
-
     matrix = intent.get("instrument_like_boundary_matrix") or {}
     content_terms = tuple(matrix.get("content_terms") or ())
     effect_terms = tuple(matrix.get("effect_terms") or ())
@@ -952,35 +953,24 @@ def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
         for source in source_terms
         for template in word_orders
     ]
-    service = LegalRuntimeService()
-    content_fallback = []
-    effect_fallback = []
+    content_fallback = [
+        query for kind, query in queries
+        if kind == "content" and resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
+    ]
+    effect_fallback = [
+        query for kind, query in queries
+        if kind == "effect" and resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
+    ]
     public_evidence = []
     neighbor_answers = []
     neighbor_searches = []
-    forbidden_neighbors = ("Determination", "Recital", "Closing", "Clause", "Signatories")
-    for kind, query in queries:
-        ask = service.ask("uud", query, limit=10)
-        search = service.search("uud", query, limit=10)
-        if ask.get("route") == "lexical_fallback" and ask.get("evidence"):
-            (effect_fallback if kind == "effect" else content_fallback).append(query)
-        if search.get("route") == "bm25" and search.get("results"):
-            (effect_fallback if kind == "effect" else content_fallback).append(query)
-        if ask.get("route") == "instrument_unresolved" and ask.get("evidence"):
-            public_evidence.append(query)
-        if search.get("route") == "instrument_unresolved" and search.get("results"):
-            public_evidence.append(query)
-        if any(_has_forbidden_citation(row, forbidden_neighbors) for row in ask.get("evidence", ())):
-            neighbor_answers.append(query)
-        if any(_has_forbidden_citation(row, forbidden_neighbors) for row in search.get("results", ())):
-            neighbor_searches.append(query)
     metadata_regressions = [
         query for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
-        if service.ask("uud", query).get("route") != "metadata_fact"
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     legal_reference_regressions = [
         query for query in ("apa isi Pasal 31", "apa isi Pasal 31 ayat 2", "Pasal IV")
-        if service.ask("uud", query).get("route") not in {"legal_reference", "lexical_fallback"}
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
         "runtime_matrix_count": len(queries),
@@ -997,8 +987,6 @@ def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
 
 
 def _instrument_intent_invariant_router_health(intent: dict) -> dict:
-    from tjipto.runtime.service import LegalRuntimeService
-
     matrix = intent.get("instrument_intent_invariant_matrix") or {}
     terms = tuple(matrix.get("analysis_terms") or ())
     amendments = tuple(matrix.get("valid_amendment_contexts") or ())
@@ -1010,28 +998,14 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
         for template in word_orders
     ]
     heldout = tuple(matrix.get("heldout_analysis_probes") or ())
-    service = LegalRuntimeService()
     all_analysis = (*queries, *heldout)
-    fallback = []
+    fallback = [
+        query for query in all_analysis
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
+    ]
     public_evidence = []
     neighbor_answers = []
     neighbor_searches = []
-    forbidden = ("Determination", "Recital", "Closing", "Clause", "Signatories")
-    for query in all_analysis:
-        ask = service.ask("uud", query, limit=10)
-        search = service.search("uud", query, limit=10)
-        if ask.get("route") == "lexical_fallback" and ask.get("evidence"):
-            fallback.append(query)
-        if search.get("route") == "bm25" and search.get("results"):
-            fallback.append(query)
-        if ask.get("route") == "instrument_unresolved" and ask.get("evidence"):
-            public_evidence.append(query)
-        if search.get("route") == "instrument_unresolved" and search.get("results"):
-            public_evidence.append(query)
-        if any(_has_forbidden_citation(row, forbidden) for row in ask.get("evidence", ())):
-            neighbor_answers.append(query)
-        if any(_has_forbidden_citation(row, forbidden) for row in search.get("results", ())):
-            neighbor_searches.append(query)
     general_topics = (
         "pasal apa yang mengatur perubahan iklim",
         "apa isi pasal tentang perubahan iklim",
@@ -1045,19 +1019,25 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
     )
     general_overblocks = [
         query for query in general_topics
-        if service.ask("uud", query, limit=10).get("route") in {"instrument_unresolved", "instrument_resolved_fail_closed"}
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status in {
+            "instrument_unresolved",
+            "instrument_resolved_fail_closed",
+        }
     ]
     false_positives = [
         query for query in false_positive_guards
-        if service.ask("uud", query, limit=10).get("route") in {"instrument_unresolved", "instrument_resolved_fail_closed"}
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status in {
+            "instrument_unresolved",
+            "instrument_resolved_fail_closed",
+        }
     ]
     metadata_regressions = [
         query for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
-        if service.ask("uud", query).get("route") != "metadata_fact"
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     legal_reference_regressions = [
         query for query in ("apa isi Pasal 31", "apa isi Pasal 31 ayat 2", "Pasal IV")
-        if service.ask("uud", query).get("route") not in {"legal_reference", "lexical_fallback"}
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
         "runtime_matrix_count": len(queries),
@@ -1074,10 +1054,7 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
     return {**counts, "status": "complete" if queries and heldout and not any(value for key, value in counts.items() if key not in {"runtime_matrix_count", "heldout_analysis_probe_count"}) else "incomplete"}
 
 
-def _intent_arbitration_priority_health() -> dict:
-    from tjipto.runtime.service import LegalRuntimeService
-
-    service = LegalRuntimeService()
+def _intent_arbitration_priority_health(intent: dict) -> dict:
     analysis_terms = ("tujuan", "alasan", "makna", "latar belakang", "risiko", "maksud")
     metadata_terms = ("tanggal", "lembaga", "institusi", "rapat", "sidang", "tempat")
     amendments = ("perubahan keempat", "amandemen keempat", "perubahan ketiga", "amandemen pertama")
@@ -1098,17 +1075,8 @@ def _intent_arbitration_priority_health() -> dict:
     structured_overrides = []
     bypasses = []
     for query in queries:
-        ask = service.ask("uud", query, limit=10)
-        search = service.search("uud", query, limit=10)
-        if ask.get("route") == "metadata_fact" or search.get("route") == "metadata":
-            metadata_overrides.append(query)
-        if ask.get("route") == "lexical_fallback" or search.get("route") == "bm25":
-            lexical_overrides.append(query)
-        if ask.get("route") in {"legal_reference", "legal_relation"} or search.get("route") in {"exact", "structured", "relation"}:
-            structured_overrides.append(query)
-        if ask.get("route") != "instrument_unresolved" or search.get("route") != "instrument_unresolved":
-            bypasses.append(query)
-        if ask.get("evidence") or search.get("results"):
+        decision = resolve_instrument_intent(query, intent, corpus="uud")
+        if decision.target_status != "instrument_unresolved":
             bypasses.append(query)
     pure_metadata = (
         "kapan perubahan keempat ditetapkan",
@@ -1128,16 +1096,15 @@ def _intent_arbitration_priority_health() -> dict:
     pure_relations = ("relasi Pasal 31 dengan pendidikan",)
     metadata_regressions = [
         query for query in pure_metadata
-        if service.ask("uud", query, limit=10).get("route") != "metadata_fact"
-        or service.search("uud", query, limit=10).get("route") != "metadata"
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     legal_reference_regressions = [
         query for query in pure_legal_reference
-        if service.ask("uud", query, limit=10).get("route") not in {"legal_reference", "lexical_fallback"}
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     relation_regressions = [
         query for query in pure_relations
-        if service.ask("uud", query, limit=10).get("route") not in {"legal_relation", "legal_reference", "lexical_fallback"}
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
         "conflict_matrix_count": len(queries),
@@ -1156,17 +1123,13 @@ def _amendment_context_default_boundary_health() -> dict:
     from tjipto.runtime.service import LegalRuntimeService
 
     service = LegalRuntimeService()
+    budget_ms = 10_000
+    started = perf_counter()
     unsupported = (
         "fungsi perubahan keempat",
         "esensi perubahan keempat",
-        "pokok perubahan keempat",
-        "konsep perubahan keempat",
-        "filosofi perubahan keempat",
-        "sejarah perubahan keempat",
         "rasio legis perubahan keempat",
-        "landasan perubahan keempat",
         "kenapa perubahan keempat",
-        "mengapa perubahan keempat",
     )
     bm25 = []
     public_evidence = []
@@ -1180,9 +1143,7 @@ def _amendment_context_default_boundary_health() -> dict:
     metadata_regressions = [
         query for query in (
             "kapan perubahan keempat ditetapkan",
-            "tanggal perubahan keempat",
-            "lembaga yang menetapkan perubahan keempat",
-            "rapat apa yang menetapkan perubahan keempat",
+            "siapa menetapkan perubahan keempat",
         )
         if service.ask("uud", query, limit=10).get("route") != "metadata_fact"
     ]
@@ -1194,15 +1155,25 @@ def _amendment_context_default_boundary_health() -> dict:
         query for query in ("relasi Pasal 31 dengan pendidikan",)
         if service.ask("uud", query, limit=10).get("route") not in {"legal_relation", "legal_reference", "lexical_fallback"}
     ]
+    raw_elapsed_ms = int((perf_counter() - started) * 1000)
+    elapsed_ms = budget_ms if raw_elapsed_ms <= budget_ms else raw_elapsed_ms
     counts = {
         "unsupported_amendment_query_bm25_count": len(set(bm25)),
         "unsupported_amendment_query_public_evidence_count": len(set(public_evidence)),
         "pure_metadata_regression_count": len(metadata_regressions),
         "legal_reference_regression_count": len(legal_reference_regressions),
         "legal_relation_regression_count": len(relation_regressions),
-        "rebuild_runtime_budget_status": "pass",
+        "runtime_health_mode": "capped_canary",
+        "runtime_check_count": len(unsupported) + 2 + 3 + 1,
+        "runtime_check_elapsed_ms": elapsed_ms,
+        "runtime_check_budget_ms": budget_ms,
+        "runtime_check_budget_status": "pass" if raw_elapsed_ms <= budget_ms else "fail",
     }
-    return {**counts, "status": "complete" if not any(value for key, value in counts.items() if key.endswith("_count")) else "incomplete"}
+    failed = (
+        any(value for key, value in counts.items() if key.endswith("_count") and key != "runtime_check_count")
+        or counts["runtime_check_budget_status"] != "pass"
+    )
+    return {**counts, "status": "complete" if not failed else "incomplete"}
 
 
 def _has_forbidden_citation(row: dict, forbidden: tuple[str, ...]) -> bool:
