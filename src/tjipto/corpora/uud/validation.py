@@ -184,6 +184,7 @@ def build_validation_report(
     validation_report["instrument_intent_invariant_router_health"] = _instrument_intent_invariant_router_health(
         intent_config or {},
     )
+    validation_report["intent_arbitration_priority_health"] = _intent_arbitration_priority_health()
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
@@ -1070,6 +1071,84 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
         "legal_reference_route_regression_count": len(legal_reference_regressions),
     }
     return {**counts, "status": "complete" if queries and heldout and not any(value for key, value in counts.items() if key not in {"runtime_matrix_count", "heldout_analysis_probe_count"}) else "incomplete"}
+
+
+def _intent_arbitration_priority_health() -> dict:
+    from tjipto.runtime.service import LegalRuntimeService
+
+    service = LegalRuntimeService()
+    analysis_terms = ("tujuan", "alasan", "makna", "latar belakang", "risiko", "maksud")
+    metadata_terms = ("tanggal", "lembaga", "institusi", "rapat", "sidang", "tempat")
+    amendments = ("perubahan keempat", "amandemen keempat", "perubahan ketiga", "amandemen pertama")
+    patterns = (
+        "{analysis} {metadata} {amendment}",
+        "{analysis} {metadata} menetapkan {amendment}",
+        "apa {analysis} {metadata} {amendment}",
+    )
+    queries = [
+        pattern.format(analysis=analysis, metadata=metadata, amendment=amendment)
+        for analysis in analysis_terms
+        for metadata in metadata_terms
+        for amendment in amendments
+        for pattern in patterns
+    ]
+    metadata_overrides = []
+    lexical_overrides = []
+    structured_overrides = []
+    bypasses = []
+    for query in queries:
+        ask = service.ask("uud", query, limit=10)
+        search = service.search("uud", query, limit=10)
+        if ask.get("route") == "metadata_fact" or search.get("route") == "metadata":
+            metadata_overrides.append(query)
+        if ask.get("route") == "lexical_fallback" or search.get("route") == "bm25":
+            lexical_overrides.append(query)
+        if ask.get("route") in {"legal_reference", "legal_relation"} or search.get("route") in {"exact", "structured", "relation"}:
+            structured_overrides.append(query)
+        if ask.get("route") != "instrument_unresolved" or search.get("route") != "instrument_unresolved":
+            bypasses.append(query)
+        if ask.get("evidence") or search.get("results"):
+            bypasses.append(query)
+    pure_metadata = (
+        "kapan perubahan keempat ditetapkan",
+        "tanggal perubahan keempat",
+        "lembaga yang menetapkan perubahan keempat",
+        "rapat apa yang menetapkan perubahan keempat",
+        "sidang yang menetapkan perubahan keempat",
+        "tempat penetapan perubahan keempat",
+    )
+    pure_legal_reference = (
+        "apa dampak Pasal 31 ayat 1",
+        "apa isi Pasal 31 ayat 2",
+        "Pasal IV",
+        "pasal apa yang mengatur pendidikan",
+        "apa isi Pasal 31",
+    )
+    pure_relations = ("relasi Pasal 31 dengan pendidikan",)
+    metadata_regressions = [
+        query for query in pure_metadata
+        if service.ask("uud", query, limit=10).get("route") != "metadata_fact"
+        or service.search("uud", query, limit=10).get("route") != "metadata"
+    ]
+    legal_reference_regressions = [
+        query for query in pure_legal_reference
+        if service.ask("uud", query, limit=10).get("route") not in {"legal_reference", "lexical_fallback"}
+    ]
+    relation_regressions = [
+        query for query in pure_relations
+        if service.ask("uud", query, limit=10).get("route") not in {"legal_relation", "legal_reference", "lexical_fallback"}
+    ]
+    counts = {
+        "conflict_matrix_count": len(queries),
+        "analysis_metadata_bypass_count": len(set(bypasses)),
+        "metadata_overrode_analysis_count": len(set(metadata_overrides)),
+        "lexical_overrode_analysis_count": len(set(lexical_overrides)),
+        "structured_overrode_analysis_count": len(set(structured_overrides)),
+        "pure_metadata_regression_count": len(metadata_regressions),
+        "pure_legal_reference_regression_count": len(legal_reference_regressions),
+        "pure_relation_regression_count": len(relation_regressions),
+    }
+    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "conflict_matrix_count") else "incomplete"}
 
 
 def _has_forbidden_citation(row: dict, forbidden: tuple[str, ...]) -> bool:

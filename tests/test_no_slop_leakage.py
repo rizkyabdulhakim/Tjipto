@@ -67,6 +67,17 @@ class NoSlopLeakageTest(unittest.TestCase):
     def test_stale_runtime_structure_shim_is_absent(self) -> None:
         self.assertFalse((ROOT / "src/tjipto/retrieval/structure.py").exists())
 
+    def test_metadata_candidate_terms_are_not_instrument_blockers(self) -> None:
+        text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (
+                ROOT / "data/corpus_registry.json",
+                ROOT / "src/tjipto/corpora/intent_config.py",
+            )
+        )
+        self.assertNotIn("instrument_intent_blocking_queries", text)
+        self.assertIn("metadata_candidate_signals", text)
+
     def test_git_archive_handoff_excludes_local_artifacts(self) -> None:
         if (ROOT / ".git").exists():
             archive = subprocess.check_output(

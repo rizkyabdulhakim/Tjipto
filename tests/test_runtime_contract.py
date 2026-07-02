@@ -1175,6 +1175,43 @@ class RuntimeContractTest(unittest.TestCase):
             for row in (*ask["evidence"], *search["results"]):
                 self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
 
+    def test_analysis_metadata_conflicts_fail_closed_before_metadata(self) -> None:
+        queries = (
+            "apa tujuan lembaga menetapkan perubahan keempat",
+            "tujuan tanggal perubahan keempat",
+            "latar belakang tanggal perubahan keempat",
+            "alasan sidang perubahan keempat",
+            "makna rapat perubahan keempat",
+            "risiko institusi perubahan keempat",
+            "maksud tempat perubahan ketiga",
+        )
+        for query in queries:
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertEqual(ask["status"], "insufficient_evidence", query)
+            self.assertEqual(ask["route"], "instrument_unresolved", query)
+            self.assertEqual(ask["reason"], "analysis_metadata_conflict", query)
+            self.assertFalse(ask["evidence"], query)
+            self.assertFalse(search["results"], query)
+            self.assertEqual(search["public_status"], "no_results", query)
+            self.assertEqual(search["route"], "instrument_unresolved", query)
+
+    def test_pure_metadata_still_routes_after_arbitration(self) -> None:
+        for query in (
+            "kapan perubahan keempat ditetapkan",
+            "tanggal perubahan keempat",
+            "lembaga yang menetapkan perubahan keempat",
+            "rapat apa yang menetapkan perubahan keempat",
+            "sidang yang menetapkan perubahan keempat",
+            "tempat penetapan perubahan keempat",
+        ):
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertEqual(ask["route"], "metadata_fact", query)
+            self.assertNotEqual(ask.get("reason"), "unsupported_analysis_intent", query)
+            self.assertNotEqual(ask.get("reason"), "analysis_metadata_conflict", query)
+            self.assertEqual(search["route"], "metadata", query)
+
     def test_contextual_numbers_do_not_create_amendment_instrument_intent(self) -> None:
         impact = self.service.ask("uud", "apa dampak Pasal 31 ayat 1", limit=10)
         self.assertNotIn(impact["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"})
@@ -1242,6 +1279,9 @@ class RuntimeContractTest(unittest.TestCase):
         invariant = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "instrument_intent_invariant_router_health"
         ]
+        arbitration = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "intent_arbitration_priority_health"
+        ]
         self.assertEqual(safety["status"], "complete")
         self.assertEqual(precision["status"], "complete")
         self.assertEqual(natural_precision["status"], "complete")
@@ -1249,14 +1289,16 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(partial["status"], "complete")
         self.assertEqual(general["status"], "complete")
         self.assertEqual(invariant["status"], "complete")
+        self.assertEqual(arbitration["status"], "complete")
         self.assertGreater(matrix["matrix_query_count"], 0)
         self.assertGreater(partial["partial_signal_runtime_matrix_count"], 0)
         self.assertGreater(general["runtime_matrix_count"], 0)
         self.assertGreater(invariant["runtime_matrix_count"], 0)
         self.assertGreater(invariant["heldout_analysis_probe_count"], 0)
-        for health in (safety, precision, natural_precision, matrix, partial, general, invariant):
+        self.assertGreater(arbitration["conflict_matrix_count"], 0)
+        for health in (safety, precision, natural_precision, matrix, partial, general, invariant, arbitration):
             for key, value in health.items():
-                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count", "runtime_matrix_count", "heldout_analysis_probe_count"}:
+                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count", "runtime_matrix_count", "heldout_analysis_probe_count", "conflict_matrix_count"}:
                     self.assertEqual(value, 0, key)
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),

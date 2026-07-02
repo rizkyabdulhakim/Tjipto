@@ -188,6 +188,17 @@
     "legal_reference_route_regression_count": 0,
     "status": "complete"
   },
+  "intent_arbitration_priority_health": {
+    "conflict_matrix_count": 432,
+    "analysis_metadata_bypass_count": 0,
+    "metadata_overrode_analysis_count": 0,
+    "lexical_overrode_analysis_count": 0,
+    "structured_overrode_analysis_count": 0,
+    "pure_metadata_regression_count": 0,
+    "pure_legal_reference_regression_count": 0,
+    "pure_relation_regression_count": 0,
+    "status": "complete"
+  },
   "artifact_origin_health": {
     "manifest_file_rows": 23,
     "files_with_origin": 23,

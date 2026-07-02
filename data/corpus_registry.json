@@ -610,7 +610,7 @@
           "terdampak",
           "hasil perubahan"
       ],
-      "instrument_intent_blocking_queries": [
+      "metadata_candidate_signals": [
         "tanggal",
         "tempat",
         "di mana",

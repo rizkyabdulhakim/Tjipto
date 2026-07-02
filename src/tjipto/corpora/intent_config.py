@@ -33,7 +33,7 @@ _GENERIC = {
     "instrument_change_context_words": (),
     "instrument_citation_templates": {},
     "instrument_role_queries": {},
-    "instrument_intent_blocking_queries": (),
+    "metadata_candidate_signals": (),
     "instrument_intent_matrix": {},
     "partial_signal_instrument_matrix": {},
     "instrument_like_boundary_matrix": {},
@@ -83,7 +83,7 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
             key: tuple(value)
             for key, value in (raw.get("instrument_role_queries") or {}).items()
         },
-        "instrument_intent_blocking_queries": tuple(raw.get("instrument_intent_blocking_queries") or ()),
+        "metadata_candidate_signals": tuple(raw.get("metadata_candidate_signals") or ()),
         "instrument_intent_matrix": dict(raw.get("instrument_intent_matrix") or {}),
         "partial_signal_instrument_matrix": dict(raw.get("partial_signal_instrument_matrix") or {}),
         "instrument_like_boundary_matrix": dict(raw.get("instrument_like_boundary_matrix") or {}),
@@ -114,9 +114,7 @@ def contains_intent_phrase(text: str, aliases: tuple[str, ...] | list[str]) -> b
 
 def resolve_instrument_intent(query: str, intent: dict, *, corpus: str = "") -> InstrumentIntentDecision:
     normalized = normalize_intent_text(query)
-    if not normalized or contains_intent_phrase(query, intent.get("instrument_intent_blocking_queries", ())):
-        return InstrumentIntentDecision(corpus, normalized, None, None, "not_instrument", True, "not_instrument")
-    if contains_intent_phrase(query, intent.get("relation_words", ())):
+    if not normalized:
         return InstrumentIntentDecision(corpus, normalized, None, None, "not_instrument", True, "not_instrument")
     role = next(
         (key for key, aliases in intent.get("instrument_role_queries", {}).items() if contains_intent_phrase(query, aliases)),
@@ -126,13 +124,19 @@ def resolve_instrument_intent(query: str, intent: dict, *, corpus: str = "") -> 
     valid_amendment_context = amendment is not None
     source_signal = valid_amendment_context
     analysis_signal = contains_intent_phrase(query, intent.get("instrument_analysis_signals", ()))
+    metadata_signal = contains_intent_phrase(query, intent.get("metadata_candidate_signals", ()))
+    if valid_amendment_context and analysis_signal:
+        reason = "analysis_metadata_conflict" if metadata_signal else "unsupported_analysis_intent"
+        return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, reason)
+    if metadata_signal:
+        return InstrumentIntentDecision(corpus, normalized, None, amendment, "not_instrument", True, "pure_metadata_intent")
+    if contains_intent_phrase(query, intent.get("relation_words", ())):
+        return InstrumentIntentDecision(corpus, normalized, None, None, "not_instrument", True, "not_instrument")
     content_signal = contains_intent_phrase(query, intent.get("instrument_content_signals", ()))
     effect_signal = contains_intent_phrase(query, intent.get("instrument_effect_signals", ()))
     object_signal = contains_intent_phrase(query, intent.get("instrument_legal_object_signals", ()))
     change_signal = contains_intent_phrase(query, intent.get("instrument_change_signals", ()))
     if role is None or amendment is None:
-        if valid_amendment_context and analysis_signal:
-            return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "unsupported_analysis_intent")
         if source_signal and effect_signal:
             return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "effect_signal_unsupported")
         if source_signal and content_signal:
