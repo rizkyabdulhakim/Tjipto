@@ -8,8 +8,7 @@ from uuid import uuid4
 from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
-from tjipto.retrieval import answer as answer_policy
-from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack
+from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.viewer import resolve_pdf_access, viewer_payload
 
@@ -493,7 +492,7 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
     if decision.target_status == "not_instrument":
         return None
     if decision.target_status == "instrument_unresolved":
-        return None, "instrument_unresolved", "instrument_unresolved"
+        return None, "instrument_unresolved", decision.reason
     row = next(
         (
             item for item in store.evidence
@@ -503,12 +502,12 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
         None,
     )
     if row is None:
-        return None, "instrument_unresolved", "instrument_unresolved"
+        return None, "instrument_unresolved", decision.reason
     row = row | {
         "route_sources": ("structured",),
-        "candi" + "date_type": f"instrument_{decision.role_family}_candi" + "date",
+        "candidate_type": f"instrument_{decision.role_family}_candidate",
     }
-    accepted, _ = _answer_validator()(store, row)
+    accepted, _ = validate_answer_candidate(store, row)
     if accepted:
         return row, "instrument_resolved_answerable", "answer_evidence"
     return (
@@ -532,30 +531,18 @@ def _exact_fail_closed_instrument_context(store, query: str) -> dict | None:
         if " ".join(str(row.get("citation") or "").split()).casefold() != folded:
             continue
         unit = units.get(row.get("legal_unit_id"), {})
-        if not _is_instrument_unit(unit):
+        if not _is_instrument_unit(store, unit):
             continue
         row_with_route = row | {"route_sources": ("exact",)}
-        accepted, _ = _answer_validator()(store, row_with_route)
+        accepted, _ = validate_answer_candidate(store, row_with_route)
         if not accepted:
             return row_with_route | {"forced_rejection_reason": "exact_instrument_unit_fail_closed"}
     return None
 
 
-def _answer_validator():
-    return getattr(answer_policy, "validate_answer_" + "candi" + "date")
-
-
-def _is_instrument_unit(unit: dict) -> bool:
-    return unit.get("unit_type") in {
-        "amendment_recital_record",
-        "amendment_scope_record",
-        "instrument_clause_record",
-        "instrument_closing_record",
-        "decision_clause_record",
-        "effective_clause_record",
-        "determination_clause_record",
-        "signatory_block_record",
-    }
+def _is_instrument_unit(store, unit: dict) -> bool:
+    schema = getattr(getattr(store, "config", None), "setting", lambda *args: {})("schema", {}) or {}
+    return unit.get("unit_type") in set(schema.get("instrument_unit_types") or ())
 
 
 def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:

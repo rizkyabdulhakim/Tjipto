@@ -204,8 +204,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 8583,
-      "sha256": "4bb1284a7b4630ca2ff08f8b3878958af9e91e1e6af1de5c4682263c789fb770"
+      "bytes": 9050,
+      "sha256": "4eade58b30614e47e262d384182563500033965c666588658409248c3845f116"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import re
-
-from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
+from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
 from tjipto.corpora.parser_dispatch import (
     DEFAULT_CORPUS_ID,
     label_keys,
@@ -62,7 +60,6 @@ def _instrument_rows(
 ) -> tuple[dict, ...]:
     folded = (query or "").casefold()
     intent = intent_config_for(strategy, config)
-    role = _source_role(query, strategy=strategy, config=config)
     corpus_id = _corpus_id(config)
     bab = parse_bab_reference(corpus_id, query)
     if (
@@ -83,19 +80,14 @@ def _instrument_rows(
             if bab.casefold() in text.casefold() and any(word in text.casefold() for word in intent["instrument_deletion_evidence_words"]):
                 matches.append(_candidate(row, "instrument_clause_candidate"))
         return tuple(matches[:limit])
-    if role is None:
-        return ()
-    if _scope_query(query, intent):
+    decision = resolve_instrument_intent(query, intent, corpus=corpus_id)
+    if decision.target_status == "instrument_unresolved":
+        return ({"probe": True},) if probe_only else ()
+    if decision.target_status.startswith("instrument_resolved") and decision.target_citation:
         if probe_only:
             return ({"probe": True},)
-        row = _instrument_evidence(store, role, _instrument_citation(intent, "scope", role))
-        return (_candidate(row, "instrument_scope_candidate"),) if row else ()
-    clause = _clause_letter(query)
-    if clause:
-        if probe_only:
-            return ({"probe": True},)
-        row = _instrument_evidence(store, role, _instrument_citation(intent, "clause", role, clause=clause))
-        return (_candidate(row, "instrument_clause_candidate"),) if row else ()
+        row = _instrument_evidence(store, decision.amendment or "", decision.target_citation)
+        return (_candidate(row, f"instrument_{decision.role_family}_candidate"),) if row else ()
     return ()
 
 
@@ -142,33 +134,6 @@ def _label_keys(value: object) -> set[str]:
 
 def _corpus_id(config) -> str:
     return getattr(config, "corpus_id", DEFAULT_CORPUS_ID)
-
-
-def _scope_query(folded: str, intent: dict) -> bool:
-    return contains_intent_phrase(folded, intent.get("instrument_role_queries", {}).get("scope", ()))
-
-
-def _clause_letter(query: str) -> str | None:
-    match = re.search(r"\b(?:butir|clause)\s*\(?([a-e])\)?", query or "", re.IGNORECASE)
-    if not match:
-        match = re.search(r"\(([a-e])\)", query or "", re.IGNORECASE)
-    return match.group(1).lower() if match else None
-
-
-def _source_role(query: str, *, strategy: str, config=None) -> str | None:
-    for role, pattern in intent_config_for(strategy, config)["metadata_roles"]:
-        if pattern.search(query or ""):
-            return role
-    return None
-
-
-def _ordinal_label(role: str, intent: dict) -> str:
-    return intent["source_role_labels"][role]
-
-
-def _instrument_citation(intent: dict, key: str, role: str, **values: str) -> str:
-    template = intent["instrument_citation_templates"].get(key, "")
-    return template.format(ordinal=_ordinal_label(role, intent), **values) if template else ""
 
 
 def _instrument_evidence(store: EvidenceStore | None, source_role: str, citation: str) -> dict | None:

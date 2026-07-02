@@ -63,6 +63,16 @@
         "determination_clause_record",
         "signatory_block_record"
       ],
+      "instrument_unit_types": [
+        "amendment_recital_record",
+        "amendment_scope_record",
+        "instrument_clause_record",
+        "instrument_closing_record",
+        "decision_clause_record",
+        "effective_clause_record",
+        "determination_clause_record",
+        "signatory_block_record"
+      ],
       "metadata_fields": [
         "date",
         "decision_date",
@@ -468,6 +478,38 @@
           "{source} {object} yang {change}"
         ]
       },
+      "instrument_like_boundary_matrix": {
+        "content_terms": [
+          "muatan",
+          "rincian",
+          "isi",
+          "substansi",
+          "objek",
+          "sasaran",
+          "hal",
+          "bagian"
+        ],
+        "effect_terms": [
+          "dampak",
+          "akibat",
+          "implikasi",
+          "pengaruh",
+          "konsekuensi"
+        ],
+        "source_terms": [
+          "perubahan pertama",
+          "perubahan ketiga",
+          "perubahan keempat",
+          "amandemen pertama",
+          "amandemen ketiga",
+          "amandemen keempat"
+        ],
+        "word_orders": [
+          "{term} {source}",
+          "apa {term} {source}",
+          "{term} dari {source}"
+        ]
+      },
       "instrument_source_signals": [
         "amandemen",
         "perubahan",
@@ -479,6 +521,28 @@
         "ke 2",
         "ke 3",
         "ke 4"
+      ],
+      "instrument_content_signals": [
+        "muatan",
+        "rincian",
+        "isi",
+        "substansi",
+        "materi",
+        "objek",
+        "sasaran",
+        "ketentuan",
+        "bagian",
+        "hal",
+        "cakupan",
+        "lingkup",
+        "ruang lingkup"
+      ],
+      "instrument_effect_signals": [
+        "dampak",
+        "akibat",
+        "implikasi",
+        "pengaruh",
+        "konsekuensi"
       ],
       "instrument_legal_object_signals": [
         "pasal",

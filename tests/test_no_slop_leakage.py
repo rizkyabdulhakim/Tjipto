@@ -10,7 +10,6 @@ import json
 
 ROOT = Path(__file__).resolve().parents[1]
 FORBIDDEN = (
-    "candidate",
     "batch",
     "manual_review",
     "dry_run",

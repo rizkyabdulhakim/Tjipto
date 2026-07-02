@@ -1119,6 +1119,45 @@ class RuntimeContractTest(unittest.TestCase):
         relation = self.service.ask("uud", "relasi Pasal 31 dengan pendidikan", limit=10)
         self.assertIn(relation["route"], {"legal_relation", "legal_reference", "lexical_fallback"})
 
+    def test_instrument_like_content_and_effect_queries_fail_closed_before_bm25(self) -> None:
+        queries = (
+            "muatan perubahan keempat",
+            "rincian perubahan keempat",
+            "apa dampak perubahan keempat",
+            "dampak amandemen keempat",
+            "implikasi perubahan keempat",
+            "akibat amandemen keempat",
+            "konsekuensi perubahan keempat",
+            "objek perubahan keempat",
+            "sasaran perubahan keempat",
+            "hal yang berubah perubahan pertama",
+            "bagian terdampak amandemen keempat",
+        )
+        forbidden = ("Determination", "Recital", "Closing", "Clause", "Signatories")
+        for query in queries:
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertEqual(ask["status"], "insufficient_evidence", query)
+            self.assertEqual(ask["route"], "instrument_unresolved", query)
+            self.assertNotEqual(ask["reason"], "instrument_unresolved", query)
+            self.assertFalse(ask["evidence"], query)
+            self.assertFalse(search["results"], query)
+            self.assertEqual(search["public_status"], "no_results", query)
+            self.assertNotEqual(search["route"], "bm25", query)
+            for row in (*ask["evidence"], *search["results"]):
+                self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
+
+    def test_contextual_numbers_do_not_create_amendment_instrument_intent(self) -> None:
+        impact = self.service.ask("uud", "apa dampak Pasal 31 ayat 1", limit=10)
+        self.assertNotIn(impact["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"})
+
+        ayat = self.service.ask("uud", "apa isi Pasal 31 ayat 2", limit=10)
+        self.assertEqual(ayat["route"], "legal_reference")
+        self.assertTrue(ayat["evidence"])
+
+        roman = self.service.ask("uud", "Pasal IV", limit=10)
+        self.assertNotIn(roman["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"})
+
     def test_natural_instrument_exact_labels_rank_first(self) -> None:
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),
@@ -1159,16 +1198,21 @@ class RuntimeContractTest(unittest.TestCase):
         partial = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "partial_signal_instrument_boundary_health"
         ]
+        general = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "instrument_like_boundary_generalization_health"
+        ]
         self.assertEqual(safety["status"], "complete")
         self.assertEqual(precision["status"], "complete")
         self.assertEqual(natural_precision["status"], "complete")
         self.assertEqual(matrix["status"], "complete")
         self.assertEqual(partial["status"], "complete")
+        self.assertEqual(general["status"], "complete")
         self.assertGreater(matrix["matrix_query_count"], 0)
         self.assertGreater(partial["partial_signal_runtime_matrix_count"], 0)
-        for health in (safety, precision, natural_precision, matrix, partial):
+        self.assertGreater(general["runtime_matrix_count"], 0)
+        for health in (safety, precision, natural_precision, matrix, partial, general):
             for key, value in health.items():
-                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count"}:
+                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count", "runtime_matrix_count"}:
                     self.assertEqual(value, 0, key)
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),

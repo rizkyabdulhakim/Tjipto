@@ -178,6 +178,9 @@ def build_validation_report(
         retrieval_units,
         intent_config or {},
     )
+    validation_report["instrument_like_boundary_generalization_health"] = _instrument_like_boundary_generalization_health(
+        intent_config or {},
+    )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
@@ -927,6 +930,86 @@ def _partial_signal_instrument_boundary_health(evidence: list[dict], retrieval_u
         "legal_reference_route_regression_count": len(legal_reference_regressions),
     }
     return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "partial_signal_runtime_matrix_count") else "incomplete"}
+
+
+def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
+    from tjipto.runtime.service import LegalRuntimeService
+
+    matrix = intent.get("instrument_like_boundary_matrix") or {}
+    content_terms = tuple(matrix.get("content_terms") or ())
+    effect_terms = tuple(matrix.get("effect_terms") or ())
+    source_terms = tuple(matrix.get("source_terms") or ())
+    word_orders = tuple(matrix.get("word_orders") or ())
+    queries = [
+        (kind, template.format(term=term, source=source))
+        for kind, terms in (("content", content_terms), ("effect", effect_terms))
+        for term in terms
+        for source in source_terms
+        for template in word_orders
+    ]
+    service = LegalRuntimeService()
+    content_fallback = []
+    effect_fallback = []
+    public_evidence = []
+    neighbor_answers = []
+    neighbor_searches = []
+    forbidden_neighbors = ("Determination", "Recital", "Closing", "Clause", "Signatories")
+    for kind, query in queries:
+        ask = service.ask("uud", query, limit=10)
+        search = service.search("uud", query, limit=10)
+        if ask.get("route") == "lexical_fallback" and ask.get("evidence"):
+            (effect_fallback if kind == "effect" else content_fallback).append(query)
+        if search.get("route") == "bm25" and search.get("results"):
+            (effect_fallback if kind == "effect" else content_fallback).append(query)
+        if ask.get("route") == "instrument_unresolved" and ask.get("evidence"):
+            public_evidence.append(query)
+        if search.get("route") == "instrument_unresolved" and search.get("results"):
+            public_evidence.append(query)
+        if any(_has_forbidden_citation(row, forbidden_neighbors) for row in ask.get("evidence", ())):
+            neighbor_answers.append(query)
+        if any(_has_forbidden_citation(row, forbidden_neighbors) for row in search.get("results", ())):
+            neighbor_searches.append(query)
+    metadata_regressions = [
+        query for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
+        if service.ask("uud", query).get("route") != "metadata_fact"
+    ]
+    legal_reference_regressions = [
+        query for query in ("apa isi Pasal 31", "apa isi Pasal 31 ayat 2", "Pasal IV")
+        if service.ask("uud", query).get("route") not in {"legal_reference", "lexical_fallback"}
+    ]
+    counts = {
+        "runtime_matrix_count": len(queries),
+        "content_signal_bm25_fallback_count": len(set(content_fallback)),
+        "effect_signal_bm25_fallback_count": len(set(effect_fallback)),
+        "unresolved_instrument_public_evidence_count": len(set(public_evidence)),
+        "neighbor_answer_count": len(set(neighbor_answers)),
+        "neighbor_search_count": len(set(neighbor_searches)),
+        "generic_runtime_hardcoded_unit_type_count": _generic_runtime_hardcoded_unit_type_count(),
+        "metadata_route_regression_count": len(metadata_regressions),
+        "legal_reference_route_regression_count": len(legal_reference_regressions),
+    }
+    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "runtime_matrix_count") else "incomplete"}
+
+
+def _has_forbidden_citation(row: dict, forbidden: tuple[str, ...]) -> bool:
+    citation = str(row.get("citation") or row.get("title") or "")
+    return any(token in citation for token in forbidden)
+
+
+def _generic_runtime_hardcoded_unit_type_count() -> int:
+    root = Path(__file__).resolve().parents[4]
+    needles = {
+        "amendment_recital_record",
+        "amendment_scope_record",
+        "instrument_clause_record",
+        "instrument_closing_record",
+        "decision_clause_record",
+        "effective_clause_record",
+        "determination_clause_record",
+        "signatory_block_record",
+    }
+    paths = [*(root / "src/tjipto/runtime").rglob("*.py"), *(root / "src/tjipto/retrieval").rglob("*.py")]
+    return sum(path.read_text(encoding="utf-8").count(needle) for path in paths for needle in needles)
 
 
 def _instrument_role_from_citation(citation: object) -> str | None:
