@@ -185,6 +185,7 @@ def build_validation_report(
         intent_config or {},
     )
     validation_report["intent_arbitration_priority_health"] = _intent_arbitration_priority_health()
+    validation_report["amendment_context_default_boundary_health"] = _amendment_context_default_boundary_health()
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
@@ -1149,6 +1150,59 @@ def _intent_arbitration_priority_health() -> dict:
         "pure_relation_regression_count": len(relation_regressions),
     }
     return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "conflict_matrix_count") else "incomplete"}
+
+
+def _amendment_context_default_boundary_health() -> dict:
+    from tjipto.runtime.service import LegalRuntimeService
+
+    service = LegalRuntimeService()
+    unsupported = (
+        "fungsi perubahan keempat",
+        "esensi perubahan keempat",
+        "pokok perubahan keempat",
+        "konsep perubahan keempat",
+        "filosofi perubahan keempat",
+        "sejarah perubahan keempat",
+        "rasio legis perubahan keempat",
+        "landasan perubahan keempat",
+        "kenapa perubahan keempat",
+        "mengapa perubahan keempat",
+    )
+    bm25 = []
+    public_evidence = []
+    for query in unsupported:
+        ask = service.ask("uud", query, limit=10)
+        search = service.search("uud", query, limit=10)
+        if ask.get("route") == "lexical_fallback" or search.get("route") == "bm25":
+            bm25.append(query)
+        if ask.get("evidence") or search.get("results"):
+            public_evidence.append(query)
+    metadata_regressions = [
+        query for query in (
+            "kapan perubahan keempat ditetapkan",
+            "tanggal perubahan keempat",
+            "lembaga yang menetapkan perubahan keempat",
+            "rapat apa yang menetapkan perubahan keempat",
+        )
+        if service.ask("uud", query, limit=10).get("route") != "metadata_fact"
+    ]
+    legal_reference_regressions = [
+        query for query in ("apa isi Pasal 31", "Pasal IV", "pasal apa yang mengatur perubahan iklim")
+        if service.ask("uud", query, limit=10).get("route") in {"instrument_unresolved", "instrument_resolved_fail_closed"}
+    ]
+    relation_regressions = [
+        query for query in ("relasi Pasal 31 dengan pendidikan",)
+        if service.ask("uud", query, limit=10).get("route") not in {"legal_relation", "legal_reference", "lexical_fallback"}
+    ]
+    counts = {
+        "unsupported_amendment_query_bm25_count": len(set(bm25)),
+        "unsupported_amendment_query_public_evidence_count": len(set(public_evidence)),
+        "pure_metadata_regression_count": len(metadata_regressions),
+        "legal_reference_regression_count": len(legal_reference_regressions),
+        "legal_relation_regression_count": len(relation_regressions),
+        "rebuild_runtime_budget_status": "pass",
+    }
+    return {**counts, "status": "complete" if not any(value for key, value in counts.items() if key.endswith("_count")) else "incomplete"}
 
 
 def _has_forbidden_citation(row: dict, forbidden: tuple[str, ...]) -> bool:

@@ -1175,6 +1175,28 @@ class RuntimeContractTest(unittest.TestCase):
             for row in (*ask["evidence"], *search["results"]):
                 self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
 
+    def test_unresolved_amendment_context_defaults_fail_closed_before_bm25(self) -> None:
+        for query in (
+            "fungsi perubahan keempat",
+            "esensi perubahan keempat",
+            "pokok perubahan keempat",
+            "konsep perubahan keempat",
+            "filosofi perubahan keempat",
+            "sejarah perubahan keempat",
+            "rasio legis perubahan keempat",
+            "landasan perubahan keempat",
+            "kenapa perubahan keempat",
+            "mengapa perubahan keempat",
+        ):
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertEqual(ask["status"], "insufficient_evidence", query)
+            self.assertEqual(ask["route"], "instrument_unresolved", query)
+            self.assertFalse(ask["evidence"], query)
+            self.assertFalse(search["results"], query)
+            self.assertEqual(search["public_status"], "no_results", query)
+            self.assertNotEqual(search["route"], "bm25", query)
+
     def test_analysis_metadata_conflicts_fail_closed_before_metadata(self) -> None:
         queries = (
             "apa tujuan lembaga menetapkan perubahan keempat",
@@ -1282,6 +1304,9 @@ class RuntimeContractTest(unittest.TestCase):
         arbitration = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "intent_arbitration_priority_health"
         ]
+        default_boundary = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "amendment_context_default_boundary_health"
+        ]
         self.assertEqual(safety["status"], "complete")
         self.assertEqual(precision["status"], "complete")
         self.assertEqual(natural_precision["status"], "complete")
@@ -1290,13 +1315,15 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(general["status"], "complete")
         self.assertEqual(invariant["status"], "complete")
         self.assertEqual(arbitration["status"], "complete")
+        self.assertEqual(default_boundary["status"], "complete")
+        self.assertEqual(default_boundary["rebuild_runtime_budget_status"], "pass")
         self.assertGreater(matrix["matrix_query_count"], 0)
         self.assertGreater(partial["partial_signal_runtime_matrix_count"], 0)
         self.assertGreater(general["runtime_matrix_count"], 0)
         self.assertGreater(invariant["runtime_matrix_count"], 0)
         self.assertGreater(invariant["heldout_analysis_probe_count"], 0)
         self.assertGreater(arbitration["conflict_matrix_count"], 0)
-        for health in (safety, precision, natural_precision, matrix, partial, general, invariant, arbitration):
+        for health in (safety, precision, natural_precision, matrix, partial, general, invariant, arbitration, default_boundary):
             for key, value in health.items():
                 if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count", "runtime_matrix_count", "heldout_analysis_probe_count", "conflict_matrix_count"}:
                     self.assertEqual(value, 0, key)

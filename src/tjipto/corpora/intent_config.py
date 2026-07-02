@@ -143,6 +143,8 @@ def resolve_instrument_intent(query: str, intent: dict, *, corpus: str = "") -> 
             return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "content_signal_unresolved")
         if source_signal and (role is not None or object_signal or change_signal):
             return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "instrument_unresolved")
+        if source_signal:
+            return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "instrument_unresolved")
         return InstrumentIntentDecision(corpus, normalized, role, amendment, "not_instrument", True, "not_instrument")
     citation = _instrument_citation(intent, amendment, role, query)
     if not citation:
