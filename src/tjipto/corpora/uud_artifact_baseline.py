@@ -99,9 +99,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     legal_units.sort(key=lambda row: row["legal_unit_id"])
     chunks.sort(key=lambda row: row["chunk_id"])
     evidence.sort(key=lambda row: row["evidence_id"])
+    apply_chunk_grounding(chunks, legal_units, evidence, page_text_spans)
     retrieval_units = build_retrieval_units(evidence, chunks)
     retrieval_units.sort(key=lambda row: row["retrieval_unit_id"])
-    apply_chunk_grounding(chunks, legal_units, evidence, page_text_spans)
     apply_page_text_span_dispositions(
         page_text_spans=page_text_spans,
         legal_units=legal_units,

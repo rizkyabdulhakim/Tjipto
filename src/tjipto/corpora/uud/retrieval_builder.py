@@ -32,8 +32,14 @@ def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict
 def _retrieval_answerability(evidence: dict, chunk: dict) -> dict:
     if evidence.get("bbox_precision") == "page_grounded_only":
         return {"status": "excluded_public_answer", "rejection_reason": "page_grounded_only_not_answerable"}
+    if evidence.get("bbox_precision") != "exact":
+        return {"status": "excluded_public_answer", "rejection_reason": "missing_exact_grounding"}
     if evidence.get("viewer_highlightable") is False:
         return {"status": "excluded_public_answer", "rejection_reason": "viewer_not_highlightable"}
+    if not evidence.get("text_span_ids"):
+        return {"status": "excluded_public_answer", "rejection_reason": "missing_exact_text_span_support"}
+    if not (evidence.get("bbox_ids") or evidence.get("bbox_refs")):
+        return {"status": "excluded_public_answer", "rejection_reason": "missing_bbox"}
     if chunk.get("runtime_loadable") is False:
         return {"status": "excluded_public_answer", "rejection_reason": "linked_chunk_not_runtime_loadable"}
     return {"status": "accepted"}
@@ -54,6 +60,14 @@ def apply_chunk_grounding(
     for row in page_text_spans:
         spans_by_page[(row["source_document_id"], row["page_number"])].append(row)
         source_meta.setdefault(row["source_document_id"], row)
+    for row in evidence:
+        row["bbox_ids"] = list(row.get("bbox_refs") or ())
+        row["text_span_ids"] = _text_span_ids_for_text(
+            spans_by_page,
+            row["source_document_id"],
+            list(row.get("page_numbers") or ()),
+            row.get("quoted_text") or "",
+        )
     for chunk in chunks:
         unit = units_by_id[chunk["legal_unit_id"]]
         source = source_meta[unit["source_document_id"]]

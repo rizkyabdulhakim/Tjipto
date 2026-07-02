@@ -40,7 +40,7 @@ class LegalRuntimeService:
         if fail_closed:
             context_pack = assemble_context_pack(store, (fail_closed,))
             return {
-                "status": "found",
+                "status": "no_results",
                 "public_status": "no_results",
                 "route": "exact_instrument_fail_closed",
                 "intent": "exact_instrument_unit",

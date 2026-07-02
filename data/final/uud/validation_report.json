@@ -120,6 +120,23 @@
     "instrument_records_unresolved_count": 0,
     "status": "complete"
   },
+  "instrument_exact_grounding_health": {
+    "final_evidence_linked_to_nonruntime_count": 0,
+    "retrieval_accepted_for_nonruntime_count": 0,
+    "retrieval_accepted_for_page_grounded_only_count": 0,
+    "nonhighlightable_public_evidence_count": 0,
+    "empty_text_span_public_evidence_count": 0,
+    "invalid_bbox_public_evidence_count": 0,
+    "viewer_resolvable_nonhighlightable_count": 0,
+    "needs_review_count": 0,
+    "inventory": {
+      "exact_runtime": 459,
+      "trace_only": 5,
+      "excluded_with_reason": 5,
+      "needs_review": 0
+    },
+    "status": "complete"
+  },
   "instrument_query_precision_health": {
     "exact_fail_closed_query_neighbor_answer_count": 0,
     "instrument_neighbor_substitution_count": 0,

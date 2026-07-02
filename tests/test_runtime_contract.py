@@ -874,9 +874,13 @@ class RuntimeContractTest(unittest.TestCase):
             "temporal_context": "current_consolidated",
             "page_numbers": (1,),
             "route_sources": ("exact",),
+            "bbox_precision": "exact",
+            "viewer_highlightable": True,
+            "bbox_ids": ("direct",),
+            "text_span_ids": ("s1",),
         }
-        graph = base | {"evidence_id": "graph", "route_sources": ("graph",)}
-        missing_bbox = base | {"evidence_id": "missing_bbox"}
+        graph = base | {"evidence_id": "graph", "route_sources": ("graph",), "bbox_ids": ("graph",)}
+        missing_bbox = base | {"evidence_id": "missing_bbox", "bbox_ids": ()}
         not_loadable = base | {"evidence_id": "not_loadable", "runtime_loadable": False}
 
         self.assertEqual(validate_answer_candidate(store, base), (True, "answer_evidence"))
@@ -907,7 +911,7 @@ class RuntimeContractTest(unittest.TestCase):
             )
 
             def bboxes_for(self, evidence_id):
-                return [{"bbox_id": evidence_id}]
+                return [{"bbox_id": "safe"}]
 
         store = Store()
         base = {
@@ -924,6 +928,8 @@ class RuntimeContractTest(unittest.TestCase):
             "route_sources": ("bm25",),
             "bbox_precision": "exact",
             "viewer_highlightable": True,
+            "bbox_ids": ("safe",),
+            "text_span_ids": ("s1",),
         }
         self.assertEqual(validate_answer_candidate(store, base), (True, "answer_evidence"))
         self.assertEqual(
@@ -993,6 +999,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["route"], "exact_instrument_fail_closed", query)
             self.assertFalse(ask["evidence"], query)
             self.assertFalse(search["results"], query)
+            self.assertEqual(search["status"], "no_results", query)
             self.assertEqual(search["public_status"], "no_results", query)
             self.assertIn("exact_instrument_unit_fail_closed", ask["insufficient_reasons"], query)
             self.assertTrue(ask["context_pack"]["excluded_results"], query)
@@ -1291,6 +1298,9 @@ class RuntimeContractTest(unittest.TestCase):
         safety = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "instrument_runtime_safety_health"
         ]
+        exact_grounding = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "instrument_exact_grounding_health"
+        ]
         precision = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "instrument_query_precision_health"
         ]
@@ -1316,6 +1326,7 @@ class RuntimeContractTest(unittest.TestCase):
             "amendment_context_default_boundary_health"
         ]
         self.assertEqual(safety["status"], "complete")
+        self.assertEqual(exact_grounding["status"], "complete")
         self.assertEqual(precision["status"], "complete")
         self.assertEqual(natural_precision["status"], "complete")
         self.assertEqual(matrix["status"], "complete")
@@ -1340,10 +1351,12 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertGreater(invariant["resolver_matrix_count"], 0)
         self.assertGreater(invariant["heldout_analysis_probe_count"], 0)
         self.assertGreater(arbitration["conflict_matrix_count"], 0)
-        for health in (safety, precision, natural_precision, matrix, partial, general, invariant, arbitration, default_boundary):
+        for health in (safety, exact_grounding, precision, natural_precision, matrix, partial, general, invariant, arbitration, default_boundary):
             for key, value in health.items():
                 if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_resolver_matrix_count", "resolver_matrix_count", "heldout_analysis_probe_count", "conflict_matrix_count", "runtime_check_count"}:
                     self.assertEqual(value, 0, key)
+        self.assertGreater(exact_grounding["inventory"]["exact_runtime"], 0)
+        self.assertGreater(exact_grounding["inventory"]["trace_only"], 0)
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),
             ("Perubahan Kedua Scope", SAFE_INSTRUMENT_EVIDENCE["00628"]),
@@ -1444,6 +1457,10 @@ class RuntimeContractTest(unittest.TestCase):
                     "temporal_context": "current_consolidated",
                     "page_numbers": [1],
                     "status": "final",
+                    "bbox_precision": "exact",
+                    "viewer_highlightable": True,
+                    "bbox_ids": ["box_1"],
+                    "text_span_ids": ["span_1"],
                 })
                 + "\n",
                 encoding="utf-8",

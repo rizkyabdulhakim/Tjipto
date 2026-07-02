@@ -15,7 +15,10 @@ PUBLIC_REJECTION_REASONS = {
     "linked_chunk_not_runtime_loadable",
     "page_grounded_only_not_answerable",
     "viewer_not_highlightable",
+    "missing_exact_grounding",
     "missing_exact_text_span_support",
+    "missing_bbox",
+    "invalid_bbox",
     "retrieval_unit_backing_record_not_answerable",
     "noncanonical_trace_not_answerable",
 }
@@ -68,8 +71,18 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
     if not row.get("metadata_grounding"):
         if row.get("bbox_precision") == "page_grounded_only":
             return False, "page_grounded_only_not_answerable"
-        if row.get("viewer_highlightable") is False:
+        if row.get("bbox_precision") != "exact":
+            return False, "missing_exact_grounding"
+        if row.get("viewer_highlightable") is not True:
             return False, "viewer_not_highlightable"
+        if not row.get("text_span_ids"):
+            return False, "missing_exact_text_span_support"
+        bbox_ids = set(row.get("bbox_ids") or row.get("bbox_refs") or ())
+        actual_bbox_ids = {bbox.get("bbox_id") for bbox in store.bboxes_for(row["evidence_id"])}
+        if not bbox_ids:
+            return False, "missing_bbox"
+        if not bbox_ids <= actual_bbox_ids:
+            return False, "invalid_bbox"
         if legal_unit and legal_unit.get("runtime_loadable") is False:
             return False, "linked_legal_unit_not_runtime_loadable"
         if chunk and chunk.get("runtime_loadable") is False:
@@ -110,7 +123,12 @@ def _payload(store, row: dict) -> dict:
     )
     label = _evidence_label(row)
     hierarchy = _evidence_hierarchy(row)
-    can_resolve = row.get("status") == "final" and row.get("viewer_highlightable") is not False and bool(bboxes) and (
+    can_resolve = (
+        row.get("status") == "final"
+        and row.get("bbox_precision") == "exact"
+        and row.get("viewer_highlightable") is True
+        and bool(bboxes)
+    ) and (
         not row.get("metadata_grounding") or row.get("metadata_viewer_resolvable") is True
     )
     return {

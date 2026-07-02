@@ -23,6 +23,7 @@ class EvidenceContractTest(unittest.TestCase):
             self.assertTrue(row["page_numbers"])
             self.assertTrue(row["quoted_text"])
             self.assertTrue(row["bbox_refs"])
+            self.assertEqual(row["bbox_ids"], row["bbox_refs"])
             self.assertNotIn("uud_chunk_candidate_", str(row))
 
     def test_legal_units_and_chunks_are_linked(self) -> None:

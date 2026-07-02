@@ -159,6 +159,13 @@ def build_validation_report(
         chunks,
         retrieval_units,
     )
+    validation_report["instrument_exact_grounding_health"] = _instrument_exact_grounding_health(
+        evidence,
+        legal_units,
+        chunks,
+        retrieval_units,
+        bbox_rows,
+    )
     validation_report["instrument_query_precision_health"] = _instrument_query_precision_health(
         evidence,
         legal_units,
@@ -355,6 +362,9 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"orphan_bbox_ref:{row['evidence_id']}:{bbox_id}")
             elif bbox_by_id[bbox_id]["page_number"] not in row["page_numbers"]:
                 errors.append(f"bbox_page_mismatch:{row['evidence_id']}:{bbox_id}")
+        for text_span_id in row.get("text_span_ids") or ():
+            if text_span_id not in text_span_ids:
+                errors.append(f"orphan_evidence_text_span_ref:{row['evidence_id']}:{text_span_id}")
         if row.get("citation") in DECISION_LABELS:
             for bbox_id in row.get("bbox_refs") or ():
                 bbox_row = bbox_by_id.get(bbox_id)
@@ -424,6 +434,12 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"instrument_runtime_safety_{key}:{value}")
     if instrument_safety["status"] != "complete":
         errors.append("instrument_runtime_safety_incomplete")
+    exact_grounding = _instrument_exact_grounding_health(evidence, legal_units, chunks, retrieval_units, bbox_rows)
+    for key, value in exact_grounding.items():
+        if key.endswith("_count") and value:
+            errors.append(f"instrument_exact_grounding_{key}:{value}")
+    if exact_grounding["status"] != "complete":
+        errors.append("instrument_exact_grounding_incomplete")
     query_precision = _instrument_query_precision_health(evidence, legal_units, retrieval_units)
     for key, value in query_precision.items():
         if key.endswith("_count") and value:
@@ -739,6 +755,68 @@ def _instrument_runtime_safety_health(
         "instrument_records_unresolved_count": len(unresolved_instrument),
     }
     return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
+
+
+def _instrument_exact_grounding_health(
+    evidence: list[dict],
+    legal_units: list[dict],
+    chunks: list[dict],
+    retrieval_units: list[dict],
+    bbox_rows: list[dict],
+) -> dict:
+    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
+    evidence_by_id = {row["evidence_id"]: row for row in evidence}
+    bbox_ids = {row["bbox_id"] for row in bbox_rows}
+    accepted_retrieval = [row for row in retrieval_units if row.get("status") == "accepted"]
+    public_evidence = [evidence_by_id[row["evidence_id"]] for row in accepted_retrieval if row.get("evidence_id") in evidence_by_id]
+    linked_to_nonruntime = [
+        row
+        for row in public_evidence
+        if units_by_id.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
+        or chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
+    ]
+    accepted_for_nonruntime = [
+        row
+        for row in accepted_retrieval
+        if units_by_id.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
+        or chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
+    ]
+    page_grounded = [row for row in public_evidence if row.get("bbox_precision") == "page_grounded_only"]
+    nonhighlightable = [row for row in public_evidence if row.get("viewer_highlightable") is not True]
+    empty_text_spans = [row for row in public_evidence if not row.get("text_span_ids")]
+    invalid_bbox = [
+        row
+        for row in public_evidence
+        if not (row.get("bbox_ids") or row.get("bbox_refs"))
+        or not set(row.get("bbox_ids") or row.get("bbox_refs") or ()) <= bbox_ids
+    ]
+    needs_review_rows = [
+        row
+        for row in public_evidence
+        if any(
+            needs_review(item)
+            for item in (row, units_by_id.get(row.get("legal_unit_id")), chunks_by_unit.get(row.get("legal_unit_id")))
+            if item
+        )
+    ]
+    counts = {
+        "final_evidence_linked_to_nonruntime_count": len(linked_to_nonruntime),
+        "retrieval_accepted_for_nonruntime_count": len(accepted_for_nonruntime),
+        "retrieval_accepted_for_page_grounded_only_count": len(page_grounded),
+        "nonhighlightable_public_evidence_count": len(nonhighlightable),
+        "empty_text_span_public_evidence_count": len(empty_text_spans),
+        "invalid_bbox_public_evidence_count": len(invalid_bbox),
+        "viewer_resolvable_nonhighlightable_count": len(nonhighlightable),
+        "needs_review_count": len(needs_review_rows),
+    }
+    inventory = {
+        "exact_runtime": len(public_evidence),
+        "trace_only": sum(1 for row in evidence if row["evidence_id"] not in {item["evidence_id"] for item in public_evidence} and row.get("bbox_precision") == "page_grounded_only"),
+        "excluded_with_reason": sum(1 for row in retrieval_units if row.get("status") != "accepted" and row.get("rejection_reason")),
+        "needs_review": len(needs_review_rows),
+    }
+    return {**counts, "inventory": inventory, "status": "complete" if not any(counts.values()) else "incomplete"}
 
 
 def _instrument_query_precision_health(evidence: list[dict], legal_units: list[dict], retrieval_units: list[dict]) -> dict:
