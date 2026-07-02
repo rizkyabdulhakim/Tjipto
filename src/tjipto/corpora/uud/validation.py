@@ -929,15 +929,14 @@ def _partial_signal_instrument_boundary_health(evidence: list[dict], retrieval_u
         if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
-        "partial_signal_runtime_matrix_count": len(queries),
+        "health_mode": "resolver_config_decision",
+        "partial_signal_resolver_matrix_count": len(queries),
         "partial_signal_bm25_fallback_count": len(fail_open),
-        "partial_signal_neighbor_answer_count": 0,
-        "partial_signal_neighbor_search_count": 0,
         "blocking_query_suppressed_instrument_intent_count": len(blocked),
         "metadata_route_regression_count": len(metadata_regressions),
         "legal_reference_route_regression_count": len(legal_reference_regressions),
     }
-    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "partial_signal_runtime_matrix_count") else "incomplete"}
+    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key not in {"health_mode", "partial_signal_resolver_matrix_count"}) else "incomplete"}
 
 
 def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
@@ -973,17 +972,17 @@ def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
         if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
-        "runtime_matrix_count": len(queries),
+        "health_mode": "resolver_config_decision",
+        "resolver_matrix_count": len(queries),
         "content_signal_bm25_fallback_count": len(set(content_fallback)),
         "effect_signal_bm25_fallback_count": len(set(effect_fallback)),
         "unresolved_instrument_public_evidence_count": len(set(public_evidence)),
-        "neighbor_answer_count": len(set(neighbor_answers)),
-        "neighbor_search_count": len(set(neighbor_searches)),
+        "resolver_neighbor_candidate_count": len(set((*neighbor_answers, *neighbor_searches))),
         "generic_runtime_hardcoded_unit_type_count": _generic_runtime_hardcoded_unit_type_count(),
         "metadata_route_regression_count": len(metadata_regressions),
         "legal_reference_route_regression_count": len(legal_reference_regressions),
     }
-    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "runtime_matrix_count") else "incomplete"}
+    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key not in {"health_mode", "resolver_matrix_count"}) else "incomplete"}
 
 
 def _instrument_intent_invariant_router_health(intent: dict) -> dict:
@@ -1040,18 +1039,18 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
         if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
-        "runtime_matrix_count": len(queries),
+        "health_mode": "resolver_config_decision",
+        "resolver_matrix_count": len(queries),
         "heldout_analysis_probe_count": len(heldout),
         "analysis_signal_bm25_fallback_count": len(set(fallback)),
         "unsupported_analysis_public_evidence_count": len(set(public_evidence)),
-        "neighbor_answer_count": len(set(neighbor_answers)),
-        "neighbor_search_count": len(set(neighbor_searches)),
+        "resolver_neighbor_candidate_count": len(set((*neighbor_answers, *neighbor_searches))),
         "general_topic_overblock_count": len(general_overblocks),
         "amendment_context_false_positive_count": len(false_positives),
         "metadata_route_regression_count": len(metadata_regressions),
         "legal_reference_route_regression_count": len(legal_reference_regressions),
     }
-    return {**counts, "status": "complete" if queries and heldout and not any(value for key, value in counts.items() if key not in {"runtime_matrix_count", "heldout_analysis_probe_count"}) else "incomplete"}
+    return {**counts, "status": "complete" if queries and heldout and not any(value for key, value in counts.items() if key not in {"health_mode", "resolver_matrix_count", "heldout_analysis_probe_count"}) else "incomplete"}
 
 
 def _intent_arbitration_priority_health(intent: dict) -> dict:
@@ -1165,9 +1164,10 @@ def _amendment_context_default_boundary_health() -> dict:
         "legal_relation_regression_count": len(relation_regressions),
         "runtime_health_mode": "capped_canary",
         "runtime_check_count": len(unsupported) + 2 + 3 + 1,
-        "runtime_check_elapsed_ms": elapsed_ms,
+        "runtime_check_deterministic_elapsed_ms": elapsed_ms,
         "runtime_check_budget_ms": budget_ms,
         "runtime_check_budget_status": "pass" if raw_elapsed_ms <= budget_ms else "fail",
+        "runtime_check_actual_elapsed_recorded": False,
     }
     failed = (
         any(value for key, value in counts.items() if key.endswith("_count") and key != "runtime_check_count")

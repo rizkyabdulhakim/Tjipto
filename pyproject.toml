@@ -13,3 +13,9 @@ where = ["src"]
 
 [project.optional-dependencies]
 test = ["PyMuPDF"]
+
+[tool.pytest.ini_options]
+markers = [
+  "runtime_policy: explicit runtime policy matrix gate",
+  "slow: slow tests excluded from the fast default suite",
+]

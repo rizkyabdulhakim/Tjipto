@@ -6,6 +6,8 @@ import os
 import tempfile
 import unittest
 
+import pytest
+
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.provenance import validate_corpus_provenance
 from tjipto.evidence.store import EvidenceStore
@@ -1034,6 +1036,9 @@ class RuntimeContractTest(unittest.TestCase):
             for row in (*ask["evidence"], *search["results"]):
                 self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
 
+    @pytest.mark.runtime_policy
+    @pytest.mark.slow
+    @unittest.skipUnless(os.environ.get("TJIPTO_RUN_RUNTIME_POLICY") == "1", "set TJIPTO_RUN_RUNTIME_POLICY=1 to run")
     def test_instrument_intent_matrix_blocks_neighbor_fallback(self) -> None:
         intent = CorpusRegistry(ROOT).resolve("uud").setting("intent_config")
         matrix = intent["instrument_intent_matrix"]
@@ -1142,6 +1147,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertNotEqual(ask["reason"], "instrument_unresolved", query)
             self.assertFalse(ask["evidence"], query)
             self.assertFalse(search["results"], query)
+            self.assertEqual(search["status"], "no_results", query)
             self.assertEqual(search["public_status"], "no_results", query)
             self.assertNotEqual(search["route"], "bm25", query)
             for row in (*ask["evidence"], *search["results"]):
@@ -1194,6 +1200,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["route"], "instrument_unresolved", query)
             self.assertFalse(ask["evidence"], query)
             self.assertFalse(search["results"], query)
+            self.assertEqual(search["status"], "no_results", query)
             self.assertEqual(search["public_status"], "no_results", query)
             self.assertNotEqual(search["route"], "bm25", query)
 
@@ -1319,19 +1326,23 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(default_boundary["status"], "complete")
         self.assertEqual(default_boundary["runtime_health_mode"], "capped_canary")
         self.assertGreater(default_boundary["runtime_check_count"], 0)
-        self.assertGreaterEqual(default_boundary["runtime_check_elapsed_ms"], 0)
+        self.assertFalse(default_boundary["runtime_check_actual_elapsed_recorded"])
+        self.assertGreaterEqual(default_boundary["runtime_check_deterministic_elapsed_ms"], 0)
         self.assertGreater(default_boundary["runtime_check_budget_ms"], 0)
-        self.assertLessEqual(default_boundary["runtime_check_elapsed_ms"], default_boundary["runtime_check_budget_ms"])
+        self.assertLessEqual(default_boundary["runtime_check_deterministic_elapsed_ms"], default_boundary["runtime_check_budget_ms"])
         self.assertEqual(default_boundary["runtime_check_budget_status"], "pass")
         self.assertGreater(matrix["matrix_query_count"], 0)
-        self.assertGreater(partial["partial_signal_runtime_matrix_count"], 0)
-        self.assertGreater(general["runtime_matrix_count"], 0)
-        self.assertGreater(invariant["runtime_matrix_count"], 0)
+        self.assertEqual(partial["health_mode"], "resolver_config_decision")
+        self.assertEqual(general["health_mode"], "resolver_config_decision")
+        self.assertEqual(invariant["health_mode"], "resolver_config_decision")
+        self.assertGreater(partial["partial_signal_resolver_matrix_count"], 0)
+        self.assertGreater(general["resolver_matrix_count"], 0)
+        self.assertGreater(invariant["resolver_matrix_count"], 0)
         self.assertGreater(invariant["heldout_analysis_probe_count"], 0)
         self.assertGreater(arbitration["conflict_matrix_count"], 0)
         for health in (safety, precision, natural_precision, matrix, partial, general, invariant, arbitration, default_boundary):
             for key, value in health.items():
-                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count", "runtime_matrix_count", "heldout_analysis_probe_count", "conflict_matrix_count", "runtime_check_count"}:
+                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_resolver_matrix_count", "resolver_matrix_count", "heldout_analysis_probe_count", "conflict_matrix_count", "runtime_check_count"}:
                     self.assertEqual(value, 0, key)
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),

@@ -58,7 +58,7 @@ class LegalRuntimeService:
             if row is None:
                 context_pack = empty_context_pack(reason)
                 return {
-                    "status": "found",
+                    "status": "no_results",
                     "public_status": "no_results",
                     "route": route,
                     "intent": "instrument_unit_lookup",
