@@ -37,9 +37,11 @@ _GENERIC = {
     "instrument_intent_matrix": {},
     "partial_signal_instrument_matrix": {},
     "instrument_like_boundary_matrix": {},
+    "instrument_intent_invariant_matrix": {},
     "instrument_source_signals": (),
     "instrument_content_signals": (),
     "instrument_effect_signals": (),
+    "instrument_analysis_signals": (),
     "instrument_legal_object_signals": (),
     "instrument_change_signals": (),
     "source_role_labels": {},
@@ -85,9 +87,11 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "instrument_intent_matrix": dict(raw.get("instrument_intent_matrix") or {}),
         "partial_signal_instrument_matrix": dict(raw.get("partial_signal_instrument_matrix") or {}),
         "instrument_like_boundary_matrix": dict(raw.get("instrument_like_boundary_matrix") or {}),
+        "instrument_intent_invariant_matrix": dict(raw.get("instrument_intent_invariant_matrix") or {}),
         "instrument_source_signals": tuple(raw.get("instrument_source_signals") or ()),
         "instrument_content_signals": tuple(raw.get("instrument_content_signals") or ()),
         "instrument_effect_signals": tuple(raw.get("instrument_effect_signals") or ()),
+        "instrument_analysis_signals": tuple(raw.get("instrument_analysis_signals") or ()),
         "instrument_legal_object_signals": tuple(raw.get("instrument_legal_object_signals") or ()),
         "instrument_change_signals": tuple(raw.get("instrument_change_signals") or ()),
         "source_role_labels": dict(raw.get("source_role_labels") or {}),
@@ -119,12 +123,16 @@ def resolve_instrument_intent(query: str, intent: dict, *, corpus: str = "") -> 
         None,
     )
     amendment = next((source_role for source_role, pattern in intent.get("metadata_roles", ()) if pattern.search(query or "")), None)
-    source_signal = amendment is not None or contains_intent_phrase(query, intent.get("instrument_source_signals", ()))
+    valid_amendment_context = amendment is not None
+    source_signal = valid_amendment_context
+    analysis_signal = contains_intent_phrase(query, intent.get("instrument_analysis_signals", ()))
     content_signal = contains_intent_phrase(query, intent.get("instrument_content_signals", ()))
     effect_signal = contains_intent_phrase(query, intent.get("instrument_effect_signals", ()))
     object_signal = contains_intent_phrase(query, intent.get("instrument_legal_object_signals", ()))
     change_signal = contains_intent_phrase(query, intent.get("instrument_change_signals", ()))
     if role is None or amendment is None:
+        if valid_amendment_context and analysis_signal:
+            return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "unsupported_analysis_intent")
         if source_signal and effect_signal:
             return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "effect_signal_unsupported")
         if source_signal and content_signal:

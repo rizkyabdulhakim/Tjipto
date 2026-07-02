@@ -175,6 +175,19 @@
     "legal_reference_route_regression_count": 0,
     "status": "complete"
   },
+  "instrument_intent_invariant_router_health": {
+    "runtime_matrix_count": 168,
+    "heldout_analysis_probe_count": 3,
+    "analysis_signal_bm25_fallback_count": 0,
+    "unsupported_analysis_public_evidence_count": 0,
+    "neighbor_answer_count": 0,
+    "neighbor_search_count": 0,
+    "general_topic_overblock_count": 0,
+    "amendment_context_false_positive_count": 0,
+    "metadata_route_regression_count": 0,
+    "legal_reference_route_regression_count": 0,
+    "status": "complete"
+  },
   "artifact_origin_health": {
     "manifest_file_rows": 23,
     "files_with_origin": 23,

@@ -181,6 +181,9 @@ def build_validation_report(
     validation_report["instrument_like_boundary_generalization_health"] = _instrument_like_boundary_generalization_health(
         intent_config or {},
     )
+    validation_report["instrument_intent_invariant_router_health"] = _instrument_intent_invariant_router_health(
+        intent_config or {},
+    )
     validation_report["artifact_origin_health"] = _artifact_origin_health(manifest_files)
     validation_report["instrument_baseline"] = {
         "status": "corrected",
@@ -989,6 +992,84 @@ def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
         "legal_reference_route_regression_count": len(legal_reference_regressions),
     }
     return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "runtime_matrix_count") else "incomplete"}
+
+
+def _instrument_intent_invariant_router_health(intent: dict) -> dict:
+    from tjipto.runtime.service import LegalRuntimeService
+
+    matrix = intent.get("instrument_intent_invariant_matrix") or {}
+    terms = tuple(matrix.get("analysis_terms") or ())
+    amendments = tuple(matrix.get("valid_amendment_contexts") or ())
+    word_orders = tuple(matrix.get("word_orders") or ())
+    queries = [
+        template.format(analysis=term, amendment=amendment)
+        for term in terms
+        for amendment in amendments
+        for template in word_orders
+    ]
+    heldout = tuple(matrix.get("heldout_analysis_probes") or ())
+    service = LegalRuntimeService()
+    all_analysis = (*queries, *heldout)
+    fallback = []
+    public_evidence = []
+    neighbor_answers = []
+    neighbor_searches = []
+    forbidden = ("Determination", "Recital", "Closing", "Clause", "Signatories")
+    for query in all_analysis:
+        ask = service.ask("uud", query, limit=10)
+        search = service.search("uud", query, limit=10)
+        if ask.get("route") == "lexical_fallback" and ask.get("evidence"):
+            fallback.append(query)
+        if search.get("route") == "bm25" and search.get("results"):
+            fallback.append(query)
+        if ask.get("route") == "instrument_unresolved" and ask.get("evidence"):
+            public_evidence.append(query)
+        if search.get("route") == "instrument_unresolved" and search.get("results"):
+            public_evidence.append(query)
+        if any(_has_forbidden_citation(row, forbidden) for row in ask.get("evidence", ())):
+            neighbor_answers.append(query)
+        if any(_has_forbidden_citation(row, forbidden) for row in search.get("results", ())):
+            neighbor_searches.append(query)
+    general_topics = (
+        "pasal apa yang mengatur perubahan iklim",
+        "apa isi pasal tentang perubahan iklim",
+        "perubahan sosial dalam UUD",
+        "pasal yang mengatur perubahan masyarakat",
+    )
+    false_positive_guards = (
+        "apa dampak Pasal 31 ayat 1",
+        "apa isi Pasal 31 ayat 2",
+        "Pasal IV",
+    )
+    general_overblocks = [
+        query for query in general_topics
+        if service.ask("uud", query, limit=10).get("route") in {"instrument_unresolved", "instrument_resolved_fail_closed"}
+    ]
+    false_positives = [
+        query for query in false_positive_guards
+        if service.ask("uud", query, limit=10).get("route") in {"instrument_unresolved", "instrument_resolved_fail_closed"}
+    ]
+    metadata_regressions = [
+        query for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
+        if service.ask("uud", query).get("route") != "metadata_fact"
+    ]
+    legal_reference_regressions = [
+        query for query in ("apa isi Pasal 31", "apa isi Pasal 31 ayat 2", "Pasal IV")
+        if service.ask("uud", query).get("route") not in {"legal_reference", "lexical_fallback"}
+    ]
+    counts = {
+        "runtime_matrix_count": len(queries),
+        "heldout_analysis_probe_count": len(heldout),
+        "analysis_signal_bm25_fallback_count": len(set(fallback)),
+        "unsupported_analysis_public_evidence_count": len(set(public_evidence)),
+        "neighbor_answer_count": len(set(neighbor_answers)),
+        "neighbor_search_count": len(set(neighbor_searches)),
+        "general_topic_overblock_count": len(general_overblocks),
+        "amendment_context_false_positive_count": len(false_positives),
+        "metadata_route_regression_count": len(metadata_regressions),
+        "legal_reference_route_regression_count": len(legal_reference_regressions),
+    }
+    return {**counts, "status": "complete" if queries and heldout and not any(value for key, value in counts.items() if key not in {"runtime_matrix_count", "heldout_analysis_probe_count"}) else "incomplete"}
 
 
 def _has_forbidden_citation(row: dict, forbidden: tuple[str, ...]) -> bool:

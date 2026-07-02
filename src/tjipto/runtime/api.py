@@ -167,6 +167,7 @@ def _public_reason(reason):
         "content_signal_unresolved",
         "effect_signal_unsupported",
         "unsupported_instrument_analysis",
+        "unsupported_analysis_intent",
         "instrument_resolved_fail_closed",
         "exact_label_target_not_answerable",
         "lexical_fallback_blocked_by_instrument_intent",

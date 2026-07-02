@@ -1147,6 +1147,34 @@ class RuntimeContractTest(unittest.TestCase):
             for row in (*ask["evidence"], *search["results"]):
                 self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
 
+    def test_unsupported_analysis_intent_fails_closed_before_bm25(self) -> None:
+        queries = (
+            "risiko perubahan keempat",
+            "tujuan perubahan keempat",
+            "alasan perubahan keempat",
+            "latar belakang perubahan keempat",
+            "maksud perubahan keempat",
+            "makna perubahan keempat",
+            "urgensi perubahan keempat",
+            "dasar perubahan keempat",
+            "rasional amandemen keempat",
+            "pertimbangan perubahan ketiga",
+            "motif amandemen pertama",
+        )
+        forbidden = ("Determination", "Recital", "Closing", "Clause", "Signatories")
+        for query in queries:
+            ask = self.service.ask("uud", query, limit=10)
+            search = self.service.search("uud", query, limit=10)
+            self.assertEqual(ask["status"], "insufficient_evidence", query)
+            self.assertEqual(ask["route"], "instrument_unresolved", query)
+            self.assertEqual(ask["reason"], "unsupported_analysis_intent", query)
+            self.assertFalse(ask["evidence"], query)
+            self.assertFalse(search["results"], query)
+            self.assertEqual(search["public_status"], "no_results", query)
+            self.assertNotEqual(search["route"], "bm25", query)
+            for row in (*ask["evidence"], *search["results"]):
+                self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
+
     def test_contextual_numbers_do_not_create_amendment_instrument_intent(self) -> None:
         impact = self.service.ask("uud", "apa dampak Pasal 31 ayat 1", limit=10)
         self.assertNotIn(impact["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"})
@@ -1157,6 +1185,16 @@ class RuntimeContractTest(unittest.TestCase):
 
         roman = self.service.ask("uud", "Pasal IV", limit=10)
         self.assertNotIn(roman["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"})
+
+    def test_general_perubahan_topics_are_not_instrument_overblocked(self) -> None:
+        for query in (
+            "pasal apa yang mengatur perubahan iklim",
+            "apa isi pasal tentang perubahan iklim",
+            "perubahan sosial dalam UUD",
+            "pasal yang mengatur perubahan masyarakat",
+        ):
+            result = self.service.ask("uud", query, limit=10)
+            self.assertNotIn(result["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"}, query)
 
     def test_natural_instrument_exact_labels_rank_first(self) -> None:
         for query, evidence_id in (
@@ -1201,18 +1239,24 @@ class RuntimeContractTest(unittest.TestCase):
         general = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "instrument_like_boundary_generalization_health"
         ]
+        invariant = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "instrument_intent_invariant_router_health"
+        ]
         self.assertEqual(safety["status"], "complete")
         self.assertEqual(precision["status"], "complete")
         self.assertEqual(natural_precision["status"], "complete")
         self.assertEqual(matrix["status"], "complete")
         self.assertEqual(partial["status"], "complete")
         self.assertEqual(general["status"], "complete")
+        self.assertEqual(invariant["status"], "complete")
         self.assertGreater(matrix["matrix_query_count"], 0)
         self.assertGreater(partial["partial_signal_runtime_matrix_count"], 0)
         self.assertGreater(general["runtime_matrix_count"], 0)
-        for health in (safety, precision, natural_precision, matrix, partial, general):
+        self.assertGreater(invariant["runtime_matrix_count"], 0)
+        self.assertGreater(invariant["heldout_analysis_probe_count"], 0)
+        for health in (safety, precision, natural_precision, matrix, partial, general, invariant):
             for key, value in health.items():
-                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count", "runtime_matrix_count"}:
+                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_runtime_matrix_count", "runtime_matrix_count", "heldout_analysis_probe_count"}:
                     self.assertEqual(value, 0, key)
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),

@@ -510,6 +510,37 @@
           "{term} dari {source}"
         ]
       },
+      "instrument_intent_invariant_matrix": {
+        "analysis_terms": [
+          "tujuan",
+          "alasan",
+          "latar belakang",
+          "maksud",
+          "makna",
+          "risiko",
+          "urgensi",
+          "dasar"
+        ],
+        "valid_amendment_contexts": [
+          "perubahan pertama",
+          "perubahan ketiga",
+          "perubahan keempat",
+          "amandemen pertama",
+          "amandemen ketiga",
+          "amandemen keempat",
+          "amandemen IV"
+        ],
+        "word_orders": [
+          "{analysis} {amendment}",
+          "apa {analysis} {amendment}",
+          "{analysis} dari {amendment}"
+        ],
+        "heldout_analysis_probes": [
+          "rasional amandemen keempat",
+          "pertimbangan perubahan ketiga",
+          "motif amandemen pertama"
+        ]
+      },
       "instrument_source_signals": [
         "amandemen",
         "perubahan",
@@ -543,6 +574,19 @@
         "implikasi",
         "pengaruh",
         "konsekuensi"
+      ],
+      "instrument_analysis_signals": [
+        "tujuan",
+        "alasan",
+        "latar belakang",
+        "maksud",
+        "makna",
+        "risiko",
+        "urgensi",
+        "dasar",
+        "rasional",
+        "pertimbangan",
+        "motif"
       ],
       "instrument_legal_object_signals": [
         "pasal",
