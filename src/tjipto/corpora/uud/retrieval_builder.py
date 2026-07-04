@@ -103,7 +103,11 @@ def apply_chunk_grounding(
         unit["validation_status"] = "accepted_grounding" if text_span_ids else "grounding_unavailable"
         if not text_span_ids:
             unit["failure_reason"] = "text_span_exact_match_unavailable"
-        unit["runtime_loadable"] = unit.get("runtime_loadable") is not False and bool(text_span_ids) and bool(unit_evidence or (chunk and chunk.get("runtime_loadable")))
+        unit["runtime_loadable"] = (
+            unit.get("runtime_loadable") is not False
+            and bool(text_span_ids)
+            and bool(unit_evidence or (chunk and chunk.get("runtime_loadable")))
+        )
         apply_review_category(unit)
 
 

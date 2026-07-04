@@ -5,6 +5,7 @@ export interface Citation {
   documentId: string;
   documentTitle: string;
   regulationType: RegulationType;
+  viewerMode?: "evidence" | "document";
   legalUnitId?: string;
   sourceDocumentId?: string;
   viewerRefId?: string;

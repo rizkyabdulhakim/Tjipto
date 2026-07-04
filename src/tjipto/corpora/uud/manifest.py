@@ -97,10 +97,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "schema_version": 1,
         "source_conflicts": "source_conflicts.jsonl",
         "source_documents": "source_documents.jsonl",
-        "source_files": {
-            row["path"]: row["sha256"]
-            for row in sorted(source_documents.values(), key=lambda item: item["path"])
-        },
+        "source_files": {row["path"]: row["sha256"] for row in sorted(source_documents.values(), key=lambda item: item["path"])},
         "source_integrity": "source_integrity.json",
         "status": "final",
         "validation_alignment_results": "validation_alignment_results.jsonl",

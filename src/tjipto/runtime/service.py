@@ -5,12 +5,13 @@ from pathlib import Path
 import re
 from uuid import uuid4
 
-from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
+from tjipto.retrieval.metadata import normalize_filters, public_filters
 from tjipto.retrieval.router import route_retrieval
-from tjipto.runtime.viewer import resolve_pdf_access, viewer_payload
+from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
 
 
 _BOOKMARKS: dict[str, dict] = {}
@@ -36,70 +37,28 @@ class LegalRuntimeService:
 
     def search(self, corpus_id: str, query: str, limit: int = 10, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
-        fail_closed = _exact_fail_closed_instrument_context(store, query)
-        if fail_closed:
-            context_pack = assemble_context_pack(store, (fail_closed,))
-            return {
-                "status": "no_results",
-                "public_status": "no_results",
-                "route": "exact_instrument_fail_closed",
-                "intent": "exact_instrument_unit",
-                "corpus_id": corpus_id,
-                "original_query": query,
-                "normalized_query": query.strip(),
-                "matches": (fail_closed,),
-                "reason": "exact_instrument_unit_fail_closed",
-                "results": (),
-                "context_pack": context_pack,
-            }
-        instrument = _instrument_intent_context(store, query)
-        if instrument:
-            row, route, reason = instrument
-            if row is None:
-                context_pack = empty_context_pack(reason)
-                return {
-                    "status": "no_results",
-                    "public_status": "no_results",
-                    "route": route,
-                    "intent": "instrument_unit_lookup",
-                    "corpus_id": corpus_id,
-                    "original_query": query,
-                    "normalized_query": query.strip(),
-                    "matches": (),
-                    "reason": reason,
-                    "results": (),
-                    "context_pack": context_pack,
-                }
-            context_pack = assemble_context_pack(store, (row,))
-            return {
-                "status": "found",
-                "public_status": "found" if context_pack["answer_evidence"] else "no_results",
-                "route": route,
-                "intent": "instrument_unit_lookup",
-                "corpus_id": corpus_id,
-                "original_query": query,
-                "normalized_query": query.strip(),
-                "matches": (row,),
-                "reason": None if context_pack["answer_evidence"] else reason,
-                "results": tuple(_search_result(item, {"corpus_id": corpus_id, "route": route}, context_pack) for item in context_pack["answer_evidence"]),
-                "context_pack": context_pack,
-            }
-        routed = route_retrieval(
+        if store is None:
+            return _catalog_search_response(corpus_id, query, (), "unsupported_corpus", "unsupported_corpus")
+        normalized_filters = normalize_filters(filters, config=store.config)
+        if normalized_filters.get("_error"):
+            return _catalog_search_response(
+                corpus_id,
+                query,
+                (),
+                "invalid_filter",
+                normalized_filters["_error"],
+                applied_filters=public_filters(normalized_filters),
+                invalid_filters=normalized_filters.get("_invalid_filters", ()),
+            )
+        rows = _catalog_search(store, corpus_id, query, limit, normalized_filters)
+        return _catalog_search_response(
             corpus_id,
             query,
-            store,
-            limit=limit,
-            allow_bm25_after_citation_miss=True,
-            metadata_filters=filters,
+            rows,
+            "found" if rows else "no_results",
+            None if rows else "document_not_found",
+            applied_filters=public_filters(normalized_filters),
         )
-        context_pack = assemble_context_pack(store, routed["matches"]) if store and routed["matches"] else empty_context_pack(routed.get("reason"))
-        public_status = "found" if context_pack["answer_evidence"] else ("no_results" if routed["status"] == "found" else routed["status"])
-        return routed | {
-            "status": "found" if routed["matches"] else routed["status"],
-            "public_status": public_status,
-            "results": tuple(_search_result(row, routed, context_pack) for row in context_pack["answer_evidence"]),
-            "context_pack": context_pack,
-        }
 
     def citation(
         self,
@@ -137,7 +96,7 @@ class LegalRuntimeService:
     def viewer(
         self,
         corpus_id: str,
-        evidence_id: str,
+        evidence_id: str | None,
         *,
         source_document_id: str | None = None,
         page_number: int | None = None,
@@ -147,6 +106,17 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return {"status": "unsupported_corpus", "corpus_id": corpus_id}
+        if evidence_id is None:
+            source = _source_document_by_id(store, source_document_id)
+            if source is None:
+                return {"status": "not_found", "reason": "invalid_source", "corpus_id": corpus_id}
+            return document_viewer_payload(
+                store,
+                corpus_id,
+                source,
+                page_number=page_number,
+                source_pdf_path=source_pdf_path,
+            )
         evidence = store.get(evidence_id)
         if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
@@ -164,7 +134,7 @@ class LegalRuntimeService:
     def pdf_access(
         self,
         corpus_id: str,
-        evidence_id: str,
+        evidence_id: str | None,
         *,
         source_document_id: str,
         page_number: int,
@@ -175,6 +145,17 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return {"status": "unsupported_corpus", "corpus_id": corpus_id}
+        if evidence_id is None:
+            source = _source_document_by_id(store, source_document_id)
+            if source is None:
+                return {"status": "not_found", "reason": "invalid_source", "corpus_id": corpus_id}
+            return resolve_document_pdf_access(
+                store,
+                corpus_id,
+                source,
+                page_number=page_number,
+                source_pdf_path=source_pdf_path,
+            )
         evidence = store.get(evidence_id)
         if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
@@ -202,11 +183,7 @@ class LegalRuntimeService:
     def bookmarks(self, corpus_id: str) -> dict:
         if self._store(corpus_id) is None:
             return {"status": "unsupported_corpus", "corpus_id": corpus_id, "bookmarks": ()}
-        bookmarks = tuple(
-            self._bookmark_status(row)
-            for row in _BOOKMARKS.values()
-            if row["corpus_id"] == corpus_id
-        )
+        bookmarks = tuple(self._bookmark_status(row) for row in _BOOKMARKS.values() if row["corpus_id"] == corpus_id)
         return {
             "status": "ok",
             "corpus_id": corpus_id,
@@ -351,11 +328,35 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": (),
             }
+        scope = _scope_guard_context(store, query)
+        if scope:
+            templates = _answer_templates(store)
+            context_pack = empty_context_pack(scope["reason"])
+            return scope | {
+                "status": "insufficient_evidence",
+                "corpus_id": corpus_id,
+                "original_query": query,
+                "normalized_query": query.strip(),
+                "matches": (),
+                "answer_type": "none",
+                "answer": templates["insufficient"],
+                "context_pack": context_pack,
+                "evidence": (),
+                "citations": (),
+                "viewer_refs": (),
+                "metadata_facts": (),
+                "legal_relations": (),
+                "answer_scope": "insufficient_evidence",
+                "warnings": (),
+                "insufficient_reasons": (scope["reason"],),
+            }
         routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
         if routed["status"] != "found":
-            public_status = "insufficient_evidence" if routed.get("route") in {"metadata_not_found", "relation_not_found"} else routed["status"]
+            public_status = (
+                "insufficient_evidence" if routed.get("route") in {"metadata_not_found", "relation_not_found"} else routed["status"]
+            )
             context_pack = empty_context_pack(routed.get("reason") or routed["status"])
             return routed | {
                 "status": public_status,
@@ -427,6 +428,102 @@ def _answer_templates(store) -> dict[str, str]:
     return _ANSWER_TEMPLATES | dict(configured or {})
 
 
+def _catalog_search(store, corpus_id: str, query: str, limit: int, filters: dict) -> tuple[dict, ...]:
+    query_text = normalize_intent_text(query)
+    if not query_text:
+        return ()
+    catalog = store.config.setting("document_catalog", {}) or {}
+    if not contains_intent_phrase(query, tuple(catalog.get("document_terms") or ())):
+        return ()
+    rows = [
+        _document_result(store, corpus_id, source, _document_search_score(store, source, query_text))
+        for source in store.source_documents
+        if _document_matches_filters(source, filters)
+    ]
+    rows = [row for row in rows if row["_score"] > 0]
+    rows.sort(key=lambda row: (-row["_score"], row["title"]))
+    return tuple(({key: value for key, value in row.items() if key != "_score"}) for row in rows[:limit])
+
+
+def _document_search_score(store, source: dict, query_text: str) -> int:
+    haystack = normalize_intent_text(
+        " ".join(
+            str(item or "")
+            for item in (
+                _document_title(store, source),
+                source.get("filename"),
+                source.get("source_role"),
+                source.get("temporal_context"),
+            )
+        )
+    )
+    return sum(1 for token in query_text.split() if token in haystack)
+
+
+def _document_result(store, corpus_id: str, source: dict, score: int) -> dict:
+    page_count = int(source.get("page_count") or 0)
+    return {
+        "_score": score,
+        "corpus_id": corpus_id,
+        "source_document_id": source.get("source_document_id"),
+        "document_id": source.get("source_document_id"),
+        "title": _document_title(store, source),
+        "document_title": _document_title(store, source),
+        "snippet": f"Dokumen sumber terverifikasi: {source.get('filename')} ({page_count} halaman).",
+        "source_role": source.get("source_role"),
+        "temporal_context": source.get("temporal_context"),
+        "page_numbers": (1,),
+        "bbox_count": 0,
+        "viewer_ref": {
+            "action": "viewer",
+            "source_document_id": source.get("source_document_id"),
+            "page_numbers": (1,),
+            "bbox_count": 0,
+            "can_resolve": True,
+        },
+        "status": "document",
+    }
+
+
+def _document_title(store, source: dict) -> str:
+    catalog = store.config.setting("document_catalog", {}) or {}
+    return (catalog.get("titles") or {}).get(source.get("source_role")) or source.get("filename") or source["source_document_id"]
+
+
+def _document_matches_filters(source: dict, filters: dict) -> bool:
+    return all(
+        source.get(key) == value for key, value in filters.items() if key in {"source_role", "temporal_context"} and value is not None
+    )
+
+
+def _catalog_search_response(
+    corpus_id: str,
+    query: str,
+    rows: tuple[dict, ...],
+    status: str,
+    reason: str | None,
+    *,
+    applied_filters: dict | None = None,
+    invalid_filters: tuple[str, ...] = (),
+) -> dict:
+    return {
+        "status": status,
+        "public_status": "found" if rows else status,
+        "route": "document_catalog" if status != "unsupported_corpus" else "unsupported_corpus",
+        "intent": "document_catalog_search",
+        "corpus_id": corpus_id,
+        "original_query": query,
+        "normalized_query": query.strip(),
+        "matches": (),
+        "reason": reason,
+        "required_corpus": None,
+        "applied_filters": applied_filters or {},
+        "invalid_filters": invalid_filters,
+        "results": rows,
+        "context_pack": empty_context_pack(reason),
+    }
+
+
 def _search_result(row: dict, routed: dict, context_pack: dict) -> dict:
     viewer_ref = row.get("viewer_ref") or {}
     return {
@@ -495,9 +592,9 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
         return None, "instrument_unresolved", decision.reason
     row = next(
         (
-            item for item in store.evidence
-            if item.get("source_role") == decision.amendment
-            and item.get("citation") == decision.target_citation
+            item
+            for item in store.evidence
+            if item.get("source_role") == decision.amendment and item.get("citation") == decision.target_citation
         ),
         None,
     )
@@ -515,6 +612,20 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
         "instrument_resolved_fail_closed",
         "instrument_resolved_fail_closed",
     )
+
+
+def _scope_guard_context(store, query: str) -> dict | None:
+    if store is None:
+        return None
+    guard = store.config.setting("scope_guard", {}) or {}
+    current = contains_intent_phrase(query, tuple(guard.get("current_fact_terms") or ()))
+    subject = contains_intent_phrase(query, tuple(guard.get("current_fact_subjects") or ()))
+    out_of_corpus = contains_intent_phrase(query, tuple(guard.get("out_of_corpus_terms") or ()))
+    if current and subject:
+        return {"route": "current_fact_unsupported", "intent": "current_fact_query", "reason": "current_fact_unsupported"}
+    if out_of_corpus:
+        return {"route": "unsupported_scope", "intent": "out_of_corpus", "reason": "unsupported_scope"}
+    return None
 
 
 def _exact_fail_closed_instrument_context(store, query: str) -> dict | None:
@@ -579,11 +690,7 @@ def _matched_source_conflict(store, query: str) -> dict | None:
     if not _is_source_anomaly_query(store, query):
         return None
     intent = _source_conflict_intent(store)
-    matches = [
-        (score, row)
-        for row in store.source_conflicts
-        if (score := _source_conflict_match_score(store, row, folded, intent)) > 0
-    ]
+    matches = [(score, row) for row in store.source_conflicts if (score := _source_conflict_match_score(store, row, folded, intent)) > 0]
     if not matches:
         return None
     matches.sort(key=lambda item: (-item[0], item[1].get("source_conflict_id") or ""))
@@ -640,16 +747,20 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
             score += 3
     if score:
         return score
-    haystack = " ".join(
-        str(value or "")
-        for value in (
-            conflict.get("source_conflict_id"),
-            conflict.get("type"),
-            conflict.get("classification"),
-            conflict.get("source_document_id"),
-            role_label,
+    haystack = (
+        " ".join(
+            str(value or "")
+            for value in (
+                conflict.get("source_conflict_id"),
+                conflict.get("type"),
+                conflict.get("classification"),
+                conflict.get("source_document_id"),
+                role_label,
+            )
         )
-    ).replace("_", " ").casefold()
+        .replace("_", " ")
+        .casefold()
+    )
     query_tokens = _meaningful_conflict_tokens(folded_query, intent)
     conflict_tokens = {token for token in re.findall(r"[a-z0-9]+", haystack) if len(token) > 2}
     overlap = query_tokens & conflict_tokens
@@ -661,6 +772,10 @@ def _source_document_meta(store, source_document_id: object) -> dict:
         (row for row in store.source_documents if row.get("source_document_id") == source_document_id),
         {},
     )
+
+
+def _source_document_by_id(store, source_document_id: object) -> dict | None:
+    return next((row for row in store.source_documents if row.get("source_document_id") == source_document_id), None)
 
 
 def _meaningful_conflict_tokens(text: str, intent: dict) -> set[str]:

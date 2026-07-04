@@ -34,11 +34,7 @@ class PdfTextSpanCoverageTest(unittest.TestCase):
                     "sha256": "abc123",
                 }
             },
-            pdf_lines={
-                "synthetic-source": {
-                    1: [{"text": "hello", "x0": 1, "x1": 2, "y0": 3, "y1": 4}]
-                }
-            },
+            pdf_lines={"synthetic-source": {1: [{"text": "hello", "x0": 1, "x1": 2, "y0": 3, "y1": 4}]}},
             corpus_id="synthetic",
             text_span_id_prefix="span",
         )

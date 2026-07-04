@@ -95,10 +95,7 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
             return False, "noncanonical_trace_not_answerable"
     if not (DIRECT_ROUTES & set(row.get("route_sources") or ())):
         return False, "graph_only"
-    if (
-        "bm25" in set(row.get("route_sources") or ())
-        and row.get("lexical_relevance_ok") is False
-    ):
+    if "bm25" in set(row.get("route_sources") or ()) and row.get("lexical_relevance_ok") is False:
         return False, row.get("lexical_relevance_reason") or "weak_lexical_match"
     if row.get("status") != "final":
         return False, "not_final"
@@ -116,21 +113,12 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
 
 
 def _payload(store, row: dict) -> dict:
-    bboxes = (
-        store.metadata_bboxes_for(row["evidence_id"])
-        if row.get("metadata_grounding")
-        else store.bboxes_for(row["evidence_id"])
-    )
+    bboxes = store.metadata_bboxes_for(row["evidence_id"]) if row.get("metadata_grounding") else store.bboxes_for(row["evidence_id"])
     label = _evidence_label(row)
     hierarchy = _evidence_hierarchy(row)
     can_resolve = (
-        row.get("status") == "final"
-        and row.get("bbox_precision") == "exact"
-        and row.get("viewer_highlightable") is True
-        and bool(bboxes)
-    ) and (
-        not row.get("metadata_grounding") or row.get("metadata_viewer_resolvable") is True
-    )
+        row.get("status") == "final" and row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True and bool(bboxes)
+    ) and (not row.get("metadata_grounding") or row.get("metadata_viewer_resolvable") is True)
     return {
         "corpus_id": row.get("corpus_id"),
         "evidence_id": row["evidence_id"],

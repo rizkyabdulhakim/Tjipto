@@ -30,9 +30,7 @@ DECISION_LABELS = {
     "Perubahan Keempat Decision",
 }
 INSERTED_BAB_HEADING_BBOX_MARKER = "::heading_bab_"
-STRUCTURAL_FORBIDDEN_MARKERS = (
-    "Ditetapkan di Jakarta",
-)
+STRUCTURAL_FORBIDDEN_MARKERS = ("Ditetapkan di Jakarta",)
 PROVENANCE_EDGE_TYPES = {
     "HAS_FINAL_EVIDENCE",
     "BELONGS_TO_SOURCE_ROLE",
@@ -42,9 +40,7 @@ PROVENANCE_EDGE_TYPES = {
     "EXCLUDED_BECAUSE",
 }
 STRUCTURAL_SEQUENCE_EDGE_TYPES = {
-    edge_type
-    for edge_type, schema in UUD_LEGAL_GRAPH_EDGE_SCHEMA.items()
-    if schema.get("category") == "structural_sequence"
+    edge_type for edge_type, schema in UUD_LEGAL_GRAPH_EDGE_SCHEMA.items() if schema.get("category") == "structural_sequence"
 }
 LEGAL_EDGE_TYPES = {
     "CONTAINS",
@@ -229,9 +225,7 @@ def build_validation_report(
         "status": "evidence_backed_minimal_baseline",
         "legal_edge_types": sorted(LEGAL_EDGE_TYPES),
         "runtime_loadable_legal_edges": sum(
-            1
-            for row in graph_edges
-            if row.get("edge_type") in LEGAL_EDGE_TYPES and row.get("runtime_loadable") is True
+            1 for row in graph_edges if row.get("edge_type") in LEGAL_EDGE_TYPES and row.get("runtime_loadable") is True
         ),
     }
     return validation_report
@@ -297,14 +291,26 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             if any(marker in row["text"] for marker in ("BAB VIIA", "BAB VIIB", "BAB VIIIA", "BAB IXA", "BAB XA")):
                 errors.append(f"inserted_bab_inside_normative_unit:{row['legal_unit_id']}")
         if row["unit_type"] == "pasal_record" and row.get("hierarchy") and str(row["hierarchy"][0]).startswith("BAB"):
-            if not any(units_by_id[parent]["unit_type"] == "bab_record" for parent in row.get("parent_legal_unit_ids") or () if parent in units_by_id):
+            if not any(
+                units_by_id[parent]["unit_type"] == "bab_record"
+                for parent in row.get("parent_legal_unit_ids") or ()
+                if parent in units_by_id
+            ):
                 errors.append(f"pasal_missing_bab_parent:{row['legal_unit_id']}")
         if row["unit_type"] == "bab_record" and any(marker in row["text"] for marker in STRUCTURAL_FORBIDDEN_MARKERS):
             errors.append(f"structural_bab_contains_instrument_text:{row['legal_unit_id']}")
         for text_span_id in row.get("text_span_ids") or ():
             if text_span_id not in text_span_ids:
                 errors.append(f"orphan_legal_unit_text_span:{row['legal_unit_id']}:{text_span_id}")
-        for field in ("source_role", "temporal_context", "page_numbers", "text_span_ids", "bbox_ids", "grounding_status", "validation_status"):
+        for field in (
+            "source_role",
+            "temporal_context",
+            "page_numbers",
+            "text_span_ids",
+            "bbox_ids",
+            "grounding_status",
+            "validation_status",
+        ):
             if row.get("runtime_loadable") is True and field not in row:
                 errors.append(f"runtime_loadable_legal_unit_missing_{field}:{row['legal_unit_id']}")
         if row.get("runtime_loadable") is True:
@@ -345,7 +351,9 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"runtime_loadable_chunk_missing_text_span:{row['chunk_id']}")
             if row.get("validation_status") == "validation_error_missing_grounding":
                 errors.append(f"runtime_loadable_chunk_validation_error:{row['chunk_id']}")
-        if row.get("runtime_loadable") is False and not (row.get("validation_basis") or row.get("failure_reason") or row.get("grounding_status")):
+        if row.get("runtime_loadable") is False and not (
+            row.get("validation_basis") or row.get("failure_reason") or row.get("grounding_status")
+        ):
             errors.append(f"non_runtime_chunk_missing_status_or_reason:{row['chunk_id']}")
         if row["chunk_type"] == "bab_structural_context_record" and any(marker in row["text"] for marker in STRUCTURAL_FORBIDDEN_MARKERS):
             errors.append(f"structural_chunk_contains_instrument_text:{row['chunk_id']}")
@@ -480,11 +488,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"noncanonical_conflict_trace_runtime_loadable:{row['source_conflict_id']}")
             if row.get("canonical_use_allowed") is True:
                 errors.append(f"noncanonical_conflict_trace_canonical_use_allowed:{row['source_conflict_id']}")
-    uncounted_unresolved_exceptions = [
-        row
-        for row in validation_exceptions
-        if row.get("status") == UNRESOLVED_MANUAL_REVIEW_REQUIRED
-    ]
+    uncounted_unresolved_exceptions = [row for row in validation_exceptions if row.get("status") == UNRESOLVED_MANUAL_REVIEW_REQUIRED]
     for row in uncounted_unresolved_exceptions:
         errors.append(f"unresolved_validation_exception:{row['exception_id']}")
     for row in metadata_grounding:
@@ -560,7 +564,12 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 if not row.get("temporal_context"):
                     errors.append(f"structural_sequence_missing_temporal_context:{row['edge_id']}")
             evidence_ref = row.get("evidence_ref")
-            if evidence_ref and evidence_ref not in evidence_by_id and evidence_ref not in metadata_grounding_ids and evidence_ref not in source_conflict_ids:
+            if (
+                evidence_ref
+                and evidence_ref not in evidence_by_id
+                and evidence_ref not in metadata_grounding_ids
+                and evidence_ref not in source_conflict_ids
+            ):
                 errors.append(f"legal_edge_unknown_evidence_ref:{row['edge_id']}:{evidence_ref}")
 
     return tuple(sorted(set(errors)))
@@ -593,20 +602,14 @@ def _all_text_disposition_health(
     metadata_grounding: list[dict],
     source_conflicts: list[dict],
 ) -> dict:
-    referenced_span_ids = {
-        text_span_id
-        for row in (*legal_units, *chunks)
-        for text_span_id in row.get("text_span_ids") or ()
-    }
+    referenced_span_ids = {text_span_id for row in (*legal_units, *chunks) for text_span_id in row.get("text_span_ids") or ()}
     span_ids = {row["text_span_id"] for row in page_text_spans}
     legal_targets = {row["legal_unit_id"] for row in legal_units} | {row["chunk_id"] for row in chunks}
     metadata_targets = {row["metadata_grounding_id"] for row in metadata_grounding}
     conflict_targets = {row["source_conflict_id"] for row in source_conflicts}
     missing_fields = [row for row in page_text_spans if any(field not in row for field in SPAN_DISPOSITION_FIELDS)]
     excluded_missing_reason = [
-        row
-        for row in page_text_spans
-        if row.get("promotion_status") in EXCLUDED_STATUSES and not row.get("exclusion_reason")
+        row for row in page_text_spans if row.get("promotion_status") in EXCLUDED_STATUSES and not row.get("exclusion_reason")
     ]
     fake_grounding_ids = [
         row
@@ -627,7 +630,9 @@ def _all_text_disposition_health(
         "runtime_loadable_needs_review_count": sum(1 for row in needs_review_rows if row.get("runtime_loadable") is True),
         "canonical_use_allowed_needs_review_count": sum(1 for row in needs_review_rows if row.get("canonical_use_allowed") is True),
         "fake_grounding_id_count": len(fake_grounding_ids),
-        "status": "complete" if page_text_spans and not missing_fields and not excluded_missing_reason and not fake_grounding_ids else "incomplete",
+        "status": "complete"
+        if page_text_spans and not missing_fields and not excluded_missing_reason and not fake_grounding_ids
+        else "incomplete",
     }
 
 
@@ -730,14 +735,10 @@ def _instrument_runtime_safety_health(
         and bool(row.get("bbox_refs"))
     ]
     accepted_for_nonruntime_chunks = [
-        row
-        for row in accepted_retrieval
-        if chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
+        row for row in accepted_retrieval if chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
     ]
     accepted_for_page_grounded = [
-        row
-        for row in accepted_retrieval
-        if evidence_by_id.get(row.get("evidence_id"), {}).get("bbox_precision") == "page_grounded_only"
+        row for row in accepted_retrieval if evidence_by_id.get(row.get("evidence_id"), {}).get("bbox_precision") == "page_grounded_only"
     ]
     unresolved_instrument = [
         row
@@ -788,8 +789,7 @@ def _instrument_exact_grounding_health(
     invalid_bbox = [
         row
         for row in public_evidence
-        if not (row.get("bbox_ids") or row.get("bbox_refs"))
-        or not set(row.get("bbox_ids") or row.get("bbox_refs") or ()) <= bbox_ids
+        if not (row.get("bbox_ids") or row.get("bbox_refs")) or not set(row.get("bbox_ids") or row.get("bbox_refs") or ()) <= bbox_ids
     ]
     needs_review_rows = [
         row
@@ -812,7 +812,12 @@ def _instrument_exact_grounding_health(
     }
     inventory = {
         "exact_runtime": len(public_evidence),
-        "trace_only": sum(1 for row in evidence if row["evidence_id"] not in {item["evidence_id"] for item in public_evidence} and row.get("bbox_precision") == "page_grounded_only"),
+        "trace_only": sum(
+            1
+            for row in evidence
+            if row["evidence_id"] not in {item["evidence_id"] for item in public_evidence}
+            and row.get("bbox_precision") == "page_grounded_only"
+        ),
         "excluded_with_reason": sum(1 for row in retrieval_units if row.get("status") != "accepted" and row.get("rejection_reason")),
         "needs_review": len(needs_review_rows),
     }
@@ -830,17 +835,19 @@ def _instrument_query_precision_health(evidence: list[dict], legal_units: list[d
         and row["evidence_id"] not in accepted_evidence_ids
     }
     same_citation_answerable = [
-        row
-        for row in evidence
-        if row.get("citation") in fail_closed_citations and row["evidence_id"] in accepted_evidence_ids
+        row for row in evidence if row.get("citation") in fail_closed_citations and row["evidence_id"] in accepted_evidence_ids
     ]
     accepted_neighbor_substitution = [
         row
         for row in retrieval_units
         if row.get("status") == "accepted" and row.get("rejection_reason") == "neighbor_substitution_not_allowed"
     ]
-    page_grounded_ready = [row for row in evidence if row.get("bbox_precision") == "page_grounded_only" and row.get("viewer_highlightable") is True]
-    nonhighlightable_exact_ready = [row for row in evidence if row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is False]
+    page_grounded_ready = [
+        row for row in evidence if row.get("bbox_precision") == "page_grounded_only" and row.get("viewer_highlightable") is True
+    ]
+    nonhighlightable_exact_ready = [
+        row for row in evidence if row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is False
+    ]
     counts = {
         "exact_fail_closed_query_neighbor_answer_count": len(same_citation_answerable),
         "instrument_neighbor_substitution_count": len(accepted_neighbor_substitution),
@@ -853,20 +860,13 @@ def _instrument_query_precision_health(evidence: list[dict], legal_units: list[d
 def _instrument_natural_query_precision_health(evidence: list[dict], legal_units: list[dict], retrieval_units: list[dict]) -> dict:
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     accepted_evidence_ids = {row["evidence_id"] for row in retrieval_units if row.get("status") == "accepted"}
-    instrument_evidence = [
-        row
-        for row in evidence
-        if _is_instrument_unit(units_by_id.get(row.get("legal_unit_id"), {}))
-    ]
+    instrument_evidence = [row for row in evidence if _is_instrument_unit(units_by_id.get(row.get("legal_unit_id"), {}))]
     fail_closed_targets = [
         row
         for row in instrument_evidence
-        if _instrument_role_from_citation(row.get("citation")) in {"decision", "scope"}
-        and row["evidence_id"] not in accepted_evidence_ids
+        if _instrument_role_from_citation(row.get("citation")) in {"decision", "scope"} and row["evidence_id"] not in accepted_evidence_ids
     ]
-    answerable_fail_closed_targets = [
-        row for row in fail_closed_targets if row["evidence_id"] in accepted_evidence_ids
-    ]
+    answerable_fail_closed_targets = [row for row in fail_closed_targets if row["evidence_id"] in accepted_evidence_ids]
     safe_exact_targets = [
         row
         for row in instrument_evidence
@@ -879,7 +879,8 @@ def _instrument_natural_query_precision_health(evidence: list[dict], legal_units
         row
         for row in retrieval_units
         if row.get("status") == "accepted"
-        and row.get("rejection_reason") in {
+        and row.get("rejection_reason")
+        in {
             "neighbor_substitution_not_allowed",
             "lexical_fallback_blocked_by_instrument_intent",
         }
@@ -888,7 +889,8 @@ def _instrument_natural_query_precision_health(evidence: list[dict], legal_units
         row
         for row in retrieval_units
         if row.get("status") == "accepted"
-        and row.get("rejection_reason") in {
+        and row.get("rejection_reason")
+        in {
             "natural_variant_neighbor_substitution",
             "punctuation_boundary_miss",
             "amandemen_alias_miss",
@@ -909,10 +911,16 @@ def _instrument_natural_query_precision_health(evidence: list[dict], legal_units
         "amandemen_alias_miss_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "amandemen_alias_miss"),
         "ordinal_alias_miss_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "ordinal_alias_miss"),
         "safe_exact_label_punctuation_rank_miss_count": len(safe_not_accepted),
-        "role_family_neighbor_answer_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "role_family_neighbor_substitution"),
-        "role_family_neighbor_search_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "role_family_neighbor_substitution"),
+        "role_family_neighbor_answer_count": sum(
+            1 for row in variant_misses if row.get("rejection_reason") == "role_family_neighbor_substitution"
+        ),
+        "role_family_neighbor_search_count": sum(
+            1 for row in variant_misses if row.get("rejection_reason") == "role_family_neighbor_substitution"
+        ),
         "scope_family_alias_miss_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "scope_family_alias_miss"),
-        "target_fail_closed_fallback_count": sum(1 for row in variant_misses if row.get("rejection_reason") == "target_fail_closed_fallback"),
+        "target_fail_closed_fallback_count": sum(
+            1 for row in variant_misses if row.get("rejection_reason") == "target_fail_closed_fallback"
+        ),
     }
     return {**counts, "status": "complete" if not any(counts.values()) else "incomplete"}
 
@@ -923,16 +931,10 @@ def _instrument_intent_matrix_health(evidence: list[dict], retrieval_units: list
     amendment_terms = tuple(matrix.get("amendment_terms") or ())
     word_orders = tuple(matrix.get("word_orders") or ())
     queries = [
-        template.format(role=role, amendment=amendment)
-        for role in role_terms
-        for amendment in amendment_terms
-        for template in word_orders
+        template.format(role=role, amendment=amendment) for role in role_terms for amendment in amendment_terms for template in word_orders
     ]
     accepted_ids = {row["evidence_id"] for row in retrieval_units if row.get("status") == "accepted"}
-    evidence_by_citation = {
-        (row.get("source_role"), row.get("citation")): row
-        for row in evidence
-    }
+    evidence_by_citation = {(row.get("source_role"), row.get("citation")): row for row in evidence}
     bm25_fallback = []
     unresolved_fail_open = []
     for query in queries:
@@ -951,16 +953,17 @@ def _instrument_intent_matrix_health(evidence: list[dict], retrieval_units: list
         if target["evidence_id"] in accepted_ids and _instrument_role_from_citation(target.get("citation")) != decision.role_family:
             unresolved_fail_open.append(query)
     duplicate_paths = [
-        value for value in intent.get("instrument_scope_queries", ())
+        value
+        for value in intent.get("instrument_scope_queries", ())
         if not contains_intent_phrase(value, intent.get("instrument_role_queries", {}).get("scope", ()))
     ]
     duplicate_paths.extend(
-        value for value in role_terms
+        value
+        for value in role_terms
         if not any(contains_intent_phrase(value, aliases) for aliases in intent.get("instrument_role_queries", {}).values())
     )
     duplicate_paths.extend(
-        value for value in amendment_terms
-        if not any(pattern.search(value) for _, pattern in intent.get("metadata_roles", ()))
+        value for value in amendment_terms if not any(pattern.search(value) for _, pattern in intent.get("metadata_roles", ()))
     )
     counts = {
         "instrument_like_bm25_fallback_count": len(bm25_fallback),
@@ -970,7 +973,12 @@ def _instrument_intent_matrix_health(evidence: list[dict], retrieval_units: list
         "duplicated_intent_config_path_count": len(duplicate_paths),
         "matrix_query_count": len(queries),
     }
-    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "matrix_query_count") else "incomplete"}
+    return {
+        **counts,
+        "status": "complete"
+        if queries and not any(value for key, value in counts.items() if key != "matrix_query_count")
+        else "incomplete",
+    }
 
 
 def _partial_signal_instrument_boundary_health(evidence: list[dict], retrieval_units: list[dict], intent: dict) -> dict:
@@ -986,24 +994,22 @@ def _partial_signal_instrument_boundary_health(evidence: list[dict], retrieval_u
         for source in source_terms
         for template in word_orders
     ]
-    fail_open = [
-        query for query in queries
-        if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
-    ]
+    fail_open = [query for query in queries if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"]
     blocking_examples = (
         "ubah pasal apa perubahan keempat",
         "pasal apa yang diubah amandemen keempat",
     )
     blocked = [
-        query for query in blocking_examples
-        if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
+        query for query in blocking_examples if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
     ]
     metadata_regressions = [
-        query for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
+        query
+        for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
         if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     legal_reference_regressions = [
-        query for query in ("pasal apa yang mengatur pendidikan", "apa isi Pasal 31")
+        query
+        for query in ("pasal apa yang mengatur pendidikan", "apa isi Pasal 31")
         if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
@@ -1014,7 +1020,12 @@ def _partial_signal_instrument_boundary_health(evidence: list[dict], retrieval_u
         "metadata_route_regression_count": len(metadata_regressions),
         "legal_reference_route_regression_count": len(legal_reference_regressions),
     }
-    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key not in {"health_mode", "partial_signal_resolver_matrix_count"}) else "incomplete"}
+    return {
+        **counts,
+        "status": "complete"
+        if queries and not any(value for key, value in counts.items() if key not in {"health_mode", "partial_signal_resolver_matrix_count"})
+        else "incomplete",
+    }
 
 
 def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
@@ -1031,22 +1042,26 @@ def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
         for template in word_orders
     ]
     content_fallback = [
-        query for kind, query in queries
+        query
+        for kind, query in queries
         if kind == "content" and resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
     ]
     effect_fallback = [
-        query for kind, query in queries
+        query
+        for kind, query in queries
         if kind == "effect" and resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
     ]
     public_evidence = []
     neighbor_answers = []
     neighbor_searches = []
     metadata_regressions = [
-        query for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
+        query
+        for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
         if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     legal_reference_regressions = [
-        query for query in ("apa isi Pasal 31", "apa isi Pasal 31 ayat 2", "Pasal IV")
+        query
+        for query in ("apa isi Pasal 31", "apa isi Pasal 31 ayat 2", "Pasal IV")
         if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
@@ -1060,7 +1075,12 @@ def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
         "metadata_route_regression_count": len(metadata_regressions),
         "legal_reference_route_regression_count": len(legal_reference_regressions),
     }
-    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key not in {"health_mode", "resolver_matrix_count"}) else "incomplete"}
+    return {
+        **counts,
+        "status": "complete"
+        if queries and not any(value for key, value in counts.items() if key not in {"health_mode", "resolver_matrix_count"})
+        else "incomplete",
+    }
 
 
 def _instrument_intent_invariant_router_health(intent: dict) -> dict:
@@ -1069,17 +1089,11 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
     amendments = tuple(matrix.get("valid_amendment_contexts") or ())
     word_orders = tuple(matrix.get("word_orders") or ())
     queries = [
-        template.format(analysis=term, amendment=amendment)
-        for term in terms
-        for amendment in amendments
-        for template in word_orders
+        template.format(analysis=term, amendment=amendment) for term in terms for amendment in amendments for template in word_orders
     ]
     heldout = tuple(matrix.get("heldout_analysis_probes") or ())
     all_analysis = (*queries, *heldout)
-    fallback = [
-        query for query in all_analysis
-        if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
-    ]
+    fallback = [query for query in all_analysis if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"]
     public_evidence = []
     neighbor_answers = []
     neighbor_searches = []
@@ -1095,25 +1109,31 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
         "Pasal IV",
     )
     general_overblocks = [
-        query for query in general_topics
-        if resolve_instrument_intent(query, intent, corpus="uud").target_status in {
+        query
+        for query in general_topics
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status
+        in {
             "instrument_unresolved",
             "instrument_resolved_fail_closed",
         }
     ]
     false_positives = [
-        query for query in false_positive_guards
-        if resolve_instrument_intent(query, intent, corpus="uud").target_status in {
+        query
+        for query in false_positive_guards
+        if resolve_instrument_intent(query, intent, corpus="uud").target_status
+        in {
             "instrument_unresolved",
             "instrument_resolved_fail_closed",
         }
     ]
     metadata_regressions = [
-        query for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
+        query
+        for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
         if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     legal_reference_regressions = [
-        query for query in ("apa isi Pasal 31", "apa isi Pasal 31 ayat 2", "Pasal IV")
+        query
+        for query in ("apa isi Pasal 31", "apa isi Pasal 31 ayat 2", "Pasal IV")
         if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
@@ -1128,7 +1148,16 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
         "metadata_route_regression_count": len(metadata_regressions),
         "legal_reference_route_regression_count": len(legal_reference_regressions),
     }
-    return {**counts, "status": "complete" if queries and heldout and not any(value for key, value in counts.items() if key not in {"health_mode", "resolver_matrix_count", "heldout_analysis_probe_count"}) else "incomplete"}
+    return {
+        **counts,
+        "status": "complete"
+        if queries
+        and heldout
+        and not any(
+            value for key, value in counts.items() if key not in {"health_mode", "resolver_matrix_count", "heldout_analysis_probe_count"}
+        )
+        else "incomplete",
+    }
 
 
 def _intent_arbitration_priority_health(intent: dict) -> dict:
@@ -1172,16 +1201,13 @@ def _intent_arbitration_priority_health(intent: dict) -> dict:
     )
     pure_relations = ("relasi Pasal 31 dengan pendidikan",)
     metadata_regressions = [
-        query for query in pure_metadata
-        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
+        query for query in pure_metadata if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     legal_reference_regressions = [
-        query for query in pure_legal_reference
-        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
+        query for query in pure_legal_reference if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     relation_regressions = [
-        query for query in pure_relations
-        if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
+        query for query in pure_relations if resolve_instrument_intent(query, intent, corpus="uud").target_status != "not_instrument"
     ]
     counts = {
         "conflict_matrix_count": len(queries),
@@ -1193,7 +1219,12 @@ def _intent_arbitration_priority_health(intent: dict) -> dict:
         "pure_legal_reference_regression_count": len(legal_reference_regressions),
         "pure_relation_regression_count": len(relation_regressions),
     }
-    return {**counts, "status": "complete" if queries and not any(value for key, value in counts.items() if key != "conflict_matrix_count") else "incomplete"}
+    return {
+        **counts,
+        "status": "complete"
+        if queries and not any(value for key, value in counts.items() if key != "conflict_matrix_count")
+        else "incomplete",
+    }
 
 
 def _amendment_context_default_boundary_health() -> dict:
@@ -1215,21 +1246,27 @@ def _amendment_context_default_boundary_health() -> dict:
         search = service.search("uud", query, limit=10)
         if ask.get("route") == "lexical_fallback" or search.get("route") == "bm25":
             bm25.append(query)
-        if ask.get("evidence") or search.get("results"):
+        search_evidence_rows = [
+            row for row in search.get("results", ()) if row.get("status") != "document" or row.get("evidence_id") or row.get("bbox_count")
+        ]
+        if ask.get("evidence") or search_evidence_rows:
             public_evidence.append(query)
     metadata_regressions = [
-        query for query in (
+        query
+        for query in (
             "kapan perubahan keempat ditetapkan",
             "siapa menetapkan perubahan keempat",
         )
         if service.ask("uud", query, limit=10).get("route") != "metadata_fact"
     ]
     legal_reference_regressions = [
-        query for query in ("apa isi Pasal 31", "Pasal IV", "pasal apa yang mengatur perubahan iklim")
+        query
+        for query in ("apa isi Pasal 31", "Pasal IV", "pasal apa yang mengatur perubahan iklim")
         if service.ask("uud", query, limit=10).get("route") in {"instrument_unresolved", "instrument_resolved_fail_closed"}
     ]
     relation_regressions = [
-        query for query in ("relasi Pasal 31 dengan pendidikan",)
+        query
+        for query in ("relasi Pasal 31 dengan pendidikan",)
         if service.ask("uud", query, limit=10).get("route") not in {"legal_relation", "legal_reference", "lexical_fallback"}
     ]
     raw_elapsed_ms = int((perf_counter() - started) * 1000)
@@ -1311,9 +1348,7 @@ def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], so
         )
     }
     noncanonical_conflicts = [
-        row
-        for row in source_conflicts
-        if row.get("provenance_exception_category") == ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
+        row for row in source_conflicts if row.get("provenance_exception_category") == ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
     ]
     validate_text_reviewed = [
         row
@@ -1334,8 +1369,12 @@ def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], so
         "source_text_accepted_nonruntime_no_evidence_bbox_count": category_counts[SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX],
         "unresolved_needs_review_count": category_counts[UNRESOLVED_NEEDS_REVIEW],
         "runtime_loadable_needs_review_count": sum(1 for row in needs_review_rows if row.get("runtime_loadable") is True),
-        "noncanonical_conflict_trace_runtime_loadable_count": sum(1 for row in noncanonical_conflicts if row.get("runtime_loadable") is True),
-        "noncanonical_conflict_trace_canonical_use_allowed_count": sum(1 for row in noncanonical_conflicts if row.get("canonical_use_allowed") is True),
+        "noncanonical_conflict_trace_runtime_loadable_count": sum(
+            1 for row in noncanonical_conflicts if row.get("runtime_loadable") is True
+        ),
+        "noncanonical_conflict_trace_canonical_use_allowed_count": sum(
+            1 for row in noncanonical_conflicts if row.get("canonical_use_allowed") is True
+        ),
     }
 
 
@@ -1352,13 +1391,17 @@ def _chunk_self_contained_health(chunks: list[dict], units_by_id: dict[str, dict
         "chunk_validation_status_count": sum(1 for row in chunks if row.get("validation_status")),
         "chunk_validation_basis_count": sum(1 for row in chunks if row.get("validation_basis")),
         "chunk_missing_legal_unit_ref_count": sum(1 for row in chunks if row.get("legal_unit_id") not in units_by_id),
-        "runtime_chunks_missing_source_context": sum(1 for row in runtime_chunks if not all(row.get(field) for field in ("source_document_id", "source_role", "temporal_context"))),
+        "runtime_chunks_missing_source_context": sum(
+            1 for row in runtime_chunks if not all(row.get(field) for field in ("source_document_id", "source_role", "temporal_context"))
+        ),
         "runtime_chunks_missing_validation_status": sum(1 for row in runtime_chunks if not row.get("validation_status")),
         "runtime_chunks_missing_validation_basis": sum(1 for row in runtime_chunks if not row.get("validation_basis")),
         "runtime_chunks_missing_evidence_ids": sum(1 for row in runtime_chunks if not row.get("evidence_ids")),
         "runtime_chunks_missing_bbox_ids": sum(1 for row in runtime_chunks if not row.get("bbox_ids")),
         "runtime_chunks_missing_text_span_ids": sum(1 for row in runtime_chunks if not row.get("text_span_ids")),
-        "non_runtime_chunks_missing_status_or_reason": sum(1 for row in non_runtime_chunks if not (row.get("validation_basis") or row.get("failure_reason") or row.get("grounding_status"))),
+        "non_runtime_chunks_missing_status_or_reason": sum(
+            1 for row in non_runtime_chunks if not (row.get("validation_basis") or row.get("failure_reason") or row.get("grounding_status"))
+        ),
     }
 
 

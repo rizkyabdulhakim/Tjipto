@@ -41,6 +41,47 @@
       "original_historical": "Historis (naskah asli)",
       "default": "Status sumber tidak tersedia"
     },
+    "document_catalog": {
+      "document_terms": [
+        "uud",
+        "undang undang dasar",
+        "1945",
+        "naskah",
+        "perubahan",
+        "amandemen"
+      ],
+      "titles": {
+        "current_consolidated": "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945 dalam Satu Naskah",
+        "original_historical": "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
+        "amendment_1_historical": "Perubahan Pertama Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
+        "amendment_2_historical": "Perubahan Kedua Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
+        "amendment_3_historical": "Perubahan Ketiga Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
+        "amendment_4_historical": "Perubahan Keempat Undang-Undang Dasar Negara Republik Indonesia Tahun 1945"
+      }
+    },
+    "scope_guard": {
+      "current_fact_terms": [
+        "sekarang",
+        "saat ini",
+        "terkini",
+        "hari ini",
+        "berikutnya",
+        "selanjutnya"
+      ],
+      "current_fact_subjects": [
+        "presiden",
+        "wakil presiden",
+        "pemilu",
+        "jadwal",
+        "harga",
+        "tanah"
+      ],
+      "out_of_corpus_terms": [
+        "harga",
+        "tanah",
+        "jakarta"
+      ]
+    },
     "schema": {
       "document_roles": [
         "current_consolidated",

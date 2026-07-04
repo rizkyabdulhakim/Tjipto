@@ -26,10 +26,12 @@ def build_text_bbox_rows(
                 break
             if _compact(candidate["text"]) != expected[target_index]:
                 continue
-            matched.append({
-                "page_number": page_number,
-                **candidate,
-            })
+            matched.append(
+                {
+                    "page_number": page_number,
+                    **candidate,
+                }
+            )
             target_index += 1
         if target_index >= len(expected):
             break
@@ -123,24 +125,26 @@ def _fallback_bbox_rows(
         candidates = line_entries.get(page_number, [])
         if not candidates:
             continue
-        rows.append({
-            "bbox_id": f"{bbox_id_prefix}::{evidence_id}::{index:04d}",
-            "bbox_precision": "page_grounded_only",
-            "corpus_id": corpus_id,
-            "evidence_id": evidence_id,
-            "page_number": page_number,
-            "source_document_id": source_id,
-            "source_pdf": source_meta["filename"],
-            "source_pdf_path": source_meta["path"],
-            "source_sha256": source_meta["sha256"],
-            "status": "accepted",
-            "text": text.strip() if index == 0 else "",
-            "viewer_highlightable": False,
-            "x0": min(row["x0"] for row in candidates),
-            "x1": max(row["x1"] for row in candidates),
-            "y0": min(row["y0"] for row in candidates),
-            "y1": max(row["y1"] for row in candidates),
-        })
+        rows.append(
+            {
+                "bbox_id": f"{bbox_id_prefix}::{evidence_id}::{index:04d}",
+                "bbox_precision": "page_grounded_only",
+                "corpus_id": corpus_id,
+                "evidence_id": evidence_id,
+                "page_number": page_number,
+                "source_document_id": source_id,
+                "source_pdf": source_meta["filename"],
+                "source_pdf_path": source_meta["path"],
+                "source_sha256": source_meta["sha256"],
+                "status": "accepted",
+                "text": text.strip() if index == 0 else "",
+                "viewer_highlightable": False,
+                "x0": min(row["x0"] for row in candidates),
+                "x1": max(row["x1"] for row in candidates),
+                "y0": min(row["y0"] for row in candidates),
+                "y1": max(row["y1"] for row in candidates),
+            }
+        )
     if not rows:
         raise ValueError(f"unable_to_build_bbox_rows:{source_id}:{text[:80]}")
     return rows

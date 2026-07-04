@@ -29,10 +29,7 @@ def validate_corpus_provenance(config: CorpusConfig) -> dict:
     if config.corpus_id == "uud":
         health = read_json(config.manifest_path.parent / "validation_report.json").get("provenance_exception_health", {})
         report["provenance_exception_health"] = health
-        if (
-            health.get("unresolved_needs_review_count") == 0
-            and health.get("runtime_loadable_needs_review_count") == 0
-        ):
+        if health.get("unresolved_needs_review_count") == 0 and health.get("runtime_loadable_needs_review_count") == 0:
             report["status"] = "pass"
             for key in ("legal_units", "chunks"):
                 report[key]["status"] = "pass_with_reviewed_exceptions"

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path, PurePosixPath
-import sys
 import zipfile
 
 
@@ -60,7 +59,10 @@ def _zip_entries(path: Path) -> list[str]:
 def _forbidden(name: str) -> bool:
     path = PurePosixPath(name)
     parts = path.parts
-    if any(part in {".git", "node_modules", "dist", "__pycache__", ".pytest_cache", "tmp", "temp", "coverage", ".mypy_cache", ".ruff_cache"} for part in parts):
+    if any(
+        part in {".git", "node_modules", "dist", "__pycache__", ".pytest_cache", "tmp", "temp", "coverage", ".mypy_cache", ".ruff_cache"}
+        for part in parts
+    ):
         return True
     return path.match("*.pyc") or path.match("*.pyo") or path.match("*.log") or path.match(".env") or path.match(".env.*")
 

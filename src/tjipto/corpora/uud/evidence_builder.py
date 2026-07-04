@@ -126,22 +126,24 @@ def append_instrument_unit(
     evidence.append(evidence_row)
     bbox_rows.extend(bbox_records)
     bbox_by_evidence[evidence_id] = bbox_records
-    retrieval_units.append({
-        "bbox_sample_refs": [bbox_records[0]["bbox_id"]] if bbox_records else [],
-        "bbox_total_count": len(bbox_records),
-        "chunk_id": chunk_id,
-        "corpus_id": "uud",
-        "evidence_id": evidence_id,
-        "legal_unit_id": legal_unit_id,
-        "page_numbers": evidence_row["page_numbers"],
-        "retrieval_unit_id": f"uud_retrieval_unit::{evidence_id}",
-        "source_pdf_path": source_meta["path"],
-        "source_role": source_role,
-        "source_sha256": source_meta["sha256"],
-        "status": "accepted",
-        "temporal_context": temporal_context,
-        "text": retrieval_text(unit_label, hierarchy or [], quoted_text),
-    })
+    retrieval_units.append(
+        {
+            "bbox_sample_refs": [bbox_records[0]["bbox_id"]] if bbox_records else [],
+            "bbox_total_count": len(bbox_records),
+            "chunk_id": chunk_id,
+            "corpus_id": "uud",
+            "evidence_id": evidence_id,
+            "legal_unit_id": legal_unit_id,
+            "page_numbers": evidence_row["page_numbers"],
+            "retrieval_unit_id": f"uud_retrieval_unit::{evidence_id}",
+            "source_pdf_path": source_meta["path"],
+            "source_role": source_role,
+            "source_sha256": source_meta["sha256"],
+            "status": "accepted",
+            "temporal_context": temporal_context,
+            "text": retrieval_text(unit_label, hierarchy or [], quoted_text),
+        }
+    )
     return legal_unit_id
 
 

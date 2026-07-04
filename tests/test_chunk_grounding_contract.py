@@ -14,10 +14,7 @@ FINAL = ROOT / "data/final/uud"
 class ChunkGroundingContractTest(unittest.TestCase):
     def test_chunks_are_self_contained_and_match_legal_units(self) -> None:
         chunks = read_jsonl(FINAL / "chunks.jsonl")
-        units = {
-            row["legal_unit_id"]: row
-            for row in read_jsonl(FINAL / "legal_units.jsonl")
-        }
+        units = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "legal_units.jsonl")}
         self.assertEqual(len(chunks), 651)
         self.assertEqual(sum(1 for row in chunks if row["runtime_loadable"] is True), 459)
         self.assertEqual(sum(1 for row in chunks if row["runtime_loadable"] is False), 192)
@@ -61,19 +58,15 @@ class ChunkGroundingContractTest(unittest.TestCase):
                 self.assertTrue(row["bbox_ids"], row["chunk_id"])
                 self.assertEqual(row["grounding_status"], "text_span_exact", row["chunk_id"])
                 unit = units[row["legal_unit_id"]]
-                page_span_ids = set().union(*[
-                    spans_by_page.get((unit["source_document_id"], page_number), set())
-                    for page_number in row["page_numbers"]
-                ])
+                page_span_ids = set().union(
+                    *[spans_by_page.get((unit["source_document_id"], page_number), set()) for page_number in row["page_numbers"]]
+                )
                 if page_span_ids != set(row["text_span_ids"]):
                     continue
                 self.assertLessEqual(len(page_span_ids), len(row["bbox_ids"]), row["chunk_id"])
 
     def test_fixture_chunk_keeps_stable_grounding_ids(self) -> None:
-        rows = {
-            row["chunk_id"]: row
-            for row in read_jsonl(FINAL / "chunks.jsonl")
-        }
+        rows = {row["chunk_id"]: row for row in read_jsonl(FINAL / "chunks.jsonl")}
         for case in _chunk_grounding_cases():
             row = rows[case["chunk_id"]]
             for field in (

@@ -12,7 +12,8 @@ def exact_citation(
 ) -> list[dict]:
     pasal, ayat = parse_citation(query)
     matches = [
-        row for row in evidence
+        row
+        for row in evidence
         if row.get("status") == "final"
         and (source_role is None or row.get("source_role") == source_role)
         and evidence_matches_citation(row, pasal, ayat)

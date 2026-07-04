@@ -12,7 +12,7 @@ import type { Citation } from "../../lib/types";
 const filters = ["Sumber", "Status", "Periode"];
 
 export function SearchRoute({ onOpenCitation }: { onOpenCitation?: (citation: Citation) => void }) {
-  const [q, setQ] = useState("negara hukum");
+  const [q, setQ] = useState("UUD 1945");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [status, setStatus] = useState("loading");
 
@@ -89,7 +89,7 @@ export function SearchRoute({ onOpenCitation }: { onOpenCitation?: (citation: Ci
               const citation = mapSearchResultToCitation(row, index);
               const page = row.page_numbers?.[0] ?? row.viewer_ref?.page_numbers?.[0];
               return (
-                <li key={row.evidence_id} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
+                <li key={row.evidence_id ?? row.source_document_id} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
                   <button
                     type="button"
                     aria-label={`Buka viewer ${row.title ?? row.evidence_id}`}

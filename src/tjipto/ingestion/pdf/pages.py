@@ -23,17 +23,19 @@ def build_pdf_pages(
         source = source_documents[source_id]
         doc = fitz.open(repo_root / source["path"])
         for page_number in range(1, doc.page_count + 1):
-            rows.append({
-                "corpus_id": corpus_id,
-                "page_count": doc.page_count,
-                "page_id": f"{page_id_prefixes[source_id]}::{page_number:04d}",
-                "page_number": page_number,
-                "source_document_id": source_id,
-                "source_pdf_path": source["path"],
-                "source_sha256": source["sha256"],
-                "status": status,
-                "text": pdf_page_text(doc, page_number),
-            })
+            rows.append(
+                {
+                    "corpus_id": corpus_id,
+                    "page_count": doc.page_count,
+                    "page_id": f"{page_id_prefixes[source_id]}::{page_number:04d}",
+                    "page_number": page_number,
+                    "source_document_id": source_id,
+                    "source_pdf_path": source["path"],
+                    "source_sha256": source["sha256"],
+                    "status": status,
+                    "text": pdf_page_text(doc, page_number),
+                }
+            )
     return rows
 
 

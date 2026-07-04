@@ -26,10 +26,7 @@ def build_graph_artifacts(
     legal_units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     evidence_by_unit = {row["legal_unit_id"]: row for row in evidence}
     source_by_id = {row["source_document_id"]: row for row in source_documents}
-    metadata_by_key = {
-        (row.get("source_role"), row.get("metadata_field")): row
-        for row in metadata_grounding
-    }
+    metadata_by_key = {(row.get("source_role"), row.get("metadata_field")): row for row in metadata_grounding}
 
     def add_node(node_id: str, **payload) -> None:
         if node_id in seen_nodes:
@@ -42,14 +39,16 @@ def build_graph_artifacts(
         if edge_id in seen_edges:
             return
         seen_edges.add(edge_id)
-        edges.append({
-            "edge_id": edge_id,
-            "edge_type": edge_type,
-            "relation_type": edge_type,
-            "source_id": source_id,
-            "target_id": target_id,
-            **payload,
-        })
+        edges.append(
+            {
+                "edge_id": edge_id,
+                "edge_type": edge_type,
+                "relation_type": edge_type,
+                "source_id": source_id,
+                "target_id": target_id,
+                **payload,
+            }
+        )
 
     for row in source_documents:
         source_role = row["source_role"]
@@ -309,7 +308,10 @@ def build_graph_artifacts(
 
 
 def _edge_id(edge_type: str, source_id: str, target_id: str, evidence_ref: str | None) -> str:
-    digest = hashlib.md5(f"{edge_type}|{source_id}|{target_id}|{evidence_ref or ''}".encode("utf-8")).hexdigest()
+    digest = hashlib.md5(
+        f"{edge_type}|{source_id}|{target_id}|{evidence_ref or ''}".encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()
     return f"edge::{digest}"
 
 
@@ -353,11 +355,7 @@ def _scope_target_labels(text: str | None) -> list[str]:
 
 def _resolve_legal_unit_by_label(legal_units: list[dict], source_document_id: str, label: str) -> dict | None:
     return next(
-        (
-            row
-            for row in legal_units
-            if row["source_document_id"] == source_document_id and row.get("unit_label") == label
-        ),
+        (row for row in legal_units if row["source_document_id"] == source_document_id and row.get("unit_label") == label),
         None,
     )
 
@@ -369,4 +367,3 @@ def _source_role_for_ordinal(ordinal: str) -> str:
         "Ketiga": "amendment_3_historical",
         "Keempat": "amendment_4_historical",
     }[ordinal]
-

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 import re
 import unicodedata
 
 from tjipto.corpora.uud.anomaly_builder import append_amendment_instrument_units
 from tjipto.corpora.uud.parser import UUD_LEGAL_TOKEN_RE
-from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, INSERTED_BAB_SPECS, UUD_LEGAL_UNIT_ID_STARTS, UUD_LEGAL_UNIT_SOURCE_ORDER, UUD_CHUNK_ID_STARTS
+from tjipto.corpora.uud.specs import (
+    EXCLUDED_RECORD_SPECS,
+    INSERTED_BAB_SPECS,
+    UUD_LEGAL_UNIT_ID_STARTS,
+    UUD_LEGAL_UNIT_SOURCE_ORDER,
+    UUD_CHUNK_ID_STARTS,
+)
 from tjipto.corpora.uud.structure_builder import page_span_for_text, slice_between, trim_before
 
 
@@ -36,11 +41,7 @@ def _append_source_units(
     source_text, page_ranges = _source_text(source_id, pages_by_source)
     tokens = list(UUD_LEGAL_TOKEN_RE.finditer(source_text))
     skipped_babs = {spec["label"] for spec in INSERTED_BAB_SPECS if spec["source_document_id"] == source_id}
-    inserted_children = {
-        spec["label"]: set(spec["child_labels"])
-        for spec in INSERTED_BAB_SPECS
-        if spec["source_document_id"] == source_id
-    }
+    inserted_children = {spec["label"]: set(spec["child_labels"]) for spec in INSERTED_BAB_SPECS if spec["source_document_id"] == source_id}
     current_bab: dict | None = None
     current_pasal: dict | None = None
     source_count = 0
@@ -56,12 +57,17 @@ def _append_source_units(
         if source_id == "uud::amendment_4_historical" and label == "ATURAN TAMBAHAN":
             break
         unit_type = _unit_type(label)
-        if unit_type == "pasal_record" and current_bab and current_bab["id"] is None and label not in inserted_children.get(current_bab["label"], set()):
+        if (
+            unit_type == "pasal_record"
+            and current_bab
+            and current_bab["id"] is None
+            and label not in inserted_children.get(current_bab["label"], set())
+        ):
             current_bab = None
         if source_id == "uud::amendment_4_historical" and unit_type == "pasal_record" and label == "Pasal 37":
             current_bab = None
         end = _unit_end(source_text, tokens, index, unit_type)
-        text = source_text[token.start():end]
+        text = source_text[token.start() : end]
         page_start, page_end = _span_pages(token.start(), end, page_ranges)
         legal_id = f"uud_legal_unit_{UUD_LEGAL_UNIT_ID_STARTS[source_id] + source_count:05d}"
         chunk_id = f"uud_chunk_{UUD_CHUNK_ID_STARTS[source_id] + source_count:05d}"
@@ -258,7 +264,7 @@ def _strip_page_header(source_id: str, text: str) -> str:
     lines = text.split("\n")
     for index, line in enumerate(lines):
         if line.strip() == "Perubahan Keempat":
-            return "\n".join(lines[index + 1:]).lstrip("\n")
+            return "\n".join(lines[index + 1 :]).lstrip("\n")
     return text
 
 
@@ -268,14 +274,18 @@ def _unit_end(text: str, tokens: list[re.Match[str]], index: int, unit_type: str
         stops.add("Pasal")
     elif unit_type == "ayat_record":
         stops |= {"Pasal", "Ayat"}
-    for token in tokens[index + 1:]:
+    for token in tokens[index + 1 :]:
         if _token_kind(token.group(1)) in stops:
             return token.start()
     return len(text)
 
 
 def _span_pages(start: int, end: int, ranges: list[tuple[int, int, int]]) -> tuple[int, int]:
-    pages = [page for range_start, range_end, page in ranges if range_start <= start < range_end or range_start < max(start, end - 1) <= range_end]
+    pages = [
+        page
+        for range_start, range_end, page in ranges
+        if range_start <= start < range_end or range_start < max(start, end - 1) <= range_end
+    ]
     if pages:
         return min(pages), max(pages)
     return ranges[0][2], ranges[-1][2]
@@ -332,7 +342,7 @@ def _find_unit(rows: list[dict], source_document_id: str, unit_label: str, hiera
         candidates = [
             row
             for row in candidates
-            if tuple(_compact(part) for part in [*(row.get("hierarchy") or []), row.get("unit_label")])[-len(suffix):] == suffix
+            if tuple(_compact(part) for part in [*(row.get("hierarchy") or []), row.get("unit_label")])[-len(suffix) :] == suffix
         ]
     if len(candidates) != 1:
         raise KeyError(f"unable_to_resolve_unit:{source_document_id}:{unit_label}:{hierarchy_suffix}")

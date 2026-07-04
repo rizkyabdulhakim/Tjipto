@@ -14,35 +14,43 @@ class BadRequest(ValueError):
 def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path | None = None) -> dict:
     service = LegalRuntimeService(repo_root)
     if action == "search":
-        return _public_search(service.search(
-            corpus_id,
-            str(payload.get("query", "")),
-            _limit(payload, default=10),
-            _filters(payload),
-        ))
+        return _public_search(
+            service.search(
+                corpus_id,
+                str(payload.get("query", "")),
+                _limit(payload, default=10),
+                _filters(payload),
+            )
+        )
     if action == "citation":
-        return _public_citation_response(service.citation(
-            corpus_id,
-            str(payload.get("query", "")),
-            _optional_str(payload, "source_role"),
-            _filters(payload),
-        ))
+        return _public_citation_response(
+            service.citation(
+                corpus_id,
+                str(payload.get("query", "")),
+                _optional_str(payload, "source_role"),
+                _filters(payload),
+            )
+        )
     if action == "viewer":
-        return _public_viewer(service.viewer(
-            corpus_id,
-            _required_str(payload, "evidence_id"),
-            source_document_id=_optional_str(payload, "source_document_id"),
-            page_number=_optional_int(payload, "page_number"),
-            bbox_id=_optional_str(payload, "bbox_id"),
-            source_pdf_path=_optional_str(payload, "source_pdf_path"),
-        ))
+        return _public_viewer(
+            service.viewer(
+                corpus_id,
+                _optional_str(payload, "evidence_id"),
+                source_document_id=_optional_str(payload, "source_document_id"),
+                page_number=_optional_int(payload, "page_number"),
+                bbox_id=_optional_str(payload, "bbox_id"),
+                source_pdf_path=_optional_str(payload, "source_pdf_path"),
+            )
+        )
     if action == "ask":
-        return _public_ask(service.ask(
-            corpus_id,
-            str(payload.get("query", "")),
-            _limit(payload, default=3),
-            _filters(payload),
-        ))
+        return _public_ask(
+            service.ask(
+                corpus_id,
+                str(payload.get("query", "")),
+                _limit(payload, default=3),
+                _filters(payload),
+            )
+        )
     if action == "capabilities":
         return service.capabilities(corpus_id)
     if action == "bookmarks":
@@ -153,28 +161,36 @@ def _public_viewer_highlightable(precision: str, value) -> bool:
 def _public_reason(reason):
     if reason in {"metadata_not_found", "relation_not_found"}:
         return "insufficient_evidence"
-    return reason if reason in {
-        "invalid_query",
-        "unsupported_corpus",
-        "citation_not_found",
-        "insufficient_evidence",
-        "exact_instrument_unit_fail_closed",
-        "neighbor_substitution_not_allowed",
-        "page_grounded_only_not_answerable",
-        "viewer_not_highlightable",
-        "missing_exact_grounding",
-        "instrument_unresolved",
-        "content_signal_unresolved",
-        "effect_signal_unsupported",
-        "unsupported_instrument_analysis",
-        "unsupported_analysis_intent",
-        "analysis_metadata_conflict",
-        "intent_arbitration_analysis_wins",
-        "metadata_candidate_signal",
-        "instrument_resolved_fail_closed",
-        "exact_label_target_not_answerable",
-        "lexical_fallback_blocked_by_instrument_intent",
-    } else None
+    return (
+        reason
+        if reason
+        in {
+            "invalid_query",
+            "unsupported_corpus",
+            "citation_not_found",
+            "insufficient_evidence",
+            "exact_instrument_unit_fail_closed",
+            "neighbor_substitution_not_allowed",
+            "page_grounded_only_not_answerable",
+            "viewer_not_highlightable",
+            "missing_exact_grounding",
+            "instrument_unresolved",
+            "content_signal_unresolved",
+            "effect_signal_unsupported",
+            "unsupported_instrument_analysis",
+            "unsupported_analysis_intent",
+            "analysis_metadata_conflict",
+            "intent_arbitration_analysis_wins",
+            "metadata_candidate_signal",
+            "instrument_resolved_fail_closed",
+            "exact_label_target_not_answerable",
+            "lexical_fallback_blocked_by_instrument_intent",
+            "current_fact_unsupported",
+            "unsupported_scope",
+            "document_not_found",
+        }
+        else None
+    )
 
 
 def _public_search_result(row: dict) -> dict:
@@ -182,6 +198,7 @@ def _public_search_result(row: dict) -> dict:
         "corpus_id": row.get("corpus_id"),
         "legal_unit_id": row.get("legal_unit_id"),
         "evidence_id": row.get("evidence_id"),
+        "document_id": row.get("document_id"),
         "citation_id": row.get("citation_id"),
         "viewer_ref_id": row.get("viewer_ref_id"),
         "source_document_id": row.get("source_document_id"),
@@ -246,6 +263,7 @@ def _public_viewer_ref(row: dict) -> dict:
     return {
         "action": row.get("action"),
         "evidence_id": row.get("evidence_id"),
+        "source_document_id": row.get("source_document_id"),
         "page_numbers": row.get("page_numbers", ()),
         "bbox_count": row.get("bbox_count"),
         "can_resolve": row.get("can_resolve"),
@@ -255,7 +273,7 @@ def _public_viewer_ref(row: dict) -> dict:
 def handle_pdf_request(corpus_id: str, payload: dict, repo_root: Path | None = None) -> dict:
     return LegalRuntimeService(repo_root).pdf_access(
         corpus_id,
-        _required_str(payload, "evidence_id"),
+        _optional_str(payload, "evidence_id"),
         source_document_id=_required_str(payload, "source_document_id"),
         page_number=_required_int(payload, "page_number"),
         source_sha256=_optional_str(payload, "source_sha256"),

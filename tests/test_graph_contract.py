@@ -63,10 +63,7 @@ class GraphContractTest(unittest.TestCase):
                 self.assertNotIn("chunk_candidate_id", member)
 
     def test_source_conflicts_reference_source_documents(self) -> None:
-        source_ids = {
-            row["source_document_id"]
-            for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")
-        }
+        source_ids = {row["source_document_id"] for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")}
         rows = read_jsonl(ROOT / "data/final/uud/source_conflicts.jsonl")
         self.assertEqual(len(rows), 2)
         conflict_ids = {row["source_conflict_id"] for row in rows}
@@ -92,20 +89,12 @@ class GraphContractTest(unittest.TestCase):
 
     def test_inserted_bab_hierarchy_is_consistent(self) -> None:
         final = ROOT / "data/final/uud"
-        units = {
-            row["legal_unit_id"]: row
-            for row in read_jsonl(final / "legal_units.jsonl")
-        }
+        units = {row["legal_unit_id"]: row for row in read_jsonl(final / "legal_units.jsonl")}
         evidence = read_jsonl(final / "evidence_registry.jsonl")
-        chunks = {
-            row["chunk_id"]: row
-            for row in read_jsonl(final / "chunks.jsonl")
-        }
+        chunks = {row["chunk_id"]: row for row in read_jsonl(final / "chunks.jsonl")}
         retrieval = read_jsonl(final / "retrieval_units.jsonl")
         nodes_by_unit = {
-            row["legal_unit_id"]: row
-            for row in read_jsonl(final / "graph_nodes.jsonl")
-            if row.get("node_type") == "legal_unit"
+            row["legal_unit_id"]: row for row in read_jsonl(final / "graph_nodes.jsonl") if row.get("node_type") == "legal_unit"
         }
 
         expected = {
@@ -156,10 +145,7 @@ class GraphContractTest(unittest.TestCase):
 
     def test_inserted_bab_graph_uses_sibling_sequence_not_parent_child(self) -> None:
         final = ROOT / "data/final/uud"
-        nodes = {
-            row["node_id"]: row
-            for row in read_jsonl(final / "graph_nodes.jsonl")
-        }
+        nodes = {row["node_id"]: row for row in read_jsonl(final / "graph_nodes.jsonl")}
         bab_nodes = {
             (row["source_document_id"], row["unit_label"]): row["node_id"]
             for row in nodes.values()
@@ -188,20 +174,13 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(false_contains, [])
         self.assertEqual(false_part_of, [])
 
-        edge_keys = {
-            (row["edge_type"], row["source_id"], row["target_id"], row.get("source_document_id"))
-            for row in edges
-        }
+        edge_keys = {(row["edge_type"], row["source_id"], row["target_id"], row.get("source_document_id")) for row in edges}
         for (source_document_id, inserted_label), inserted_node in bab_nodes.items():
             predecessors = INSERTED_BAB_PREDECESSORS.get(inserted_label)
             if not predecessors:
                 continue
             predecessor_node = next(
-                (
-                    bab_nodes[(source_document_id, label)]
-                    for label in predecessors
-                    if (source_document_id, label) in bab_nodes
-                ),
+                (bab_nodes[(source_document_id, label)] for label in predecessors if (source_document_id, label) in bab_nodes),
                 None,
             )
             if not predecessor_node:
@@ -215,14 +194,8 @@ class GraphContractTest(unittest.TestCase):
 
     def test_inserted_bab_sequence_edges_follow_schema_and_source_scope(self) -> None:
         final = ROOT / "data/final/uud"
-        nodes = {
-            row["node_id"]: row
-            for row in read_jsonl(final / "graph_nodes.jsonl")
-        }
-        edges = [
-            row for row in read_jsonl(final / "graph_edges.jsonl")
-            if row["edge_type"] in SEQUENCE_EDGE_TYPES
-        ]
+        nodes = {row["node_id"]: row for row in read_jsonl(final / "graph_nodes.jsonl")}
+        edges = [row for row in read_jsonl(final / "graph_edges.jsonl") if row["edge_type"] in SEQUENCE_EDGE_TYPES]
         self.assertEqual(len(edges), 21)
         edge_keys = {(row["edge_type"], row["source_id"], row["target_id"]) for row in edges}
         for edge in edges:
@@ -254,18 +227,9 @@ class GraphContractTest(unittest.TestCase):
                     self.assertFalse((row.get("hierarchy") or [""])[0].startswith("BAB"), (filename, row))
 
     def test_validation_artifacts_resolve_refs(self) -> None:
-        source_ids = {
-            row["source_document_id"]
-            for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")
-        }
-        chunk_ids = {
-            row["chunk_id"]
-            for row in read_jsonl(ROOT / "data/final/uud/chunks.jsonl")
-        }
-        unit_ids = {
-            row["legal_unit_id"]
-            for row in read_jsonl(ROOT / "data/final/uud/legal_units.jsonl")
-        }
+        source_ids = {row["source_document_id"] for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")}
+        chunk_ids = {row["chunk_id"] for row in read_jsonl(ROOT / "data/final/uud/chunks.jsonl")}
+        unit_ids = {row["legal_unit_id"] for row in read_jsonl(ROOT / "data/final/uud/legal_units.jsonl")}
         alignment = read_jsonl(ROOT / "data/final/uud/validation_alignment_results.jsonl")
         self.assertEqual(len(alignment), 610)
         for row in alignment:
@@ -291,18 +255,13 @@ class GraphContractTest(unittest.TestCase):
     def test_metadata_graph_edges_exclude_source_role_level_amends(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/metadata_graph_edges.jsonl")
         self.assertEqual(len(edges), 449)
-        self.assertFalse(
-            [edge for edge in edges if edge["edge_type"] in {"AMENDS", "AMENDED_BY"}]
-        )
+        self.assertFalse([edge for edge in edges if edge["edge_type"] in {"AMENDS", "AMENDED_BY"}])
         self.assertTrue(all(edge["status"] == "accepted" for edge in edges))
         self.assertTrue(all(edge["runtime_loadable"] is False for edge in edges))
 
     def test_amends_edges_are_preserved_as_not_promoted_exceptions(self) -> None:
         exceptions = read_jsonl(ROOT / "data/final/uud/validation_exceptions.jsonl")
-        amends = [
-            row for row in exceptions
-            if row.get("edge_type") in {"AMENDS", "AMENDED_BY"}
-        ]
+        amends = [row for row in exceptions if row.get("edge_type") in {"AMENDS", "AMENDED_BY"}]
         self.assertEqual(len(amends), 8)
         for row in amends:
             self.assertEqual(row["status"], "not_promoted_source_role_level_only")
@@ -311,26 +270,30 @@ class GraphContractTest(unittest.TestCase):
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
         nodes = {row["node_id"] for row in read_jsonl(ROOT / "data/final/uud/graph_nodes.jsonl")}
-        legal_edges = [row for row in edges if row.get("edge_type") in {
-            "CONTAINS",
-            "PART_OF",
-            "MODIFIES",
-            "DELETES",
-            "HAS_EFFECTIVE_RULE",
-            "HAS_SIGNATORY",
-            "HAS_DECISION_SESSION",
-            "HAS_SOURCE_ANOMALY",
-        }]
+        legal_edges = [
+            row
+            for row in edges
+            if row.get("edge_type")
+            in {
+                "CONTAINS",
+                "PART_OF",
+                "MODIFIES",
+                "DELETES",
+                "HAS_EFFECTIVE_RULE",
+                "HAS_SIGNATORY",
+                "HAS_DECISION_SESSION",
+                "HAS_SOURCE_ANOMALY",
+            }
+        ]
         self.assertTrue(legal_edges)
         self.assertTrue(any(row["edge_type"] == "DELETES" for row in legal_edges))
         self.assertTrue(any(row["edge_type"] == "HAS_SIGNATORY" for row in legal_edges))
         self.assertTrue(any(row["edge_type"] == "HAS_DECISION_SESSION" for row in legal_edges))
         self.assertTrue(any(row["edge_type"] == "HAS_EFFECTIVE_RULE" for row in legal_edges))
         self.assertTrue(any(row["edge_type"] == "HAS_SOURCE_ANOMALY" for row in legal_edges))
-        self.assertFalse([
-            row for row in legal_edges
-            if row["edge_type"] in {"AMENDS", "AMENDED_BY"} and row["source_id"].startswith("source_role::")
-        ])
+        self.assertFalse(
+            [row for row in legal_edges if row["edge_type"] in {"AMENDS", "AMENDED_BY"} and row["source_id"].startswith("source_role::")]
+        )
         for row in legal_edges:
             self.assertIn(row["source_id"], nodes)
             self.assertIn(row["target_id"], nodes)
@@ -357,10 +320,7 @@ class GraphContractTest(unittest.TestCase):
             self.assertEqual(path.stat().st_size, expected["bytes"], rel)
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected["sha256"], rel)
 
-        source_docs = {
-            row["source_document_id"]: row
-            for row in read_jsonl(final / "source_documents.jsonl")
-        }
+        source_docs = {row["source_document_id"]: row for row in read_jsonl(final / "source_documents.jsonl")}
         pdfs = {}
         pdf_text = {}
         for source_id, row in source_docs.items():
@@ -372,8 +332,7 @@ class GraphContractTest(unittest.TestCase):
             pdfs[source_id] = pdf
             self.assertEqual(pdf.page_count, row["page_count"])
             pdf_text[source_id] = {
-                page_number: self._compact_text(pdf[page_number - 1].get_text())
-                for page_number in range(1, pdf.page_count + 1)
+                page_number: self._compact_text(pdf[page_number - 1].get_text()) for page_number in range(1, pdf.page_count + 1)
             }
 
         pages = read_jsonl(final / "pages.jsonl")
@@ -386,10 +345,7 @@ class GraphContractTest(unittest.TestCase):
             page_text[key] = self._compact_text(row["text"])
             self.assertIn(page_text[key], pdf_text[row["source_document_id"]][row["page_number"]])
 
-        legal_units = {
-            row["legal_unit_id"]: row
-            for row in read_jsonl(final / "legal_units.jsonl")
-        }
+        legal_units = {row["legal_unit_id"]: row for row in read_jsonl(final / "legal_units.jsonl")}
         for row in legal_units.values():
             self.assertIn(row["source_document_id"], source_docs)
             for parent_id in row["parent_legal_unit_ids"]:
@@ -397,9 +353,7 @@ class GraphContractTest(unittest.TestCase):
 
         chunks = read_jsonl(final / "chunks.jsonl")
         exception_chunk_ids = {
-            row["chunk_id"]
-            for row in read_jsonl(final / "validation_exceptions.jsonl")
-            if row.get("type") == "pdf_text_layer_noise_review"
+            row["chunk_id"] for row in read_jsonl(final / "validation_exceptions.jsonl") if row.get("type") == "pdf_text_layer_noise_review"
         }
         chunk_by_legal_unit = {}
         for row in chunks:
@@ -409,14 +363,8 @@ class GraphContractTest(unittest.TestCase):
             self.assertTrue(chunk_text in unit_text or row["status"] == "parent_context_only")
             chunk_by_legal_unit.setdefault(row["legal_unit_id"], set()).add(row["chunk_id"])
 
-        bboxes = {
-            row["bbox_id"]: row
-            for row in read_jsonl(final / "bbox_registry.jsonl")
-        }
-        evidence = {
-            row["evidence_id"]: row
-            for row in read_jsonl(final / "evidence_registry.jsonl")
-        }
+        bboxes = {row["bbox_id"]: row for row in read_jsonl(final / "bbox_registry.jsonl")}
+        evidence = {row["evidence_id"]: row for row in read_jsonl(final / "evidence_registry.jsonl")}
         for row in bboxes.values():
             self.assertEqual(row["status"], "accepted")
             self.assertIn(row["evidence_id"], evidence)
@@ -436,27 +384,18 @@ class GraphContractTest(unittest.TestCase):
                 self.assertIn((row["source_document_id"], page_number), page_keys)
             self.assertTrue(set(row["bbox_refs"]) <= bboxes.keys())
             quote = self._compact_text(row["quoted_text"])
-            pages_text = "".join(
-                page_text[(row["source_document_id"], page_number)]
-                for page_number in row["page_numbers"]
-            )
+            pages_text = "".join(page_text[(row["source_document_id"], page_number)] for page_number in row["page_numbers"])
             exception_ids = chunk_by_legal_unit.get(row["legal_unit_id"], set()) & exception_chunk_ids
             self.assertTrue(quote in pages_text or exception_ids, row["evidence_id"])
 
-        metadata_bbox_ids = {
-            row["bbox_id"]
-            for row in read_jsonl(final / "metadata_grounding_registry.jsonl")
-        }
+        metadata_bbox_ids = {row["bbox_id"] for row in read_jsonl(final / "metadata_grounding_registry.jsonl")}
         for row in read_jsonl(final / "metadata_grounding.jsonl"):
             self.assertIn(row["source_document_id"], source_docs)
             for page_number in row["page_numbers"]:
                 self.assertIn((row["source_document_id"], page_number), page_keys)
             self.assertTrue(set(row["bbox_refs"]) <= metadata_bbox_ids)
             quote = self._compact_text(row["quoted_text"])
-            pages_text = "".join(
-                page_text[(row["source_document_id"], page_number)]
-                for page_number in row["page_numbers"]
-            )
+            pages_text = "".join(page_text[(row["source_document_id"], page_number)] for page_number in row["page_numbers"])
             self.assertIn(quote, pages_text)
 
         graph_nodes = read_jsonl(final / "graph_nodes.jsonl")
@@ -481,27 +420,13 @@ class GraphContractTest(unittest.TestCase):
         return "".join(re.findall(r"\w+", text.casefold()))
 
     def _assert_contains(self, final: Path, source_role: str, parent_label: str, child_label: str) -> None:
-        units = {
-            row["legal_unit_id"]: row
-            for row in read_jsonl(final / "legal_units.jsonl")
-        }
+        units = {row["legal_unit_id"]: row for row in read_jsonl(final / "legal_units.jsonl")}
         nodes = {
-            row["legal_unit_id"]: row["node_id"]
-            for row in read_jsonl(final / "graph_nodes.jsonl")
-            if row.get("node_type") == "legal_unit"
+            row["legal_unit_id"]: row["node_id"] for row in read_jsonl(final / "graph_nodes.jsonl") if row.get("node_type") == "legal_unit"
         }
-        parent = next(
-            row for row in units.values()
-            if row.get("source_role") == source_role and row.get("unit_label") == parent_label
-        )
-        child = next(
-            row for row in units.values()
-            if row.get("source_role") == source_role and row.get("unit_label") == child_label
-        )
-        edge_keys = {
-            (row["edge_type"], row["source_id"], row["target_id"])
-            for row in read_jsonl(final / "graph_edges.jsonl")
-        }
+        parent = next(row for row in units.values() if row.get("source_role") == source_role and row.get("unit_label") == parent_label)
+        child = next(row for row in units.values() if row.get("source_role") == source_role and row.get("unit_label") == child_label)
+        edge_keys = {(row["edge_type"], row["source_id"], row["target_id"]) for row in read_jsonl(final / "graph_edges.jsonl")}
         self.assertIn(("CONTAINS", nodes[parent["legal_unit_id"]], nodes[child["legal_unit_id"]]), edge_keys)
         self.assertIn(("PART_OF", nodes[child["legal_unit_id"]], nodes[parent["legal_unit_id"]]), edge_keys)
 

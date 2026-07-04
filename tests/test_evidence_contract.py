@@ -44,14 +44,8 @@ class EvidenceContractTest(unittest.TestCase):
                 self.assertIn(parent_id, unit_ids)
 
     def test_excluded_chunks_are_not_active_canonical(self) -> None:
-        chunks = {
-            row["chunk_id"]: row
-            for row in read_jsonl(FINAL / "chunks.jsonl")
-        }
-        units = {
-            row["legal_unit_id"]: row
-            for row in read_jsonl(FINAL / "legal_units.jsonl")
-        }
+        chunks = {row["chunk_id"]: row for row in read_jsonl(FINAL / "chunks.jsonl")}
+        units = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "legal_units.jsonl")}
         excluded = read_jsonl(FINAL / "excluded_records.jsonl")
         self.assertEqual(len(excluded), 6)
         for row in excluded:
@@ -80,9 +74,7 @@ class EvidenceContractTest(unittest.TestCase):
         source_ids = {row["source_document_id"] for row in source_docs}
         import json
 
-        source_integrity = json.loads(
-            (FINAL / "source_integrity.json").read_text(encoding="utf-8")
-        )
+        source_integrity = json.loads((FINAL / "source_integrity.json").read_text(encoding="utf-8"))
         self.assertEqual(source_integrity["source_count"], 6)
         for doc in source_integrity["source_documents"]:
             self.assertIn(doc["source_document_id"], source_ids)
@@ -98,10 +90,7 @@ class EvidenceContractTest(unittest.TestCase):
             self.assertIn("content_fingerprint", doc)
 
     def test_metadata_grounding_and_document_metadata_reference_sources(self) -> None:
-        source_ids = {
-            row["source_document_id"]
-            for row in read_jsonl(FINAL / "source_documents.jsonl")
-        }
+        source_ids = {row["source_document_id"] for row in read_jsonl(FINAL / "source_documents.jsonl")}
         for filename in (
             "metadata_grounding.jsonl",
             "metadata_grounding_registry.jsonl",
@@ -111,10 +100,7 @@ class EvidenceContractTest(unittest.TestCase):
             self.assertTrue(rows)
             for row in rows:
                 self.assertIn(row["source_document_id"], source_ids)
-        grounding = {
-            row["metadata_grounding_id"]: row
-            for row in read_jsonl(FINAL / "metadata_grounding.jsonl")
-        }
+        grounding = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}
         field_grounding = [row for row in grounding.values() if row.get("metadata_field")]
         docs = read_jsonl(FINAL / "document_metadata.jsonl")
         self.assertEqual(len(docs), 6)
@@ -171,10 +157,7 @@ class EvidenceContractTest(unittest.TestCase):
 
     def test_instrument_units_and_historical_anomaly_are_preserved(self) -> None:
         units = read_jsonl(FINAL / "legal_units.jsonl")
-        chunks = {
-            row["legal_unit_id"]: row
-            for row in read_jsonl(FINAL / "chunks.jsonl")
-        }
+        chunks = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "chunks.jsonl")}
         labels = {row.get("unit_label") for row in units}
         for label in (
             "Perubahan Pertama Recital",
@@ -188,11 +171,7 @@ class EvidenceContractTest(unittest.TestCase):
         ):
             self.assertIn(label, labels)
 
-        anomaly_rows = [
-            row
-            for row in units
-            if row.get("exclusion_ref") == "source_typo_reference::uud_source_typo_reference_00001"
-        ]
+        anomaly_rows = [row for row in units if row.get("exclusion_ref") == "source_typo_reference::uud_source_typo_reference_00001"]
         self.assertEqual(
             {row["unit_label"] for row in anomaly_rows},
             {"ATURAN TAMBAHAN source typo reference", "Pasal I", "Pasal III"},
@@ -219,17 +198,11 @@ class EvidenceContractTest(unittest.TestCase):
     def test_amendment_2_bab_xv_parent_context_is_clean(self) -> None:
         units = read_jsonl(FINAL / "legal_units.jsonl")
         unit = next(
-            row
-            for row in units
-            if row["source_document_id"] == "uud::amendment_2_historical" and row.get("unit_label") == "BAB XV"
+            row for row in units if row["source_document_id"] == "uud::amendment_2_historical" and row.get("unit_label") == "BAB XV"
         )
         self.assertNotIn("Ditetapkan di Jakarta", unit["text"])
         self.assertNotIn("MAJELIS PERMUSYAWARATAN RAKYAT", unit["text"])
-        chunk = next(
-            row
-            for row in read_jsonl(FINAL / "chunks.jsonl")
-            if row["legal_unit_id"] == unit["legal_unit_id"]
-        )
+        chunk = next(row for row in read_jsonl(FINAL / "chunks.jsonl") if row["legal_unit_id"] == unit["legal_unit_id"])
         self.assertEqual(chunk["chunk_type"], "bab_structural_context_record")
         self.assertNotIn("Ditetapkan di Jakarta", chunk["text"])
         self.assertNotIn("MAJELIS PERMUSYAWARATAN RAKYAT", chunk["text"])

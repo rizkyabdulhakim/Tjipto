@@ -1,8 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 import io
-import subprocess
+import subprocess  # nosec B404
 import tarfile
 import unittest
 import json
@@ -23,35 +23,22 @@ FORBIDDEN = (
 
 class NoSlopLeakageTest(unittest.TestCase):
     def test_active_paths_are_clean(self) -> None:
-        active_paths = [
-            path.relative_to(ROOT).as_posix()
-            for path in (ROOT / "data/final/uud").iterdir()
-            if path.is_file()
-        ]
-        active_paths.extend(
-            str(path.relative_to(ROOT)).replace("\\", "/")
-            for path in (ROOT / "src/tjipto/runtime").rglob("*.py")
-        )
+        active_paths = [path.relative_to(ROOT).as_posix() for path in (ROOT / "data/final/uud").iterdir() if path.is_file()]
+        active_paths.extend(str(path.relative_to(ROOT)).replace("\\", "/") for path in (ROOT / "src/tjipto/runtime").rglob("*.py"))
         for path in active_paths:
             lowered = path.casefold()
             for word in FORBIDDEN:
                 self.assertNotIn(word, lowered, path)
 
     def test_runtime_source_does_not_reference_process_artifacts(self) -> None:
-        runtime_text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (ROOT / "src/tjipto/runtime").rglob("*.py")
-        ).casefold()
+        runtime_text = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "src/tjipto/runtime").rglob("*.py")).casefold()
         for word in FORBIDDEN:
             self.assertNotIn(word, runtime_text)
         self.assertNotIn("data/processed/constitutional/uud", runtime_text)
         self.assertNotIn("data/final/uud", runtime_text)
 
     def test_core_boundary_has_no_runtime_or_corpus_dependency(self) -> None:
-        core_text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (ROOT / "src/tjipto/core").rglob("*.py")
-        ).casefold()
+        core_text = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "src/tjipto/core").rglob("*.py")).casefold()
         self.assertNotIn("tjipto.runtime", core_text)
         self.assertNotIn("tjipto.retrieval", core_text)
         self.assertNotIn("tjipto.corpora", core_text)
@@ -80,7 +67,7 @@ class NoSlopLeakageTest(unittest.TestCase):
 
     def test_git_archive_handoff_excludes_local_artifacts(self) -> None:
         if (ROOT / ".git").exists():
-            archive = subprocess.check_output(
+            archive = subprocess.check_output(  # nosec B603 B607
                 ["git", "archive", "--format=tar", "--worktree-attributes", "HEAD"],
                 cwd=ROOT,
             )
@@ -114,11 +101,7 @@ class NoSlopLeakageTest(unittest.TestCase):
         )
         for filename in checked_files:
             rows = [
-                json.loads(line)
-                for line in (ROOT / "data/final/uud" / filename)
-                .read_text(encoding="utf-8")
-                .splitlines()
-                if line.strip()
+                json.loads(line) for line in (ROOT / "data/final/uud" / filename).read_text(encoding="utf-8").splitlines() if line.strip()
             ]
             for row in rows:
                 self._assert_id_values_clean(row, filename)
@@ -127,9 +110,7 @@ class NoSlopLeakageTest(unittest.TestCase):
         self.assertFalse((ROOT / "data/final/uud/eval_fixtures.jsonl").exists())
         rows = [
             json.loads(line)
-            for line in (ROOT / "tests/fixtures/uud/eval_fixtures.jsonl")
-            .read_text(encoding="utf-8")
-            .splitlines()
+            for line in (ROOT / "tests/fixtures/uud/eval_fixtures.jsonl").read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
         self.assertEqual(len(rows), 175)

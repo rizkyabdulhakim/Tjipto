@@ -38,11 +38,7 @@ def normalize_filters(filters: dict | None = None, *, config=None, **kwargs) -> 
     if invalid:
         normalized["_error"] = "invalid_filter"
         normalized["_invalid_filters"] = tuple(invalid)
-    if (
-        "source_role" in normalized
-        and "temporal_context" in normalized
-        and normalized["source_role"] != normalized["temporal_context"]
-    ):
+    if "source_role" in normalized and "temporal_context" in normalized and normalized["source_role"] != normalized["temporal_context"]:
         normalized["_error"] = "conflicting_filters"
     return normalized
 
@@ -51,16 +47,11 @@ def filter_evidence(rows: tuple[dict, ...], filters: dict) -> tuple[dict, ...]:
     if filters.get("_error"):
         return ()
     return tuple(
-        row for row in rows
+        row
+        for row in rows
         if row.get("status") == filters.get("status", "final")
-        and (
-            "source_role" not in filters
-            or row.get("source_role") == filters["source_role"]
-        )
-        and (
-            "temporal_context" not in filters
-            or row.get("temporal_context") == filters["temporal_context"]
-        )
+        and ("source_role" not in filters or row.get("source_role") == filters["source_role"])
+        and ("temporal_context" not in filters or row.get("temporal_context") == filters["temporal_context"])
     )
 
 
@@ -155,34 +146,21 @@ def _asks_signatories(folded: str, intent: dict) -> bool:
 
 
 def _asks_enactment_place(folded: str, intent: dict) -> bool:
-    return (
-        _asks_any(folded, intent, "place_context")
-        and _asks_any(folded, intent, "enactment_context")
-    ) or (
-        _asks_any(folded, intent, "enactment_verbs")
-        and _asks_any(folded, intent, "place_question")
+    return (_asks_any(folded, intent, "place_context") and _asks_any(folded, intent, "enactment_context")) or (
+        _asks_any(folded, intent, "enactment_verbs") and _asks_any(folded, intent, "place_question")
     )
 
 
 def _asks_effective_rule(folded: str, intent: dict) -> bool:
-    return (
-        _asks_any(folded, intent, "effective_rule")
-        and _asks_any(folded, intent, "date_question")
-    )
+    return _asks_any(folded, intent, "effective_rule") and _asks_any(folded, intent, "date_question")
 
 
 def _asks_decision_date(folded: str, intent: dict) -> bool:
-    return (
-        _asks_any(folded, intent, "decision_context")
-        and _asks_any(folded, intent, "date_question")
-    )
+    return _asks_any(folded, intent, "decision_context") and _asks_any(folded, intent, "date_question")
 
 
 def _asks_decision_session(folded: str, intent: dict) -> bool:
-    return (
-        _asks_any(folded, intent, "decision_context")
-        and _asks_any(folded, intent, "session_question")
-    )
+    return _asks_any(folded, intent, "decision_context") and _asks_any(folded, intent, "session_question")
 
 
 def _asks_institution(folded: str, intent: dict) -> bool:
@@ -195,12 +173,8 @@ def _asks_institution(folded: str, intent: dict) -> bool:
 
 
 def _asks_enactment_date(folded: str, intent: dict) -> bool:
-    return (
-        _asks_any(folded, intent, "enactment_date")
-        or (
-            _asks_any(folded, intent, "enactment_context")
-            and _asks_any(folded, intent, "date_question")
-        )
+    return _asks_any(folded, intent, "enactment_date") or (
+        _asks_any(folded, intent, "enactment_context") and _asks_any(folded, intent, "date_question")
     )
 
 
@@ -271,8 +245,4 @@ def _metadata_citation(row: dict, field: str) -> str:
 
 
 def _bboxes_have_coordinates(bboxes: list[dict]) -> bool:
-    return bool(bboxes) and all(
-        box.get(key) is not None
-        for box in bboxes
-        for key in ("x0", "y0", "x1", "y1")
-    )
+    return bool(bboxes) and all(box.get(key) is not None for box in bboxes for key in ("x0", "y0", "x1", "y1"))

@@ -40,10 +40,7 @@ def graph_expand(store, seeds: tuple[dict, ...], filters: dict, per_seed: int = 
     out = []
     seen = {row["evidence_id"] for row in seeds}
     for seed in seeds[:5]:
-        if (
-            "bm25" in set(seed.get("route_sources") or ())
-            and seed.get("lexical_relevance_ok") is False
-        ):
+        if "bm25" in set(seed.get("route_sources") or ()) and seed.get("lexical_relevance_ok") is False:
             continue
         seed_node = f"final_evidence::{seed['evidence_id']}"
         added = 0
@@ -59,12 +56,14 @@ def graph_expand(store, seeds: tuple[dict, ...], filters: dict, per_seed: int = 
                     continue
                 seen.add(evidence_id)
                 added += 1
-                out.append({
-                    "evidence_id": evidence_id,
-                    "from_evidence_id": seed["evidence_id"],
-                    "via": node.split("::", 1)[0],
-                    "reason": "shared_validated_graph_relation",
-                })
+                out.append(
+                    {
+                        "evidence_id": evidence_id,
+                        "from_evidence_id": seed["evidence_id"],
+                        "via": node.split("::", 1)[0],
+                        "reason": "shared_validated_graph_relation",
+                    }
+                )
                 if added >= per_seed:
                     break
             if added >= per_seed:
@@ -107,12 +106,10 @@ def _add(rows_by_id: dict[str, dict], store, row: dict, route: str, order: int, 
     if route not in existing["route_sources"]:
         existing["route_sources"] = (*existing["route_sources"], route)
     if "candidate_type" not in existing or route == "graph":
-        existing["candidate_type"] = row.get("candidate_type") or CANDIDATE_TYPE.get(route, existing.get("candidate_type", "legal_unit_candidate"))
-    score = (
-        0.0
-        if route == "bm25" and row.get("lexical_relevance_ok") is False
-        else ROUTE_WEIGHT[route] - order
-    )
+        existing["candidate_type"] = row.get("candidate_type") or CANDIDATE_TYPE.get(
+            route, existing.get("candidate_type", "legal_unit_candidate")
+        )
+    score = 0.0 if route == "bm25" and row.get("lexical_relevance_ok") is False else ROUTE_WEIGHT[route] - order
     existing["route_scores"][route] = max(existing["route_scores"].get(route, 0.0), score)
     if trace:
         existing["expansion_trace"] = (*existing["expansion_trace"], trace)

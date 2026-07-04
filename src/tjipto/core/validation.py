@@ -20,10 +20,7 @@ def validate_counts(final_dir) -> dict[str, int]:
 
 
 def validate_text_provenance(config: CorpusConfig, header_stripper=None) -> dict:
-    page_text = {
-        (page["source_document_id"], page["page_number"]): page["text"]
-        for page in config.jsonl("pages")
-    }
+    page_text = {(page["source_document_id"], page["page_number"]): page["text"] for page in config.jsonl("pages")}
     legal_units = config.jsonl("legal_units")
     source_by_legal_unit = {row["legal_unit_id"]: row["source_document_id"] for row in legal_units}
     evidence_ids = {row["legal_unit_id"] for row in config.jsonl("evidence")}

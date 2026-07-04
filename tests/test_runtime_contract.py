@@ -36,11 +36,15 @@ def _exact_highlightable_evidence_id() -> str:
 
 def _page_grounded_decision_evidence_id() -> str:
     for row in CorpusRegistry(ROOT).resolve("uud").jsonl("evidence"):
-        if row.get("citation") in {
-            "Perubahan Pertama Decision",
-            "Perubahan Ketiga Decision",
-            "Perubahan Keempat Decision",
-        } and row.get("viewer_highlightable") is False:
+        if (
+            row.get("citation")
+            in {
+                "Perubahan Pertama Decision",
+                "Perubahan Ketiga Decision",
+                "Perubahan Keempat Decision",
+            }
+            and row.get("viewer_highlightable") is False
+        ):
             return row["evidence_id"]
     raise AssertionError("missing page-grounded decision evidence")
 
@@ -104,11 +108,19 @@ class RuntimeContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.service = LegalRuntimeService(ROOT)
 
+    def assertPublicSearchHasNoEvidenceRows(self, search: dict, query: str) -> None:
+        self.assertNotEqual(search["route"], "bm25", query)
+        for row in search["results"]:
+            self.assertEqual(row.get("status"), "document", query)
+            self.assertNotIn("evidence_id", row, query)
+            self.assertEqual(row.get("bbox_count"), 0, query)
+
     def test_search_citation_and_viewer_work(self) -> None:
-        search = self.service.search("uud", "negara hukum", limit=3)
+        search = self.service.search("uud", "UUD 1945", limit=3)
         self.assertEqual(search["status"], "found")
-        self.assertEqual(search["route"], "bm25")
-        self.assertTrue(search["matches"])
+        self.assertEqual(search["route"], "document_catalog")
+        self.assertTrue(search["results"])
+        self.assertTrue(all(row["status"] == "document" for row in search["results"]))
 
         citation = self.service.citation("uud", "Pasal 1 ayat (3)")
         self.assertEqual(citation["status"], "found")
@@ -173,31 +185,73 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(self.service.viewer("unknown", evidence_id)["status"], "unsupported_corpus")
         self.assertEqual(self.service.viewer("uud", "missing")["reason"], "invalid_evidence")
 
-    def test_search_results_are_public_evidence_payloads(self) -> None:
-        result = self.service.search("uud", "negara hukum", limit=2)
+    def test_search_results_are_public_document_payloads(self) -> None:
+        result = self.service.search("uud", "Perubahan Ketiga UUD", limit=2)
         self.assertEqual(result["status"], "found")
         self.assertTrue(result["results"])
         for row in result["results"]:
             for field in (
                 "corpus_id",
-                "legal_unit_id",
-                "evidence_id",
-                "citation_id",
-                "viewer_ref_id",
+                "document_id",
+                "source_document_id",
                 "title",
                 "snippet",
-                "retrieval_method",
-                "reasons",
                 "status",
             ):
                 self.assertIn(field, row)
-            self.assertEqual(row["status"], "evidence")
+            self.assertEqual(row["status"], "document")
+            self.assertEqual(row["bbox_count"], 0)
+            self.assertEqual(row["viewer_ref"]["source_document_id"], row["source_document_id"])
             self.assertNotRegex(row["title"], r"^\([0-9]+\)$")
 
-        weak = self.service.search("uud", "aturan KUHP tentang pencurian")
-        self.assertEqual(weak["status"], "found")
+        weak = self.service.search("uud", "hak pendidikan")
+        self.assertEqual(weak["status"], "no_results")
         self.assertEqual(weak["public_status"], "no_results")
         self.assertFalse(weak["results"])
+
+        current_fact = self.service.search("uud", "siapa presiden indonesia sekarang?")
+        self.assertEqual(current_fact["status"], "no_results")
+        self.assertFalse(current_fact["results"])
+
+    def test_public_search_is_document_catalog(self) -> None:
+        for query, expected_source in (
+            ("UUD 1945", "uud::current_consolidated"),
+            ("Perubahan Ketiga UUD", "uud::amendment_3_historical"),
+            ("Satu Naskah UUD 1945", "uud::current_consolidated"),
+        ):
+            result = self.service.search("uud", query, limit=10)
+            self.assertEqual(result["route"], "document_catalog", query)
+            self.assertTrue(result["results"], query)
+            self.assertIn(expected_source, {row["source_document_id"] for row in result["results"]}, query)
+            self.assertTrue(all(row["status"] == "document" for row in result["results"]), query)
+            self.assertTrue(all(not row.get("evidence_id") for row in result["results"]), query)
+
+        viewer = self.service.viewer("uud", None, source_document_id="uud::current_consolidated")
+        self.assertEqual(viewer["status"], "viewer_payload_ready")
+        self.assertTrue(viewer["rendering_available"])
+        self.assertFalse(viewer["bbox_rectangles"])
+        self.assertFalse(viewer["viewer_highlightable"])
+
+    def test_scope_guard_blocks_current_and_out_of_corpus_facts(self) -> None:
+        for query in ("siapa presiden indonesia sekarang?", "siapa wakil presiden sekarang?"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "insufficient_evidence", query)
+            self.assertEqual(result["route"], "current_fact_unsupported", query)
+            self.assertFalse(result["evidence"], query)
+            self.assertFalse(result["citations"], query)
+
+        for query in ("berapa harga tanah di jakarta?", "jadwal pemilu berikutnya kapan?"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "insufficient_evidence", query)
+            self.assertFalse(result["evidence"], query)
+
+        legal_norm = self.service.ask("uud", "hak pendidikan", limit=10)
+        self.assertEqual(legal_norm["route"], "lexical_fallback")
+        self.assertTrue(legal_norm["evidence"])
+
+        citation = self.service.ask("uud", "apa isi Pasal 1 ayat (3)?")
+        self.assertEqual(citation["route"], "legal_reference")
+        self.assertTrue(citation["evidence"])
 
     def test_bookmarks_store_pointers_only(self) -> None:
         evidence_id = self.service.citation("uud", "Pasal 1 ayat (3)")["matches"][0]["evidence_id"]
@@ -217,14 +271,8 @@ class RuntimeContractTest(unittest.TestCase):
         from tjipto.core.manifest import read_jsonl
 
         config = CorpusRegistry(ROOT).resolve("uud")
-        evidence_ids = {
-            row["evidence_id"]
-            for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")
-        }
-        bbox_ids = {
-            row["bbox_id"]
-            for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")
-        }
+        evidence_ids = {row["evidence_id"] for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")}
+        bbox_ids = {row["bbox_id"] for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")}
         rows = read_jsonl(ROOT / "data/final/uud/retrieval_units.jsonl")
         self.assertEqual(len(rows), config.manifest["counts"]["retrieval_units"])
         for row in rows:
@@ -236,14 +284,8 @@ class RuntimeContractTest(unittest.TestCase):
     def test_graph_retrieval_eval_fixtures_resolve_refs(self) -> None:
         from tjipto.core.manifest import read_jsonl
 
-        evidence_ids = {
-            row["evidence_id"]
-            for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")
-        }
-        chunk_ids = {
-            row["chunk_id"]
-            for row in read_jsonl(ROOT / "data/final/uud/chunks.jsonl")
-        }
+        evidence_ids = {row["evidence_id"] for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")}
+        chunk_ids = {row["chunk_id"] for row in read_jsonl(ROOT / "data/final/uud/chunks.jsonl")}
         cases = read_jsonl(ROOT / "tests/fixtures/uud/graph_retrieval_eval_cases.jsonl")
         self.assertEqual(len(cases), 76)
         for row in cases:
@@ -260,11 +302,13 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertIn(evidence_id, evidence_ids)
 
     def test_bm25_prioritizes_term_frequency_without_breaking_exact_citation(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        store = EvidenceStore(config)
         citation = self.service.citation("uud", "Pasal 1 ayat (3)")
-        search = self.service.search("uud", "Pasal 1 ayat (3)", limit=1)
+        search = route_retrieval("uud", "Pasal 1 ayat (3)", store, limit=1, allow_bm25_after_citation_miss=True)
         self.assertEqual(search["matches"][0]["evidence_id"], citation["matches"][0]["evidence_id"])
 
-        results = self.service.search("uud", "negara negara negara hukum", limit=3)
+        results = route_retrieval("uud", "negara negara negara hukum", store, limit=3)
         self.assertEqual(results["status"], "found")
         self.assertTrue(any("negara" in row["quoted_text"].casefold() for row in results["matches"]))
 
@@ -346,10 +390,7 @@ class RuntimeContractTest(unittest.TestCase):
     def test_relation_fixture_asserts_stable_runtime_and_graph_ids(self) -> None:
         from tjipto.core.manifest import read_jsonl
 
-        graph_edges = {
-            row["edge_id"]: row
-            for row in read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
-        }
+        graph_edges = {row["edge_id"]: row for row in read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")}
         for case in _relation_cases():
             result = self.service.ask("uud", case["query"])
             self.assertEqual(result["status"], "answer_ready", case["query"])
@@ -550,34 +591,30 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(historical["status"], "found")
         self.assertEqual(historical["route"], "exact")
         self.assertTrue(historical["matches"])
-        self.assertTrue(
-            all(row["source_role"] == "amendment_1_historical" for row in historical["matches"])
-        )
+        self.assertTrue(all(row["source_role"] == "amendment_1_historical" for row in historical["matches"]))
 
         historical_search = self.service.search(
             "uud",
-            "negara hukum",
+            "Perubahan Pertama UUD",
             filters={"source_role": "amendment_1_historical"},
         )
         self.assertEqual(historical_search["status"], "found")
-        self.assertTrue(
-            all(row["source_role"] == "amendment_1_historical" for row in historical_search["matches"])
-        )
+        self.assertTrue(all(row["source_role"] == "amendment_1_historical" for row in historical_search["results"]))
 
         temporal = self.service.search(
             "uud",
-            "presiden",
+            "UUD 1945",
             limit=1,
             filters={"temporal_context": "amendment_1_historical"},
         )
         self.assertEqual(temporal["status"], "found")
         self.assertEqual(temporal["applied_filters"]["temporal_context"], "amendment_1_historical")
-        self.assertEqual(len(temporal["matches"]), 1)
-        self.assertEqual(temporal["matches"][0]["temporal_context"], "amendment_1_historical")
+        self.assertEqual(len(temporal["results"]), 1)
+        self.assertEqual(temporal["results"][0]["temporal_context"], "amendment_1_historical")
 
         conflicting = self.service.search(
             "uud",
-            "presiden",
+            "UUD 1945",
             filters={
                 "source_role": "current_consolidated",
                 "temporal_context": "amendment_1_historical",
@@ -589,7 +626,7 @@ class RuntimeContractTest(unittest.TestCase):
 
         invalid = self.service.search(
             "uud",
-            "presiden",
+            "UUD 1945",
             filters={"source_role": "not_a_source_role"},
         )
         self.assertEqual(invalid["status"], "invalid_filter")
@@ -652,25 +689,26 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertTrue(all(store.bboxes_for(row["evidence_id"]) for row in rows))
             self.assertTrue(any(expected in " ".join(row.get("hierarchy") or row.get("citation", "")) for row in rows))
 
-        bab_xa = self.service.search("uud", "BAB XA", limit=3)
+        bab_xa = route_retrieval("uud", "BAB XA", store, limit=3)
         self.assertEqual(bab_xa["status"], "found")
         self.assertEqual(bab_xa["route"], "structured")
         self.assertEqual(bab_xa["intent"], "structured_lookup")
-        self.assertTrue(bab_xa["results"])
-        self.assertTrue(all(row["title"].startswith("BAB XA") for row in bab_xa["results"]))
+        self.assertTrue(bab_xa["matches"])
+        self.assertTrue(all("BAB XA" in " / ".join(row["hierarchy"]) for row in bab_xa["matches"]))
 
-        pasal_28a = self.service.search("uud", "Pasal 28A", limit=1)
+        pasal_28a = route_retrieval("uud", "Pasal 28A", store, limit=1)
         self.assertEqual(pasal_28a["status"], "found")
-        self.assertTrue(pasal_28a["results"][0]["title"].startswith("BAB XA"))
+        self.assertTrue("BAB XA" in " / ".join(pasal_28a["matches"][0]["hierarchy"]))
 
-        pasal_28 = self.service.search("uud", "Pasal 28", limit=1)
+        pasal_28 = route_retrieval("uud", "Pasal 28", store, limit=1)
         self.assertEqual(pasal_28["status"], "found")
-        self.assertTrue(pasal_28["results"][0]["title"].startswith("BAB X / Pasal 28"))
+        self.assertTrue("BAB X" in " / ".join(pasal_28["matches"][0]["hierarchy"]))
 
-        filtered = self.service.search(
+        filtered = route_retrieval(
             "uud",
             "Pembukaan",
-            filters={"source_role": "current_consolidated", "temporal_context": "current_consolidated"},
+            store,
+            metadata_filters={"source_role": "current_consolidated", "temporal_context": "current_consolidated"},
         )
         self.assertEqual(filtered["status"], "found")
         self.assertEqual(filtered["route"], "structured")
@@ -753,9 +791,9 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(empty_trace, ())
 
     def test_runtime_bm25_exposes_ranked_route_signals(self) -> None:
-        result = self.service.search("uud", "negara hukum", limit=3)
-        self.assertEqual(result["status"], "found")
-        self.assertEqual(result["route"], "bm25")
+        result = self.service.ask("uud", "negara hukum", limit=3)
+        self.assertEqual(result["status"], "limited_answer")
+        self.assertEqual(result["route"], "lexical_fallback")
         self.assertTrue(result["expansion_trace"])
         for row in result["matches"]:
             self.assertTrue(row["bbox_count"])
@@ -799,9 +837,11 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(any(row["route_sources"] == ("graph",) for row in exact["context_pack"]["supporting_context"]))
         self.assertTrue(any(row["reason"] == "graph_only" for row in exact["context_pack"]["excluded_results"]))
         self.assertTrue(
-            all(direct_routes & set(row["route_sources"]) for row in exact["matches"] if row["evidence_id"] in {
-                evidence["evidence_id"] for evidence in exact["evidence"]
-            })
+            all(
+                direct_routes & set(row["route_sources"])
+                for row in exact["matches"]
+                if row["evidence_id"] in {evidence["evidence_id"] for evidence in exact["evidence"]}
+            )
         )
         self.assertFalse(any(evidence["citation"] == "PEMBUKAAN/Preambule" for evidence in exact["evidence"]))
 
@@ -811,10 +851,13 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(structured["answer_type"], "quoted_evidence")
         self.assertTrue(any(row["route_sources"] == ("graph",) for row in structured["matches"]))
         evidence_ids = {evidence["evidence_id"] for evidence in structured["evidence"]}
-        self.assertTrue(all(direct_routes & set(row["route_sources"]) for row in structured["matches"] if row["evidence_id"] in evidence_ids))
+        self.assertTrue(
+            all(direct_routes & set(row["route_sources"]) for row in structured["matches"] if row["evidence_id"] in evidence_ids)
+        )
 
         search = self.service.search("uud", "Pasal 1 ayat (3)", limit=5)
-        self.assertTrue(any(row["route_sources"] == ("graph",) for row in search["matches"]))
+        self.assertEqual(search["route"], "document_catalog")
+        self.assertTrue(all(row["status"] == "document" for row in search["results"]))
 
     def test_citation_response_exposes_public_payloads(self) -> None:
         result = self.service.citation("uud", "Pasal 1 ayat (3)")
@@ -850,7 +893,6 @@ class RuntimeContractTest(unittest.TestCase):
         )
         self.assertNotIn("classify_coverage", source)
         self.assertNotIn("required_missing_corpus", source)
-        self.assertNotIn("out_of_corpus", source)
 
     def test_answer_context_validator_explains_inclusion_and_exclusion(self) -> None:
         class Store:
@@ -906,9 +948,7 @@ class RuntimeContractTest(unittest.TestCase):
                 {"legal_unit_id": "lu_runtime", "runtime_loadable": True, "text_span_ids": ("s1",)},
                 {"legal_unit_id": "lu_blocked", "runtime_loadable": False, "text_span_ids": ("s1",)},
             )
-            retrieval_units = (
-                {"evidence_id": "not_accepted", "status": "excluded_public_answer"},
-            )
+            retrieval_units = ({"evidence_id": "not_accepted", "status": "excluded_public_answer"},)
 
             def bboxes_for(self, evidence_id):
                 return [{"bbox_id": "safe"}]
@@ -962,10 +1002,10 @@ class RuntimeContractTest(unittest.TestCase):
             ask = self.service.ask("uud", query, limit=10)
             search = self.service.search("uud", query, limit=10)
             self.assertNotIn(evidence_id, {row["evidence_id"] for row in ask["evidence"]}, query)
-            self.assertNotIn(evidence_id, {row["evidence_id"] for row in search["results"]}, query)
+            self.assertNotIn(evidence_id, {row.get("evidence_id") for row in search["results"]}, query)
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
             excluded = {
-                row["evidence_id"]: row
-                for row in (*ask["context_pack"]["excluded_results"], *search["context_pack"]["excluded_results"])
+                row["evidence_id"]: row for row in (*ask["context_pack"]["excluded_results"], *search["context_pack"]["excluded_results"])
             }
             if evidence_id in excluded:
                 self.assertIn(
@@ -998,9 +1038,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["status"], "insufficient_evidence", query)
             self.assertEqual(ask["route"], "exact_instrument_fail_closed", query)
             self.assertFalse(ask["evidence"], query)
-            self.assertFalse(search["results"], query)
-            self.assertEqual(search["status"], "no_results", query)
-            self.assertEqual(search["public_status"], "no_results", query)
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
             self.assertIn("exact_instrument_unit_fail_closed", ask["insufficient_reasons"], query)
             self.assertTrue(ask["context_pack"]["excluded_results"], query)
             self.assertEqual(ask["context_pack"]["excluded_results"][0]["reason"], "exact_instrument_unit_fail_closed", query)
@@ -1036,8 +1074,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["status"], "insufficient_evidence", query)
             self.assertEqual(ask["route"], "instrument_resolved_fail_closed", query)
             self.assertFalse(ask["evidence"], query)
-            self.assertFalse(search["results"], query)
-            self.assertEqual(search["public_status"], "no_results", query)
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
             self.assertEqual(ask["context_pack"]["excluded_results"][0]["citation"], citation, query)
             self.assertEqual(ask["context_pack"]["excluded_results"][0]["reason"], "instrument_resolved_fail_closed", query)
             for row in (*ask["evidence"], *search["results"]):
@@ -1062,7 +1099,8 @@ class RuntimeContractTest(unittest.TestCase):
             search = self.service.search("uud", query, limit=10)
             self.assertFalse(ask["route"] == "lexical_fallback" and ask["evidence"], query)
             self.assertFalse(search["route"] == "bm25" and search["results"], query)
-            for row in (*ask["evidence"], *search["results"]):
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
+            for row in ask["evidence"]:
                 citation = row.get("citation") or ""
                 self.assertIn("Scope", citation, query)
                 self.assertFalse(any(token in citation for token in forbidden), query)
@@ -1077,15 +1115,15 @@ class RuntimeContractTest(unittest.TestCase):
             search = self.service.search("uud", query, limit=10)
             self.assertFalse(ask["route"] == "lexical_fallback" and ask["evidence"], query)
             self.assertFalse(search["route"] == "bm25" and search["results"], query)
-            for row in (*ask["evidence"], *search["results"]):
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
+            for row in ask["evidence"]:
                 self.assertIn("Scope", row.get("citation") or "", query)
 
         ask = self.service.ask("uud", "huruf perubahan keempat", limit=10)
         search = self.service.search("uud", "huruf perubahan keempat", limit=10)
         self.assertEqual(ask["route"], "instrument_unresolved")
         self.assertFalse(ask["evidence"])
-        self.assertEqual(search["public_status"], "no_results")
-        self.assertFalse(search["results"])
+        self.assertPublicSearchHasNoEvidenceRows(search, "huruf perubahan keempat")
 
     def test_partial_signal_instrument_queries_fail_closed_before_bm25(self) -> None:
         queries = (
@@ -1108,8 +1146,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["status"], "insufficient_evidence", query)
             self.assertIn(ask["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"}, query)
             self.assertFalse(ask["evidence"], query)
-            self.assertFalse(search["results"], query)
-            self.assertEqual(search["public_status"], "no_results", query)
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
             for row in (*ask["evidence"], *search["results"]):
                 self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
 
@@ -1153,10 +1190,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["route"], "instrument_unresolved", query)
             self.assertNotEqual(ask["reason"], "instrument_unresolved", query)
             self.assertFalse(ask["evidence"], query)
-            self.assertFalse(search["results"], query)
-            self.assertEqual(search["status"], "no_results", query)
-            self.assertEqual(search["public_status"], "no_results", query)
-            self.assertNotEqual(search["route"], "bm25", query)
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
             for row in (*ask["evidence"], *search["results"]):
                 self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
 
@@ -1182,9 +1216,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["route"], "instrument_unresolved", query)
             self.assertEqual(ask["reason"], "unsupported_analysis_intent", query)
             self.assertFalse(ask["evidence"], query)
-            self.assertFalse(search["results"], query)
-            self.assertEqual(search["public_status"], "no_results", query)
-            self.assertNotEqual(search["route"], "bm25", query)
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
             for row in (*ask["evidence"], *search["results"]):
                 self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
 
@@ -1206,10 +1238,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["status"], "insufficient_evidence", query)
             self.assertEqual(ask["route"], "instrument_unresolved", query)
             self.assertFalse(ask["evidence"], query)
-            self.assertFalse(search["results"], query)
-            self.assertEqual(search["status"], "no_results", query)
-            self.assertEqual(search["public_status"], "no_results", query)
-            self.assertNotEqual(search["route"], "bm25", query)
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
 
     def test_analysis_metadata_conflicts_fail_closed_before_metadata(self) -> None:
         queries = (
@@ -1228,9 +1257,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["route"], "instrument_unresolved", query)
             self.assertEqual(ask["reason"], "analysis_metadata_conflict", query)
             self.assertFalse(ask["evidence"], query)
-            self.assertFalse(search["results"], query)
-            self.assertEqual(search["public_status"], "no_results", query)
-            self.assertEqual(search["route"], "instrument_unresolved", query)
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
 
     def test_pure_metadata_still_routes_after_arbitration(self) -> None:
         for query in (
@@ -1247,7 +1274,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(ask["route"], "metadata_fact", query)
             self.assertNotEqual(ask.get("reason"), "unsupported_analysis_intent", query)
             self.assertNotEqual(ask.get("reason"), "analysis_metadata_conflict", query)
-            self.assertEqual(search["route"], "metadata", query)
+            self.assertPublicSearchHasNoEvidenceRows(search, query)
 
     def test_contextual_numbers_do_not_create_amendment_instrument_intent(self) -> None:
         impact = self.service.ask("uud", "apa dampak Pasal 31 ayat 1", limit=10)
@@ -1279,10 +1306,10 @@ class RuntimeContractTest(unittest.TestCase):
             ("Perubahan Kedua Scope?", SAFE_INSTRUMENT_EVIDENCE["00628"]),
             ("Perubahan Keempat Recital?", SAFE_INSTRUMENT_EVIDENCE["00638"]),
         ):
-            result = self.service.search("uud", query, limit=10)
+            result = self.service.ask("uud", query, limit=10)
             self.assertEqual(result["route"], "instrument_resolved_answerable", query)
-            self.assertTrue(result["results"], query)
-            self.assertEqual(result["results"][0]["evidence_id"], evidence_id, query)
+            self.assertTrue(result["evidence"], query)
+            self.assertEqual(result["evidence"][0]["evidence_id"], evidence_id, query)
 
     def test_page_grounded_instrument_viewer_is_trace_only(self) -> None:
         for evidence_id in UNSAFE_INSTRUMENT_EVIDENCE.values():
@@ -1307,9 +1334,7 @@ class RuntimeContractTest(unittest.TestCase):
         natural_precision = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "instrument_natural_query_precision_health"
         ]
-        matrix = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
-            "instrument_intent_matrix_health"
-        ]
+        matrix = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))["instrument_intent_matrix_health"]
         partial = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
             "partial_signal_instrument_boundary_health"
         ]
@@ -1351,9 +1376,27 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertGreater(invariant["resolver_matrix_count"], 0)
         self.assertGreater(invariant["heldout_analysis_probe_count"], 0)
         self.assertGreater(arbitration["conflict_matrix_count"], 0)
-        for health in (safety, exact_grounding, precision, natural_precision, matrix, partial, general, invariant, arbitration, default_boundary):
+        for health in (
+            safety,
+            exact_grounding,
+            precision,
+            natural_precision,
+            matrix,
+            partial,
+            general,
+            invariant,
+            arbitration,
+            default_boundary,
+        ):
             for key, value in health.items():
-                if key.endswith("_count") and key not in {"matrix_query_count", "partial_signal_resolver_matrix_count", "resolver_matrix_count", "heldout_analysis_probe_count", "conflict_matrix_count", "runtime_check_count"}:
+                if key.endswith("_count") and key not in {
+                    "matrix_query_count",
+                    "partial_signal_resolver_matrix_count",
+                    "resolver_matrix_count",
+                    "heldout_analysis_probe_count",
+                    "conflict_matrix_count",
+                    "runtime_check_count",
+                }:
                     self.assertEqual(value, 0, key)
         self.assertGreater(exact_grounding["inventory"]["exact_runtime"], 0)
         self.assertGreater(exact_grounding["inventory"]["trace_only"], 0)
@@ -1362,15 +1405,17 @@ class RuntimeContractTest(unittest.TestCase):
             ("Perubahan Kedua Scope", SAFE_INSTRUMENT_EVIDENCE["00628"]),
             ("Perubahan Keempat Recital", SAFE_INSTRUMENT_EVIDENCE["00638"]),
         ):
-            result = self.service.search("uud", query, limit=10)
-            self.assertIn(evidence_id, {row["evidence_id"] for row in result["results"]}, query)
+            result = self.service.ask("uud", query, limit=10)
+            self.assertIn(evidence_id, {row["evidence_id"] for row in result["evidence"]}, query)
         chunks = {
             row["chunk_id"]: row
             for row in (json.loads(line) for line in (ROOT / "data/final/uud/chunks.jsonl").read_text(encoding="utf-8").splitlines())
         }
         retrieval_chunk_ids = {
             row["chunk_id"]
-            for row in (json.loads(line) for line in (ROOT / "data/final/uud/retrieval_units.jsonl").read_text(encoding="utf-8").splitlines())
+            for row in (
+                json.loads(line) for line in (ROOT / "data/final/uud/retrieval_units.jsonl").read_text(encoding="utf-8").splitlines()
+            )
         }
         for chunk_id in ("uud_chunk_00646", "uud_chunk_00647"):
             self.assertFalse(chunks[chunk_id]["runtime_loadable"])
@@ -1417,10 +1462,7 @@ class RuntimeContractTest(unittest.TestCase):
             ROOT / "src/tjipto/graph",
         )
         text = "\n".join(
-            path.read_text(encoding="utf-8").casefold()
-            for root in checked_roots
-            for path in root.rglob("*.py")
-            if path.name != "http.py"
+            path.read_text(encoding="utf-8").casefold() for root in checked_roots for path in root.rglob("*.py") if path.name != "http.py"
         )
         for forbidden in (
             "data/final/uud",
@@ -1446,22 +1488,24 @@ class RuntimeContractTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (corpus / "proof.rows").write_text(
-                json.dumps({
-                    "evidence_id": "demo_evidence_1",
-                    "citation": "Rule 1",
-                    "quoted_text": "generic corpus resolution",
-                    "hierarchy": [],
-                    "source_pdf_path": "source.pdf",
-                    "source_sha256": "sha",
-                    "source_role": "current_consolidated",
-                    "temporal_context": "current_consolidated",
-                    "page_numbers": [1],
-                    "status": "final",
-                    "bbox_precision": "exact",
-                    "viewer_highlightable": True,
-                    "bbox_ids": ["box_1"],
-                    "text_span_ids": ["span_1"],
-                })
+                json.dumps(
+                    {
+                        "evidence_id": "demo_evidence_1",
+                        "citation": "Rule 1",
+                        "quoted_text": "generic corpus resolution",
+                        "hierarchy": [],
+                        "source_pdf_path": "source.pdf",
+                        "source_sha256": "sha",
+                        "source_role": "current_consolidated",
+                        "temporal_context": "current_consolidated",
+                        "page_numbers": [1],
+                        "status": "final",
+                        "bbox_precision": "exact",
+                        "viewer_highlightable": True,
+                        "bbox_ids": ["box_1"],
+                        "text_span_ids": ["span_1"],
+                    }
+                )
                 + "\n",
                 encoding="utf-8",
             )
@@ -1472,13 +1516,15 @@ class RuntimeContractTest(unittest.TestCase):
             (corpus / "nodes.rows").write_text("{}\n{}\n", encoding="utf-8")
             (corpus / "edges.rows").write_text("{}\n", encoding="utf-8")
             (corpus / "manifest.json").write_text(
-                json.dumps({
-                    "corpus_id": "demo",
-                    "evidence_registry": "proof.rows",
-                    "bbox_registry": "boxes.rows",
-                    "graph_nodes": "nodes.rows",
-                    "graph_edges": "edges.rows",
-                }),
+                json.dumps(
+                    {
+                        "corpus_id": "demo",
+                        "evidence_registry": "proof.rows",
+                        "bbox_registry": "boxes.rows",
+                        "graph_nodes": "nodes.rows",
+                        "graph_edges": "edges.rows",
+                    }
+                ),
                 encoding="utf-8",
             )
 
@@ -1510,15 +1556,17 @@ class RuntimeContractTest(unittest.TestCase):
             (root / "corpus").mkdir()
             (root / "corpus/manifest.json").write_text(json.dumps({"corpus_id": "demo"}), encoding="utf-8")
             (root / "data/corpus_registry.json").write_text(
-                json.dumps({
-                    "demo": {
-                        "manifest": "corpus/manifest.json",
-                        "query_strategy": "demo_strategy",
-                        "source_roles": ["published"],
-                        "temporal_contexts": ["current"],
-                        "preferred_source_role": "published",
+                json.dumps(
+                    {
+                        "demo": {
+                            "manifest": "corpus/manifest.json",
+                            "query_strategy": "demo_strategy",
+                            "source_roles": ["published"],
+                            "temporal_contexts": ["current"],
+                            "preferred_source_role": "published",
+                        }
                     }
-                }),
+                ),
                 encoding="utf-8",
             )
 

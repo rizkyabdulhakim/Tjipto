@@ -42,7 +42,10 @@ class TextSpanDispositionContractTest(unittest.TestCase):
 
     def test_excluded_and_needs_review_spans_fail_closed(self) -> None:
         for span in self.spans:
-            if span["promotion_status"].startswith("excluded") or span["promotion_status"] in {"nonruntime_instrument_text", "needs_review"}:
+            if span["promotion_status"].startswith("excluded") or span["promotion_status"] in {
+                "nonruntime_instrument_text",
+                "needs_review",
+            }:
                 self.assertTrue(span["exclusion_reason"], span["text_span_id"])
             if span["promotion_status"] == "needs_review":
                 self.assertIsNot(span.get("runtime_loadable"), True, span["text_span_id"])
@@ -102,11 +105,14 @@ class TextSpanDispositionContractTest(unittest.TestCase):
         ):
             chunk = self.chunks[chunk_id]
             self.assertFalse(chunk["runtime_loadable"], chunk_id)
-            self.assertIn(chunk["validation_status"], {
-                "accepted_false_positive_segmentation_punctuation",
-                "builder_slicing_label_issue_confirmed",
-                "duplicated_heading_artifact_issue_confirmed",
-            })
+            self.assertIn(
+                chunk["validation_status"],
+                {
+                    "accepted_false_positive_segmentation_punctuation",
+                    "builder_slicing_label_issue_confirmed",
+                    "duplicated_heading_artifact_issue_confirmed",
+                },
+            )
 
     def test_validation_report_matches_disposition_counts(self) -> None:
         health = read_json(FINAL / "validation_report.json")["all_text_disposition_health"]

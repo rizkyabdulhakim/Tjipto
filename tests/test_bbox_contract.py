@@ -26,12 +26,8 @@ class BBoxContractTest(unittest.TestCase):
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())
 
     def test_metadata_grounding_is_non_normative_and_bbox_linked(self) -> None:
-        legal_evidence_bbox_ids = {
-            row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")
-        }
-        metadata_grounding_ids = {
-            row["bbox_id"] for row in read_jsonl(FINAL / "metadata_grounding_registry.jsonl")
-        }
+        legal_evidence_bbox_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
+        metadata_grounding_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "metadata_grounding_registry.jsonl")}
         metadata_registry_rows = read_jsonl(FINAL / "metadata_grounding_registry.jsonl")
         rows = read_jsonl(FINAL / "metadata_grounding.jsonl")
         self.assertEqual(len(rows), 37)
@@ -51,14 +47,8 @@ class BBoxContractTest(unittest.TestCase):
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())
 
     def test_inserted_bab_heading_bboxes_attach_to_matching_structure(self) -> None:
-        evidence = {
-            row["evidence_id"]: row
-            for row in read_jsonl(FINAL / "evidence_registry.jsonl")
-        }
-        legal_units = {
-            row["legal_unit_id"]: row
-            for row in read_jsonl(FINAL / "legal_units.jsonl")
-        }
+        evidence = {row["evidence_id"]: row for row in read_jsonl(FINAL / "evidence_registry.jsonl")}
+        legal_units = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "legal_units.jsonl")}
         expected = {
             "BAB IXA": "BAB IXA",
             "BAB XA": "BAB XA",
@@ -66,10 +56,7 @@ class BBoxContractTest(unittest.TestCase):
             "BAB VIIB": "BAB VIIB",
             "BAB VIIIA": "BAB VIIIA",
         }
-        heading_rows = [
-            row for row in read_jsonl(FINAL / "bbox_registry.jsonl")
-            if row["text"] in expected
-        ]
+        heading_rows = [row for row in read_jsonl(FINAL / "bbox_registry.jsonl") if row["text"] in expected]
         self.assertEqual(len(heading_rows), 5)
         for row in heading_rows:
             target = evidence[row["evidence_id"]]
@@ -81,20 +68,13 @@ class BBoxContractTest(unittest.TestCase):
                 self.assertFalse(row["viewer_highlightable"], row["bbox_id"])
 
     def test_decision_bbox_precision_is_exact_or_non_highlightable(self) -> None:
-        bbox_by_id = {
-            row["bbox_id"]: row
-            for row in read_jsonl(FINAL / "bbox_registry.jsonl")
-        }
+        bbox_by_id = {row["bbox_id"]: row for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
         for label in (
             "Perubahan Pertama Decision",
             "Perubahan Ketiga Decision",
             "Perubahan Keempat Decision",
         ):
-            evidence = next(
-                row
-                for row in read_jsonl(FINAL / "evidence_registry.jsonl")
-                if row["citation"] == label
-            )
+            evidence = next(row for row in read_jsonl(FINAL / "evidence_registry.jsonl") if row["citation"] == label)
             self.assertIn(evidence["bbox_precision"], {"exact", "page_grounded_only", "coarse"})
             if evidence["viewer_highlightable"]:
                 self.assertEqual(evidence["bbox_precision"], "exact")

@@ -16,7 +16,7 @@ import {
   Bookmark,
 } from "lucide-react";
 import type { Citation } from "../../lib/types";
-import { getLegalViewerPayload, pdfAccessUrl, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
+import { getDocumentViewerPayload, getLegalViewerPayload, pdfAccessUrl, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
 import { bboxToViewportPercent } from "../../lib/pdfBBox";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -148,7 +148,10 @@ function EvidenceContent({
     setViewer(null);
     setViewerError(false);
     setRenderFailed(false);
-    getLegalViewerPayload(citation.documentId)
+    const request = citation.viewerMode === "document" && citation.sourceDocumentId
+      ? getDocumentViewerPayload(citation.sourceDocumentId)
+      : getLegalViewerPayload(citation.documentId);
+    request
       .then((payload) => {
         if (!stale) setViewer(payload);
       })
@@ -302,6 +305,7 @@ function EvidenceContent({
           >
             {viewer?.pdf_access_available && viewer.pdf?.access_url && !renderFailed ? (
               <RenderedViewer
+                key={`${citation.viewerMode ?? "evidence"}:${viewer.source_document_id}:${viewer.evidence_id ?? "document"}:${viewer.bbox_rectangles?.length ?? 0}`}
                 viewer={viewer}
                 targetPage={pageNumber}
                 onRenderFailed={() => {

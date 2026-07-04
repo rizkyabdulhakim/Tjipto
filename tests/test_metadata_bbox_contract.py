@@ -26,10 +26,7 @@ class MetadataBBoxContractTest(unittest.TestCase):
 
     def test_metadata_grounding_registry_exact_rows_resolve_to_bbox_registry(self) -> None:
         registry_rows = read_jsonl(FINAL / "metadata_grounding_registry.jsonl")
-        bboxes = {
-            row["bbox_id"]: row
-            for row in read_jsonl(FINAL / "bbox_registry.jsonl")
-        }
+        bboxes = {row["bbox_id"]: row for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
         exact_rows = [row for row in registry_rows if row["bbox_precision"] == "exact"]
         unresolved_rows = [row for row in registry_rows if row["bbox_id"] not in bboxes]
         self.assertTrue(exact_rows)
@@ -64,10 +61,7 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertTrue(exact_rows)
 
     def test_fixture_metadata_rows_keep_stable_exact_grounding_ids(self) -> None:
-        rows = {
-            row["metadata_grounding_id"]: row
-            for row in read_jsonl(FINAL / "metadata_grounding.jsonl")
-        }
+        rows = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}
         for case in _metadata_grounding_cases():
             row = rows[case["metadata_grounding_id"]]
             for field in (

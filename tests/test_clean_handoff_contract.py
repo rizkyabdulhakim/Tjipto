@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 from pathlib import Path
 from contextlib import redirect_stdout
@@ -20,12 +20,12 @@ class CleanHandoffContractTest(unittest.TestCase):
         self.assertIn("*.pyc", FORBIDDEN_PATTERNS)
 
     def test_git_archive_has_no_forbidden_entries(self) -> None:
-        probe = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=ROOT, capture_output=True, text=True)
+        probe = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=ROOT, capture_output=True, text=True)  # nosec B603 B607
         if probe.returncode != 0:
             self.skipTest("git archive production check requires a git checkout")
         with tempfile.TemporaryDirectory() as tmp:
             archive = Path(tmp) / "tjipto-clean.zip"
-            subprocess.run(
+            subprocess.run(  # nosec B603 B607
                 ["git", "archive", "--format=zip", "--worktree-attributes", "HEAD", "-o", str(archive)],
                 cwd=ROOT,
                 check=True,

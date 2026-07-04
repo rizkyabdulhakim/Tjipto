@@ -55,6 +55,54 @@ def viewer_payload(
     }
 
 
+def document_viewer_payload(
+    store,
+    corpus_id: str,
+    source: dict,
+    *,
+    page_number: int | None = None,
+    source_pdf_path: str | None = None,
+) -> dict:
+    pdf = resolve_document_pdf_access(
+        store,
+        corpus_id,
+        source,
+        page_number=page_number,
+        source_pdf_path=source_pdf_path,
+    )
+    base = {
+        "status": "viewer_payload_ready",
+        "corpus_id": corpus_id,
+        "source_document_id": source.get("source_document_id"),
+        "citation": _document_title(store, source),
+        "quoted_text": "",
+        "source_role": source.get("source_role"),
+        "temporal_context": source.get("temporal_context"),
+        "source_status_label": _source_status_label(source, store),
+        "page_numbers": (page_number or 1,),
+        "bbox_count": 0,
+        "bbox_rectangles": (),
+        "pdf_access_available": False,
+        "rendering_available": False,
+        "render_status": "render_unavailable",
+        "reason": None,
+        "bbox_precision": "page_grounded_only",
+        "viewer_highlightable": False,
+    }
+    if pdf["status"] != "pdf_access_ready":
+        return base | _unavailable(pdf["reason"])
+    return base | {
+        "pdf_access_available": True,
+        "rendering_available": True,
+        "render_status": "pdf_access_available",
+        "page_number": pdf["page_number"],
+        "pdf": {
+            "mime_type": "application/pdf",
+            "access_url": pdf["access_url"],
+        },
+    }
+
+
 def resolve_pdf_access(
     store,
     corpus_id: str,
@@ -104,6 +152,40 @@ def resolve_pdf_access(
         "bbox_rectangles": page_bboxes,
         "source_sha256": evidence.get("source_sha256"),
         "access_url": _pdf_access_url(corpus_id, evidence, page, bbox_id),
+    }
+
+
+def resolve_document_pdf_access(
+    store,
+    corpus_id: str,
+    source: dict,
+    *,
+    page_number: int | None = None,
+    source_pdf_path: str | None = None,
+) -> dict:
+    if source_pdf_path is not None:
+        return _pdf_unavailable("invalid_source")
+    page = page_number or 1
+    if page < 1 or page > int(source.get("page_count") or 0):
+        return _pdf_unavailable("invalid_page")
+    try:
+        pdf_path = store.config.source_path(source["path"])
+    except (KeyError, ValueError):
+        return _pdf_unavailable("invalid_source")
+    if not pdf_path.exists() or pdf_path.suffix.casefold() != ".pdf":
+        return _pdf_unavailable("invalid_source")
+    try:
+        if file_sha256(pdf_path) != source.get("sha256"):
+            return _pdf_unavailable("source_hash_mismatch")
+    except (OSError, ValueError):
+        return _pdf_unavailable("render_failed")
+    return {
+        "status": "pdf_access_ready",
+        "path": pdf_path,
+        "mime_type": "application/pdf",
+        "page_number": page,
+        "source_sha256": source.get("sha256"),
+        "access_url": _document_pdf_access_url(corpus_id, source, page),
     }
 
 
@@ -161,6 +243,11 @@ def _source_document(store, evidence: dict) -> dict | None:
     return None
 
 
+def _document_title(store, source: dict) -> str:
+    titles = getattr(getattr(store, "config", None), "setting", lambda *args: {})("document_catalog", {}).get("titles", {})
+    return titles.get(source.get("source_role")) or source.get("filename") or source.get("source_document_id") or "Document"
+
+
 def _safe_pdf_path(store, evidence: dict, source: dict):
     if source.get("path") != evidence.get("source_pdf_path"):
         return None
@@ -213,11 +300,18 @@ def _pdf_access_url(corpus_id: str, evidence: dict, page_number: int, bbox_id: s
     return f"/legal/{quote(corpus_id, safe='')}/pdf?{urlencode(query)}"
 
 
+def _document_pdf_access_url(corpus_id: str, source: dict, page_number: int) -> str:
+    query = {
+        "source_document_id": source["source_document_id"],
+        "page_number": str(page_number),
+    }
+    return f"/legal/{quote(corpus_id, safe='')}/pdf?{urlencode(query)}"
+
+
 def _source_status_label(evidence: dict, store=None) -> str:
     role = str(evidence.get("source_role") or evidence.get("temporal_context") or "")
     labels = _SOURCE_STATUS_LABELS | dict(
-        getattr(getattr(store, "config", None), "setting", lambda *args: {})("viewer_source_status_labels", {})
-        or {}
+        getattr(getattr(store, "config", None), "setting", lambda *args: {})("viewer_source_status_labels", {}) or {}
     )
     if role in labels:
         return labels[role]

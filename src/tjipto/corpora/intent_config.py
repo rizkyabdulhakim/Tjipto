@@ -56,18 +56,9 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         return _GENERIC
     return {
         "document_target_words": tuple(raw.get("document_target_words") or ()),
-        "metadata_fields": {
-            key: tuple(value)
-            for key, value in (raw.get("metadata_fields") or {}).items()
-        },
-        "metadata_rules": {
-            key: tuple(value)
-            for key, value in (raw.get("metadata_rules") or {}).items()
-        },
-        "metadata_roles": tuple(
-            (row["role"], re.compile(row["pattern"], re.IGNORECASE))
-            for row in raw.get("metadata_roles", ())
-        ),
+        "metadata_fields": {key: tuple(value) for key, value in (raw.get("metadata_fields") or {}).items()},
+        "metadata_rules": {key: tuple(value) for key, value in (raw.get("metadata_rules") or {}).items()},
+        "metadata_roles": tuple((row["role"], re.compile(row["pattern"], re.IGNORECASE)) for row in raw.get("metadata_roles", ())),
         "relation_words": tuple(raw.get("relation_words") or ()),
         "direct_relation_words": tuple(raw.get("direct_relation_words") or ()),
         "pasal_parent_words": tuple(raw.get("pasal_parent_words") or ()),
@@ -79,10 +70,7 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "instrument_deletion_evidence_words": tuple(raw.get("instrument_deletion_evidence_words") or ()),
         "instrument_change_context_words": tuple(raw.get("instrument_change_context_words") or ()),
         "instrument_citation_templates": dict(raw.get("instrument_citation_templates") or {}),
-        "instrument_role_queries": {
-            key: tuple(value)
-            for key, value in (raw.get("instrument_role_queries") or {}).items()
-        },
+        "instrument_role_queries": {key: tuple(value) for key, value in (raw.get("instrument_role_queries") or {}).items()},
         "metadata_candidate_signals": tuple(raw.get("metadata_candidate_signals") or ()),
         "instrument_intent_matrix": dict(raw.get("instrument_intent_matrix") or {}),
         "partial_signal_instrument_matrix": dict(raw.get("partial_signal_instrument_matrix") or {}),
@@ -138,9 +126,13 @@ def resolve_instrument_intent(query: str, intent: dict, *, corpus: str = "") -> 
     change_signal = contains_intent_phrase(query, intent.get("instrument_change_signals", ()))
     if role is None or amendment is None:
         if source_signal and effect_signal:
-            return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "effect_signal_unsupported")
+            return InstrumentIntentDecision(
+                corpus, normalized, role, amendment, "instrument_unresolved", False, "effect_signal_unsupported"
+            )
         if source_signal and content_signal:
-            return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "content_signal_unresolved")
+            return InstrumentIntentDecision(
+                corpus, normalized, role, amendment, "instrument_unresolved", False, "content_signal_unresolved"
+            )
         if source_signal and (role is not None or object_signal or change_signal):
             return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "instrument_unresolved")
         if source_signal:
@@ -149,7 +141,9 @@ def resolve_instrument_intent(query: str, intent: dict, *, corpus: str = "") -> 
     citation = _instrument_citation(intent, amendment, role, query)
     if not citation:
         return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_unresolved", False, "instrument_unresolved")
-    return InstrumentIntentDecision(corpus, normalized, role, amendment, "instrument_resolved_fail_closed", False, "instrument_resolved_fail_closed", citation)
+    return InstrumentIntentDecision(
+        corpus, normalized, role, amendment, "instrument_resolved_fail_closed", False, "instrument_resolved_fail_closed", citation
+    )
 
 
 def _instrument_citation(intent: dict, role: str, key: str, query: str) -> str:

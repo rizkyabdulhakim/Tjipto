@@ -18,11 +18,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _page_grounded_decision_evidence_id() -> str:
     for row in CorpusRegistry(ROOT).resolve("uud").jsonl("evidence"):
-        if row.get("citation") in {
-            "Perubahan Pertama Decision",
-            "Perubahan Ketiga Decision",
-            "Perubahan Keempat Decision",
-        } and row.get("viewer_highlightable") is False:
+        if (
+            row.get("citation")
+            in {
+                "Perubahan Pertama Decision",
+                "Perubahan Ketiga Decision",
+                "Perubahan Keempat Decision",
+            }
+            and row.get("viewer_highlightable") is False
+        ):
             return row["evidence_id"]
     raise AssertionError("missing page-grounded decision evidence")
 
@@ -55,23 +59,25 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(capabilities["status"], "ok")
         self.assertIn("search", capabilities["capabilities"])
 
-        search = self._post("/legal/uud/search", {"query": "negara hukum", "limit": 2})
+        search = self._post("/legal/uud/search", {"query": "UUD 1945", "limit": 2})
         self.assertEqual(search["status"], "found")
         self.assertTrue(search["results"])
         for internal in ("matches", "context_pack", "route", "intent", "ranked_final_evidence_ids"):
             self.assertNotIn(internal, search)
         first = search["results"][0]
-        self.assertTrue(first["evidence_id"])
-        self.assertTrue(first["legal_unit_id"])
+        self.assertEqual(first["status"], "document")
+        self.assertTrue(first["document_id"])
+        self.assertTrue(first["source_document_id"])
         self.assertIn("viewer_ref", first)
         self.assertIn("source_role", first)
+        self.assertFalse(first["viewer_ref"]["bbox_count"])
         self.assertNotIn("route_score", first)
         self.assertNotIn("source_sha256", first)
         self.assertNotIn("source_pdf_path", first)
         self.assertNotIn("source_sha256", first["viewer_ref"])
         self.assertNotIn("source_pdf_path", first["viewer_ref"])
 
-        weak = self._post("/legal/uud/search", {"query": "aturan KUHP tentang pencurian"})
+        weak = self._post("/legal/uud/search", {"query": "hak pendidikan"})
         self.assertEqual(weak["public_status"], "no_results")
         self.assertEqual(weak["results"], [])
 
@@ -117,6 +123,12 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertFalse(decision["bbox_rectangles"])
         self.assertEqual(decision["bbox_precision"], "page_grounded_only")
         self.assertFalse(decision["viewer_highlightable"])
+
+        document_viewer = self._post("/legal/uud/viewer", {"source_document_id": first["source_document_id"]})
+        self.assertEqual(document_viewer["status"], "viewer_payload_ready")
+        self.assertTrue(document_viewer["pdf_access_available"])
+        self.assertFalse(document_viewer["bbox_rectangles"])
+        self.assertFalse(document_viewer["viewer_highlightable"])
 
         saved = self._post("/legal/uud/bookmarks", {"evidence_id": evidence_id, "note": "cek lagi"})
         self.assertEqual(saved["status"], "saved")
@@ -187,7 +199,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             headers={"Content-Type": "application/json", "Origin": "http://localhost:5173"},
             method="POST",
         )
-        with urlopen(request, timeout=10) as response:
+        with self._open_local(request) as response:
             self.assertEqual(response.headers["Access-Control-Allow-Origin"], "http://localhost:5173")
             self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
             self.assertEqual(response.headers["Referrer-Policy"], "no-referrer")
@@ -198,7 +210,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             headers={"Content-Type": "application/json", "Origin": "https://example.com"},
             method="POST",
         )
-        with urlopen(request, timeout=10) as response:
+        with self._open_local(request) as response:
             self.assertIsNone(response.headers.get("Access-Control-Allow-Origin"))
 
     def test_unknown_path(self) -> None:
@@ -214,7 +226,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             method="POST",
         )
         with self.assertRaises(HTTPError) as error:
-            urlopen(request, timeout=10)
+            self._open_local(request)
         self.assertEqual(error.exception.code, 400)
         self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "invalid_json")
 
@@ -225,7 +237,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             method="POST",
         )
         with self.assertRaises(HTTPError) as error:
-            urlopen(request, timeout=10)
+            self._open_local(request)
         self.assertEqual(error.exception.code, 413)
         self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "request_body_too_large")
 
@@ -236,7 +248,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             method="POST",
         )
         with self.assertRaises(HTTPError) as error:
-            urlopen(request, timeout=10)
+            self._open_local(request)
         self.assertEqual(error.exception.code, 400)
         self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "invalid_limit")
 
@@ -274,11 +286,11 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(error.exception.code, 404)
 
     def _get(self, path: str) -> dict:
-        with urlopen(self.base_url + path, timeout=10) as response:
+        with self._open_local(self.base_url + path) as response:
             return json.loads(response.read().decode("utf-8"))
 
     def _get_bytes(self, path: str) -> tuple[bytes, Any]:
-        with urlopen(self.base_url + path, timeout=10) as response:
+        with self._open_local(self.base_url + path) as response:
             return response.read(), response.headers
 
     def _post(self, path: str, payload: dict) -> dict:
@@ -288,8 +300,11 @@ class RuntimeHttpContractTest(unittest.TestCase):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urlopen(request, timeout=10) as response:
+        with self._open_local(request) as response:
             return json.loads(response.read().decode("utf-8"))
+
+    def _open_local(self, request_or_url):
+        return urlopen(request_or_url, timeout=10)  # nosec B310
 
 
 if __name__ == "__main__":

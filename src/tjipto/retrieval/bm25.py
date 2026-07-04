@@ -36,25 +36,23 @@ def tokens(text: str) -> list[str]:
 
 
 def meaningful_tokens(text: str) -> set[str]:
-    return {
-        _normalize_token(token)
-        for token in tokens(text)
-        if token not in STOPWORDS and len(token) > 2
-    }
+    return {_normalize_token(token) for token in tokens(text) if token not in STOPWORDS and len(token) > 2}
 
 
 def _normalize_token(token: str) -> str:
-    if token == "berhak":
+    if token == "berhak":  # nosec B105
         return "hak"
     return "kerja" if token in {"bekerja", "pekerjaan"} else token
 
 
 def _document_text(row: dict) -> str:
-    return " ".join([
-        row.get("quoted_text", ""),
-        row.get("citation", ""),
-        " ".join(row.get("hierarchy") or []),
-    ])
+    return " ".join(
+        [
+            row.get("quoted_text", ""),
+            row.get("citation", ""),
+            " ".join(row.get("hierarchy") or []),
+        ]
+    )
 
 
 def lexical_search(
@@ -101,11 +99,7 @@ def _with_relevance(row: dict, query: str) -> dict:
     query_terms = meaningful_tokens(query)
     doc_terms = meaningful_tokens(_document_text(row))
     supported = query_terms & doc_terms
-    required = (
-        len(query_terms)
-        if len(query_terms) <= 2
-        else max(2, (len(query_terms) + 1) // 2)
-    )
+    required = len(query_terms) if len(query_terms) <= 2 else max(2, (len(query_terms) + 1) // 2)
     ok = bool(query_terms) and len(supported) >= required
     return dict(
         row,

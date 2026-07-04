@@ -11,7 +11,13 @@ from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.artifacts.writer import write_json, write_jsonl
 from tjipto.corpora.uud.legal_unit_builder import build_legal_units_from_sources
 from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest
-from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_assertions, build_metadata_block_grounding, build_metadata_graph_edges, rebuild_metadata_grounding
+from tjipto.corpora.uud.metadata_builder import (
+    build_document_metadata,
+    build_metadata_assertions,
+    build_metadata_block_grounding,
+    build_metadata_graph_edges,
+    rebuild_metadata_grounding,
+)
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, build_retrieval_units
@@ -53,15 +59,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     source_conflicts = build_source_conflicts()
     pages = build_pages(repo_root, source_documents)
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
-    docs = {
-        source_id: fitz.open(repo_root / meta["path"])
-        for source_id, meta in source_documents.items()
-    }
+    docs = {source_id: fitz.open(repo_root / meta["path"]) for source_id, meta in source_documents.items()}
     try:
-        pdf_lines_by_source = {
-            source_id: pdf_lines(doc)
-            for source_id, doc in docs.items()
-        }
+        pdf_lines_by_source = {source_id: pdf_lines(doc) for source_id, doc in docs.items()}
     finally:
         for doc in docs.values():
             doc.close()

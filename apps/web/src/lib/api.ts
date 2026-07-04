@@ -24,8 +24,9 @@ export interface TjiptoAskResponse {
 
 export interface SearchResult {
   corpus_id: string;
-  legal_unit_id: string;
-  evidence_id: string;
+  legal_unit_id?: string;
+  evidence_id?: string;
+  document_id?: string;
   citation_id?: string;
   viewer_ref_id?: string;
   source_document_id?: string;
@@ -44,7 +45,8 @@ export interface SearchResult {
 
 export interface ViewerRefPayload {
   action?: string;
-  evidence_id: string;
+  evidence_id?: string;
+  source_document_id?: string;
   page_numbers?: number[];
   bbox_count?: number;
   source_status_label?: string;
@@ -172,6 +174,16 @@ export async function getLegalViewerPayload(evidenceId: string): Promise<ViewerP
   return response.json();
 }
 
+export async function getDocumentViewerPayload(sourceDocumentId: string): Promise<ViewerPayload> {
+  const response = await fetch(corpusEndpoint("viewer"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source_document_id: sourceDocumentId }),
+  });
+  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} viewer returned ${response.status}`);
+  return response.json();
+}
+
 export function pdfAccessUrl(viewer: ViewerPayload): string | null {
   const accessUrl = viewer.pdf?.access_url;
   if (!accessUrl) return null;
@@ -221,7 +233,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
 }
 
 export function mapSearchResultToCitation(item: SearchResult, index: number): Citation | null {
-  if (!item?.evidence_id || !item.snippet) return null;
+  if (!item?.source_document_id || !item.snippet) return null;
   const pages = Array.isArray(item.page_numbers)
     ? item.page_numbers
     : Array.isArray(item.viewer_ref?.page_numbers)
@@ -230,7 +242,8 @@ export function mapSearchResultToCitation(item: SearchResult, index: number): Ci
   const pageNumber = Number(pages[0] ?? 1);
   return {
     id: index + 1,
-    documentId: String(item.evidence_id),
+    documentId: String(item.evidence_id ?? item.document_id ?? item.source_document_id),
+    viewerMode: item.status === "document" ? "document" : "evidence",
     legalUnitId: item.legal_unit_id,
     sourceDocumentId: item.source_document_id,
     viewerRefId: item.viewer_ref_id ?? item.viewer_ref?.evidence_id,

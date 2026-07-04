@@ -108,9 +108,7 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
     def test_unresolved_needs_review_count_is_zero_or_explicitly_tracked(self) -> None:
         self.assertEqual(self.report["provenance_exception_health"]["unresolved_needs_review_count"], 0)
         unresolved = [
-            row
-            for row in read_jsonl(FINAL / "validation_exceptions.jsonl")
-            if row.get("status") == "unresolved_manual_review_required"
+            row for row in read_jsonl(FINAL / "validation_exceptions.jsonl") if row.get("status") == "unresolved_manual_review_required"
         ]
         self.assertFalse(unresolved)
 
@@ -129,11 +127,7 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
 
     def test_all_text_disposition_health_is_reported_without_fake_classification(self) -> None:
         spans = read_jsonl(FINAL / "page_text_spans.jsonl")
-        referenced = {
-            span_id
-            for row in (*self.units.values(), *self.chunks.values())
-            for span_id in row.get("text_span_ids") or ()
-        }
+        referenced = {span_id for row in (*self.units.values(), *self.chunks.values()) for span_id in row.get("text_span_ids") or ()}
         health = self.report["all_text_disposition_health"]
         self.assertEqual(health["page_text_span_count"], len(spans))
         self.assertEqual(health["span_disposition_present_count"], len(spans))

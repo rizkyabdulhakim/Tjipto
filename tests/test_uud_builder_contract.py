@@ -12,7 +12,13 @@ from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
 from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
 from tjipto.corpora.uud.legal_unit_builder import build_legal_units_from_sources
 from tjipto.corpora.uud.manifest import build_manifest
-from tjipto.corpora.uud.metadata_builder import build_document_metadata, build_metadata_assertions, build_metadata_block_grounding, build_metadata_graph_edges, rebuild_metadata_grounding
+from tjipto.corpora.uud.metadata_builder import (
+    build_document_metadata,
+    build_metadata_assertions,
+    build_metadata_block_grounding,
+    build_metadata_graph_edges,
+    rebuild_metadata_grounding,
+)
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.retrieval_builder import build_retrieval_units
 from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
@@ -46,7 +52,7 @@ class UudBuilderContractTest(unittest.TestCase):
         spans_source = (ROOT / "src/tjipto/corpora/uud/text_span_builder.py").read_text(encoding="utf-8")
         bbox_source = (ROOT / "src/tjipto/corpora/uud/bbox_builder.py").read_text(encoding="utf-8")
         self.assertNotIn("import fitz", source_documents_source)
-        self.assertNotIn("get_text(\"text\")", pages_source)
+        self.assertNotIn('get_text("text")', pages_source)
         self.assertNotIn("accepted_text_span", spans_source)
         self.assertNotIn("def pdf_lines", bbox_source)
         self.assertIn("tjipto.ingestion.pdf.source_documents", source_documents_source)
@@ -117,10 +123,7 @@ class UudBuilderContractTest(unittest.TestCase):
         )
 
     def test_manifest_rebuilds_from_artifact_contract_and_source_specs(self) -> None:
-        source_documents = {
-            row["source_document_id"]: row
-            for row in build_source_documents(ROOT)
-        }
+        source_documents = {row["source_document_id"]: row for row in build_source_documents(ROOT)}
         expected = build_manifest(source_documents)
         actual = read_json(FINAL / "manifest.json")
         self.assertEqual(expected["source_files"], actual["source_files"])
@@ -132,10 +135,7 @@ class UudBuilderContractTest(unittest.TestCase):
         )
 
     def test_pages_rebuild_from_specs_and_pdfs(self) -> None:
-        source_documents = {
-            row["source_document_id"]: row
-            for row in build_source_documents(ROOT)
-        }
+        source_documents = {row["source_document_id"]: row for row in build_source_documents(ROOT)}
         self.assertEqual(
             build_pages(ROOT, source_documents),
             read_jsonl(FINAL / "pages.jsonl"),
@@ -145,14 +145,8 @@ class UudBuilderContractTest(unittest.TestCase):
         builder_source = (ROOT / "src/tjipto/corpora/uud/legal_unit_builder.py").read_text(encoding="utf-8")
         self.assertNotIn("compatibility_seed", builder_source)
         self.assertNotIn("read_jsonl", builder_source)
-        source_documents = {
-            row["source_document_id"]: row
-            for row in build_source_documents(ROOT)
-        }
-        pages_by_source = {
-            (row["source_document_id"], row["page_number"]): row["text"]
-            for row in build_pages(ROOT, source_documents)
-        }
+        source_documents = {row["source_document_id"]: row for row in build_source_documents(ROOT)}
+        pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in build_pages(ROOT, source_documents)}
         rebuilt = build_legal_units_from_sources(
             pages_by_source=pages_by_source,
             source_documents=source_documents,
@@ -168,14 +162,8 @@ class UudBuilderContractTest(unittest.TestCase):
         builder_source = (ROOT / "src/tjipto/corpora/uud/chunk_builder.py").read_text(encoding="utf-8")
         self.assertNotIn("compatibility_seed", builder_source)
         self.assertNotIn("read_jsonl", builder_source)
-        source_documents = {
-            row["source_document_id"]: row
-            for row in build_source_documents(ROOT)
-        }
-        pages_by_source = {
-            (row["source_document_id"], row["page_number"]): row["text"]
-            for row in build_pages(ROOT, source_documents)
-        }
+        source_documents = {row["source_document_id"]: row for row in build_source_documents(ROOT)}
+        pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in build_pages(ROOT, source_documents)}
         legal_units = build_legal_units_from_sources(
             pages_by_source=pages_by_source,
             source_documents=source_documents,
@@ -194,23 +182,14 @@ class UudBuilderContractTest(unittest.TestCase):
         builder_source = (ROOT / "src/tjipto/corpora/uud/evidence_bbox_builder.py").read_text(encoding="utf-8")
         self.assertNotIn("compatibility_seed", builder_source)
         self.assertNotIn("read_jsonl", builder_source)
-        source_documents = {
-            row["source_document_id"]: row
-            for row in build_source_documents(ROOT)
-        }
-        pages_by_source = {
-            (row["source_document_id"], row["page_number"]): row["text"]
-            for row in build_pages(ROOT, source_documents)
-        }
+        source_documents = {row["source_document_id"]: row for row in build_source_documents(ROOT)}
+        pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in build_pages(ROOT, source_documents)}
         legal_units = build_legal_units_from_sources(
             pages_by_source=pages_by_source,
             source_documents=source_documents,
         )
         chunks = build_chunks_from_legal_units(legal_units)
-        docs = {
-            source_id: fitz.open(ROOT / meta["path"])
-            for source_id, meta in source_documents.items()
-        }
+        docs = {source_id: fitz.open(ROOT / meta["path"]) for source_id, meta in source_documents.items()}
         try:
             evidence, bbox_rows = build_evidence_and_bboxes(
                 legal_units=legal_units,
@@ -235,16 +214,11 @@ class UudBuilderContractTest(unittest.TestCase):
         )
 
     def test_metadata_block_grounding_rebuilds_from_specs_and_pages(self) -> None:
-        source_documents = {
-            row["source_document_id"]: row
-            for row in build_source_documents(ROOT)
-        }
-        pages_by_source = {
-            (row["source_document_id"], row["page_number"]): row["text"]
-            for row in build_pages(ROOT, source_documents)
-        }
+        source_documents = {row["source_document_id"]: row for row in build_source_documents(ROOT)}
+        pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in build_pages(ROOT, source_documents)}
         expected = [
-            row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")
+            row
+            for row in read_jsonl(FINAL / "metadata_grounding.jsonl")
             if not row["metadata_grounding_id"].startswith("uud_metadata_field_grounding::")
         ]
         self.assertEqual(
@@ -256,14 +230,8 @@ class UudBuilderContractTest(unittest.TestCase):
         )
 
     def test_document_metadata_rebuilds_from_specs_and_grounding(self) -> None:
-        source_documents = {
-            row["source_document_id"]: row
-            for row in build_source_documents(ROOT)
-        }
-        pages_by_source = {
-            (row["source_document_id"], row["page_number"]): row["text"]
-            for row in build_pages(ROOT, source_documents)
-        }
+        source_documents = {row["source_document_id"]: row for row in build_source_documents(ROOT)}
+        pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in build_pages(ROOT, source_documents)}
         metadata_grounding = build_metadata_block_grounding(
             pages_by_source=pages_by_source,
             source_documents=source_documents,
@@ -280,14 +248,8 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertEqual(json.loads(json.dumps(document_metadata)), read_jsonl(FINAL / "document_metadata.jsonl"))
 
     def test_metadata_assertions_rebuild_from_evidence_and_grounding(self) -> None:
-        source_documents = {
-            row["source_document_id"]: row
-            for row in build_source_documents(ROOT)
-        }
-        pages_by_source = {
-            (row["source_document_id"], row["page_number"]): row["text"]
-            for row in build_pages(ROOT, source_documents)
-        }
+        source_documents = {row["source_document_id"]: row for row in build_source_documents(ROOT)}
+        pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in build_pages(ROOT, source_documents)}
         _, metadata_grounding, _ = rebuild_metadata_grounding(
             document_metadata=build_document_metadata(
                 source_documents,

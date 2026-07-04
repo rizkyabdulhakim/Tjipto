@@ -37,10 +37,7 @@ class LegalUnitGroundingContractTest(unittest.TestCase):
             self.assertTrue(row["bbox_ids"], row["legal_unit_id"])
 
     def test_fixture_legal_unit_keeps_stable_grounding_ids(self) -> None:
-        rows = {
-            row["legal_unit_id"]: row
-            for row in read_jsonl(FINAL / "legal_units.jsonl")
-        }
+        rows = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "legal_units.jsonl")}
         for case in _legal_unit_grounding_cases():
             row = rows[case["legal_unit_id"]]
             for field in (

@@ -28,7 +28,8 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
         if row.get("legal_unit_id") and _matches_unit(row, targets)
     }
     rows = [
-        row for row in store.evidence
+        row
+        for row in store.evidence
         if row.get("status") == "final"
         and store.bboxes_for(row["evidence_id"])
         and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets))
@@ -141,10 +142,9 @@ def _instrument_evidence(store: EvidenceStore | None, source_role: str, citation
         return None
     return next(
         (
-            row for row in store.evidence
-            if row.get("source_role") == source_role
-            and row.get("citation") == citation
-            and row.get("status") == "final"
+            row
+            for row in store.evidence
+            if row.get("source_role") == source_role and row.get("citation") == citation and row.get("status") == "final"
         ),
         None,
     )

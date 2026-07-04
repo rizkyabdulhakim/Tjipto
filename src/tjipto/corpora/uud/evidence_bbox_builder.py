@@ -38,25 +38,27 @@ def build_evidence_and_bboxes(
             line_entries=pdf_lines_by_source[source_id],
         )
         quoted_text = "\n".join(row["text"] for row in bbox_records)
-        evidence.append({
-            "bbox_refs": [row["bbox_id"] for row in bbox_records],
-            "bbox_precision": aggregate_bbox_precision(bbox_records),
-            "citation": unit["unit_label"],
-            "corpus_id": "uud",
-            "evidence_id": evidence_id,
-            "hierarchy": chunk["hierarchy"],
-            "legal_unit_id": unit["legal_unit_id"],
-            "page_numbers": sorted({row["page_number"] for row in bbox_records}),
-            "quoted_text": quoted_text,
-            "source_document_id": source_id,
-            "source_pdf": source_meta["filename"],
-            "source_pdf_path": source_meta["path"],
-            "source_role": source_role,
-            "source_sha256": source_meta["sha256"],
-            "status": "final",
-            "temporal_context": source_meta.get("temporal_context", source_role),
-            "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
-        })
+        evidence.append(
+            {
+                "bbox_refs": [row["bbox_id"] for row in bbox_records],
+                "bbox_precision": aggregate_bbox_precision(bbox_records),
+                "citation": unit["unit_label"],
+                "corpus_id": "uud",
+                "evidence_id": evidence_id,
+                "hierarchy": chunk["hierarchy"],
+                "legal_unit_id": unit["legal_unit_id"],
+                "page_numbers": sorted({row["page_number"] for row in bbox_records}),
+                "quoted_text": quoted_text,
+                "source_document_id": source_id,
+                "source_pdf": source_meta["filename"],
+                "source_pdf_path": source_meta["path"],
+                "source_role": source_role,
+                "source_sha256": source_meta["sha256"],
+                "status": "final",
+                "temporal_context": source_meta.get("temporal_context", source_role),
+                "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
+            }
+        )
         bbox_rows.extend(bbox_records)
     _append_inserted_bab_bbox_refs(
         evidence=evidence,
@@ -112,7 +114,6 @@ def _append_inserted_bab_bbox_refs(
     source_documents: dict[str, dict],
     pdf_lines_by_source: dict[str, dict[int, list[dict]]],
 ) -> None:
-    evidence_by_unit = {row["legal_unit_id"]: row for row in evidence}
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     source_evidence = sorted(
@@ -162,7 +163,9 @@ def _append_inserted_bab_bbox_refs(
         row["page_numbers"] = sorted({item["page_number"] for item in rows})
 
 
-def _first_evidence_at_or_after_child(spec: dict, source_evidence: list[dict], chunks_by_unit: dict[str, dict], units_by_id: dict[str, dict]) -> dict | None:
+def _first_evidence_at_or_after_child(
+    spec: dict, source_evidence: list[dict], chunks_by_unit: dict[str, dict], units_by_id: dict[str, dict]
+) -> dict | None:
     child_ids = [
         row["legal_unit_id"]
         for row in units_by_id.values()
@@ -175,8 +178,7 @@ def _first_evidence_at_or_after_child(spec: dict, source_evidence: list[dict], c
         (
             row
             for row in source_evidence
-            if row["source_document_id"] == spec["source_document_id"]
-            and chunks_by_unit[row["legal_unit_id"]]["chunk_id"] >= child_chunk
+            if row["source_document_id"] == spec["source_document_id"] and chunks_by_unit[row["legal_unit_id"]]["chunk_id"] >= child_chunk
         ),
         None,
     )

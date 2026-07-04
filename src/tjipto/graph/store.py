@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class GraphStore:
     def __init__(self, config):
         self.config = config

@@ -27,15 +27,18 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
         row = _evidence_for_unit(store, source, evidence_by_unit, descendants_by_parent)
         if row is None:
             return ()
-        return (row | {
-            "legal_relation": {
-                "relation_type": relation,
-                "source_legal_unit_id": source["legal_unit_id"],
-                "source_label": source.get("unit_label"),
-                "target_legal_unit_id": target.get("legal_unit_id"),
-                "target_label": target.get("unit_label"),
+        return (
+            row
+            | {
+                "legal_relation": {
+                    "relation_type": relation,
+                    "source_legal_unit_id": source["legal_unit_id"],
+                    "source_label": source.get("unit_label"),
+                    "target_legal_unit_id": target.get("legal_unit_id"),
+                    "target_label": target.get("unit_label"),
+                },
             },
-        },)
+        )
     parent = _parent_unit(store, query, route)
     if parent is None:
         return ()
@@ -43,23 +46,25 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     children = [
         row
         for row in store.legal_units
-        if row.get("unit_type") == child_type
-        and parent["legal_unit_id"] in (row.get("parent_legal_unit_ids") or ())
+        if row.get("unit_type") == child_type and parent["legal_unit_id"] in (row.get("parent_legal_unit_ids") or ())
     ]
     rows = []
     for child in children:
         row = _evidence_for_unit(store, child, evidence_by_unit, descendants_by_parent)
         if row is None:
             continue
-        rows.append(row | {
-            "legal_relation": {
-                "relation_type": relation,
-                "source_legal_unit_id": parent["legal_unit_id"],
-                "source_label": parent.get("unit_label"),
-                "target_legal_unit_id": child.get("legal_unit_id"),
-                "target_label": child.get("unit_label"),
-            },
-        })
+        rows.append(
+            row
+            | {
+                "legal_relation": {
+                    "relation_type": relation,
+                    "source_legal_unit_id": parent["legal_unit_id"],
+                    "source_label": parent.get("unit_label"),
+                    "target_legal_unit_id": child.get("legal_unit_id"),
+                    "target_label": child.get("unit_label"),
+                },
+            }
+        )
     return tuple(rows[:limit])
 
 
@@ -116,9 +121,7 @@ def _unsupported_relation_requested(query: str, folded: str, *, strategy: str, c
     direct_relation = any(pattern in folded for pattern in intent["direct_relation_words"])
     relation_words = any(pattern in folded for pattern in intent["relation_words"])
     unsupported_context = any(pattern in folded for pattern in intent["unsupported_relation_context_words"])
-    return (
-        direct_relation and (has_pasal or has_bab or relation_words)
-    ) or (
+    return (direct_relation and (has_pasal or has_bab or relation_words)) or (
         relation_words and (has_pasal or has_bab or unsupported_context)
     )
 
@@ -129,8 +132,7 @@ def _child_relation_requested(folded: str, intent: dict) -> bool:
 
 def _pasal_parent_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
     return _has_pasal(query, _corpus_id(config)) and any(
-        pattern in folded
-        for pattern in intent_config_for(strategy, config)["pasal_parent_words"]
+        pattern in folded for pattern in intent_config_for(strategy, config)["pasal_parent_words"]
     )
 
 
@@ -150,10 +152,7 @@ def _unit(store, query: str, unit_type: str) -> dict | None:
     if label is None:
         return None
     preferred = getattr(store.config, "preferred_source_role", None)
-    matches = [
-        row for row in store.legal_units
-        if row.get("unit_label") == label and row.get("unit_type") == unit_type
-    ]
+    matches = [row for row in store.legal_units if row.get("unit_label") == label and row.get("unit_type") == unit_type]
     return next((row for row in matches if _source_role(row) == preferred), None) or (matches[0] if matches else None)
 
 
@@ -162,10 +161,7 @@ def _hierarchy_parent(store, unit: dict, unit_type: str) -> dict | None:
     if not parent_ids:
         return None
     preferred = getattr(store.config, "preferred_source_role", None)
-    matches = [
-        row for row in store.legal_units
-        if row.get("legal_unit_id") in parent_ids and row.get("unit_type") == unit_type
-    ]
+    matches = [row for row in store.legal_units if row.get("legal_unit_id") in parent_ids and row.get("unit_type") == unit_type]
     return next((row for row in matches if _source_role(row) == preferred), None) or (matches[0] if matches else None)
 
 
@@ -196,7 +192,9 @@ def _corpus_id(config) -> str:
     return getattr(config, "corpus_id", DEFAULT_CORPUS_ID)
 
 
-def _evidence_for_unit(store, unit: dict, evidence_by_unit: dict[str, list[dict]], descendants_by_parent: dict[str, list[dict]]) -> dict | None:
+def _evidence_for_unit(
+    store, unit: dict, evidence_by_unit: dict[str, list[dict]], descendants_by_parent: dict[str, list[dict]]
+) -> dict | None:
     for candidate in evidence_by_unit.get(unit["legal_unit_id"], ()):
         if candidate.get("status") == "final" and store.bboxes_for(candidate["evidence_id"]):
             return candidate

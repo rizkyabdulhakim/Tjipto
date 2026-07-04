@@ -219,22 +219,27 @@ async function runSmoke() {
 
     await page.getByRole("button", { name: "Cari Regulasi" }).click();
     await page.getByRole("heading", { name: "Search UUD" }).waitFor();
-    await page.getByPlaceholder("Cari dalam UUD 1945...").fill("Pembukaan");
-    await page.getByText(/PEMBUKAAN/).first().waitFor();
+    await page.getByPlaceholder("Cari dalam UUD 1945...").fill("UUD 1945");
+    await page.getByText(/Undang-Undang Dasar Negara Republik Indonesia Tahun 1945/).first().waitFor();
     await page.getByLabel(/Buka viewer/).first().click();
     await page.locator('[data-pdf-document="full"]').waitFor();
-    await page.locator('canvas[aria-label="Halaman sumber 2"][data-rendered="true"]').waitFor();
-    await page.locator('canvas[aria-label="Halaman sumber 3"][data-rendered="true"]').waitFor();
-    await page.locator('[data-pdf-page="2"] [data-bbox-highlight]').first().waitFor();
-    await page.locator('[data-pdf-page="3"] [data-bbox-highlight]').first().waitFor();
+    await page.locator('canvas[aria-label="Halaman sumber 1"][data-rendered="true"]').waitFor();
+    assert(
+      (await page.locator('[data-pdf-document="full"] [data-bbox-highlight]').count()) === 0,
+      "Document search viewer should not show default highlights.",
+    );
 
     await page.getByRole("button", { name: "Cari Regulasi" }).click();
     await page.getByRole("heading", { name: "Search UUD" }).waitFor();
-    await page.getByPlaceholder("Cari dalam UUD 1945...").fill("BAB XA");
-    await page.getByText(/BAB XA/).first().waitFor();
+    await page.getByPlaceholder("Cari dalam UUD 1945...").fill("Perubahan Ketiga UUD");
+    await page.getByText(/Perubahan Ketiga Undang-Undang Dasar/).first().waitFor();
     await page.getByLabel(/Buka viewer/).first().click();
     await page.locator('[data-pdf-document="full"]').waitFor();
-    await page.locator('[data-bbox-highlight="active"]').first().waitFor();
+    await page.locator('canvas[aria-label="Halaman sumber 1"][data-rendered="true"]').waitFor();
+    assert(
+      (await page.locator('[data-pdf-document="full"] [data-bbox-highlight]').count()) === 0,
+      "Document search viewer should stay unhighlighted.",
+    );
 
     await page.getByRole("button", { name: "Pustaka Hukum" }).click();
     await page.getByRole("heading", { name: "Library" }).waitFor();
