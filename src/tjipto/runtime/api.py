@@ -88,6 +88,7 @@ def _public_ask(result: dict) -> dict:
         "metadata_facts": tuple(_public_metadata_fact(row) for row in result.get("metadata_facts", ())),
         "metadata_support": tuple(result.get("metadata_support", ())),
         "legal_relations": tuple(_public_legal_relation(row) for row in result.get("legal_relations", ())),
+        "document_relations": tuple(result.get("document_relations", ())),
         "trace_support": tuple(result.get("trace_support", ())),
         "answer_scope": result.get("answer_scope"),
         "warnings": tuple(result.get("warnings", ())),

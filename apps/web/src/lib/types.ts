@@ -25,8 +25,18 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  metadataSupport?: SupportItem[];
+  traceSupport?: SupportItem[];
+  documentRelations?: SupportItem[];
   status?: "streaming" | "complete";
   runtimeStatus?: string;
+}
+
+export interface SupportItem {
+  id: string;
+  label: string;
+  detail?: string;
+  kind: "metadata" | "trace" | "document_relation";
 }
 
 export interface ChatThread {

@@ -9,7 +9,7 @@ import {
   Volume2,
   FileText,
 } from "lucide-react";
-import type { ChatMessage, Citation } from "../../lib/types";
+import type { ChatMessage, Citation, SupportItem } from "../../lib/types";
 import { Composer } from "./Composer";
 
 interface ChatViewProps {
@@ -212,7 +212,7 @@ function AssistantMessage({
         >
           ANALISIS TJIPTO
           {message.runtimeStatus && (
-            <span className="rounded-md border border-[var(--tj-border-subtle)] px-1.5 py-0.5">
+            <span data-runtime-status={message.runtimeStatus} className="rounded-md border border-[var(--tj-border-subtle)] px-1.5 py-0.5">
               {message.runtimeStatus}
             </span>
           )}
@@ -238,6 +238,14 @@ function AssistantMessage({
               citations={message.citations}
               onClick={onCitationClick}
               activeId={activeCitationId}
+            />
+          )}
+
+          {message.status !== "streaming" && (
+            <SupportFooter
+              metadataSupport={message.metadataSupport}
+              traceSupport={message.traceSupport}
+              documentRelations={message.documentRelations}
             />
           )}
 
@@ -288,7 +296,7 @@ function CitationFooter({
   activeId?: number;
 }) {
   return (
-    <div className="mt-5 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] overflow-hidden">
+    <div data-citation-footer="true" className="mt-5 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] overflow-hidden">
       <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[var(--tj-border-subtle)]">
         <FileText size={13} className="text-[var(--tj-text-secondary)]" />
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.02em", color: "var(--tj-text-secondary)" }}>
@@ -349,6 +357,47 @@ function legalUnitLabel(article?: string, paragraph?: string) {
   const knownLabel = /^(pasal|bab|aturan|pembukaan)\b/i.test(base) || base.includes(" / ");
   const label = knownLabel ? base : `Pasal ${base}`;
   return paragraph ? `${label} ayat (${paragraph})` : label;
+}
+
+function SupportFooter({
+  metadataSupport,
+  traceSupport,
+  documentRelations,
+}: {
+  metadataSupport?: SupportItem[];
+  traceSupport?: SupportItem[];
+  documentRelations?: SupportItem[];
+}) {
+  const groups = [
+    ["metadata-support", "DUKUNGAN METADATA", metadataSupport],
+    ["trace-support", "TRACE-ONLY", traceSupport],
+    ["document-relations", "RELASI DOKUMEN", documentRelations],
+  ] as const;
+  const visible = groups.filter(([, , rows]) => rows?.length);
+  if (!visible.length) return null;
+  return (
+    <div className="mt-4 space-y-2">
+      {visible.map(([testId, title, rows]) => (
+        <div
+          key={testId}
+          data-support-kind={testId}
+          className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3.5 py-2.5"
+        >
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}>
+            {title}
+          </div>
+          <ul className="mt-1 space-y-1">
+            {rows?.map((row) => (
+              <li key={row.id} style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
+                <span style={{ color: "var(--tj-text-primary)", fontWeight: 600 }}>{row.label}</span>
+                {row.detail ? ` · ${row.detail}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function ChatView({

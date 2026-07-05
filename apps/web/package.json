@@ -7,8 +7,9 @@
     "build": "vite build",
     "dev": "vite --host 127.0.0.1",
     "lint": "tsc --noEmit",
+    "preview": "vite preview --host 127.0.0.1",
     "smoke": "node smoke.mjs",
-    "smoke:install": "playwright install chromium",
+    "smoke:install": "playwright install --with-deps chromium",
     "test": "node --test --experimental-strip-types tests/*.mjs",
     "typecheck": "tsc --noEmit"
   },

@@ -72,7 +72,9 @@ async function ensureFrontend() {
   }
   const port = new URL(frontendUrl).port || "5173";
   const command = process.platform === "win32" ? "cmd.exe" : "npm";
-  const args = process.platform === "win32" ? ["/d", "/s", "/c", "npm run dev -- --host 127.0.0.1 --port " + port] : ["run", "dev", "--", "--host", "127.0.0.1", "--port", port];
+  const args = process.platform === "win32"
+    ? ["/d", "/s", "/c", "npm run preview -- --host 127.0.0.1 --port " + port]
+    : ["run", "preview", "--", "--host", "127.0.0.1", "--port", port];
   const child = spawn(command, args, {
     cwd: webRoot,
     env: { ...process.env, VITE_TJIPTO_API_BASE: backendUrl },
@@ -81,6 +83,50 @@ async function ensureFrontend() {
   });
   started.push(child);
   await waitFor(frontendUrl);
+}
+
+async function ask(page, query) {
+  await page.goto(frontendUrl, { waitUntil: "networkidle" });
+  await page.getByPlaceholder("Tanya UUD 1945...").fill(query);
+  await page.getByLabel("Send").click();
+  await page.locator("[data-runtime-status]").first().waitFor();
+}
+
+async function expectNoExactCitationUi(page) {
+  assert((await page.locator('[data-citation-footer="true"]').count()) === 0, "Non-exact support rendered as citation footer.");
+  assert((await page.locator("[data-evidence-panel]").count()) === 0, "Non-exact support opened evidence panel.");
+}
+
+async function runEvidenceContractSmoke(browser) {
+  const metadataPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await ask(metadataPage, "kapan perubahan pertama ditetapkan");
+  await metadataPage.locator('[data-runtime-status="answer_ready"]').waitFor();
+  await metadataPage.locator('[data-support-kind="metadata-support"]').waitFor();
+  await metadataPage.locator('[data-support-kind="metadata-support"]').getByText("19 Oktober 1999").waitFor();
+  await expectNoExactCitationUi(metadataPage);
+  await metadataPage.close();
+
+  const tracePage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await ask(tracePage, "amandemen keempat mengubah pasal 31?");
+  await tracePage.locator('[data-runtime-status="insufficient_evidence"]').waitFor();
+  await tracePage.locator('[data-support-kind="trace-support"]').waitFor();
+  await expectNoExactCitationUi(tracePage);
+  await tracePage.close();
+
+  const relationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await ask(relationPage, "UUD 1945 diubah oleh amandemen berapa");
+  await relationPage.locator('[data-runtime-status="answer_ready"]').waitFor();
+  await relationPage.locator('[data-support-kind="document-relations"]').waitFor();
+  await expectNoExactCitationUi(relationPage);
+  await relationPage.close();
+
+  const insufficientPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await ask(insufficientPage, "siapa presiden indonesia sekarang?");
+  await insufficientPage.locator('[data-runtime-status="insufficient_evidence"]').waitFor();
+  await insufficientPage.getByText("Bukti tidak cukup").waitFor();
+  await expectNoExactCitationUi(insufficientPage);
+  assert((await insufficientPage.locator("[data-support-kind]").count()) === 0, "Insufficient evidence rendered support rows.");
+  await insufficientPage.close();
 }
 
 async function runSmoke() {
@@ -98,6 +144,7 @@ async function runSmoke() {
     await page.getByLabel("Send").click();
     await page.getByText("Dukungan sitasi berbasis bukti").waitFor();
     await page.getByText(/SUMBER/).waitFor();
+    assert((await page.locator("[data-support-kind]").count()) === 0, "Exact citation answer rendered non-exact support rows.");
 
     await page.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
     await page.locator('[data-pdf-document="full"]').waitFor();
@@ -268,6 +315,8 @@ async function runSmoke() {
     await fallbackPage.getByText("Dukungan sitasi berbasis bukti").waitFor();
     await fallbackPage.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
     await fallbackPage.getByText("Rendering PDF/BBox belum tersedia").first().waitFor();
+
+    await runEvidenceContractSmoke(browser);
   } finally {
     await browser.close();
   }

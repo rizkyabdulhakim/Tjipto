@@ -21,6 +21,8 @@ export interface TjiptoAskResponse {
   citations?: CitationPayload[];
   viewer_refs?: ViewerRefPayload[];
   metadata_support?: MetadataSupportPayload[];
+  document_relations?: DocumentRelationPayload[];
+  trace_support?: TraceSupportPayload[];
 }
 
 export interface MetadataSupportPayload {
@@ -31,6 +33,30 @@ export interface MetadataSupportPayload {
   source_document_id?: string;
   source_role?: string;
   page_numbers?: number[];
+  citation_available?: boolean;
+  viewer_highlightable?: boolean;
+}
+
+export interface DocumentRelationPayload {
+  relation_id?: string;
+  relation_type?: string;
+  source_role?: string;
+  source_document_id?: string;
+  target_source_role?: string;
+  target_document_id?: string;
+  support_type?: string;
+  reason?: string;
+  highlightable?: boolean;
+}
+
+export interface TraceSupportPayload {
+  relation_id?: string;
+  relation_type?: string;
+  source_role?: string;
+  target_citation?: string;
+  evidence_id?: string;
+  support_class?: string;
+  grounding_level?: string;
   citation_available?: boolean;
   viewer_highlightable?: boolean;
 }

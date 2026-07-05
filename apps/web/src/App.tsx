@@ -7,7 +7,7 @@ import { EvidencePanel } from "./components/tjipto/EvidencePanel";
 import { SearchRoute, LibraryRoute } from "./components/tjipto/SecondaryRoutes";
 import type { Citation, ChatMessage as TMessage } from "./lib/types";
 import { conversation } from "./components/tjipto/data";
-import { askLegal, fallbackAnswer, mapAskResponseToCitations } from "./lib/api";
+import { askLegal, fallbackAnswer, mapAskResponseToCitations, type TjiptoAskResponse } from "./lib/api";
 import { Menu, SquarePen } from "lucide-react";
 
 type Route = "chat" | "search" | "library";
@@ -79,7 +79,8 @@ export default function App() {
       const response = await askLegal(value);
       const citations = mapAskResponseToCitations(response);
       const hasFinalEvidence = citations.length > 0;
-      const content = hasFinalEvidence ? response.answer || fallbackAnswer() : fallbackAnswer();
+      const hasAnswer = response.status === "answer_ready" && Boolean(response.answer);
+      const content = hasAnswer ? response.answer || fallbackAnswer() : fallbackAnswer();
       setMessages((prev) =>
         prev.map((m) =>
           m.id === asstId
@@ -89,6 +90,9 @@ export default function App() {
                 status: "complete",
                 runtimeStatus: response.status,
                 citations: hasFinalEvidence ? citations : undefined,
+                metadataSupport: supportItems(response, "metadata"),
+                traceSupport: supportItems(response, "trace"),
+                documentRelations: supportItems(response, "document_relation"),
               }
             : m,
         ),
@@ -263,6 +267,31 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+function supportItems(response: TjiptoAskResponse, kind: "metadata" | "trace" | "document_relation") {
+  if (kind === "metadata") {
+    return (response.metadata_support ?? []).map((row, index) => ({
+      id: String(row.evidence_id ?? `${kind}_${index}`),
+      kind,
+      label: String(row.field ?? "metadata_support"),
+      detail: String(row.answer ?? "field-grounded support"),
+    }));
+  }
+  if (kind === "trace") {
+    return (response.trace_support ?? []).map((row, index) => ({
+      id: String(row.relation_id ?? row.evidence_id ?? `${kind}_${index}`),
+      kind,
+      label: String(row.target_citation ?? row.relation_type ?? "trace_support"),
+      detail: "Trace-only, not citation/highlight evidence",
+    }));
+  }
+  return (response.document_relations ?? []).map((row, index) => ({
+    id: String(row.relation_id ?? `${kind}_${index}`),
+    kind,
+    label: String(row.relation_type ?? "document_relation"),
+    detail: "Document-level relation, not citation/highlight evidence",
+  }));
 }
 
 // Force-show the sidebar inside the mobile drawer (sidebar itself is hidden md:flex)
