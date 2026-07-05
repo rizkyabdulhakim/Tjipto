@@ -54,7 +54,7 @@ def apply_chunk_grounding(
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     evidence_by_unit: dict[str, list[dict]] = defaultdict(list)
     spans_by_page: dict[tuple[str, int], list[dict]] = defaultdict(list)
-    source_meta = {}
+    source_meta: dict[str, dict] = {}
     for row in evidence:
         evidence_by_unit[row["legal_unit_id"]].append(row)
     for row in page_text_spans:
@@ -89,7 +89,7 @@ def apply_chunk_grounding(
         apply_review_category(chunk)
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     for unit in legal_units:
-        chunk = chunks_by_unit.get(unit["legal_unit_id"])
+        unit_chunk = chunks_by_unit.get(unit["legal_unit_id"])
         unit_evidence = evidence_by_unit.get(unit["legal_unit_id"], [])
         page_numbers = list(range(unit["page_start"], unit["page_end"] + 1))
         text_span_ids = _text_span_ids_for_text(spans_by_page, unit["source_document_id"], page_numbers, unit["text"])
@@ -106,7 +106,7 @@ def apply_chunk_grounding(
         unit["runtime_loadable"] = (
             unit.get("runtime_loadable") is not False
             and bool(text_span_ids)
-            and bool(unit_evidence or (chunk and chunk.get("runtime_loadable")))
+            and bool(unit_evidence or (unit_chunk and unit_chunk.get("runtime_loadable")))
         )
         apply_review_category(unit)
 

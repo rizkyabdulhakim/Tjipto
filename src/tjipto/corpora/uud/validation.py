@@ -94,6 +94,8 @@ def build_validation_report(
         "corpus_id": "uud",
         "referenced_artifacts": [
             "document_metadata.jsonl",
+            "document_relations.jsonl",
+            "article_amendment_relations.jsonl",
             "metadata_graph_edges.jsonl",
             "metadata_grounding.jsonl",
             "metadata_grounding_registry.jsonl",
@@ -223,7 +225,15 @@ def build_validation_report(
     )
     validation_report["legal_graph_baseline"] = {
         "status": "evidence_backed_minimal_baseline",
-        "legal_edge_types": sorted(LEGAL_EDGE_TYPES),
+        "actual_edge_type_counts": _edge_type_counts(graph_edges),
+        "actual_promoted_legal_edge_type_counts": _edge_type_counts(
+            [row for row in graph_edges if row.get("edge_type") in LEGAL_EDGE_TYPES]
+        ),
+        "runtime_loadable_legal_edge_type_counts": _edge_type_counts(
+            [row for row in graph_edges if row.get("edge_type") in LEGAL_EDGE_TYPES and row.get("runtime_loadable") is True]
+        ),
+        "schema_edge_types": sorted(LEGAL_EDGE_TYPES),
+        "not_promoted_edge_types": sorted(LEGAL_EDGE_TYPES - {str(row.get("edge_type")) for row in graph_edges}),
         "runtime_loadable_legal_edges": sum(
             1 for row in graph_edges if row.get("edge_type") in LEGAL_EDGE_TYPES and row.get("runtime_loadable") is True
         ),
@@ -239,6 +249,10 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     retrieval_units = read_jsonl(final_dir / "retrieval_units.jsonl")
     metadata_grounding = read_jsonl(final_dir / "metadata_grounding.jsonl")
     metadata_grounding_registry = read_jsonl(final_dir / "metadata_grounding_registry.jsonl")
+    document_relations = read_jsonl(final_dir / "document_relations.jsonl") if (final_dir / "document_relations.jsonl").exists() else []
+    article_amendment_relations = (
+        read_jsonl(final_dir / "article_amendment_relations.jsonl") if (final_dir / "article_amendment_relations.jsonl").exists() else []
+    )
     graph_nodes = read_jsonl(final_dir / "graph_nodes.jsonl")
     graph_edges = read_jsonl(final_dir / "graph_edges.jsonl")
     source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
@@ -253,6 +267,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
     graph_node_ids = {row["node_id"] for row in graph_nodes}
     source_conflict_ids = {row["source_conflict_id"] for row in source_conflicts}
+    validation_exception_ids = {row["exception_id"] for row in validation_exceptions}
+    source_document_ids = {row["source_document_id"] for row in read_jsonl(final_dir / "source_documents.jsonl")}
     metadata_grounding_ids = {row["metadata_grounding_id"] for row in metadata_grounding}
     metadata_grounding_ref_ids: set[str] = set()
     text_span_ids = {row["text_span_id"] for row in page_text_spans}
@@ -571,6 +587,63 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 and evidence_ref not in source_conflict_ids
             ):
                 errors.append(f"legal_edge_unknown_evidence_ref:{row['edge_id']}:{evidence_ref}")
+    for row in document_relations:
+        if row["relation_id"] in seen_ids["document_relation_id"]:
+            errors.append(f"duplicate_document_relation_id:{row['relation_id']}")
+        seen_ids["document_relation_id"].add(row["relation_id"])
+        if row.get("relation_type") not in {"AMENDS", "AMENDED_BY"}:
+            errors.append(f"invalid_document_relation_type:{row['relation_id']}:{row.get('relation_type')}")
+        if row.get("source_document_id") not in source_document_ids:
+            errors.append(f"document_relation_unknown_source:{row['relation_id']}:{row.get('source_document_id')}")
+        if row.get("target_document_id") not in source_document_ids:
+            errors.append(f"document_relation_unknown_target:{row['relation_id']}:{row.get('target_document_id')}")
+        for ref in row.get("support_refs") or ():
+            if ref not in validation_exception_ids:
+                errors.append(f"document_relation_unknown_support_ref:{row['relation_id']}:{ref}")
+        if row.get("article_level") is not False:
+            errors.append(f"document_relation_article_level:{row['relation_id']}")
+        if row.get("viewer_highlightable") is not False or row.get("citation_available") is not False:
+            errors.append(f"document_relation_false_exact_claim:{row['relation_id']}")
+    for row in article_amendment_relations:
+        if row["relation_id"] in seen_ids["article_amendment_relation_id"]:
+            errors.append(f"duplicate_article_amendment_relation_id:{row['relation_id']}")
+        seen_ids["article_amendment_relation_id"].add(row["relation_id"])
+        if row.get("relation_type") not in {"MODIFIES", "DELETES", "INSERTS", "ADDS", "RENAMES", "SUPPLEMENTS"}:
+            errors.append(f"invalid_article_amendment_relation_type:{row['relation_id']}:{row.get('relation_type')}")
+        evidence_row = evidence_by_id.get(row.get("evidence_id"))
+        if not evidence_row:
+            errors.append(f"article_relation_unknown_evidence:{row['relation_id']}:{row.get('evidence_id')}")
+            continue
+        if row.get("target_legal_unit_id") not in units_by_id:
+            errors.append(f"article_relation_unknown_target:{row['relation_id']}:{row.get('target_legal_unit_id')}")
+        if not str(row.get("target_citation") or "").startswith(("Pasal ", "Ayat ")):
+            errors.append(f"article_relation_non_pasal_ayat_target:{row['relation_id']}:{row.get('target_citation')}")
+        if row.get("quoted_text") != evidence_row.get("quoted_text"):
+            errors.append(f"article_relation_quote_mismatch:{row['relation_id']}")
+        for bbox_id in row.get("bbox_refs") or ():
+            if bbox_id not in bbox_by_id:
+                errors.append(f"article_relation_unknown_bbox:{row['relation_id']}:{bbox_id}")
+        if not row.get("bbox_refs"):
+            errors.append(f"article_relation_missing_bbox:{row['relation_id']}")
+        refs_resolve = bool(row.get("bbox_refs")) and all(bbox_id in bbox_by_id for bbox_id in row.get("bbox_refs") or ())
+        exact_support = evidence_row.get("bbox_precision") == "exact" and evidence_row.get("viewer_highlightable") is True and refs_resolve
+        support_class = row.get("support_class")
+        if support_class not in {"exact_article_relation", "trace_article_relation"}:
+            errors.append(f"article_relation_invalid_support_class:{row['relation_id']}:{support_class}")
+        if support_class == "exact_article_relation":
+            if not exact_support:
+                errors.append(f"article_relation_false_exact_claim:{row['relation_id']}")
+            if row.get("grounding_level") != "exact_source_text":
+                errors.append(f"article_relation_exact_wrong_grounding:{row['relation_id']}")
+            if row.get("viewer_highlightable") is not True or row.get("citation_available") is not True:
+                errors.append(f"article_relation_exact_not_public_resolvable:{row['relation_id']}")
+        if support_class == "trace_article_relation":
+            if exact_support:
+                errors.append(f"article_relation_trace_should_be_exact:{row['relation_id']}")
+            if row.get("grounding_level") == "exact_source_text":
+                errors.append(f"article_relation_trace_false_exact_grounding:{row['relation_id']}")
+            if row.get("viewer_highlightable") is not False or row.get("citation_available") is not False:
+                errors.append(f"article_relation_trace_public_citation:{row['relation_id']}")
 
     return tuple(sorted(set(errors)))
 
@@ -1051,9 +1124,9 @@ def _instrument_like_boundary_generalization_health(intent: dict) -> dict:
         for kind, query in queries
         if kind == "effect" and resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"
     ]
-    public_evidence = []
-    neighbor_answers = []
-    neighbor_searches = []
+    public_evidence: list[str] = []
+    neighbor_answers: list[str] = []
+    neighbor_searches: list[str] = []
     metadata_regressions = [
         query
         for query in ("kapan perubahan keempat ditetapkan", "lembaga yang menetapkan perubahan keempat")
@@ -1094,9 +1167,9 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
     heldout = tuple(matrix.get("heldout_analysis_probes") or ())
     all_analysis = (*queries, *heldout)
     fallback = [query for query in all_analysis if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"]
-    public_evidence = []
-    neighbor_answers = []
-    neighbor_searches = []
+    public_evidence: list[str] = []
+    neighbor_answers: list[str] = []
+    neighbor_searches: list[str] = []
     general_topics = (
         "pasal apa yang mengatur perubahan iklim",
         "apa isi pasal tentang perubahan iklim",
@@ -1176,9 +1249,9 @@ def _intent_arbitration_priority_health(intent: dict) -> dict:
         for amendment in amendments
         for pattern in patterns
     ]
-    metadata_overrides = []
-    lexical_overrides = []
-    structured_overrides = []
+    metadata_overrides: list[str] = []
+    lexical_overrides: list[str] = []
+    structured_overrides: list[str] = []
     bypasses = []
     for query in queries:
         decision = resolve_instrument_intent(query, intent, corpus="uud")
@@ -1422,3 +1495,12 @@ def _artifact_origin_health(manifest_files: dict[str, dict]) -> dict:
         "generated_missing_build_stage_count": sum(1 for row in generated if not str(row.get("build_stage") or "").strip()),
         "non_generated_missing_origin_reason_count": sum(1 for row in non_generated if not str(row.get("origin_reason") or "").strip()),
     }
+
+
+def _edge_type_counts(edges: list[dict]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in edges:
+        edge_type = str(row.get("edge_type") or "")
+        if edge_type:
+            counts[edge_type] = counts.get(edge_type, 0) + 1
+    return dict(sorted(counts.items()))

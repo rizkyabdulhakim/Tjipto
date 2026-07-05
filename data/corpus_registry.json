@@ -76,6 +76,20 @@
         "harga",
         "tanah"
       ],
+      "identity_question_terms": [
+        "siapa"
+      ],
+      "legal_scope_terms": [
+        "uud",
+        "undang undang dasar",
+        "menurut uud",
+        "pasal",
+        "ayat",
+        "tugas",
+        "kewenangan",
+        "wewenang",
+        "hak"
+      ],
       "out_of_corpus_terms": [
         "harga",
         "tanah",
@@ -312,7 +326,7 @@
         },
         {
           "role": "original_historical",
-          "pattern": "\\b(naskah\\s+asli|original)\\b"
+          "pattern": "\\b((uud|undang[-\\s]*undang\\s+dasar)(\\s+1945)?\\s+asli|naskah\\s+asli|original)\\b"
         }
       ],
       "relation_words": [
@@ -325,6 +339,9 @@
       "direct_relation_words": [
         "mengubah",
         "diubah",
+        "dirubah",
+        "menambah",
+        "menambahkan",
         "amandemen",
         "amended",
         "amends"
@@ -649,7 +666,10 @@
           "ubah",
           "berubah",
           "diubah",
+          "dirubah",
           "mengubah",
+          "menambah",
+          "menambahkan",
           "diganti",
           "terdampak",
           "hasil perubahan"
@@ -671,6 +691,71 @@
         "amendment_2_historical": "Kedua",
         "amendment_3_historical": "Ketiga",
         "amendment_4_historical": "Keempat"
+      },
+      "document_relation": {
+        "change_terms": [
+          "mengubah",
+          "diubah",
+          "dirubah",
+          "amends",
+          "amended"
+        ],
+        "add_terms": [
+          "menambah",
+          "menambahkan",
+          "ditambah"
+        ],
+        "source_terms": [
+          "amandemen",
+          "perubahan"
+        ],
+        "target_document_terms": [
+          "uud",
+          "undang undang dasar"
+        ],
+        "article_detail_terms": [
+          "pasal",
+          "ayat"
+        ],
+        "unsupported_detail_terms": [
+          "ketentuan",
+          "norma",
+          "materi",
+          "substansi",
+          "objek",
+          "sasaran",
+          "bagian",
+          "hal",
+          "lembaga",
+          "scope",
+          "lingkup",
+          "cakupan",
+          "dampak",
+          "akibat",
+          "implikasi",
+          "konsekuensi",
+          "tujuan",
+          "alasan",
+          "latar belakang",
+          "maksud",
+          "makna",
+          "risiko",
+          "urgensi",
+          "dasar",
+          "rasional",
+          "pertimbangan",
+          "motif"
+        ],
+        "schema_only_relation_types": [
+          "ADDS",
+          "INSERTS",
+          "RENAMES",
+          "SUPPLEMENTS"
+        ],
+        "source_role_label_prefix": "Perubahan ",
+        "document_answer_template": "Jejak relasi dokumen menunjukkan UUD 1945 diubah oleh {relations}. Relasi ini source-role/document-level dan tidak memiliki highlight BBox pasal/ayat exact.",
+        "single_document_answer_template": "Jejak relasi dokumen menunjukkan {relation} mengubah UUD 1945 pada tingkat dokumen/source-role. Detail pasal/ayat exact tidak tersedia sebagai dukungan relasi terpromosi.",
+        "article_answer_template": "Relasi amandemen tingkat pasal yang didukung bukti exact: {relations}."
       },
       "structured_sections": [
         {

@@ -17,7 +17,7 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     if relation is None:
         return ()
     intent = intent_config_for(strategy, config)
-    route = intent["relation_routes"].get(relation, {})
+    route: dict = intent["relation_routes"].get(relation, {})
     descendants_by_parent, evidence_by_unit = _relation_indexes(store)
     if route.get("mode") == "parent":
         source = _unit(store, query, route["source_unit_type"])
@@ -108,7 +108,7 @@ def _route_name(intent: dict, requested: str) -> str | None:
 
 
 def _route_terms_match(intent: dict, mode: str, folded: str) -> bool:
-    route = next((row for row in intent["relation_routes"].values() if row.get("mode") == mode), {})
+    route: dict = next((row for row in intent["relation_routes"].values() if row.get("mode") == mode), {})
     terms = route.get("required_terms") or ()
     return any(term in folded for term in terms)
 
@@ -199,7 +199,7 @@ def _evidence_for_unit(
         if candidate.get("status") == "final" and store.bboxes_for(candidate["evidence_id"]):
             return candidate
     for child in descendants_by_parent.get(unit["legal_unit_id"], ()):
-        candidate = _evidence_for_unit(store, child, evidence_by_unit, descendants_by_parent)
-        if candidate is not None:
-            return candidate
+        child_candidate = _evidence_for_unit(store, child, evidence_by_unit, descendants_by_parent)
+        if child_candidate is not None:
+            return child_candidate
     return None

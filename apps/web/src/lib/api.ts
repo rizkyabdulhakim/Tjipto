@@ -2,9 +2,9 @@ import type { Citation } from "./types";
 import type { PdfBBox } from "./pdfBBox";
 
 const API_BASE =
-  import.meta.env.VITE_TJIPTO_API_BASE ??
+  (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_TJIPTO_API_BASE ??
   "http://localhost:8000";
-const DEFAULT_CORPUS_ID = import.meta.env.VITE_TJIPTO_CORPUS_ID ?? "uud";
+const DEFAULT_CORPUS_ID = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_TJIPTO_CORPUS_ID ?? "uud";
 
 function corpusEndpoint(action: string) {
   return `${API_BASE}/legal/${DEFAULT_CORPUS_ID}/${action}`;
@@ -20,6 +20,19 @@ export interface TjiptoAskResponse {
   answer?: string;
   citations?: CitationPayload[];
   viewer_refs?: ViewerRefPayload[];
+  metadata_support?: MetadataSupportPayload[];
+}
+
+export interface MetadataSupportPayload {
+  support_class?: "metadata_support" | "metadata_trace" | "exact_metadata_citation";
+  field?: string;
+  answer?: string;
+  evidence_id?: string;
+  source_document_id?: string;
+  source_role?: string;
+  page_numbers?: number[];
+  citation_available?: boolean;
+  viewer_highlightable?: boolean;
 }
 
 export interface SearchResult {

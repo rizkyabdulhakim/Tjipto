@@ -153,7 +153,7 @@ def _append_inserted_bab_bbox_refs(
         )
         bbox_rows.append(heading_row)
         child["bbox_refs"] = [heading_row["bbox_id"], *child["bbox_refs"]]
-    by_evidence = {row["evidence_id"]: [] for row in evidence}
+    by_evidence: dict[str, list[dict]] = {row["evidence_id"]: [] for row in evidence}
     for row in bbox_rows:
         by_evidence.setdefault(row["evidence_id"], []).append(row)
     for row in evidence:

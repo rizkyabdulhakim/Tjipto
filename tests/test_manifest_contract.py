@@ -20,10 +20,12 @@ class ManifestContractTest(unittest.TestCase):
         self.assertEqual(
             manifest["counts"],
             {
+                "article_amendment_relations": 63,
                 "article_versions": 218,
                 "bbox_records": 1542,
                 "chunks": 651,
                 "document_metadata": 6,
+                "document_relations": 8,
                 "evidence_records": 464,
                 "excluded_records": 6,
                 "graph_edges": len((FINAL / "graph_edges.jsonl").read_text(encoding="utf-8").splitlines()),

@@ -20,6 +20,7 @@ from tjipto.corpora.uud.metadata_builder import (
 )
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
+from tjipto.corpora.uud.relation_builder import build_article_amendment_relations, build_document_relations
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, build_retrieval_units
 from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, FINAL_DIR
 from tjipto.corpora.uud.span_disposition_builder import apply_page_text_span_dispositions
@@ -120,6 +121,13 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
         metadata_grounding=metadata_grounding,
     )
+    document_relations = build_document_relations(list(source_documents.values()))
+    article_amendment_relations = build_article_amendment_relations(
+        graph_edges=graph_edges,
+        legal_units=legal_units,
+        evidence=evidence,
+        bbox_rows=bbox_rows,
+    )
     write_jsonl(final_dir / "legal_units.jsonl", legal_units)
     write_jsonl(final_dir / "chunks.jsonl", chunks)
     write_jsonl(final_dir / "evidence_registry.jsonl", evidence)
@@ -136,6 +144,8 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "pages.jsonl", pages)
     write_jsonl(final_dir / "graph_nodes.jsonl", graph_nodes)
     write_jsonl(final_dir / "graph_edges.jsonl", graph_edges)
+    write_jsonl(final_dir / "document_relations.jsonl", document_relations)
+    write_jsonl(final_dir / "article_amendment_relations.jsonl", article_amendment_relations)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
 
     corpus_config = CorpusRegistry(repo_root).resolve("uud")

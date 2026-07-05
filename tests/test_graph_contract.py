@@ -120,9 +120,9 @@ class GraphContractTest(unittest.TestCase):
         for row in units.values():
             if row["unit_type"] == "bab_record":
                 continue
-            role = row["source_document_id"].split("::", 1)[1]
+            role = str(row["source_document_id"].split("::", 1)[1])
             article = _article_for(row)
-            if (role, article) in expected:
+            if article is not None and (role, article) in expected:
                 self.assertEqual(row["hierarchy"][0], expected[(role, article)], row["legal_unit_id"])
                 self.assertNotIn("BAB VII", row["hierarchy"][:1], row["legal_unit_id"])
                 self.assertNotIn("BAB X", row["hierarchy"][:1], row["legal_unit_id"])
@@ -131,15 +131,15 @@ class GraphContractTest(unittest.TestCase):
                     self.assertEqual(node["hierarchy_path"][0], expected[(role, article)], row["legal_unit_id"])
 
         for row in evidence:
-            role = row["source_role"]
+            role = str(row["source_role"])
             article = _article_for(row)
-            if (role, article) in expected:
+            if article is not None and (role, article) in expected:
                 self.assertEqual(row["hierarchy"][0], expected[(role, article)], row["evidence_id"])
         for row in retrieval:
             evidence_row = next(item for item in evidence if item["evidence_id"] == row["evidence_id"])
             article = _article_for(evidence_row)
-            key = (row["source_role"], article)
-            if key in expected:
+            key = (str(row["source_role"]), article)
+            if article is not None and key in expected:
                 self.assertIn(expected[key], row["text"], row["retrieval_unit_id"])
                 self.assertEqual(chunks[row["chunk_id"]]["hierarchy"][0], expected[key], row["chunk_id"])
 
@@ -260,6 +260,8 @@ class GraphContractTest(unittest.TestCase):
         self.assertTrue(all(edge["runtime_loadable"] is False for edge in edges))
 
     def test_amends_edges_are_preserved_as_not_promoted_exceptions(self) -> None:
+        graph_edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
+        self.assertFalse([row for row in graph_edges if row["edge_type"] in {"AMENDS", "AMENDED_BY"}])
         exceptions = read_jsonl(ROOT / "data/final/uud/validation_exceptions.jsonl")
         amends = [row for row in exceptions if row.get("edge_type") in {"AMENDS", "AMENDED_BY"}]
         self.assertEqual(len(amends), 8)
@@ -267,9 +269,71 @@ class GraphContractTest(unittest.TestCase):
             self.assertEqual(row["status"], "not_promoted_source_role_level_only")
             self.assertFalse(row["runtime_loadable"])
 
+    def test_document_relation_artifact_preserves_not_promoted_document_edges(self) -> None:
+        source_ids = {row["source_document_id"] for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")}
+        exception_ids = {row["exception_id"] for row in read_jsonl(ROOT / "data/final/uud/validation_exceptions.jsonl")}
+        rows = read_jsonl(ROOT / "data/final/uud/document_relations.jsonl")
+        self.assertEqual(len(rows), 8)
+        self.assertEqual(len({row["relation_id"] for row in rows}), len(rows))
+        self.assertEqual(sum(1 for row in rows if row["relation_type"] == "AMENDS"), 4)
+        self.assertEqual(sum(1 for row in rows if row["relation_type"] == "AMENDED_BY"), 4)
+        for row in rows:
+            self.assertIn(row["source_document_id"], source_ids)
+            self.assertIn(row["target_document_id"], source_ids)
+            self.assertFalse(row["article_level"])
+            self.assertFalse(row["viewer_highlightable"])
+            self.assertFalse(row["citation_available"])
+            for ref in row["support_refs"]:
+                self.assertIn(ref, exception_ids)
+
+    def test_article_amendment_relation_artifact_separates_exact_and_trace_support(self) -> None:
+        evidence = {row["evidence_id"]: row for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")}
+        bbox_ids = {row["bbox_id"] for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")}
+        units = {row["legal_unit_id"]: row for row in read_jsonl(ROOT / "data/final/uud/legal_units.jsonl")}
+        rows = read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")
+        self.assertTrue(rows)
+        self.assertEqual(len({row["relation_id"] for row in rows}), len(rows))
+        self.assertFalse([row for row in rows if row["relation_type"] in {"ADDS", "RENAMES", "SUPPLEMENTS"}])
+        exact_rows = [row for row in rows if row["support_class"] == "exact_article_relation"]
+        trace_rows = [row for row in rows if row["support_class"] == "trace_article_relation"]
+        self.assertEqual(len(exact_rows), 32)
+        self.assertEqual(len(trace_rows), 31)
+        for row in rows:
+            source = evidence[row["evidence_id"]]
+            self.assertIn(row["target_legal_unit_id"], units)
+            self.assertEqual(row["quoted_text"], source["quoted_text"])
+            self.assertTrue(row["runtime_loadable"])
+            self.assertTrue(row["bbox_refs"])
+            for bbox_id in row["bbox_refs"]:
+                self.assertIn(bbox_id, bbox_ids)
+            if row["support_class"] == "exact_article_relation":
+                self.assertEqual(row["grounding_level"], "exact_source_text")
+                self.assertEqual(row["bbox_precision"], "exact")
+                self.assertTrue(row["viewer_highlightable"])
+                self.assertTrue(row["citation_available"])
+                self.assertEqual(source["bbox_precision"], "exact")
+                self.assertTrue(source["viewer_highlightable"])
+            else:
+                self.assertEqual(row["grounding_level"], "page_grounded_trace")
+                self.assertFalse(row["viewer_highlightable"])
+                self.assertFalse(row["citation_available"])
+
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
+        report = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))["legal_graph_baseline"]
         nodes = {row["node_id"] for row in read_jsonl(ROOT / "data/final/uud/graph_nodes.jsonl")}
+        actual_counts: dict[str, int] = {}
+        for row in edges:
+            actual_counts[row["edge_type"]] = actual_counts.get(row["edge_type"], 0) + 1
+        self.assertEqual(report["status"], "evidence_backed_minimal_baseline")
+        self.assertEqual(report["actual_edge_type_counts"], dict(sorted(actual_counts.items())))
+        self.assertNotIn("legal_edge_types", report)
+        self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "AMENDED_BY", "AMENDS", "RENAMES", "SUPPLEMENTS"})
+        for edge_type in report["not_promoted_edge_types"]:
+            self.assertNotIn(edge_type, report["actual_edge_type_counts"])
+        for edge_type in {"ADDS", "AMENDED_BY", "AMENDS", "RENAMES", "SUPPLEMENTS"}:
+            self.assertNotIn(edge_type, report["actual_promoted_legal_edge_type_counts"])
+            self.assertIn(edge_type, report["schema_edge_types"])
         legal_edges = [
             row
             for row in edges
@@ -355,7 +419,7 @@ class GraphContractTest(unittest.TestCase):
         exception_chunk_ids = {
             row["chunk_id"] for row in read_jsonl(final / "validation_exceptions.jsonl") if row.get("type") == "pdf_text_layer_noise_review"
         }
-        chunk_by_legal_unit = {}
+        chunk_by_legal_unit: dict[str, set[str]] = {}
         for row in chunks:
             self.assertIn(row["legal_unit_id"], legal_units)
             unit_text = self._compact_text(legal_units[row["legal_unit_id"]]["text"])

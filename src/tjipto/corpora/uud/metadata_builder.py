@@ -68,7 +68,7 @@ def build_metadata_graph_edges(metadata_assertions: list[dict]) -> list[dict]:
         if row["predicate"] == "legal_unit_identity":
             rows.append(
                 _metadata_graph_edge(
-                    edge_id=f"uud_legal_graph_edge::{row['evidence_link']['final_evidence_id']}::has_metadata",
+                    edge_id=f"uud_legal_graph_edge::{_evidence_link_target_id(row)}::has_metadata",
                     edge_type="HAS_METADATA",
                     row=row,
                     source_id=f"legal_unit::{row['subject_id']}",
@@ -78,7 +78,7 @@ def build_metadata_graph_edges(metadata_assertions: list[dict]) -> list[dict]:
             block_rows.append(row)
     for row in block_rows:
         role = row["source_role"]
-        slug = row["evidence_link"]["final_evidence_id"].rsplit("::", 1)[-1]
+        slug = _evidence_link_target_id(row).rsplit("::", 1)[-1]
         if row["predicate"] == "source_publication_metadata_block":
             rows.append(
                 _metadata_graph_edge(
@@ -141,6 +141,11 @@ def _metadata_graph_edge(*, edge_id: str, edge_type: str, row: dict, source_id: 
         "temporal_context": row["temporal_context"],
         "validator_status": "valid",
     }
+
+
+def _evidence_link_target_id(row: dict) -> str:
+    link = row["evidence_link"]
+    return link.get("metadata_grounding_id") or link["final_evidence_id"]
 
 
 def build_metadata_block_grounding(
@@ -566,6 +571,8 @@ def _block_metadata_assertion(row: dict) -> dict:
         "evidence_link": {
             "bbox_refs": row["bbox_refs"],
             "final_evidence_id": row["metadata_grounding_id"],
+            "link_target_type": "metadata_grounding",
+            "metadata_grounding_id": row["metadata_grounding_id"],
             "page_number": row["page_numbers"][0],
             "quoted_text": row["quoted_text"],
             "source_pdf_sha256": row["source_sha256"],

@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import tempfile
 import unittest
+from typing import Any
 
 import pytest
 
@@ -21,6 +22,7 @@ from tjipto.retrieval.structured import structured_lookup
 from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candidate
 from tjipto.runtime.api import _public_bbox, handle_request
 from tjipto.runtime.service import LegalRuntimeService
+from tjipto.runtime.viewer import viewer_payload
 from tests.test_source_conflict_runtime_contract import _source_conflict_cases
 
 
@@ -233,7 +235,14 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(viewer["viewer_highlightable"])
 
     def test_scope_guard_blocks_current_and_out_of_corpus_facts(self) -> None:
-        for query in ("siapa presiden indonesia sekarang?", "siapa wakil presiden sekarang?"):
+        for query in (
+            "siapa presiden indonesia",
+            "siapa wakil presiden indonesia",
+            "presiden indonesia siapa",
+            "wakil presiden indonesia siapa",
+            "siapa presiden indonesia sekarang?",
+            "siapa wakil presiden sekarang?",
+        ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "insufficient_evidence", query)
             self.assertEqual(result["route"], "current_fact_unsupported", query)
@@ -249,9 +258,18 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(legal_norm["route"], "lexical_fallback")
         self.assertTrue(legal_norm["evidence"])
 
+        for query in ("apa tugas presiden menurut UUD", "apa kewenangan presiden menurut UUD"):
+            result = self.service.ask("uud", query, limit=10)
+            self.assertNotEqual(result["route"], "current_fact_unsupported", query)
+
         citation = self.service.ask("uud", "apa isi Pasal 1 ayat (3)?")
         self.assertEqual(citation["route"], "legal_reference")
         self.assertTrue(citation["evidence"])
+
+        for query in ("siapa gubernur jakarta", "jadwal konser jakarta"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "insufficient_evidence", query)
+            self.assertFalse(result["evidence"], query)
 
     def test_bookmarks_store_pointers_only(self) -> None:
         evidence_id = self.service.citation("uud", "Pasal 1 ayat (3)")["matches"][0]["evidence_id"]
@@ -300,6 +318,30 @@ class RuntimeContractTest(unittest.TestCase):
         for row in traces:
             for evidence_id in row.get("outputs", {}).get("ranked_final_evidence_ids") or ():
                 self.assertIn(evidence_id, evidence_ids)
+
+    def test_retrieval_readiness_eval_fixture_schema(self) -> None:
+        from tjipto.core.manifest import read_jsonl
+
+        evidence_ids = {row["evidence_id"] for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")}
+        cases = read_jsonl(ROOT / "tests/fixtures/uud/retrieval_readiness_eval_cases.jsonl")
+        self.assertEqual(
+            {row["category"] for row in cases},
+            {
+                "exact_citation",
+                "metadata",
+                "amendment_relation",
+                "natural_legal_query",
+                "current_fact_negative",
+                "out_of_corpus_negative",
+                "source_conflict",
+                "viewer_citation_resolvability",
+            },
+        )
+        for row in cases:
+            for field in ("eval_id", "category", "corpus_id", "query", "expected_status", "expected_route", "required_evidence_ids"):
+                self.assertIn(field, row)
+            self.assertEqual(row["corpus_id"], "uud")
+            self.assertTrue(set(row["required_evidence_ids"]) <= evidence_ids)
 
     def test_bm25_prioritizes_term_frequency_without_breaking_exact_citation(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -361,15 +403,130 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertEqual(result["answer_type"], "metadata_fact", case["query"])
                 self.assertEqual(result["metadata_facts"][0]["field"], case["field"], case["query"])
                 self.assertEqual(result["metadata_facts"][0]["answer"], case["answer"], case["query"])
-                self.assertEqual(result["citations"][0]["evidence_id"], case["evidence_id"], case["query"])
-                self.assertEqual(result["citations"][0]["metadata_field"], case["field"], case["query"])
-                self.assertEqual(result["citations"][0]["metadata_answer"], case["answer"], case["query"])
-                self.assertFalse(result["viewer_refs"][0]["can_resolve"], case["query"])
+                self.assertFalse(result["citations"], case["query"])
+                self.assertFalse(result["viewer_refs"], case["query"])
+                self.assertEqual(result["metadata_support"][0]["evidence_id"], case["evidence_id"], case["query"])
+                self.assertEqual(result["metadata_support"][0]["field"], case["field"], case["query"])
+                self.assertEqual(result["metadata_support"][0]["answer"], case["answer"], case["query"])
+                self.assertFalse(result["metadata_support"][0]["citation_available"], case["query"])
+                self.assertFalse(result["metadata_support"][0]["viewer_highlightable"], case["query"])
             else:
                 self.assertFalse(result["metadata_facts"], case["query"])
                 self.assertFalse(result["citations"], case["query"])
             for unexpected in case["not_contains"]:
                 self.assertNotIn(unexpected, result["answer"], case["query"])
+
+    def test_original_metadata_role_does_not_fall_back_to_amendments(self) -> None:
+        for query in ("kapan UUD asli ditetapkan", "kapan naskah asli ditetapkan"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "insufficient_evidence", query)
+            self.assertEqual(result["route"], "metadata_fact", query)
+            self.assertFalse(result["metadata_facts"], query)
+            self.assertNotIn("19 Oktober 1999", result["answer"], query)
+            self.assertNotIn("10 Agustus 2002", result["answer"], query)
+
+        first = self.service.ask("uud", "kapan perubahan pertama ditetapkan")
+        self.assertEqual(first["route"], "metadata_fact")
+        self.assertEqual(first["metadata_facts"][0]["answer"], "19 Oktober 1999")
+
+        fourth = self.service.ask("uud", "kapan perubahan keempat ditetapkan")
+        self.assertEqual(fourth["route"], "metadata_fact")
+        self.assertEqual(fourth["metadata_facts"][0]["answer"], "10 Agustus 2002")
+
+    def test_document_level_amendment_relations_use_not_promoted_trace(self) -> None:
+        for query in (
+            "UUD 1945 diubah oleh amandemen berapa",
+            "UUD ini dirubah oleh amandemen berapa",
+            "perubahan apa saja yang mengubah UUD 1945",
+        ):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "answer_ready", query)
+            self.assertEqual(result["route"], "document_relation", query)
+            self.assertEqual(result["intent"], "document_amendment_relation", query)
+            self.assertFalse(result["evidence"], query)
+            self.assertFalse(result["citations"], query)
+            self.assertFalse(result["viewer_refs"], query)
+            self.assertEqual(len(result["document_relations"]), 4, query)
+            self.assertEqual({row["relation_type"] for row in result["document_relations"]}, {"AMENDED_BY"}, query)
+            self.assertTrue(all(row["highlightable"] is False for row in result["document_relations"]), query)
+            self.assertIn("Perubahan Pertama", result["answer"], query)
+            self.assertIn("Perubahan Keempat", result["answer"], query)
+
+        for query in ("amandemen pertama mengubah apa", "perubahan pertama mengubah apa"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "answer_ready", query)
+            self.assertEqual(result["route"], "document_relation", query)
+            self.assertEqual(result["document_relations"][0]["relation_type"], "AMENDS", query)
+            self.assertEqual(result["document_relations"][0]["source_role"], "amendment_1_historical", query)
+            self.assertFalse(result["viewer_refs"], query)
+
+    def test_article_level_amendment_relations_use_exact_artifact_only(self) -> None:
+        pasal = self.service.ask("uud", "amandemen keempat mengubah pasal apa saja")
+        self.assertEqual(pasal["status"], "answer_ready")
+        self.assertEqual(pasal["route"], "document_relation")
+        self.assertEqual(pasal["answer_type"], "article_amendment_relation")
+        self.assertTrue(pasal["evidence"])
+        self.assertTrue(pasal["citations"])
+        self.assertTrue(pasal["viewer_refs"])
+        self.assertTrue(pasal["article_amendment_relations"])
+        self.assertTrue(pasal["trace_support"])
+        self.assertIn("parsial", pasal["answer"])
+        self.assertIn("tidak highlightable", pasal["answer"])
+        self.assertEqual({row["relation_type"] for row in pasal["article_amendment_relations"]}, {"DELETES"})
+        self.assertEqual({row["relation_type"] for row in pasal["trace_support"]}, {"MODIFIES"})
+        self.assertEqual({row["support_class"] for row in pasal["article_amendment_relations"]}, {"exact_article_relation"})
+        self.assertEqual({row["support_class"] for row in pasal["trace_support"]}, {"trace_article_relation"})
+        self.assertTrue(all(row["citation_available"] for row in pasal["article_amendment_relations"]))
+        self.assertFalse(any(row["citation_available"] for row in pasal["trace_support"]))
+        self.assertTrue(all(row["viewer_highlightable"] for row in pasal["article_amendment_relations"]))
+        self.assertFalse(any(row["viewer_highlightable"] for row in pasal["trace_support"]))
+        self.assertTrue(all(row["can_resolve"] for row in pasal["viewer_refs"]))
+        citation_ids = {row["evidence_id"] for row in pasal["citations"]}
+        self.assertEqual(citation_ids, {row["evidence_id"] for row in pasal["article_amendment_relations"]})
+        self.assertFalse(citation_ids & {row["evidence_id"] for row in pasal["trace_support"]})
+        for ref in pasal["viewer_refs"]:
+            viewer = self.service.viewer("uud", ref["evidence_id"])
+            self.assertEqual(viewer["status"], "viewer_payload_ready", ref)
+            self.assertTrue(viewer["viewer_highlightable"], ref)
+            self.assertTrue(viewer["bbox_rectangles"], ref)
+
+        for query in ("perubahan keempat menambahkan apa", "perubahan keempat menambahkan lembaga apa"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "insufficient_evidence", query)
+            self.assertEqual(result["route"], "document_relation", query)
+            self.assertEqual(result["reason"], "relation_not_promoted", query)
+            self.assertFalse(result["evidence"], query)
+            self.assertFalse(result["citations"], query)
+            self.assertFalse(result["viewer_refs"], query)
+            self.assertFalse(result["document_relations"], query)
+
+    def test_target_specific_article_amendment_relations_do_not_substitute_neighbors(self) -> None:
+        unsupported = self.service.ask("uud", "amandemen keempat mengubah pasal 31?")
+        self.assertEqual(unsupported["status"], "insufficient_evidence")
+        self.assertEqual(unsupported["route"], "document_relation")
+        self.assertEqual(unsupported["reason"], "relation_not_promoted")
+        self.assertFalse(unsupported["evidence"])
+        self.assertFalse(unsupported["citations"])
+        self.assertFalse(unsupported["viewer_refs"])
+        self.assertFalse(unsupported["article_amendment_relations"])
+        self.assertTrue(unsupported["trace_support"])
+        self.assertEqual({row["target_citation"] for row in unsupported["trace_support"]}, {"Pasal 31"})
+
+        exact = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
+        self.assertEqual(exact["status"], "answer_ready")
+        self.assertEqual({row["target_citation"] for row in exact["article_amendment_relations"]}, {"Pasal 16"})
+        self.assertTrue(all(row["can_resolve"] for row in exact["viewer_refs"]))
+        self.assertFalse({row["target_citation"] for row in exact["article_amendment_relations"]} - {"Pasal 16"})
+
+        reverse = self.service.ask("uud", "pasal 31 diubah oleh amandemen berapa?")
+        self.assertNotEqual({row["target_citation"] for row in reverse.get("article_amendment_relations", ())}, {"Pasal 16"})
+        self.assertNotIn("Pasal 16", reverse.get("answer", ""))
+        if reverse["status"] == "answer_ready":
+            self.assertEqual({row["target_citation"] for row in reverse["article_amendment_relations"]}, {"Pasal 31"})
+        else:
+            self.assertEqual(reverse["route"], "document_relation")
+            self.assertFalse(reverse["citations"])
+            self.assertFalse(reverse["viewer_refs"])
 
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
         for case in _relation_cases():
@@ -421,6 +578,11 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["status"], case["status"], case["query"])
             self.assertEqual(result["route"], case["route"], case["query"])
             self.assertEqual(result["intent"], case["intent"], case["query"])
+            if result["answer_type"] == "article_amendment_relation":
+                self.assertTrue(result["article_amendment_relations"], case["query"])
+                self.assertEqual(result["evidence"][0]["evidence_id"], case["evidence_id"], case["query"])
+                self.assertEqual(result["citations"][0]["citation"], case["citation"], case["query"])
+                continue
             self.assertEqual(result["evidence"][0]["candidate_type"], case["candidate_type"], case["query"])
             self.assertEqual(result["evidence"][0]["evidence_id"], case["evidence_id"], case["query"])
             self.assertEqual(result["citations"][0]["citation"], case["citation"], case["query"])
@@ -475,6 +637,24 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(decision["bbox_rectangles"])
         self.assertEqual(decision["bbox_precision"], "page_grounded_only")
         self.assertFalse(decision["viewer_highlightable"])
+
+    def test_viewer_highlight_gate_requires_exact_bbox_rows(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        store = EvidenceStore(config)
+        evidence = store.get(_exact_highlightable_evidence_id())
+        self.assertIsNotNone(evidence)
+        synthetic_boxes = [
+            row | {"bbox_precision": "coarse", "viewer_highlightable": True} for row in store.bboxes_for(evidence["evidence_id"])
+        ]
+        result = viewer_payload(store, "uud", evidence, synthetic_boxes)
+        self.assertEqual(result["status"], "non_highlightable_trace")
+        self.assertFalse(result["rendering_available"])
+        self.assertFalse(result["bbox_rectangles"])
+
+        page_grounded = evidence | {"bbox_precision": "page_grounded_only", "viewer_highlightable": True}
+        result = viewer_payload(store, "uud", page_grounded, store.bboxes_for(evidence["evidence_id"]))
+        self.assertEqual(result["status"], "source_page_trace_only")
+        self.assertFalse(result["bbox_rectangles"])
 
     def test_public_bbox_defaults_fail_closed(self) -> None:
         for value in (None, "oops"):
@@ -715,6 +895,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(all(row["source_role"] == "current_consolidated" for row in filtered["matches"]))
 
         class NoBBoxStore:
+            config: Any
             evidence = (
                 {
                     "evidence_id": "e1",
@@ -731,6 +912,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(structured_lookup(NoBBoxStore(), "Pasal 1 ayat (1)"), ())
 
         class UnitBackedStore:
+            config: Any
             evidence = (
                 {"evidence_id": "e2", "legal_unit_id": "lu2", "status": "final", "hierarchy": []},
                 {"evidence_id": "e3", "legal_unit_id": "lu3", "status": "final", "hierarchy": ["BAB X A"]},
@@ -1060,8 +1242,6 @@ class RuntimeContractTest(unittest.TestCase):
             ("scope: perubahan keempat", "Perubahan Keempat Scope"),
             ("lingkup perubahan keempat", "Perubahan Keempat Scope"),
             ("cakupan amandemen keempat", "Perubahan Keempat Scope"),
-            ("apa yang diubah perubahan keempat", "Perubahan Keempat Scope"),
-            ("perubahan keempat mengubah apa", "Perubahan Keempat Scope"),
             ("materi perubahan keempat", "Perubahan Keempat Scope"),
             ("substansi amandemen keempat", "Perubahan Keempat Scope"),
             ("decision, perubahan ketiga", "Perubahan Ketiga Decision"),
@@ -1130,7 +1310,6 @@ class RuntimeContractTest(unittest.TestCase):
             "ketentuan yang berubah perubahan pertama",
             "ketentuan yang berubah perubahan keempat",
             "ubah pasal apa perubahan keempat",
-            "pasal apa yang diubah amandemen keempat",
             "ketentuan apa yang diubah perubahan ketiga",
             "objek perubahan keempat",
             "sasaran perubahan keempat",
@@ -1144,7 +1323,7 @@ class RuntimeContractTest(unittest.TestCase):
             ask = self.service.ask("uud", query, limit=10)
             search = self.service.search("uud", query, limit=10)
             self.assertEqual(ask["status"], "insufficient_evidence", query)
-            self.assertIn(ask["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"}, query)
+            self.assertIn(ask["route"], {"document_relation", "instrument_unresolved", "instrument_resolved_fail_closed"}, query)
             self.assertFalse(ask["evidence"], query)
             self.assertPublicSearchHasNoEvidenceRows(search, query)
             for row in (*ask["evidence"], *search["results"]):

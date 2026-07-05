@@ -43,6 +43,9 @@ files = [
   "src/tjipto/core/manifest.py",
   "src/tjipto/corpora/reproducibility.py",
   "src/tjipto/ingestion/pdf/source_documents.py",
+  "src/tjipto/runtime/api.py",
+  "src/tjipto/runtime/scope_guard.py",
+  "src/tjipto/runtime/viewer.py",
 ]
 explicit_package_bases = true
 ignore_missing_imports = true

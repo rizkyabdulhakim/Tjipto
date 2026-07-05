@@ -60,6 +60,16 @@ class MetadataBBoxContractTest(unittest.TestCase):
                 self.assertIn("failure_reason", row, row["metadata_grounding_id"])
         self.assertTrue(exact_rows)
 
+    def test_metadata_report_does_not_claim_highlight_ready(self) -> None:
+        report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
+        self.assertEqual(report["metadata_grounding_contract"]["status"], "field_grounded")
+        self.assertEqual(report["metadata_bbox_registry_health"]["metadata_bbox_false_exact_claims"], 0)
+        for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
+            for row in read_jsonl(FINAL / filename):
+                self.assertFalse(row["viewer_highlightable"], row.get("metadata_grounding_id") or row["metadata_grounding_ref_id"])
+                if row["bbox_precision"] == "page_grounded_only":
+                    self.assertIn("failure_reason", row)
+
     def test_fixture_metadata_rows_keep_stable_exact_grounding_ids(self) -> None:
         rows = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}
         for case in _metadata_grounding_cases():

@@ -24,12 +24,12 @@ def validate_text_provenance(config: CorpusConfig, header_stripper=None) -> dict
     legal_units = config.jsonl("legal_units")
     source_by_legal_unit = {row["legal_unit_id"]: row["source_document_id"] for row in legal_units}
     evidence_ids = {row["legal_unit_id"] for row in config.jsonl("evidence")}
-    results = {
+    results: dict[str, dict] = {
         "legal_units": _validate_rows(legal_units, page_text, evidence_ids, header_stripper, source_by_legal_unit),
         "chunks": _validate_rows(config.jsonl("chunks"), page_text, evidence_ids, header_stripper, source_by_legal_unit),
     }
-    results["status"] = "pass" if all(part["needs_review"] == 0 for part in results.values()) else "needs_review"
-    return results
+    status = "pass" if all(part["needs_review"] == 0 for part in results.values()) else "needs_review"
+    return {**results, "status": status}
 
 
 def _validate_rows(
@@ -39,7 +39,7 @@ def _validate_rows(
     header_stripper,
     source_by_legal_unit: dict,
 ) -> dict:
-    counts = {
+    counts: dict[str, int] = {
         "total": len(rows),
         "raw_pdf_match": 0,
         "normalized_pdf_match": 0,
@@ -57,8 +57,8 @@ def _validate_rows(
         counts["header_stripped_pdf_match"] += int(stripped_match)
         counts["evidence_grounded_match"] += int(row.get("legal_unit_id") in evidence_ids)
         counts["needs_review"] += int(not stripped_match)
-    counts["status"] = "pass" if counts["needs_review"] == 0 else "needs_review"
-    return counts
+    status = "pass" if counts["needs_review"] == 0 else "needs_review"
+    return {**counts, "status": status}
 
 
 def _row_pages(row: dict, page_text: dict, source_by_legal_unit: dict) -> str:

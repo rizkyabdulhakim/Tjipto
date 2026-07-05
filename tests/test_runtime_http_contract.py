@@ -37,6 +37,10 @@ def _http_ask_cases() -> tuple[dict, ...]:
 
 
 class RuntimeHttpContractTest(unittest.TestCase):
+    server: Any
+    thread: threading.Thread
+    base_url: str
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.server = make_server(port=0, repo_root=ROOT)
@@ -182,6 +186,10 @@ class RuntimeHttpContractTest(unittest.TestCase):
                 self.assertEqual(result["metadata_facts"][0]["field"], case["metadata_field"], case["query"])
             if "metadata_answer" in case:
                 self.assertEqual(result["metadata_facts"][0]["answer"], case["metadata_answer"], case["query"])
+            if case["route"] == "metadata_fact" and case["status"] == "answer_ready":
+                self.assertTrue(result["metadata_support"], case["query"])
+                self.assertFalse(result["metadata_support"][0]["citation_available"], case["query"])
+                self.assertFalse(result["metadata_support"][0]["viewer_highlightable"], case["query"])
             if "relation_target_labels" in case:
                 self.assertEqual(
                     {row["target_label"] for row in result["legal_relations"]},

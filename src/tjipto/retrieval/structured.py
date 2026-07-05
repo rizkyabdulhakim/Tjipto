@@ -70,7 +70,7 @@ def _instrument_rows(
     ):
         if probe_only:
             return ({"probe": True},)
-        matches = []
+        matches: list[dict] = []
         prefix = intent["instrument_citation_templates"].get("prefix", "")
         clause_marker = intent["instrument_citation_templates"].get("clause_marker", "")
         for row in getattr(store, "evidence", ()):
@@ -79,7 +79,9 @@ def _instrument_rows(
                 continue
             text = str(row.get("quoted_text") or "")
             if bab.casefold() in text.casefold() and any(word in text.casefold() for word in intent["instrument_deletion_evidence_words"]):
-                matches.append(_candidate(row, "instrument_clause_candidate"))
+                candidate = _candidate(row, "instrument_clause_candidate")
+                if candidate is not None:
+                    matches.append(candidate)
         return tuple(matches[:limit])
     decision = resolve_instrument_intent(query, intent, corpus=corpus_id)
     if decision.target_status == "instrument_unresolved":
@@ -88,7 +90,8 @@ def _instrument_rows(
         if probe_only:
             return ({"probe": True},)
         row = _instrument_evidence(store, decision.amendment or "", decision.target_citation)
-        return (_candidate(row, f"instrument_{decision.role_family}_candidate"),) if row else ()
+        candidate = _candidate(row, f"instrument_{decision.role_family}_candidate")
+        return (candidate,) if candidate is not None else ()
     return ()
 
 

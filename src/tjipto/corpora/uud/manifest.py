@@ -7,10 +7,12 @@ from tjipto.corpora.uud.artifact_policy import UUD_ARTIFACT_ORIGIN_POLICY
 
 
 ARTIFACT_FILES = (
+    ("article_amendment_relations", "article_amendment_relations.jsonl"),
     ("article_versions", "article_versions.jsonl"),
     ("bbox_registry", "bbox_registry.jsonl"),
     ("chunks", "chunks.jsonl"),
     ("document_metadata", "document_metadata.jsonl"),
+    ("document_relations", "document_relations.jsonl"),
     ("evidence_registry", "evidence_registry.jsonl"),
     ("excluded_records", "excluded_records.jsonl"),
     ("graph_edges", "graph_edges.jsonl"),
@@ -33,10 +35,12 @@ ARTIFACT_FILES = (
 )
 
 COUNT_FILES = (
+    ("article_amendment_relations", "article_amendment_relations.jsonl"),
     ("article_versions", "article_versions.jsonl"),
     ("bbox_records", "bbox_registry.jsonl"),
     ("chunks", "chunks.jsonl"),
     ("document_metadata", "document_metadata.jsonl"),
+    ("document_relations", "document_relations.jsonl"),
     ("evidence_records", "evidence_registry.jsonl"),
     ("excluded_records", "excluded_records.jsonl"),
     ("graph_edges", "graph_edges.jsonl"),
@@ -75,12 +79,14 @@ FIXTURES = {
 
 def build_manifest(source_documents: dict[str, dict]) -> dict:
     manifest = {
+        "article_amendment_relations": "article_amendment_relations.jsonl",
         "article_versions": "article_versions.jsonl",
         "bbox_registry": "bbox_registry.jsonl",
         "chunks": "chunks.jsonl",
         "corpus_id": "uud",
         "counts": {},
         "document_metadata": "document_metadata.jsonl",
+        "document_relations": "document_relations.jsonl",
         "evidence_registry": "evidence_registry.jsonl",
         "excluded_records": "excluded_records.jsonl",
         "files": {filename: dict(UUD_ARTIFACT_ORIGIN_POLICY[filename]) for _, filename in ARTIFACT_FILES},

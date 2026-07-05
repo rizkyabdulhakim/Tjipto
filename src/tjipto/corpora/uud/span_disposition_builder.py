@@ -201,7 +201,7 @@ def _fallback_disposition(span: dict) -> dict:
 
 
 def _row_refs(rows: list[dict], id_key: str) -> dict[str, dict]:
-    refs = {}
+    refs: dict[str, dict] = {}
     for row in rows:
         for span_id in row.get("text_span_ids") or ():
             refs.setdefault(span_id, row)

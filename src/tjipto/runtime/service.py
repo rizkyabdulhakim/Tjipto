@@ -6,11 +6,13 @@ import re
 from uuid import uuid4
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
+from tjipto.corpora.parser_dispatch import parse_legal_reference
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.metadata import normalize_filters, public_filters
 from tjipto.retrieval.router import route_retrieval
+from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
 
 
@@ -256,6 +258,9 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": ("exact_instrument_unit_fail_closed",),
             }
+        document_relation = _document_relation_response(store, corpus_id, query)
+        if document_relation:
+            return document_relation
         instrument = _instrument_intent_context(store, query)
         if instrument:
             row, route, reason = instrument
@@ -328,7 +333,7 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": (),
             }
-        scope = _scope_guard_context(store, query)
+        scope = scope_guard_context(store, query)
         if scope:
             templates = _answer_templates(store)
             context_pack = empty_context_pack(scope["reason"])
@@ -392,6 +397,9 @@ class LegalRuntimeService:
                 "insufficient_reasons": tuple(sorted(set(context_pack["validation_reasons"].values()))),
             }
         status = "limited_answer" if ask_route == "lexical_fallback" else "answer_ready"
+        metadata_support = tuple(_metadata_support(row) for row in evidence if row.get("metadata_field"))
+        citations = () if metadata_support else context_pack["citation_payloads"]
+        viewer_refs = () if metadata_support else context_pack["viewer_refs"]
         return routed | {
             "status": status,
             "route": ask_route,
@@ -399,12 +407,13 @@ class LegalRuntimeService:
             "answer": self._answer_text(status, evidence, templates),
             "context_pack": context_pack,
             "evidence": evidence,
-            "citations": context_pack["citation_payloads"],
-            "viewer_refs": context_pack["viewer_refs"],
+            "citations": citations,
+            "viewer_refs": viewer_refs,
             "metadata_facts": tuple(_metadata_fact(row) for row in evidence if row.get("metadata_field")),
+            "metadata_support": metadata_support,
             "legal_relations": tuple(row["legal_relation"] for row in evidence if row.get("legal_relation")),
             "answer_scope": "direct_evidence" if status == "answer_ready" else "limited_evidence",
-            "warnings": (),
+            "warnings": ("metadata_support_not_exact_highlightable",) if metadata_support else (),
             "insufficient_reasons": (),
         }
 
@@ -424,7 +433,7 @@ def _empty_citation_fields() -> dict:
 
 
 def _answer_templates(store) -> dict[str, str]:
-    configured = getattr(getattr(store, "config", None), "setting", lambda *args: {})("answer_templates", {})
+    configured: dict = getattr(getattr(store, "config", None), "setting", lambda *args: {})("answer_templates", {})
     return _ANSWER_TEMPLATES | dict(configured or {})
 
 
@@ -580,6 +589,372 @@ def _metadata_fact(row: dict) -> dict:
     }
 
 
+def _metadata_support(row: dict) -> dict:
+    return {
+        "support_class": "metadata_support",
+        "field": row.get("metadata_field"),
+        "answer": row.get("metadata_answer"),
+        "evidence_id": row.get("evidence_id"),
+        "source_document_id": row.get("source_document_id"),
+        "source_role": row.get("source_role"),
+        "page_numbers": tuple(row.get("page_numbers") or ()),
+        "citation_available": False,
+        "viewer_highlightable": False,
+    }
+
+
+def _document_relation_response(store, corpus_id: str, query: str) -> dict | None:
+    target = _document_relation_target(store, query)
+    if target["mode"] is None:
+        return None
+    templates = _answer_templates(store)
+    if target["mode"] == "article":
+        return _article_relation_response(store, corpus_id, query, target, templates)
+    if target["mode"] == "unsupported":
+        return _relation_not_promoted(corpus_id, query, templates)
+    support = _document_relation_support(store, target["role"])
+    if not support:
+        reason = "document_relation_not_found"
+        return {
+            "status": "insufficient_evidence",
+            "route": "document_relation",
+            "intent": "document_amendment_relation",
+            "corpus_id": corpus_id,
+            "original_query": query,
+            "normalized_query": query.strip(),
+            "matches": (),
+            "reason": reason,
+            "answer_type": "none",
+            "answer": templates["insufficient"],
+            "context_pack": empty_context_pack(reason),
+            "evidence": (),
+            "citations": (),
+            "viewer_refs": (),
+            "metadata_facts": (),
+            "legal_relations": (),
+            "document_relations": (),
+            "answer_scope": "insufficient_evidence",
+            "warnings": (),
+            "insufficient_reasons": (reason,),
+        }
+    relations = tuple(_public_document_relation(row) for row in support)
+    return {
+        "status": "answer_ready",
+        "route": "document_relation",
+        "intent": "document_amendment_relation",
+        "corpus_id": corpus_id,
+        "original_query": query,
+        "normalized_query": query.strip(),
+        "matches": support,
+        "reason": None,
+        "answer_type": "document_relation",
+        "answer": _document_relation_answer(store, relations),
+        "context_pack": empty_context_pack("document_relation_source_role_trace"),
+        "evidence": (),
+        "citations": (),
+        "viewer_refs": (),
+        "metadata_facts": (),
+        "legal_relations": (),
+        "document_relations": relations,
+        "answer_scope": "source_role_document_relation",
+        "warnings": ("document_relation_not_exact_highlightable",),
+        "insufficient_reasons": (),
+    }
+
+
+def _article_relation_response(store, corpus_id: str, query: str, target: dict, templates: dict[str, str]) -> dict:
+    support = _article_relation_support(store, target)
+    if not support:
+        if target.get("target_citation"):
+            return _relation_not_promoted(corpus_id, query, templates, reason="relation_target_not_found")
+        return _relation_not_promoted(corpus_id, query, templates)
+    exact_support = tuple(row for row in support if _is_exact_article_relation(row))
+    trace_support = tuple(row for row in support if not _is_exact_article_relation(row))
+    answer_evidence = tuple(row for row in (_article_relation_evidence(store, row) for row in exact_support) if row)
+    if not answer_evidence:
+        result = _relation_not_promoted(corpus_id, query, templates)
+        return result | {
+            "matches": support,
+            "article_amendment_relations": (),
+            "trace_support": tuple(_public_article_relation(row) for row in trace_support),
+            "warnings": ("article_relation_trace_only_not_citable",) if trace_support else (),
+        }
+    citations = tuple(_article_relation_citation(row) for row in answer_evidence)
+    viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence)
+    context_pack = {
+        "answer_evidence": answer_evidence,
+        "supporting_context": (),
+        "excluded_results": (),
+        "citation_payloads": citations,
+        "viewer_refs": viewer_refs,
+        "validation_reasons": {row["evidence_id"]: "article_amendment_relation_exact_source_text" for row in answer_evidence},
+    }
+    return {
+        "status": "answer_ready",
+        "route": "document_relation",
+        "intent": "document_amendment_relation",
+        "corpus_id": corpus_id,
+        "original_query": query,
+        "normalized_query": query.strip(),
+        "matches": support,
+        "reason": None,
+        "answer_type": "article_amendment_relation",
+        "answer": _article_relation_answer(store, exact_support, trace_support),
+        "context_pack": context_pack,
+        "evidence": answer_evidence,
+        "citations": citations,
+        "viewer_refs": viewer_refs,
+        "metadata_facts": (),
+        "legal_relations": (),
+        "document_relations": (),
+        "article_amendment_relations": tuple(_public_article_relation(row) for row in exact_support),
+        "trace_support": tuple(_public_article_relation(row) for row in trace_support),
+        "answer_scope": "exact_article_relation",
+        "warnings": ("article_relation_exact_support_partial_trace_omitted",) if trace_support else (),
+        "insufficient_reasons": (),
+    }
+
+
+def _relation_not_promoted(corpus_id: str, query: str, templates: dict[str, str], *, reason: str = "relation_not_promoted") -> dict:
+    return {
+        "status": "insufficient_evidence",
+        "route": "document_relation",
+        "intent": "document_amendment_relation",
+        "corpus_id": corpus_id,
+        "original_query": query,
+        "normalized_query": query.strip(),
+        "matches": (),
+        "reason": reason,
+        "answer_type": "none",
+        "answer": templates["insufficient"],
+        "context_pack": empty_context_pack(reason),
+        "evidence": (),
+        "citations": (),
+        "viewer_refs": (),
+        "metadata_facts": (),
+        "legal_relations": (),
+        "document_relations": (),
+        "article_amendment_relations": (),
+        "answer_scope": "insufficient_evidence",
+        "warnings": (),
+        "insufficient_reasons": (reason,),
+    }
+
+
+def _document_relation_target(store, query: str) -> dict:
+    config = getattr(store, "config", None)
+    intent = intent_config_for(getattr(config, "query_strategy", "generic"), config)
+    relation_config = intent.get("document_relation", {})
+    normalized = normalize_intent_text(query)
+    if not normalized:
+        return {"mode": None}
+    relation_signal = contains_intent_phrase(query, relation_config.get("change_terms", ()))
+    add_signal = contains_intent_phrase(query, relation_config.get("add_terms", ()))
+    amendment_role = next((role for role, pattern in intent.get("metadata_roles", ()) if pattern.search(query or "")), None)
+    amendment_signal = amendment_role in set(getattr(config, "source_roles", ()) or ()) or contains_intent_phrase(
+        query, relation_config.get("source_terms", ())
+    )
+    target_original = contains_intent_phrase(query, relation_config.get("target_document_terms", ()))
+    if not (relation_signal or add_signal) or not amendment_signal:
+        return {"mode": None}
+    target_citation = _article_relation_target_citation(getattr(config, "corpus_id", None), query)
+    if add_signal:
+        return {
+            "mode": "article",
+            "role": amendment_role,
+            "relation_types": tuple(relation_config.get("schema_only_relation_types", ())),
+            "target_citation": target_citation,
+        }
+    if contains_intent_phrase(query, relation_config.get("unsupported_detail_terms", ())):
+        return {"mode": "unsupported"}
+    if contains_intent_phrase(query, relation_config.get("article_detail_terms", ())):
+        return {
+            "mode": "article",
+            "role": amendment_role,
+            "relation_types": ("MODIFIES", "DELETES"),
+            "target_citation": target_citation,
+        }
+    if amendment_role and amendment_role.startswith("amendment_"):
+        return {"mode": "document", "role": amendment_role}
+    if target_original:
+        return {"mode": "document", "role": "original_historical"}
+    return {"mode": None}
+
+
+def _document_relation_support(store, target: str) -> tuple[dict, ...]:
+    if target == "original_historical":
+        return tuple(
+            row | {"route_sources": ("document_relation",)}
+            for row in store.document_relations
+            if row.get("relation_type") == "AMENDED_BY" and row.get("source_role") == "original_historical"
+        )
+    return tuple(
+        row | {"route_sources": ("document_relation",)}
+        for row in store.document_relations
+        if row.get("relation_type") == "AMENDS" and row.get("source_role") == target
+    )
+
+
+def _article_relation_support(store, target: dict) -> tuple[dict, ...]:
+    role = target.get("role")
+    relation_types = set(target.get("relation_types") or ())
+    roles = {role} if role else {row for row in getattr(store.config, "source_roles", ()) if str(row).startswith("amendment_")}
+    if not roles:
+        return ()
+    return tuple(
+        row | {"route_sources": ("article_amendment_relation",)}
+        for row in store.article_amendment_relations
+        if row.get("source_role") in roles
+        and row.get("relation_type") in relation_types
+        and row.get("runtime_loadable") is True
+        and _article_relation_matches_target(store, row, target.get("target_citation"))
+    )
+
+
+def _article_relation_target_citation(corpus_id: str | None, query: str) -> str | None:
+    if not corpus_id:
+        return None
+    ref = parse_legal_reference(corpus_id, query)
+    pasal = ref.get("pasal")
+    ayat = ref.get("ayat")
+    return f"{pasal} ayat {ayat}" if pasal and ayat else pasal
+
+
+def _article_relation_matches_target(store, row: dict, target_citation: str | None) -> bool:
+    if not target_citation:
+        return True
+    target = _normalize_article_target(target_citation)
+    citation = _normalize_article_target(row.get("target_citation"))
+    if target == citation:
+        return True
+    unit: dict = next((unit for unit in store.legal_units if unit.get("legal_unit_id") == row.get("target_legal_unit_id")), {})
+    labels = [unit.get("unit_label"), *(unit.get("hierarchy") or ())]
+    return target in {_normalize_article_target(label) for label in labels}
+
+
+def _normalize_article_target(value: object) -> str:
+    return " ".join(str(value or "").casefold().replace("(", "").replace(")", "").split())
+
+
+def _article_relation_evidence(store, relation: dict) -> dict | None:
+    if not _is_exact_article_relation(relation):
+        return None
+    row = store.get(relation["evidence_id"])
+    if row is None:
+        return None
+    bboxes = store.bboxes_for(row["evidence_id"])
+    if not bboxes or not set(relation.get("bbox_refs") or ()) <= {bbox["bbox_id"] for bbox in bboxes}:
+        return None
+    if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True:
+        return None
+    return {
+        **row,
+        "bbox_count": len(bboxes),
+        "route_sources": ("article_amendment_relation",),
+        "article_amendment_relation": relation,
+        "viewer_ref": {
+            "action": "viewer",
+            "evidence_id": row["evidence_id"],
+            "page_numbers": tuple(row.get("page_numbers") or ()),
+            "bbox_count": len(bboxes),
+            "can_resolve": True,
+        },
+    }
+
+
+def _is_exact_article_relation(row: dict) -> bool:
+    return (
+        row.get("support_class") == "exact_article_relation"
+        and row.get("grounding_level") == "exact_source_text"
+        and row.get("bbox_precision") == "exact"
+        and row.get("viewer_highlightable") is True
+        and row.get("citation_available") is True
+    )
+
+
+def _public_document_relation(row: dict) -> dict:
+    return {
+        "relation_id": row.get("relation_id"),
+        "relation_type": row.get("relation_type"),
+        "source_role": row.get("source_role"),
+        "source_document_id": row.get("source_document_id"),
+        "target_source_role": row.get("target_source_role"),
+        "target_document_id": row.get("target_document_id"),
+        "support_type": row.get("support_type"),
+        "reason": row.get("reason"),
+        "highlightable": row.get("viewer_highlightable") is True,
+    }
+
+
+def _public_article_relation(row: dict) -> dict:
+    return {
+        "relation_id": row.get("relation_id"),
+        "relation_type": row.get("relation_type"),
+        "source_role": row.get("source_role"),
+        "target_legal_unit_id": row.get("target_legal_unit_id"),
+        "target_citation": row.get("target_citation"),
+        "evidence_id": row.get("evidence_id"),
+        "bbox_refs": tuple(row.get("bbox_refs") or ()),
+        "support_class": row.get("support_class"),
+        "grounding_level": row.get("grounding_level"),
+        "citation_available": row.get("citation_available") is True,
+        "viewer_highlightable": row.get("viewer_highlightable") is True,
+    }
+
+
+def _article_relation_citation(row: dict) -> dict:
+    return {
+        "corpus_id": row.get("corpus_id"),
+        "evidence_id": row["evidence_id"],
+        "legal_unit_id": row.get("legal_unit_id"),
+        "source_document_id": row.get("source_document_id"),
+        "citation": row.get("citation"),
+        "label": row.get("citation"),
+        "hierarchy": tuple(row.get("hierarchy") or ()),
+        "quoted_text": row.get("quoted_text"),
+        "source_role": row.get("source_role"),
+        "temporal_context": row.get("temporal_context"),
+        "source_pdf_path": row.get("source_pdf_path"),
+        "source_sha256": row.get("source_sha256"),
+        "page_numbers": tuple(row.get("page_numbers") or ()),
+        "bbox_count": row.get("bbox_count"),
+        "viewer_ref": row.get("viewer_ref"),
+        "evidence_status": row.get("status"),
+    }
+
+
+def _document_relation_answer(store, relations: tuple[dict, ...]) -> str:
+    intent = store.config.setting("intent_config", {}) or {}
+    relation_config = intent.get("document_relation", {}) or {}
+    labels = intent.get("source_role_labels", {}) or {}
+    prefix = str(relation_config.get("source_role_label_prefix", ""))
+    amendment_roles = [_document_relation_amendment_role(row) for row in relations]
+    amendment_roles = [role for role in amendment_roles if role]
+    names = [f"{prefix}{labels.get(role, role)}" for role in amendment_roles]
+    if len(names) > 1:
+        listed = ", ".join(names[:-1]) + f", dan {names[-1]}"
+        return str(relation_config.get("document_answer_template", "{relations}")).format(relations=listed)
+    name = names[0] if names else "Perubahan"
+    return str(relation_config.get("single_document_answer_template", "{relation}")).format(relation=name)
+
+
+def _document_relation_amendment_role(row: dict) -> str | None:
+    for key in ("source_role", "target_source_role"):
+        role = str(row.get(key) or "")
+        if role.startswith("amendment_"):
+            return role
+    return None
+
+
+def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: tuple[dict, ...]) -> str:
+    relation_config = (store.config.setting("intent_config", {}) or {}).get("document_relation", {}) or {}
+    labels = sorted(str(row["target_citation"]) for row in relations if row.get("target_citation"))
+    answer = str(relation_config.get("article_answer_template", "{relations}")).format(relations=", ".join(labels))
+    if trace_support:
+        answer += f" Dukungan exact-highlight bersifat parsial; {len(trace_support)} relasi lain hanya trace dan tidak highlightable."
+    return answer
+
+
 def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str] | None:
     if store is None:
         return None
@@ -614,20 +989,6 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
     )
 
 
-def _scope_guard_context(store, query: str) -> dict | None:
-    if store is None:
-        return None
-    guard = store.config.setting("scope_guard", {}) or {}
-    current = contains_intent_phrase(query, tuple(guard.get("current_fact_terms") or ()))
-    subject = contains_intent_phrase(query, tuple(guard.get("current_fact_subjects") or ()))
-    out_of_corpus = contains_intent_phrase(query, tuple(guard.get("out_of_corpus_terms") or ()))
-    if current and subject:
-        return {"route": "current_fact_unsupported", "intent": "current_fact_query", "reason": "current_fact_unsupported"}
-    if out_of_corpus:
-        return {"route": "unsupported_scope", "intent": "out_of_corpus", "reason": "unsupported_scope"}
-    return None
-
-
 def _exact_fail_closed_instrument_context(store, query: str) -> dict | None:
     if store is None:
         return None
@@ -652,7 +1013,7 @@ def _exact_fail_closed_instrument_context(store, query: str) -> dict | None:
 
 
 def _is_instrument_unit(store, unit: dict) -> bool:
-    schema = getattr(getattr(store, "config", None), "setting", lambda *args: {})("schema", {}) or {}
+    schema: dict = getattr(getattr(store, "config", None), "setting", lambda *args: {})("schema", {}) or {}
     return unit.get("unit_type") in set(schema.get("instrument_unit_types") or ())
 
 

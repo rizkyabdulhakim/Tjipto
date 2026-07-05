@@ -36,9 +36,10 @@ def viewer_payload(
     )
     if pdf["status"] != "pdf_access_ready":
         return base | _unavailable(pdf["reason"])
+    highlightable = _highlightable_bboxes(evidence, bboxes)
     if evidence.get("bbox_precision") == "page_grounded_only":
         return base | _trace_only(pdf, "source_page_trace_only", "page_grounded_only_not_answerable")
-    if evidence.get("viewer_highlightable") is False:
+    if not highlightable:
         return base | _trace_only(pdf, "non_highlightable_trace", "viewer_not_highlightable")
 
     return base | {
@@ -47,7 +48,7 @@ def viewer_payload(
         "rendering_available": True,
         "render_status": "pdf_access_available",
         "page_number": pdf["page_number"],
-        "bbox_rectangles": tuple(bboxes),
+        "bbox_rectangles": highlightable,
         "pdf": {
             "mime_type": "application/pdf",
             "access_url": pdf["access_url"],
@@ -236,6 +237,17 @@ def _validate_request(
     return None
 
 
+def _highlightable_bboxes(evidence: dict, bboxes: list[dict]) -> tuple[dict, ...]:
+    if evidence.get("bbox_precision") != "exact" or evidence.get("viewer_highlightable") is not True:
+        return ()
+    bbox_refs = set(evidence.get("bbox_refs") or ())
+    return tuple(
+        row
+        for row in bboxes
+        if row.get("bbox_id") in bbox_refs and row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True
+    )
+
+
 def _source_document(store, evidence: dict) -> dict | None:
     for row in store.source_documents:
         if row.get("source_document_id") == evidence.get("source_document_id"):
@@ -244,7 +256,8 @@ def _source_document(store, evidence: dict) -> dict | None:
 
 
 def _document_title(store, source: dict) -> str:
-    titles = getattr(getattr(store, "config", None), "setting", lambda *args: {})("document_catalog", {}).get("titles", {})
+    catalog: dict = getattr(getattr(store, "config", None), "setting", lambda *args: {})("document_catalog", {}) or {}
+    titles = dict(catalog.get("titles") or {})
     return titles.get(source.get("source_role")) or source.get("filename") or source.get("source_document_id") or "Document"
 
 

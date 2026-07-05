@@ -6,8 +6,10 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite --host 127.0.0.1",
+    "lint": "tsc --noEmit",
     "smoke": "node smoke.mjs",
     "smoke:install": "playwright install chromium",
+    "test": "node --test --experimental-strip-types tests/*.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

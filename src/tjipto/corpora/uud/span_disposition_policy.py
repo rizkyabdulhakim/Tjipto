@@ -47,7 +47,7 @@ UNIT_SPECIFICITY = {
 def role_for_legal_unit(unit: dict) -> str:
     if unit.get("exclusion_ref") == "source_typo_reference::uud_source_typo_reference_00001":
         return "source_conflict_trace"
-    unit_type = unit.get("unit_type")
+    unit_type = str(unit.get("unit_type") or "")
     if unit_type in {"pasal_record", "ayat_record", "pembukaan_record"}:
         return "normative_text"
     if unit_type in {"bab_record", "aturan_peralihan_record", "aturan_tambahan_record"}:
@@ -58,7 +58,7 @@ def role_for_legal_unit(unit: dict) -> str:
 def specificity_for_legal_unit(unit: dict) -> int:
     if role_for_legal_unit(unit) == "source_conflict_trace":
         return 80
-    return UNIT_SPECIFICITY.get(unit.get("unit_type"), 0)
+    return UNIT_SPECIFICITY.get(str(unit.get("unit_type") or ""), 0)
 
 
 def classification_for_role(role: str) -> str:

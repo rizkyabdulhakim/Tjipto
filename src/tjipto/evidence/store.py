@@ -11,6 +11,8 @@ class EvidenceStore:
         self._source_documents: list[dict] | None = None
         self._document_metadata: list[dict] | None = None
         self._metadata_grounding: list[dict] | None = None
+        self._document_relations: list[dict] | None = None
+        self._article_amendment_relations: list[dict] | None = None
         self._metadata_bbox_by_grounding: dict[str, list[dict]] | None = None
         self._source_conflicts: list[dict] | None = None
         self._graph_edges: list[dict] | None = None
@@ -63,6 +65,18 @@ class EvidenceStore:
         if self._metadata_grounding is None:
             self._metadata_grounding = _optional_jsonl(self.config, "metadata_grounding")
         return self._metadata_grounding
+
+    @property
+    def document_relations(self) -> list[dict]:
+        if self._document_relations is None:
+            self._document_relations = _optional_jsonl(self.config, "document_relations")
+        return self._document_relations
+
+    @property
+    def article_amendment_relations(self) -> list[dict]:
+        if self._article_amendment_relations is None:
+            self._article_amendment_relations = _optional_jsonl(self.config, "article_amendment_relations")
+        return self._article_amendment_relations
 
     @property
     def source_conflicts(self) -> list[dict]:
