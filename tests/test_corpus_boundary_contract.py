@@ -33,7 +33,8 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         )
 
     def test_parser_dispatch_resolves_uud_and_fails_safely(self) -> None:
-        self.assertIs(parser_dispatch.get_parser("uud"), uud_parser)
+        parser = parser_dispatch.get_parser("uud")
+        self.assertIs(parser.normalize_query_reference, uud_parser.normalize_uud_query_reference)
         self.assertEqual(parser_dispatch.normalize_query_reference("uud", "pasal 28 (1)"), "Pasal 28 ayat (1)")
         self.assertEqual(
             parser_dispatch.parse_legal_reference("uud", "BAB XA Pasal 28 ayat (1)"),
@@ -52,6 +53,17 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         ):
             source = (ROOT / rel_path).read_text(encoding="utf-8")
             self.assertNotIn("tjipto.corpora.uud.parser", source, rel_path)
+
+    def test_parser_dispatch_uses_adapter_not_uud_named_calls(self) -> None:
+        source = (ROOT / "src/tjipto/corpora/parser_dispatch.py").read_text(encoding="utf-8")
+        for leak in ("normalize_uud", "parse_uud", "uud_label"):
+            self.assertNotIn(leak, source)
+
+    def test_generic_provenance_has_no_uud_header_logic(self) -> None:
+        source = (ROOT / "src/tjipto/corpora/provenance.py").read_text(encoding="utf-8")
+        self.assertNotIn("UUD_SATU_NASKAH_HEADER_RE", source)
+        self.assertNotIn("_strip_uud_header", source)
+        self.assertNotIn("Perubahan Pertama", source)
 
     def test_runtime_does_not_parse_source_metadata_from_id_shape(self) -> None:
         source = (ROOT / "src/tjipto/runtime/service.py").read_text(encoding="utf-8")

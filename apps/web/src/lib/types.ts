@@ -1,4 +1,5 @@
-export type RegulationType = "UUD";
+export type CorpusId = string;
+export type RegulationType = CorpusId;
 
 export interface Citation {
   id: number;

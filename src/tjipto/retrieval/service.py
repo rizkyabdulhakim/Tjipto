@@ -19,4 +19,4 @@ class RetrievalService:
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
         exact = self.citation(query)
-        return exact[:limit] if exact else lexical_search(self.store.evidence, query, limit)
+        return exact[:limit] if exact else lexical_search(self.store.evidence, query, limit, config=self.store.config)

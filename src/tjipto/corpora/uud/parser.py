@@ -65,3 +65,16 @@ def has_uud_pasal_reference(text: str, *, allow_roman: bool = False) -> bool:
 def uud_label_keys(value: object) -> set[str]:
     label = str(value).casefold()
     return {label, UUD_COMPACT_BAB_RE.sub(r"bab \1\2", label)}
+
+
+def parser_adapter():
+    from tjipto.corpora.parser_dispatch import CorpusParser
+
+    return CorpusParser(
+        normalize_query_reference=normalize_uud_query_reference,
+        parse_legal_reference=parse_uud_legal_reference,
+        parse_bab_reference=parse_uud_bab_reference,
+        parse_pasal_reference=parse_uud_pasal_reference,
+        parse_ayat_reference=parse_uud_ayat_reference,
+        label_keys=uud_label_keys,
+    )

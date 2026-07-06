@@ -6,24 +6,6 @@ from collections import Counter
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
-NUMBER_WORDS = {
-    "satu": "1",
-    "dua": "2",
-    "tiga": "3",
-    "empat": "4",
-    "lima": "5",
-    "enam": "6",
-    "tujuh": "7",
-    "delapan": "8",
-    "sembilan": "9",
-    "sepuluh": "10",
-}
-TERM_ALIASES = {
-    "berhak": "hak",  # nosec B105
-    "bekerja": "kerja",
-    "menjabat": "jabatan",
-    "pekerjaan": "kerja",
-}
 # Shared Indonesian lexical baseline; keep corpus config for legal structure/policy.
 STOPWORDS = {
     "adalah",
@@ -49,16 +31,16 @@ STOPWORDS = {
 }
 
 
-def tokens(text: str) -> list[str]:
-    return [_normalize_token(token.casefold()) for token in TOKEN_RE.findall(text or "")]
+def tokens(text: str, *, aliases: dict[str, str] | None = None) -> list[str]:
+    return [_normalize_token(token.casefold(), aliases or {}) for token in TOKEN_RE.findall(text or "")]
 
 
-def meaningful_tokens(text: str) -> set[str]:
-    return {_normalize_token(token) for token in tokens(text) if token not in STOPWORDS and len(token) > 2}
+def meaningful_tokens(text: str, *, aliases: dict[str, str] | None = None) -> set[str]:
+    return {_normalize_token(token, aliases or {}) for token in tokens(text, aliases=aliases) if token not in STOPWORDS and len(token) > 2}
 
 
-def _normalize_token(token: str) -> str:
-    return NUMBER_WORDS.get(token, TERM_ALIASES.get(token, token))
+def _normalize_token(token: str, aliases: dict[str, str]) -> str:
+    return aliases.get(token, token)
 
 
 def _document_text(row: dict) -> str:
@@ -76,14 +58,16 @@ def lexical_search(
     query: str,
     limit: int = 10,
     *,
+    config=None,
     k1: float = 1.5,
     b: float = 0.75,
 ) -> list[dict]:
-    query_terms = tokens(query)
+    aliases = _lexical_aliases(config)
+    query_terms = tokens(query, aliases=aliases)
     if not query_terms:
         return []
 
-    docs = [(row, tokens(_document_text(row))) for row in evidence]
+    docs = [(row, tokens(_document_text(row), aliases=aliases)) for row in evidence]
     if not docs:
         return []
     avgdl = sum(len(doc_terms) for _, doc_terms in docs) / len(docs) or 1.0
@@ -107,13 +91,13 @@ def lexical_search(
             idf = math.log(1 + (total_docs - document_frequency[term] + 0.5) / (document_frequency[term] + 0.5))
             score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * doc_len / avgdl))
         if score > 0:
-            scored.append((score, row["evidence_id"], _with_relevance(row, query)))
+            scored.append((score, row["evidence_id"], _with_relevance(row, query, aliases)))
     return [row for _, _, row in sorted(scored, key=lambda item: (-item[0], item[1]))[:limit]]
 
 
-def _with_relevance(row: dict, query: str) -> dict:
-    query_terms = meaningful_tokens(query)
-    doc_terms = meaningful_tokens(_document_text(row))
+def _with_relevance(row: dict, query: str, aliases: dict[str, str]) -> dict:
+    query_terms = meaningful_tokens(query, aliases=aliases)
+    doc_terms = meaningful_tokens(_document_text(row), aliases=aliases)
     supported = query_terms & doc_terms
     required = len(query_terms) if len(query_terms) <= 2 else max(2, (len(query_terms) + 1) // 2)
     ok = bool(query_terms) and len(supported) >= required
@@ -124,3 +108,8 @@ def _with_relevance(row: dict, query: str) -> dict:
         lexical_relevance_ok=ok,
         lexical_relevance_reason="answer_evidence" if ok else "insufficient_query_support",
     )
+
+
+def _lexical_aliases(config) -> dict[str, str]:
+    settings: dict = getattr(config, "setting", lambda *_: {})("lexical_normalization", {}) or {}
+    return {str(key).casefold(): str(value).casefold() for key, value in dict(settings.get("aliases") or {}).items()}
