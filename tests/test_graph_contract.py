@@ -291,6 +291,9 @@ class GraphContractTest(unittest.TestCase):
         bbox_ids = {row["bbox_id"] for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")}
         units = {row["legal_unit_id"]: row for row in read_jsonl(ROOT / "data/final/uud/legal_units.jsonl")}
         rows = read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")
+        health = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
+            "article_relation_runtime_policy_health"
+        ]
         self.assertTrue(rows)
         self.assertEqual(len({row["relation_id"] for row in rows}), len(rows))
         self.assertFalse([row for row in rows if row["relation_type"] in {"ADDS", "RENAMES", "SUPPLEMENTS"}])
@@ -298,6 +301,13 @@ class GraphContractTest(unittest.TestCase):
         trace_rows = [row for row in rows if row["support_class"] == "trace_article_relation"]
         self.assertEqual(len(exact_rows), 32)
         self.assertEqual(len(trace_rows), 31)
+        self.assertEqual(health["article_relation_total_count"], len(rows))
+        self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
+        self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
+        self.assertEqual(health["article_relation_invalid_bbox_refs"], 0)
+        self.assertEqual(health["article_relation_invalid_coordinates"], 0)
+        self.assertEqual(health["article_relation_partial_answer_risk_count"], 1)
+        self.assertEqual(health["relation_runtime_policy_slow_gate_status"], "covered_by_runtime_policy_test")
         for row in rows:
             source = evidence[row["evidence_id"]]
             self.assertIn(row["target_legal_unit_id"], units)

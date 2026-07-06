@@ -76,6 +76,8 @@ def build_validation_report(
     manifest_files: dict[str, dict],
     graph_nodes: list[dict],
     graph_edges: list[dict],
+    document_relations: list[dict],
+    article_amendment_relations: list[dict],
     page_text_spans: list[dict],
     pages: list[dict] | None = None,
     intent_config: dict | None = None,
@@ -238,6 +240,11 @@ def build_validation_report(
         chunks=chunks,
         bbox_rows=bbox_rows,
         page_text_spans=page_text_spans,
+    )
+    validation_report["article_relation_runtime_policy_health"] = _article_relation_runtime_policy_health(
+        document_relations=document_relations or (),
+        article_amendment_relations=article_amendment_relations or (),
+        bbox_rows=bbox_rows,
     )
     validation_report["legal_graph_baseline"] = {
         "status": "evidence_backed_minimal_baseline",
@@ -821,6 +828,41 @@ def _can_match_span_sequence(row: dict, spans: list[dict]) -> bool:
 def _has_exact_bbox_refs(row: dict, bbox_by_id: dict[str, dict]) -> bool:
     refs = row.get("bbox_refs") or ()
     return bool(refs) and all(bbox_by_id.get(ref, {}).get("bbox_precision") == "exact" for ref in refs)
+
+
+def _article_relation_runtime_policy_health(
+    *,
+    document_relations: list[dict] | tuple[dict, ...],
+    article_amendment_relations: list[dict] | tuple[dict, ...],
+    bbox_rows: list[dict],
+) -> dict:
+    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    exact_rows = [row for row in article_amendment_relations if row.get("support_class") == "exact_article_relation"]
+    trace_rows = [row for row in article_amendment_relations if row.get("support_class") == "trace_article_relation"]
+    invalid_refs = [ref for row in article_amendment_relations for ref in row.get("bbox_refs") or () if ref not in bbox_by_id]
+    invalid_coordinates = [
+        ref
+        for row in article_amendment_relations
+        for ref in row.get("bbox_refs") or ()
+        if ref in bbox_by_id and not all(bbox_by_id[ref].get(key) is not None for key in ("x0", "y0", "x1", "y1"))
+    ]
+    groups: dict[object, set[str]] = defaultdict(set)
+    for row in article_amendment_relations:
+        groups[row.get("source_role")].add(str(row.get("support_class")))
+    partial_groups = [support for support in groups.values() if {"exact_article_relation", "trace_article_relation"} <= support]
+    return {
+        "article_relation_total_count": len(article_amendment_relations),
+        "article_relation_exact_support_count": len(exact_rows),
+        "article_relation_trace_only_count": len(trace_rows),
+        "article_relation_promoted_from_scope_count": sum(1 for row in exact_rows if "scope" in str(row.get("evidence_id") or "")),
+        "article_relation_unpromoted_trace_count": len(trace_rows),
+        "article_relation_invalid_bbox_refs": len(invalid_refs),
+        "article_relation_invalid_coordinates": len(invalid_coordinates),
+        "article_relation_partial_answer_risk_count": len(partial_groups),
+        "document_relation_exact_support_partial_trace_omitted_count": len(partial_groups),
+        "relation_runtime_policy_slow_gate_status": "covered_by_runtime_policy_test",
+        "document_relation_count": len(document_relations),
+    }
 
 
 def _all_text_disposition_health(

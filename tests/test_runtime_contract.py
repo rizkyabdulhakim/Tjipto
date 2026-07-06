@@ -490,12 +490,12 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_article_level_amendment_relations_use_exact_artifact_only(self) -> None:
         pasal = self.service.ask("uud", "amandemen keempat mengubah pasal apa saja")
-        self.assertEqual(pasal["status"], "answer_ready")
+        self.assertEqual(pasal["status"], "limited_answer")
         self.assertEqual(pasal["route"], "document_relation")
         self.assertEqual(pasal["answer_type"], "article_amendment_relation")
-        self.assertTrue(pasal["evidence"])
-        self.assertTrue(pasal["citations"])
-        self.assertTrue(pasal["viewer_refs"])
+        self.assertFalse(pasal["evidence"])
+        self.assertFalse(pasal["citations"])
+        self.assertFalse(pasal["viewer_refs"])
         self.assertTrue(pasal["article_amendment_relations"])
         self.assertTrue(pasal["trace_support"])
         self.assertIn("parsial", pasal["answer"])
@@ -508,15 +508,16 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(any(row["citation_available"] for row in pasal["trace_support"]))
         self.assertTrue(all(row["viewer_highlightable"] for row in pasal["article_amendment_relations"]))
         self.assertFalse(any(row["viewer_highlightable"] for row in pasal["trace_support"]))
-        self.assertTrue(all(row["can_resolve"] for row in pasal["viewer_refs"]))
-        citation_ids = {row["evidence_id"] for row in pasal["citations"]}
-        self.assertEqual(citation_ids, {row["evidence_id"] for row in pasal["article_amendment_relations"]})
-        self.assertFalse(citation_ids & {row["evidence_id"] for row in pasal["trace_support"]})
-        for ref in pasal["viewer_refs"]:
-            viewer = self.service.viewer("uud", ref["evidence_id"])
-            self.assertEqual(viewer["status"], "viewer_payload_ready", ref)
-            self.assertTrue(viewer["viewer_highlightable"], ref)
-            self.assertTrue(viewer["bbox_rectangles"], ref)
+        self.assertFalse(pasal["context_pack"]["viewer_refs"])
+        self.assertFalse(pasal["context_pack"]["citation_payloads"])
+
+        complete = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
+        self.assertEqual(complete["status"], "answer_ready")
+        self.assertTrue(complete["evidence"])
+        self.assertTrue(complete["citations"])
+        self.assertTrue(complete["viewer_refs"])
+        self.assertFalse(complete["trace_support"])
+        self.assertTrue(all(row["can_resolve"] for row in complete["viewer_refs"]))
 
         for query in ("perubahan keempat menambahkan apa", "perubahan keempat menambahkan lembaga apa"):
             result = self.service.ask("uud", query)
@@ -530,21 +531,31 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_target_specific_article_amendment_relations_do_not_substitute_neighbors(self) -> None:
         unsupported = self.service.ask("uud", "amandemen keempat mengubah pasal 31?")
-        self.assertEqual(unsupported["status"], "insufficient_evidence")
+        self.assertEqual(unsupported["status"], "limited_answer")
         self.assertEqual(unsupported["route"], "document_relation")
-        self.assertEqual(unsupported["reason"], "relation_not_promoted")
+        self.assertEqual(unsupported["reason"], "relation_trace_only")
         self.assertFalse(unsupported["evidence"])
         self.assertFalse(unsupported["citations"])
         self.assertFalse(unsupported["viewer_refs"])
         self.assertFalse(unsupported["article_amendment_relations"])
         self.assertTrue(unsupported["trace_support"])
         self.assertEqual({row["target_citation"] for row in unsupported["trace_support"]}, {"Pasal 31"})
+        self.assertFalse(any(row["citation_available"] or row["viewer_highlightable"] for row in unsupported["trace_support"]))
 
         exact = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
         self.assertEqual(exact["status"], "answer_ready")
         self.assertEqual({row["target_citation"] for row in exact["article_amendment_relations"]}, {"Pasal 16"})
+        self.assertFalse(exact["trace_support"])
         self.assertTrue(all(row["can_resolve"] for row in exact["viewer_refs"]))
         self.assertFalse({row["target_citation"] for row in exact["article_amendment_relations"]} - {"Pasal 16"})
+
+        partial = self.service.ask("uud", "pasal yang diubah perubahan keempat")
+        self.assertEqual(partial["status"], "limited_answer")
+        self.assertEqual(partial["answer_scope"], "partial_exact_article_relation")
+        self.assertFalse(partial["citations"])
+        self.assertFalse(partial["viewer_refs"])
+        self.assertTrue(partial["article_amendment_relations"])
+        self.assertTrue(partial["trace_support"])
 
         reverse = self.service.ask("uud", "pasal 31 diubah oleh amandemen berapa?")
         self.assertNotEqual({row["target_citation"] for row in reverse.get("article_amendment_relations", ())}, {"Pasal 16"})

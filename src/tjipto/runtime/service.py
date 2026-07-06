@@ -702,28 +702,54 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
             return _relation_not_promoted(corpus_id, query, templates, reason="relation_target_not_found")
         return _relation_not_promoted(corpus_id, query, templates)
     exact_support = tuple(row for row in support if _is_exact_article_relation(row))
-    trace_support = tuple(row for row in support if not _is_exact_article_relation(row))
+    exact_targets = {row.get("target_legal_unit_id") for row in exact_support}
+    trace_support = tuple(
+        row for row in support if not _is_exact_article_relation(row) and row.get("target_legal_unit_id") not in exact_targets
+    )
     answer_evidence = tuple(row for row in (_article_relation_evidence(store, row) for row in exact_support) if row)
     if not answer_evidence:
-        result = _relation_not_promoted(corpus_id, query, templates)
-        return result | {
+        if not trace_support:
+            return _relation_not_promoted(corpus_id, query, templates)
+        return {
+            "status": "limited_answer",
+            "route": "document_relation",
+            "intent": "document_amendment_relation",
+            "corpus_id": corpus_id,
+            "original_query": query,
+            "normalized_query": query.strip(),
             "matches": support,
+            "reason": "relation_trace_only",
+            "answer_type": "article_amendment_relation",
+            "answer": _article_relation_answer(store, (), trace_support),
+            "context_pack": empty_context_pack("relation_trace_only"),
+            "evidence": (),
+            "citations": (),
+            "viewer_refs": (),
+            "metadata_facts": (),
+            "legal_relations": (),
+            "document_relations": (),
             "article_amendment_relations": (),
             "trace_support": tuple(_public_article_relation(row) for row in trace_support),
-            "warnings": ("article_relation_trace_only_not_citable",) if trace_support else (),
+            "answer_scope": "trace_article_relation",
+            "warnings": ("article_relation_trace_only_not_citable",),
+            "insufficient_reasons": (),
         }
     citations = tuple(_article_relation_citation(row) for row in answer_evidence)
     viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence)
+    partial = bool(trace_support)
+    public_evidence = () if partial and not target.get("target_citation") else answer_evidence
+    public_citations = () if partial and not target.get("target_citation") else citations
+    public_viewer_refs = () if partial and not target.get("target_citation") else viewer_refs
     context_pack = {
-        "answer_evidence": answer_evidence,
+        "answer_evidence": public_evidence,
         "supporting_context": (),
         "excluded_results": (),
-        "citation_payloads": citations,
-        "viewer_refs": viewer_refs,
-        "validation_reasons": {row["evidence_id"]: "article_amendment_relation_exact_source_text" for row in answer_evidence},
+        "citation_payloads": public_citations,
+        "viewer_refs": public_viewer_refs,
+        "validation_reasons": {row["evidence_id"]: "article_amendment_relation_exact_source_text" for row in public_evidence},
     }
     return {
-        "status": "answer_ready",
+        "status": "limited_answer" if partial else "answer_ready",
         "route": "document_relation",
         "intent": "document_amendment_relation",
         "corpus_id": corpus_id,
@@ -734,15 +760,15 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
         "answer_type": "article_amendment_relation",
         "answer": _article_relation_answer(store, exact_support, trace_support),
         "context_pack": context_pack,
-        "evidence": answer_evidence,
-        "citations": citations,
-        "viewer_refs": viewer_refs,
+        "evidence": public_evidence,
+        "citations": public_citations,
+        "viewer_refs": public_viewer_refs,
         "metadata_facts": (),
         "legal_relations": (),
         "document_relations": (),
         "article_amendment_relations": tuple(_public_article_relation(row) for row in exact_support),
         "trace_support": tuple(_public_article_relation(row) for row in trace_support),
-        "answer_scope": "exact_article_relation",
+        "answer_scope": "partial_exact_article_relation" if partial else "exact_article_relation",
         "warnings": ("article_relation_exact_support_partial_trace_omitted",) if trace_support else (),
         "insufficient_reasons": (),
     }
@@ -982,6 +1008,10 @@ def _document_relation_amendment_role(row: dict) -> str | None:
 def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: tuple[dict, ...]) -> str:
     relation_config = (store.config.setting("intent_config", {}) or {}).get("document_relation", {}) or {}
     labels = sorted(str(row["target_citation"]) for row in relations if row.get("target_citation"))
+    if not labels:
+        trace_labels = sorted(str(row["target_citation"]) for row in trace_support if row.get("target_citation"))
+        listed = ", ".join(trace_labels) if trace_labels else "relasi yang diminta"
+        return f"Relasi amandemen tingkat pasal untuk {listed} hanya tersedia sebagai trace dan belum citable/highlightable."
     answer = str(relation_config.get("article_answer_template", "{relations}")).format(relations=", ".join(labels))
     if trace_support:
         answer += f" Dukungan exact-highlight bersifat parsial; {len(trace_support)} relasi lain hanya trace dan tidak highlightable."

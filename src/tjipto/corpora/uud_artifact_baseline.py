@@ -162,6 +162,8 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         manifest_files=manifest["files"],
         graph_nodes=graph_nodes,
         graph_edges=graph_edges,
+        document_relations=document_relations,
+        article_amendment_relations=article_amendment_relations,
         page_text_spans=page_text_spans,
         pages=pages,
         intent_config=intent_config_for(getattr(corpus_config, "structured_strategy", "generic"), corpus_config),

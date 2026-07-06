@@ -307,6 +307,8 @@ class UudBuilderContractTest(unittest.TestCase):
                 manifest_files=read_json(FINAL / "manifest.json")["files"],
                 graph_nodes=read_jsonl(FINAL / "graph_nodes.jsonl"),
                 graph_edges=read_jsonl(FINAL / "graph_edges.jsonl"),
+                document_relations=read_jsonl(FINAL / "document_relations.jsonl"),
+                article_amendment_relations=read_jsonl(FINAL / "article_amendment_relations.jsonl"),
                 page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
                 pages=read_jsonl(FINAL / "pages.jsonl"),
                 intent_config=intent_config_for("uud_1945", CorpusRegistry(ROOT).resolve("uud")),

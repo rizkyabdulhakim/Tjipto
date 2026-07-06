@@ -302,6 +302,19 @@
     "invalid_bbox_coordinates": 0,
     "untracked_grounding_exception_count": 0
   },
+  "article_relation_runtime_policy_health": {
+    "article_relation_total_count": 63,
+    "article_relation_exact_support_count": 32,
+    "article_relation_trace_only_count": 31,
+    "article_relation_promoted_from_scope_count": 31,
+    "article_relation_unpromoted_trace_count": 31,
+    "article_relation_invalid_bbox_refs": 0,
+    "article_relation_invalid_coordinates": 0,
+    "article_relation_partial_answer_risk_count": 1,
+    "document_relation_exact_support_partial_trace_omitted_count": 1,
+    "relation_runtime_policy_slow_gate_status": "covered_by_runtime_policy_test",
+    "document_relation_count": 8
+  },
   "legal_graph_baseline": {
     "status": "evidence_backed_minimal_baseline",
     "actual_edge_type_counts": {
