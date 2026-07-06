@@ -101,7 +101,7 @@ class EvidenceStore:
             grouped: dict[str, list[dict]] = {}
             for row in _optional_jsonl(self.config, "metadata_grounding_registry"):
                 bbox = bbox_by_id.get(row["bbox_id"])
-                grouped.setdefault(row["metadata_grounding_id"], []).append(row | (bbox or {}))
+                grouped.setdefault(row["metadata_grounding_id"], []).append((bbox or {}) | row)
             self._metadata_bbox_by_grounding = grouped
         return self._metadata_bbox_by_grounding.get(metadata_grounding_id, [])
 

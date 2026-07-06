@@ -37,7 +37,14 @@ class MetadataBBoxContractTest(unittest.TestCase):
                 self.assertIn(field, bbox)
         for row in unresolved_rows:
             self.assertEqual(row["bbox_precision"], "page_grounded_only", row["metadata_grounding_ref_id"])
-            self.assertEqual(row["failure_reason"], "metadata_bbox_reference_unresolved")
+            self.assertIn(
+                row["failure_reason"],
+                {
+                    "metadata_block_has_no_exact_bbox_span",
+                    "metadata_publication_block_requires_page_level_support",
+                    "metadata_decision_sentence_continues_beyond_field",
+                },
+            )
 
     def test_metadata_grounding_distinguishes_exact_from_page_grounded(self) -> None:
         registry_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "metadata_grounding_registry.jsonl")}
@@ -69,6 +76,12 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(fidelity["metadata_source_quote_mismatch_count"], 0)
         self.assertEqual(fidelity["page_grounded_evidence_source_quote_mismatch_count"], 0)
         self.assertEqual(fidelity["untracked_mismatch_count"], 0)
+        grounding = report["span_sequence_grounding_health"]
+        self.assertEqual(grounding["fixable_page_grounded_metadata_count"], 0)
+        self.assertEqual(grounding["fixable_legal_units_without_span_ids"], 0)
+        self.assertEqual(grounding["fixable_chunks_without_span_ids"], 0)
+        self.assertEqual(grounding["page_grounded_evidence_without_failure_reason"], 0)
+        self.assertEqual(grounding["false_exact_metadata_claims"], 0)
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):
                 if row["bbox_precision"] == "exact":

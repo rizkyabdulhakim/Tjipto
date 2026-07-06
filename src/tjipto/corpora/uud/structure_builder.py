@@ -164,7 +164,25 @@ def page_span_for_text(
 
 def compact(text: str) -> str:
     text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "").replace("\u00c2", "")
-    return re.sub(r"\s+", " ", text).strip().casefold()
+    text = re.sub(r"\s+", " ", text)
+    return re.sub(r"\s+([,.;:])", r"\1", text).strip().casefold()
+
+
+def matching_sequence(rows: list[dict], text: str, *, text_key: str = "text") -> list[dict]:
+    target = compact(text)
+    if not target:
+        return []
+    for start in range(len(rows)):
+        selected = []
+        joined = ""
+        for row in rows[start:]:
+            selected.append(row)
+            joined = compact(f"{joined} {row.get(text_key, '')}")
+            if joined == target:
+                return selected
+            if len(joined) > len(target) + 80 or not target.startswith(joined):
+                break
+    return []
 
 
 def slug(text: str) -> str:

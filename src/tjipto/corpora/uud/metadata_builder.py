@@ -5,7 +5,7 @@ import re
 import unicodedata
 
 from tjipto.corpora.uud.specs import METADATA_BLOCK_SPECS
-from tjipto.corpora.uud.structure_builder import compact
+from tjipto.corpora.uud.structure_builder import compact, matching_sequence
 
 
 AMENDMENT_FIELD_STATUSES = {
@@ -237,6 +237,7 @@ def rebuild_metadata_grounding(
         ]
         bbox_precision = "exact" if exact_bbox_refs else "page_grounded_only"
         grounding_status = "text_bbox_exact" if exact_bbox_refs and text_span_ids else "field_level_grounded"
+        failure_reason = None if exact_bbox_refs and text_span_ids else _metadata_failure_reason(source_role, metadata_field, donor_id)
         registry_rows = exact_bbox_rows or [
             {"bbox_id": bbox_id, "page_number": page_number} for bbox_id, page_number in zip(bbox_refs, page_numbers)
         ]
@@ -247,7 +248,7 @@ def rebuild_metadata_grounding(
                     "bbox_id": registry_row["bbox_id"],
                     "bbox_precision": bbox_precision,
                     "corpus_id": "uud",
-                    "failure_reason": None if bbox_precision == "exact" else "metadata_bbox_reference_unresolved",
+                    "failure_reason": failure_reason,
                     "metadata_grounding_id": field_id,
                     "metadata_grounding_ref_id": _metadata_grounding_ref_id(field_id, metadata_field, registry_row["bbox_id"], index),
                     "metadata_field": metadata_field,
@@ -261,7 +262,6 @@ def rebuild_metadata_grounding(
                     "viewer_highlightable": viewer_highlightable,
                 }
             )
-        failure_reason = None if exact_bbox_refs and text_span_ids else _metadata_failure_reason(source_role, metadata_field, donor_id)
         field_rows.append(
             {
                 "bbox_ids": exact_bbox_refs,
@@ -504,7 +504,7 @@ def _block_registry_row(row: dict) -> dict:
         "bbox_id": bbox_id,
         "bbox_precision": "page_grounded_only",
         "corpus_id": row["corpus_id"],
-        "failure_reason": "metadata_bbox_reference_unresolved",
+        "failure_reason": row["failure_reason"],
         "metadata_grounding_id": row["metadata_grounding_id"],
         "metadata_grounding_ref_id": _metadata_grounding_ref_id(row["metadata_grounding_id"], "block", bbox_id, 0),
         "page_number": row["page_numbers"][0],
@@ -790,6 +790,9 @@ def _signatories(text: str) -> list[dict]:
 def _exact_bbox_rows(quoted_text: str, bbox_rows: list[dict]) -> list[dict]:
     if not bbox_rows or any(row.get("bbox_precision") != "exact" for row in bbox_rows):
         return []
+    matched_sequence = matching_sequence(bbox_rows, quoted_text)
+    if matched_sequence:
+        return matched_sequence
     wanted = [compact(line) for line in quoted_text.splitlines() if compact(line)]
     if not wanted:
         return []
@@ -809,6 +812,9 @@ def _exact_text_span_ids(
         return []
     pages = set(page_numbers)
     rows = [row for row in page_text_spans if row["source_document_id"] == source_document_id and row["page_number"] in pages]
+    matched_sequence = matching_sequence(rows, quoted_text)
+    if matched_sequence:
+        return [row["text_span_id"] for row in matched_sequence]
     matched = [row["text_span_id"] for row in rows if compact(row.get("text")) in wanted]
     matched_text = {compact(row.get("text")) for row in rows if compact(row.get("text")) in wanted}
     return matched if set(wanted) <= matched_text else []

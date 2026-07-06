@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from tjipto.corpora.uud.bbox_builder import aggregate_bbox_precision, apply_inserted_bab_heading_bbox_policy, build_bbox_rows
+from tjipto.corpora.uud.provenance_exceptions import SEGMENTATION_BOUNDARY_LABELS
 from tjipto.corpora.uud.specs import INSERTED_BAB_SPECS
 from tjipto.corpora.uud.structure_builder import compact, slug
 
@@ -37,15 +38,19 @@ def build_evidence_and_bboxes(
             page_end=chunk["page_range"]["end_page_number"],
             line_entries=pdf_lines_by_source[source_id],
         )
-        if unit["unit_type"] == "decision_clause_record":
+        trace_only = unit["unit_label"] in SEGMENTATION_BOUNDARY_LABELS
+        if trace_only:
             for bbox in bbox_records:
                 bbox["bbox_precision"] = "page_grounded_only"
+                bbox["viewer_highlightable"] = False
+        elif unit["unit_type"] == "decision_clause_record":
+            for bbox in bbox_records:
                 bbox["viewer_highlightable"] = False
         quoted_text = "\n".join(row["text"] for row in bbox_records)
         evidence.append(
             {
                 "bbox_refs": [row["bbox_id"] for row in bbox_records],
-                "bbox_precision": aggregate_bbox_precision(bbox_records),
+                "bbox_precision": "page_grounded_only" if trace_only else aggregate_bbox_precision(bbox_records),
                 "citation": unit["unit_label"],
                 "corpus_id": "uud",
                 "evidence_id": evidence_id,
@@ -62,6 +67,7 @@ def build_evidence_and_bboxes(
                 "temporal_context": source_meta.get("temporal_context", source_role),
                 "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
             }
+            | ({"failure_reason": "instrument_trace_only_not_public_citation"} if trace_only else {})
         )
         bbox_rows.extend(bbox_records)
     _append_inserted_bab_bbox_refs(
@@ -165,6 +171,11 @@ def _append_inserted_bab_bbox_refs(
         row["bbox_precision"] = aggregate_bbox_precision(rows)
         row["viewer_highlightable"] = any(item["viewer_highlightable"] for item in rows)
         row["page_numbers"] = sorted({item["page_number"] for item in rows})
+        unit = units_by_id[row["legal_unit_id"]]
+        if unit["unit_label"] in SEGMENTATION_BOUNDARY_LABELS:
+            row["bbox_precision"] = "page_grounded_only"
+            row["viewer_highlightable"] = False
+            row.setdefault("failure_reason", "instrument_trace_only_not_public_citation")
 
 
 def _first_evidence_at_or_after_child(

@@ -14,7 +14,7 @@ FINAL = ROOT / "data/final/uud"
 class BBoxContractTest(unittest.TestCase):
     def test_bbox_rows_are_accepted_and_page_grounded(self) -> None:
         rows = read_jsonl(FINAL / "bbox_registry.jsonl")
-        self.assertEqual(len(rows), 1547)
+        self.assertEqual(len(rows), 1584)
         for row in rows:
             self.assertTrue(bbox_is_accepted(row))
             self.assertIn(row["bbox_precision"], {"exact", "coarse", "page_grounded_only"})

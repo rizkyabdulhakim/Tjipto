@@ -16,26 +16,37 @@ def build_text_bbox_rows(
     corpus_id: str,
     bbox_id_prefix: str,
 ) -> list[dict]:
-    expected = [_compact(line) for line in text.splitlines() if line.strip()]
-    matched = []
-    target_index = 0
-    for page_number in range(page_start, page_end + 1):
-        candidates = line_entries.get(page_number, [])
-        for candidate in candidates:
+    matched = _matching_sequence(
+        [
+            {"page_number": page_number, **candidate}
+            for page_number in range(page_start, page_end + 1)
+            for candidate in line_entries.get(page_number, [])
+        ],
+        text,
+    )
+    if not matched:
+        expected = [_compact(line) for line in text.splitlines() if line.strip()]
+        target_index = 0
+        matched = []
+        for page_number in range(page_start, page_end + 1):
+            candidates = line_entries.get(page_number, [])
+            for candidate in candidates:
+                if target_index >= len(expected):
+                    break
+                if _compact(candidate["text"]) != expected[target_index]:
+                    continue
+                matched.append(
+                    {
+                        "page_number": page_number,
+                        **candidate,
+                    }
+                )
+                target_index += 1
             if target_index >= len(expected):
                 break
-            if _compact(candidate["text"]) != expected[target_index]:
-                continue
-            matched.append(
-                {
-                    "page_number": page_number,
-                    **candidate,
-                }
-            )
-            target_index += 1
-        if target_index >= len(expected):
-            break
-    if target_index < len(expected):
+        if target_index < len(expected):
+            matched = []
+    if not matched:
         return _fallback_bbox_rows(
             evidence_id=evidence_id,
             source_meta=source_meta,
@@ -68,6 +79,23 @@ def build_text_bbox_rows(
         }
         for index, row in enumerate(matched)
     ]
+
+
+def _matching_sequence(rows: list[dict], text: str) -> list[dict]:
+    target = _compact(text)
+    if not target:
+        return []
+    for start in range(len(rows)):
+        selected = []
+        joined = ""
+        for row in rows[start:]:
+            selected.append(row)
+            joined = _compact(f"{joined} {row.get('text', '')}")
+            if joined == target:
+                return selected
+            if len(joined) > len(target) + 80 or not target.startswith(joined):
+                break
+    return []
 
 
 def pdf_lines(doc) -> dict[int, list[dict]]:

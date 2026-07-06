@@ -44,20 +44,20 @@
     "legal_units": 651,
     "excluded_records": 6,
     "evidence_records": 464,
-    "bbox_records": 1547,
+    "bbox_records": 1584,
     "retrieval_units": 464,
-    "graph_nodes": 2745,
-    "graph_edges": 5136,
+    "graph_nodes": 2782,
+    "graph_edges": 5173,
     "page_text_spans": 2193
   },
   "bbox_precision_counts": {
     "exact": 1537,
     "coarse": 0,
-    "page_grounded_only": 10
+    "page_grounded_only": 47
   },
   "bbox_highlightability_counts": {
     "viewer_highlightable": 1532,
-    "non_highlightable": 15
+    "non_highlightable": 52
   },
   "chunk_self_contained_health": {
     "chunk_rows": 651,
@@ -79,7 +79,7 @@
   },
   "provenance_exception_health": {
     "total_reviewed_exceptions": 31,
-    "validate_text_provenance_needs_review_count": 6,
+    "validate_text_provenance_needs_review_count": 0,
     "accepted_false_positive_segmentation_punctuation_count": 16,
     "accepted_noncanonical_source_conflict_trace_only_count": 3,
     "builder_slicing_label_issue_confirmed_count": 2,
@@ -95,7 +95,7 @@
     "span_disposition_present_count": 2193,
     "span_disposition_missing_count": 0,
     "semantic_classification_present_count": 2193,
-    "known_unreferenced_span_count": 389,
+    "known_unreferenced_span_count": 371,
     "promotion_status_present_count": 2193,
     "legal_force_present_count": 2193,
     "exclusion_reason_missing_for_excluded_count": 0,
@@ -289,6 +289,19 @@
     "untracked_mismatch_count": 0,
     "page_grounded_only_metadata_count": 17
   },
+  "span_sequence_grounding_health": {
+    "fixable_page_grounded_metadata_count": 0,
+    "unresolved_page_grounded_metadata_count": 17,
+    "active_legal_units_without_span_ids": 3,
+    "active_chunks_without_span_ids": 3,
+    "fixable_legal_units_without_span_ids": 0,
+    "fixable_chunks_without_span_ids": 0,
+    "page_grounded_evidence_without_failure_reason": 0,
+    "false_exact_metadata_claims": 0,
+    "invalid_bbox_refs": 0,
+    "invalid_bbox_coordinates": 0,
+    "untracked_grounding_exception_count": 0
+  },
   "legal_graph_baseline": {
     "status": "evidence_backed_minimal_baseline",
     "actual_edge_type_counts": {
@@ -297,7 +310,7 @@
       "DELETES": 2,
       "EXCLUDED_BECAUSE": 6,
       "FOLLOWS": 7,
-      "HAS_BBOX": 1547,
+      "HAS_BBOX": 1584,
       "HAS_DECISION_SESSION": 3,
       "HAS_EFFECTIVE_RULE": 3,
       "HAS_FINAL_EVIDENCE": 464,

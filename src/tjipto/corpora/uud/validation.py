@@ -231,6 +231,14 @@ def build_validation_report(
         evidence=evidence,
         pages=pages or [],
     )
+    validation_report["span_sequence_grounding_health"] = _span_sequence_grounding_health(
+        metadata_grounding=metadata_grounding,
+        evidence=evidence,
+        legal_units=legal_units,
+        chunks=chunks,
+        bbox_rows=bbox_rows,
+        page_text_spans=page_text_spans,
+    )
     validation_report["legal_graph_baseline"] = {
         "status": "evidence_backed_minimal_baseline",
         "actual_edge_type_counts": _edge_type_counts(graph_edges),
@@ -285,6 +293,22 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     fidelity = _source_quote_fidelity_health(metadata_grounding=metadata_grounding, evidence=evidence, pages=pages)
     if fidelity["untracked_mismatch_count"]:
         errors.append(f"source_quote_untracked_mismatch_count:{fidelity['untracked_mismatch_count']}")
+    grounding = _span_sequence_grounding_health(
+        metadata_grounding=metadata_grounding,
+        evidence=evidence,
+        legal_units=legal_units,
+        chunks=chunks,
+        bbox_rows=bbox_rows,
+        page_text_spans=page_text_spans,
+    )
+    if grounding["fixable_page_grounded_metadata_count"]:
+        errors.append(f"fixable_page_grounded_metadata_count:{grounding['fixable_page_grounded_metadata_count']}")
+    if grounding["fixable_legal_units_without_span_ids"]:
+        errors.append(f"fixable_legal_units_without_span_ids:{grounding['fixable_legal_units_without_span_ids']}")
+    if grounding["fixable_chunks_without_span_ids"]:
+        errors.append(f"fixable_chunks_without_span_ids:{grounding['fixable_chunks_without_span_ids']}")
+    if grounding["page_grounded_evidence_without_failure_reason"]:
+        errors.append(f"page_grounded_evidence_without_failure_reason:{grounding['page_grounded_evidence_without_failure_reason']}")
     for row in bbox_rows:
         bbox_by_evidence[row["evidence_id"]].append(row)
 
@@ -720,6 +744,83 @@ def _source_quote_normalize(text: str | None) -> str:
     normalized = re.sub(r"\s+", " ", normalized)
     normalized = re.sub(r"\s+([,.;:])", r"\1", normalized)
     return normalized.strip().casefold()
+
+
+def _span_sequence_grounding_health(
+    *,
+    metadata_grounding: list[dict],
+    evidence: list[dict],
+    legal_units: list[dict],
+    chunks: list[dict],
+    bbox_rows: list[dict],
+    page_text_spans: list[dict],
+) -> dict:
+    span_rows = [row for row in page_text_spans if row.get("text_span_id")]
+    active_units = [row for row in legal_units if row.get("status") in {"final", "finalizable"}]
+    active_chunks = [row for row in chunks if row.get("status") == "active_canonical_record"]
+    units_without_spans = [row for row in active_units if not row.get("text_span_ids")]
+    chunks_without_spans = [row for row in active_chunks if not row.get("text_span_ids")]
+    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    page_metadata = [row for row in metadata_grounding if row.get("bbox_precision") == "page_grounded_only"]
+    page_evidence = [row for row in evidence if row.get("bbox_precision") == "page_grounded_only"]
+    bbox_ids = set(bbox_by_id)
+    invalid_bbox_refs = [
+        bbox_id
+        for row in (*metadata_grounding, *evidence)
+        for bbox_id in row.get("bbox_refs") or ()
+        if bbox_id not in bbox_ids and row.get("bbox_precision") == "exact"
+    ]
+    invalid_coordinates = [
+        row["bbox_id"]
+        for row in bbox_rows
+        if row.get("bbox_precision") == "exact" and not all(row.get(key) is not None for key in ("x0", "y0", "x1", "y1"))
+    ]
+    return {
+        "fixable_page_grounded_metadata_count": sum(
+            1 for row in page_metadata if _can_match_span_sequence(row, span_rows) and _has_exact_bbox_refs(row, bbox_by_id)
+        ),
+        "unresolved_page_grounded_metadata_count": len(page_metadata),
+        "active_legal_units_without_span_ids": len(units_without_spans),
+        "active_chunks_without_span_ids": len(chunks_without_spans),
+        "fixable_legal_units_without_span_ids": sum(1 for row in units_without_spans if _can_match_span_sequence(row, span_rows)),
+        "fixable_chunks_without_span_ids": sum(1 for row in chunks_without_spans if _can_match_span_sequence(row, span_rows)),
+        "page_grounded_evidence_without_failure_reason": sum(1 for row in page_evidence if not row.get("failure_reason")),
+        "false_exact_metadata_claims": sum(
+            1
+            for row in metadata_grounding
+            if row.get("bbox_precision") == "exact" and (not row.get("bbox_refs") or not row.get("viewer_highlightable"))
+        ),
+        "invalid_bbox_refs": len(invalid_bbox_refs),
+        "invalid_bbox_coordinates": len(invalid_coordinates),
+        "untracked_grounding_exception_count": sum(
+            1
+            for row in (*page_metadata, *units_without_spans, *chunks_without_spans, *page_evidence)
+            if not (row.get("failure_reason") or row.get("provenance_exception_category") or row.get("grounding_status"))
+        ),
+    }
+
+
+def _can_match_span_sequence(row: dict, spans: list[dict]) -> bool:
+    text = row.get("quoted_text") or row.get("text")
+    target = _source_quote_normalize(text)
+    if not target:
+        return False
+    pages = set(row.get("page_numbers") or range(int(row.get("page_start") or 0), int(row.get("page_end") or -1) + 1))
+    rows = [span for span in spans if span.get("source_document_id") == row.get("source_document_id") and span.get("page_number") in pages]
+    for start in range(len(rows)):
+        joined = ""
+        for span in rows[start:]:
+            joined = _source_quote_normalize(f"{joined} {span.get('text', '')}")
+            if joined == target:
+                return True
+            if len(joined) > len(target) + 80 or not target.startswith(joined):
+                break
+    return False
+
+
+def _has_exact_bbox_refs(row: dict, bbox_by_id: dict[str, dict]) -> bool:
+    refs = row.get("bbox_refs") or ()
+    return bool(refs) and all(bbox_by_id.get(ref, {}).get("bbox_precision") == "exact" for ref in refs)
 
 
 def _all_text_disposition_health(

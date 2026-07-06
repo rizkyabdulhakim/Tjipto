@@ -7,14 +7,14 @@
   "counts": {
     "article_amendment_relations": 63,
     "article_versions": 218,
-    "bbox_records": 1547,
+    "bbox_records": 1584,
     "chunks": 651,
     "document_metadata": 6,
     "document_relations": 8,
     "evidence_records": 464,
     "excluded_records": 6,
-    "graph_edges": 5136,
-    "graph_nodes": 2745,
+    "graph_edges": 5173,
+    "graph_nodes": 2782,
     "legal_units": 651,
     "metadata_assertions": 1319,
     "metadata_graph_edges": 449,
@@ -40,8 +40,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "relation_builder",
       "build_stage": "relation_build",
-      "bytes": 164079,
-      "sha256": "2f97a605d116e14396ef84423d5256908ef68ad7e7cbdf39b2dc0e624c29492a"
+      "bytes": 225972,
+      "sha256": "bb267c0017863565fa73ac3bac0762006b58670c8032f48544b180bfa5bdc8dc"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -56,16 +56,16 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "bbox_builder",
       "build_stage": "bbox_build",
-      "bytes": 1072750,
-      "sha256": "5a37b3854edfa69c73620054d5de49acb3c27bfe7a04fce164bd4f707cab284a"
+      "bytes": 1099482,
+      "sha256": "e186c051c13392cb86048a1f206e7f0b7630d6332177c7bb37c7eb841834c8ed"
     },
     "chunks.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "chunk_builder",
       "build_stage": "chunk_build",
-      "bytes": 1087983,
-      "sha256": "140ddef6486efb985fb8e6b39fd1af09130b8ba053659a46a58d887bff8863e3"
+      "bytes": 1094713,
+      "sha256": "af04835866f557bcc2db496eccde2c5f71fb6ceb1fde9979ed80755b71129839"
     },
     "document_metadata.jsonl": {
       "origin": "generated",
@@ -88,8 +88,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "evidence_builder",
       "build_stage": "evidence_build",
-      "bytes": 751144,
-      "sha256": "52d9589d029d899975a59f489b1a32ddfcfe597669b8f95616ae6614b26eca40"
+      "bytes": 762650,
+      "sha256": "a4cfbc9f62873ef4dbf491e9e5de169b8ed6c40004c1901c936f5b696756f280"
     },
     "excluded_records.jsonl": {
       "origin": "generated",
@@ -104,24 +104,24 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "graph_builder",
       "build_stage": "graph_build",
-      "bytes": 1764977,
-      "sha256": "2acc7def5e7616a2997e9d97942441072a5f79fbe1a10daf5f6f68fd7ed17597"
+      "bytes": 1778863,
+      "sha256": "690d941bb6211cf82c394c14caaecace35f8cfd9262d5569450d12bcdac2e374"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "graph_builder",
       "build_stage": "graph_build",
-      "bytes": 1465720,
-      "sha256": "9c188c88516c22eb4402ef80e572673dfdd1b23f625129395ccf4df913e63bf7"
+      "bytes": 1494116,
+      "sha256": "643a7250f2c8c8cdb985289026d6e53aefa1b66b2c561c8cf6729be2220fc3f1"
     },
     "legal_units.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "legal_unit_builder",
       "build_stage": "legal_unit_build",
-      "bytes": 988821,
-      "sha256": "3d89d00c76c0335f4a53bf94f99d898765efbd6e839f24eaf07f916cf0b6f1e7"
+      "bytes": 995524,
+      "sha256": "96efebd62543f12fe5c7bd5faa68b0d20c389e458e6d0de3d8f31740d1a37d9f"
     },
     "metadata.jsonl": {
       "origin": "generated",
@@ -144,16 +144,16 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "metadata_build",
-      "bytes": 73146,
-      "sha256": "370e3551ed82825ecbb98654651e0e686a4e573eb069d238aef69173c9bf8af7"
+      "bytes": 74066,
+      "sha256": "efc32cf9b3f9fcc306d21274cc8ce22c13ef68a80262b32fa0c27f35ba3de72e"
     },
     "metadata_grounding_registry.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "metadata_build",
-      "bytes": 204205,
-      "sha256": "fb5801ce072eb8f5e0d8b0aa5516e44ce977bd9580c982864ace582bca28b45a"
+      "bytes": 205352,
+      "sha256": "bdab377032bd0cd06902bcfc5516966c9aa2c512a03cac8d3da6a5e83eee8595"
     },
     "pages.jsonl": {
       "origin": "generated",
@@ -168,8 +168,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "retrieval_builder",
       "build_stage": "retrieval_build",
-      "bytes": 416807,
-      "sha256": "fc6b7e4f3f2fce4f8730d4654b2980969574298210442372bf3dff08e4c0486c"
+      "bytes": 416778,
+      "sha256": "89525896adfb1cb737e6442d7fb88743e0abf5ce152dda226bb322b8e6d18161"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -224,16 +224,16 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 12760,
-      "sha256": "57cca137909828d216c935cc5c3110b00c0b6824b4febc25a0222db5f4198f7f"
+      "bytes": 13279,
+      "sha256": "141665f79b7000dd744e965c7382dbf85089bf519051624fd43f8063a4ccf1eb"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "text_span_builder",
       "build_stage": "ingestion",
-      "bytes": 2235933,
-      "sha256": "1d2e327f55b2d3620596c7307d7933cd6c6bd2714f263aabdaa410da422f24b4"
+      "bytes": 2236342,
+      "sha256": "8b34308d1a0b7acf8d93e7ffb433e1ef76aabc53249e965f03021acf0ed40342"
     }
   },
   "fixtures": {

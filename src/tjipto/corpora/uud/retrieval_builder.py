@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from tjipto.corpora.uud.provenance_exceptions import apply_review_category
-from tjipto.corpora.uud.structure_builder import compact
+from tjipto.corpora.uud.structure_builder import compact, matching_sequence
 
 
 def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict]:
@@ -120,6 +120,10 @@ def _text_span_ids_for_text(
     expected = [compact(line) for line in (text or "").splitlines() if compact(line)]
     if not expected:
         return []
+    rows = [span for page_number in page_numbers for span in spans_by_page.get((source_document_id, page_number), [])]
+    matched_sequence = matching_sequence(rows, text)
+    if matched_sequence:
+        return [row["text_span_id"] for row in matched_sequence]
     matched: list[str] = []
     target_index = 0
     for page_number in page_numbers:
