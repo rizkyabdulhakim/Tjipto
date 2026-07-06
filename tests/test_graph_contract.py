@@ -476,7 +476,7 @@ class GraphContractTest(unittest.TestCase):
         result = validate_corpus_ingestion_artifacts("uud", ROOT)
         self.assertEqual(result["status"], "valid", result["errors"][:5])
         self.assertEqual(result["counts"]["evidence_records"], 464)
-        self.assertEqual(result["counts"]["bbox_records"], 1542)
+        self.assertEqual(result["counts"]["bbox_records"], 1547)
         self.assertEqual(validate_uud_ingestion_artifacts(ROOT), result)
 
     def _compact_text(self, text: str) -> str:

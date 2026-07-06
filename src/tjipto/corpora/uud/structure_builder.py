@@ -145,7 +145,8 @@ def split_effective_clause(text: str) -> tuple[str, str]:
     if marker not in text:
         return text, "dan mulai berlaku pada tanggal ditetapkan."
     head, tail = text.split(marker, 1)
-    return head.strip() + ".", ("dan mulai berlaku" + tail).strip()
+    effective = ("dan mulai berlaku" + tail).strip()
+    return f"{head.strip()}, {effective}", effective
 
 
 def page_span_for_text(

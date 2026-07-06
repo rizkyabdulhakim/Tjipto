@@ -22,7 +22,7 @@ class ManifestContractTest(unittest.TestCase):
             {
                 "article_amendment_relations": 63,
                 "article_versions": 218,
-                "bbox_records": 1542,
+                "bbox_records": 1547,
                 "chunks": 651,
                 "document_metadata": 6,
                 "document_relations": 8,

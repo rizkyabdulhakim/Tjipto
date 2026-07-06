@@ -308,6 +308,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 graph_nodes=read_jsonl(FINAL / "graph_nodes.jsonl"),
                 graph_edges=read_jsonl(FINAL / "graph_edges.jsonl"),
                 page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
+                pages=read_jsonl(FINAL / "pages.jsonl"),
                 intent_config=intent_config_for("uud_1945", CorpusRegistry(ROOT).resolve("uud")),
             ),
             read_json(FINAL / "validation_report.json"),

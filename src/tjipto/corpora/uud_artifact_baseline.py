@@ -163,6 +163,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         graph_nodes=graph_nodes,
         graph_edges=graph_edges,
         page_text_spans=page_text_spans,
+        pages=pages,
         intent_config=intent_config_for(getattr(corpus_config, "structured_strategy", "generic"), corpus_config),
     )
     write_json(final_dir / "validation_report.json", validation_report)

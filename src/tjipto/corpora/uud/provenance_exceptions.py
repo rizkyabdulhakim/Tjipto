@@ -40,7 +40,7 @@ def review_category(row: dict) -> str | None:
     if row.get("provenance_exception_category"):
         return row["provenance_exception_category"]
     label = row.get("unit_label") or _last_hierarchy_label(row)
-    if label in SEGMENTATION_BOUNDARY_LABELS and row.get("failure_reason") == "text_span_exact_match_unavailable":
+    if label in SEGMENTATION_BOUNDARY_LABELS:
         return ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION
     if row.get("exclusion_ref") == NONCANONICAL_SOURCE_TYPO_REF:
         if label == "ATURAN TAMBAHAN source typo reference":

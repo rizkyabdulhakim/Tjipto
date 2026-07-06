@@ -37,6 +37,10 @@ def build_evidence_and_bboxes(
             page_end=chunk["page_range"]["end_page_number"],
             line_entries=pdf_lines_by_source[source_id],
         )
+        if unit["unit_type"] == "decision_clause_record":
+            for bbox in bbox_records:
+                bbox["bbox_precision"] = "page_grounded_only"
+                bbox["viewer_highlightable"] = False
         quoted_text = "\n".join(row["text"] for row in bbox_records)
         evidence.append(
             {

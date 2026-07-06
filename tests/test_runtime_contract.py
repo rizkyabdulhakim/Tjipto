@@ -872,11 +872,11 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(report["status"], "pass")
         for key in ("legal_units", "chunks"):
             self.assertEqual(report[key]["total"], 651)
-            self.assertEqual(report[key]["raw_pdf_match"], 624)
-            self.assertEqual(report[key]["normalized_pdf_match"], 624)
-            self.assertEqual(report[key]["header_stripped_pdf_match"], 648)
+            self.assertEqual(report[key]["raw_pdf_match"], 626)
+            self.assertEqual(report[key]["normalized_pdf_match"], 626)
+            self.assertEqual(report[key]["header_stripped_pdf_match"], 650)
             self.assertEqual(report[key]["evidence_grounded_match"], 464)
-            self.assertEqual(report[key]["needs_review"], 3)
+            self.assertEqual(report[key]["needs_review"], 1)
             self.assertEqual(report[key]["status"], "pass_with_reviewed_exceptions")
         self.assertEqual(report["provenance_exception_health"]["unresolved_needs_review_count"], 0)
 

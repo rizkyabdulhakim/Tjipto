@@ -65,6 +65,10 @@ class MetadataBBoxContractTest(unittest.TestCase):
         report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["metadata_grounding_contract"]["status"], "mixed_exact_and_field_grounded")
         self.assertEqual(report["metadata_bbox_registry_health"]["metadata_bbox_false_exact_claims"], 0)
+        fidelity = report["source_quote_fidelity_health"]
+        self.assertEqual(fidelity["metadata_source_quote_mismatch_count"], 0)
+        self.assertEqual(fidelity["page_grounded_evidence_source_quote_mismatch_count"], 0)
+        self.assertEqual(fidelity["untracked_mismatch_count"], 0)
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):
                 if row["bbox_precision"] == "exact":

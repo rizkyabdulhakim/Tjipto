@@ -7,14 +7,14 @@
   "counts": {
     "article_amendment_relations": 63,
     "article_versions": 218,
-    "bbox_records": 1542,
+    "bbox_records": 1547,
     "chunks": 651,
     "document_metadata": 6,
     "document_relations": 8,
     "evidence_records": 464,
     "excluded_records": 6,
-    "graph_edges": 5131,
-    "graph_nodes": 2740,
+    "graph_edges": 5136,
+    "graph_nodes": 2745,
     "legal_units": 651,
     "metadata_assertions": 1319,
     "metadata_graph_edges": 449,
@@ -56,16 +56,16 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "bbox_builder",
       "build_stage": "bbox_build",
-      "bytes": 1068979,
-      "sha256": "f9a369587324b21f63e535e754e0fd692f08dc8df09f4e42f1a246435344b8f9"
+      "bytes": 1072750,
+      "sha256": "5a37b3854edfa69c73620054d5de49acb3c27bfe7a04fce164bd4f707cab284a"
     },
     "chunks.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "chunk_builder",
       "build_stage": "chunk_build",
-      "bytes": 1086857,
-      "sha256": "2ff0bfda9f80cf19135dcb93980cc91dd65919d9b977447a98ed3db5726c525b"
+      "bytes": 1087983,
+      "sha256": "140ddef6486efb985fb8e6b39fd1af09130b8ba053659a46a58d887bff8863e3"
     },
     "document_metadata.jsonl": {
       "origin": "generated",
@@ -88,8 +88,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "evidence_builder",
       "build_stage": "evidence_build",
-      "bytes": 749407,
-      "sha256": "5aabfdefa7c56b8bb156093bfe0a80e86fb454ee7fefe2ea0fb9b6ae5757f3d1"
+      "bytes": 751144,
+      "sha256": "52d9589d029d899975a59f489b1a32ddfcfe597669b8f95616ae6614b26eca40"
     },
     "excluded_records.jsonl": {
       "origin": "generated",
@@ -104,24 +104,24 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "graph_builder",
       "build_stage": "graph_build",
-      "bytes": 1763073,
-      "sha256": "ebcd1f1081fa2d9f155cf9245823f26d00e7b85182553fd945eba6d71c8f5419"
+      "bytes": 1764977,
+      "sha256": "2acc7def5e7616a2997e9d97942441072a5f79fbe1a10daf5f6f68fd7ed17597"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "graph_builder",
       "build_stage": "graph_build",
-      "bytes": 1461844,
-      "sha256": "acbed51f3426795054b902ff46e13f4a6fdb1bbce0e99c18b1aad96b3d75b5ac"
+      "bytes": 1465720,
+      "sha256": "9c188c88516c22eb4402ef80e572673dfdd1b23f625129395ccf4df913e63bf7"
     },
     "legal_units.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "legal_unit_builder",
       "build_stage": "legal_unit_build",
-      "bytes": 987713,
-      "sha256": "5387837d48f294a51bdd151dd7cbc12b8eee2de2136bc6e35cde1b3267e5016c"
+      "bytes": 988821,
+      "sha256": "3d89d00c76c0335f4a53bf94f99d898765efbd6e839f24eaf07f916cf0b6f1e7"
     },
     "metadata.jsonl": {
       "origin": "generated",
@@ -144,16 +144,16 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "metadata_build",
-      "bytes": 71851,
-      "sha256": "0be88e8b8d26aed513ac2d8a33f9108a0f9d57fa110a0a2ce2d245cb4b492b2a"
+      "bytes": 73146,
+      "sha256": "370e3551ed82825ecbb98654651e0e686a4e573eb069d238aef69173c9bf8af7"
     },
     "metadata_grounding_registry.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "metadata_build",
-      "bytes": 203219,
-      "sha256": "9cecf72111ae6dc3357e241dbe3a85593fb013623d690707f405a54434113146"
+      "bytes": 204205,
+      "sha256": "fb5801ce072eb8f5e0d8b0aa5516e44ce977bd9580c982864ace582bca28b45a"
     },
     "pages.jsonl": {
       "origin": "generated",
@@ -168,8 +168,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "retrieval_builder",
       "build_stage": "retrieval_build",
-      "bytes": 416681,
-      "sha256": "3ab5db1e2804a51e38242d243372f2844e5016532f14698c22b7b5f667674add"
+      "bytes": 416807,
+      "sha256": "fc6b7e4f3f2fce4f8730d4654b2980969574298210442372bf3dff08e4c0486c"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -224,16 +224,16 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 12407,
-      "sha256": "22cdea8646a3e962c776227dbae3a173855156e96d139225d5e4cc30f14a5f58"
+      "bytes": 12760,
+      "sha256": "57cca137909828d216c935cc5c3110b00c0b6824b4febc25a0222db5f4198f7f"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "text_span_builder",
       "build_stage": "ingestion",
-      "bytes": 2235947,
-      "sha256": "780527c4029825f8d596e5a2d378a28c016927934096986b18f23727832713d1"
+      "bytes": 2235933,
+      "sha256": "1d2e327f55b2d3620596c7307d7933cd6c6bd2714f263aabdaa410da422f24b4"
     }
   },
   "fixtures": {

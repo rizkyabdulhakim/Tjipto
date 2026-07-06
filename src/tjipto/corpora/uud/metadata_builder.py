@@ -201,7 +201,10 @@ def rebuild_metadata_grounding(
         | {
             "bbox_precision": "page_grounded_only",
             "grounding_status": row.get("grounding_status") or "block_level_grounded",
-            "failure_reason": row.get("failure_reason") or "metadata_exact_bbox_or_text_span_unavailable",
+            "failure_reason": row.get("failure_reason")
+            or _metadata_failure_reason(
+                row.get("source_role", ""), row.get("metadata_field", "block"), row.get("metadata_grounding_id", "")
+            ),
             "viewer_highlightable": False,
         }
         for row in metadata_grounding
@@ -258,7 +261,7 @@ def rebuild_metadata_grounding(
                     "viewer_highlightable": viewer_highlightable,
                 }
             )
-        failure_reason = None if exact_bbox_refs and text_span_ids else "metadata_exact_bbox_or_text_span_unavailable"
+        failure_reason = None if exact_bbox_refs and text_span_ids else _metadata_failure_reason(source_role, metadata_field, donor_id)
         field_rows.append(
             {
                 "bbox_ids": exact_bbox_refs,
@@ -512,6 +515,16 @@ def _block_registry_row(row: dict) -> dict:
         "status": row["status"],
         "viewer_highlightable": False,
     }
+
+
+def _metadata_failure_reason(source_role: str, metadata_field: str, donor_id: str) -> str:
+    if metadata_field in {"decision_date", "decision_session", "effective_rule"}:
+        return "metadata_decision_sentence_continues_beyond_field"
+    if source_role == "current_consolidated":
+        return "metadata_publication_block_requires_page_level_support"
+    if str(donor_id).startswith("uud_metadata_block_final_evidence::"):
+        return "metadata_block_has_no_exact_bbox_span"
+    return "metadata_bbox_reference_unresolved"
 
 
 def _metadata_grounding_ref_id(metadata_grounding_id: str, metadata_field: str, bbox_id: str, index: int) -> str:
@@ -817,6 +830,7 @@ def _extract_metadata_date(text: str) -> str | None:
 
 def _extract_decision_session(text: str, decision_date: str | None) -> str | None:
     compact = " ".join(text.split())
+    compact = compact.split(", dan mulai berlaku", 1)[0].strip()
     if decision_date:
         compact = compact.replace(f" tanggal {decision_date}", "")
     if compact.startswith("Perubahan tersebut diputuskan dalam "):

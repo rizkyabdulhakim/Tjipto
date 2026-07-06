@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+import re
 from time import perf_counter
+import unicodedata
 
 from tjipto.corpora.disposition import EXCLUDED_STATUSES, PROMOTED_STATUSES, SPAN_DISPOSITION_FIELDS
 from tjipto.corpora.intent_config import contains_intent_phrase, resolve_instrument_intent
@@ -75,6 +77,7 @@ def build_validation_report(
     graph_nodes: list[dict],
     graph_edges: list[dict],
     page_text_spans: list[dict],
+    pages: list[dict] | None = None,
     intent_config: dict | None = None,
 ) -> dict:
     validation_report = {
@@ -223,6 +226,11 @@ def build_validation_report(
         metadata_grounding_registry,
         {row["bbox_id"]: row for row in bbox_rows},
     )
+    validation_report["source_quote_fidelity_health"] = _source_quote_fidelity_health(
+        metadata_grounding=metadata_grounding,
+        evidence=evidence,
+        pages=pages or [],
+    )
     validation_report["legal_graph_baseline"] = {
         "status": "evidence_backed_minimal_baseline",
         "actual_edge_type_counts": _edge_type_counts(graph_edges),
@@ -258,6 +266,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
     validation_exceptions = read_jsonl(final_dir / "validation_exceptions.jsonl")
     page_text_spans = read_jsonl(final_dir / "page_text_spans.jsonl") if (final_dir / "page_text_spans.jsonl").exists() else []
+    pages = read_jsonl(final_dir / "pages.jsonl") if (final_dir / "pages.jsonl").exists() else []
 
     errors: list[str] = []
     seen_ids: dict[str, set[str]] = defaultdict(set)
@@ -273,6 +282,9 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     metadata_grounding_ref_ids: set[str] = set()
     text_span_ids = {row["text_span_id"] for row in page_text_spans}
     bbox_by_evidence: dict[str, list[dict]] = defaultdict(list)
+    fidelity = _source_quote_fidelity_health(metadata_grounding=metadata_grounding, evidence=evidence, pages=pages)
+    if fidelity["untracked_mismatch_count"]:
+        errors.append(f"source_quote_untracked_mismatch_count:{fidelity['untracked_mismatch_count']}")
     for row in bbox_rows:
         bbox_by_evidence[row["evidence_id"]].append(row)
 
@@ -672,6 +684,42 @@ def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox
         "page_grounded_only_metadata_rows": len(page_rows),
         "metadata_bbox_false_exact_claims": len(unresolved_exact),
     }
+
+
+def _source_quote_fidelity_health(*, metadata_grounding: list[dict], evidence: list[dict], pages: list[dict]) -> dict:
+    page_text = {(row["source_document_id"], row["page_number"]): row.get("text", "") for row in pages}
+    metadata_rows = list(metadata_grounding)
+    evidence_rows = [row for row in evidence if row.get("bbox_precision") == "page_grounded_only"]
+    metadata_mismatches = [row for row in metadata_rows if not _quote_in_pages(row, page_text)]
+    evidence_mismatches = [row for row in evidence_rows if not _quote_in_pages(row, page_text)]
+    tracked = [row for row in metadata_mismatches if row.get("failure_reason")]
+    return {
+        "metadata_grounding_checked_count": len(metadata_rows),
+        "page_grounded_evidence_checked_count": len(evidence_rows),
+        "metadata_source_quote_mismatch_count": len(metadata_mismatches),
+        "page_grounded_evidence_source_quote_mismatch_count": len(evidence_mismatches),
+        "tracked_exception_count": len(tracked),
+        "untracked_mismatch_count": len(metadata_mismatches) - len(tracked) + len(evidence_mismatches),
+        "page_grounded_only_metadata_count": sum(1 for row in metadata_rows if row.get("bbox_precision") == "page_grounded_only"),
+    }
+
+
+def _quote_in_pages(row: dict, page_text: dict[tuple[str, int], str]) -> bool:
+    quote = _source_quote_normalize(row.get("quoted_text"))
+    source_document_id = row.get("source_document_id")
+    if not quote or not isinstance(source_document_id, str):
+        return False
+    haystack = " ".join(
+        _source_quote_normalize(page_text.get((source_document_id, page_number), "")) for page_number in row.get("page_numbers") or ()
+    )
+    return quote in haystack
+
+
+def _source_quote_normalize(text: str | None) -> str:
+    normalized = unicodedata.normalize("NFKC", text or "").replace("\xad", "").replace("\xa0", " ")
+    normalized = re.sub(r"\s+", " ", normalized)
+    normalized = re.sub(r"\s+([,.;:])", r"\1", normalized)
+    return normalized.strip().casefold()
 
 
 def _all_text_disposition_health(
