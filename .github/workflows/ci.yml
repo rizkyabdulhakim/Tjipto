@@ -20,7 +20,7 @@ jobs:
       - run: python -m pytest -q
         env:
           PYTHONPATH: src:.
-      - run: python scripts/evaluate_uud_retrieval.py
+      - run: python scripts/evaluate_uud_retrieval.py --strict-known-gaps
       - run: python -m tjipto.corpora.uud_artifact_baseline validate
         env:
           PYTHONPATH: src

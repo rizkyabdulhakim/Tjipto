@@ -6,6 +6,24 @@ from collections import Counter
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
+NUMBER_WORDS = {
+    "satu": "1",
+    "dua": "2",
+    "tiga": "3",
+    "empat": "4",
+    "lima": "5",
+    "enam": "6",
+    "tujuh": "7",
+    "delapan": "8",
+    "sembilan": "9",
+    "sepuluh": "10",
+}
+TERM_ALIASES = {
+    "berhak": "hak",  # nosec B105
+    "bekerja": "kerja",
+    "menjabat": "jabatan",
+    "pekerjaan": "kerja",
+}
 # Shared Indonesian lexical baseline; keep corpus config for legal structure/policy.
 STOPWORDS = {
     "adalah",
@@ -32,7 +50,7 @@ STOPWORDS = {
 
 
 def tokens(text: str) -> list[str]:
-    return [token.casefold() for token in TOKEN_RE.findall(text or "")]
+    return [_normalize_token(token.casefold()) for token in TOKEN_RE.findall(text or "")]
 
 
 def meaningful_tokens(text: str) -> set[str]:
@@ -40,9 +58,7 @@ def meaningful_tokens(text: str) -> set[str]:
 
 
 def _normalize_token(token: str) -> str:
-    if token == "berhak":  # nosec B105
-        return "hak"
-    return "kerja" if token in {"bekerja", "pekerjaan"} else token
+    return NUMBER_WORDS.get(token, TERM_ALIASES.get(token, token))
 
 
 def _document_text(row: dict) -> str:

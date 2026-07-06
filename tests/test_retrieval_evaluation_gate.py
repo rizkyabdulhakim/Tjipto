@@ -34,32 +34,29 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
             "notes",
         }
         rows = [json.loads(line) for line in CASES.read_text(encoding="utf-8").splitlines() if line.strip()]
-        self.assertGreaterEqual(len(rows), 9)
+        self.assertGreaterEqual(len(rows), 10)
         self.assertEqual(len({row["id"] for row in rows}), len(rows))
         for row in rows:
             self.assertLessEqual(required, set(row), row["id"])
-        self.assertTrue(any(row["id"] == "unsafe_three_period_word" and row["case_status"] == "known_gap" for row in rows))
+        self.assertTrue(any(row["id"] == "unsafe_three_period_word" and row["case_status"] == "accepted" for row in rows))
 
-    def test_runner_reports_known_gap_without_failing_default_gate(self) -> None:
+    def test_runner_reports_no_known_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             report = Path(temp_dir) / "report.json"
             with contextlib.redirect_stdout(io.StringIO()):
                 result = runner.main(["--report", str(report)])
             self.assertEqual(result, 0)
             data = json.loads(report.read_text(encoding="utf-8"))
-        self.assertEqual(data["counts"]["pass"], 8)
+        self.assertEqual(data["counts"]["pass"], 10)
         self.assertEqual(data["counts"]["fail"], 0)
-        self.assertEqual(data["counts"]["known_gap"], 1)
-        gap = next(row for row in data["results"] if row["outcome"] == "KNOWN_GAP")
-        self.assertEqual(gap["id"], "unsafe_three_period_word")
-        self.assertIn("forbidden_evidence_returned", ";".join(gap["errors"]))
+        self.assertEqual(data["counts"]["known_gap"], 0)
 
-    def test_strict_known_gap_mode_fails(self) -> None:
+    def test_strict_known_gap_mode_passes(self) -> None:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             result = runner.main(["--strict-known-gaps"])
-        self.assertEqual(result, 1)
-        self.assertIn("KNOWN_GAP: unsafe_three_period_word", output.getvalue())
+        self.assertEqual(result, 0)
+        self.assertIn("KNOWN_GAP=0", output.getvalue())
 
 
 if __name__ == "__main__":
