@@ -97,9 +97,11 @@ class EvidenceStore:
 
     def metadata_bboxes_for(self, metadata_grounding_id: str) -> list[dict]:
         if self._metadata_bbox_by_grounding is None:
+            bbox_by_id = {row["bbox_id"]: row for row in self.config.jsonl("bbox")}
             grouped: dict[str, list[dict]] = {}
             for row in _optional_jsonl(self.config, "metadata_grounding_registry"):
-                grouped.setdefault(row["metadata_grounding_id"], []).append(row)
+                bbox = bbox_by_id.get(row["bbox_id"])
+                grouped.setdefault(row["metadata_grounding_id"], []).append(row | (bbox or {}))
             self._metadata_bbox_by_grounding = grouped
         return self._metadata_bbox_by_grounding.get(metadata_grounding_id, [])
 

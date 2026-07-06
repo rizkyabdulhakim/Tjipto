@@ -408,13 +408,41 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertEqual(result["metadata_support"][0]["evidence_id"], case["evidence_id"], case["query"])
                 self.assertEqual(result["metadata_support"][0]["field"], case["field"], case["query"])
                 self.assertEqual(result["metadata_support"][0]["answer"], case["answer"], case["query"])
-                self.assertFalse(result["metadata_support"][0]["citation_available"], case["query"])
-                self.assertFalse(result["metadata_support"][0]["viewer_highlightable"], case["query"])
+                support = result["metadata_support"][0]
+                if support["support_class"] == "exact_metadata_citation":
+                    self.assertTrue(support["citation_available"], case["query"])
+                    self.assertTrue(support["viewer_highlightable"], case["query"])
+                    self.assertTrue(support["viewer_ref"]["can_resolve"], case["query"])
+                else:
+                    self.assertFalse(support["citation_available"], case["query"])
+                    self.assertFalse(support["viewer_highlightable"], case["query"])
+                    self.assertIsNone(support["viewer_ref"], case["query"])
             else:
                 self.assertFalse(result["metadata_facts"], case["query"])
                 self.assertFalse(result["citations"], case["query"])
             for unexpected in case["not_contains"]:
                 self.assertNotIn(unexpected, result["answer"], case["query"])
+
+    def test_exact_metadata_support_resolves_viewer_without_legal_citation(self) -> None:
+        result = self.service.ask("uud", "kapan perubahan pertama ditetapkan")
+        support = result["metadata_support"][0]
+        self.assertEqual(support["support_class"], "exact_metadata_citation")
+        self.assertFalse(result["citations"])
+        self.assertFalse(result["viewer_refs"])
+        self.assertTrue(support["viewer_ref"]["can_resolve"])
+        viewer = self.service.viewer("uud", support["evidence_id"])
+        self.assertEqual(viewer["status"], "viewer_payload_ready")
+        self.assertTrue(viewer["viewer_highlightable"])
+        self.assertTrue(viewer["bbox_rectangles"])
+        self.assertTrue(all(row["bbox_precision"] == "exact" for row in viewer["bbox_rectangles"]))
+
+    def test_page_grounded_metadata_support_is_not_clickable(self) -> None:
+        result = self.service.ask("uud", "tanggal berlaku perubahan ketiga UUD")
+        support = result["metadata_support"][0]
+        self.assertEqual(support["support_class"], "metadata_support")
+        self.assertFalse(support["citation_available"])
+        self.assertFalse(support["viewer_highlightable"])
+        self.assertIsNone(support["viewer_ref"])
 
     def test_original_metadata_role_does_not_fall_back_to_amendments(self) -> None:
         for query in ("kapan UUD asli ditetapkan", "kapan naskah asli ditetapkan"):

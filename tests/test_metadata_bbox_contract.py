@@ -45,29 +45,32 @@ class MetadataBBoxContractTest(unittest.TestCase):
         text_span_ids = {row["text_span_id"] for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
         exact_rows = []
         for row in read_jsonl(FINAL / "metadata_grounding.jsonl"):
-            self.assertFalse(row["viewer_highlightable"], row["metadata_grounding_id"])
             self.assertTrue(set(row["bbox_refs"]) <= registry_ids, row["metadata_grounding_id"])
             self.assertIn("grounding_status", row)
             if row["bbox_precision"] == "exact":
                 exact_rows.append(row)
+                self.assertTrue(row["viewer_highlightable"], row["metadata_grounding_id"])
                 self.assertEqual(row["grounding_status"], "text_bbox_exact", row["metadata_grounding_id"])
                 self.assertTrue(set(row["bbox_ids"]) <= bbox_ids, row["metadata_grounding_id"])
                 self.assertTrue(set(row["text_span_ids"]) <= text_span_ids, row["metadata_grounding_id"])
                 self.assertTrue(row["bbox_ids"], row["metadata_grounding_id"])
                 self.assertTrue(row["text_span_ids"], row["metadata_grounding_id"])
             else:
+                self.assertFalse(row["viewer_highlightable"], row["metadata_grounding_id"])
                 self.assertEqual(row["bbox_precision"], "page_grounded_only", row["metadata_grounding_id"])
                 self.assertIn("failure_reason", row, row["metadata_grounding_id"])
         self.assertTrue(exact_rows)
 
-    def test_metadata_report_does_not_claim_highlight_ready(self) -> None:
+    def test_metadata_report_promotes_only_exact_highlights(self) -> None:
         report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
-        self.assertEqual(report["metadata_grounding_contract"]["status"], "field_grounded")
+        self.assertEqual(report["metadata_grounding_contract"]["status"], "mixed_exact_and_field_grounded")
         self.assertEqual(report["metadata_bbox_registry_health"]["metadata_bbox_false_exact_claims"], 0)
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):
-                self.assertFalse(row["viewer_highlightable"], row.get("metadata_grounding_id") or row["metadata_grounding_ref_id"])
-                if row["bbox_precision"] == "page_grounded_only":
+                if row["bbox_precision"] == "exact":
+                    self.assertTrue(row["viewer_highlightable"], row.get("metadata_grounding_id") or row["metadata_grounding_ref_id"])
+                else:
+                    self.assertFalse(row["viewer_highlightable"], row.get("metadata_grounding_id") or row["metadata_grounding_ref_id"])
                     self.assertIn("failure_reason", row)
 
     def test_fixture_metadata_rows_keep_stable_exact_grounding_ids(self) -> None:

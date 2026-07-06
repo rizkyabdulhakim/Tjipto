@@ -188,8 +188,17 @@ class RuntimeHttpContractTest(unittest.TestCase):
                 self.assertEqual(result["metadata_facts"][0]["answer"], case["metadata_answer"], case["query"])
             if case["route"] == "metadata_fact" and case["status"] == "answer_ready":
                 self.assertTrue(result["metadata_support"], case["query"])
-                self.assertFalse(result["metadata_support"][0]["citation_available"], case["query"])
-                self.assertFalse(result["metadata_support"][0]["viewer_highlightable"], case["query"])
+                support = result["metadata_support"][0]
+                if support["support_class"] == "exact_metadata_citation":
+                    self.assertTrue(support["citation_available"], case["query"])
+                    self.assertTrue(support["viewer_highlightable"], case["query"])
+                    self.assertTrue(support["viewer_ref"]["can_resolve"], case["query"])
+                    self.assertNotIn("source_sha256", json.dumps(support), case["query"])
+                    self.assertNotIn("source_pdf_path", json.dumps(support), case["query"])
+                else:
+                    self.assertFalse(support["citation_available"], case["query"])
+                    self.assertFalse(support["viewer_highlightable"], case["query"])
+                    self.assertIsNone(support["viewer_ref"], case["query"])
             if "relation_target_labels" in case:
                 self.assertEqual(
                     {row["target_label"] for row in result["legal_relations"]},

@@ -35,6 +35,7 @@ export interface MetadataSupportPayload {
   page_numbers?: number[];
   citation_available?: boolean;
   viewer_highlightable?: boolean;
+  viewer_ref?: ViewerRefPayload;
 }
 
 export interface DocumentRelationPayload {

@@ -216,8 +216,8 @@ def build_validation_report(
         "coarse_policy": "bbox_precision=coarse rows are not viewer_highlightable",
     }
     validation_report["metadata_grounding_contract"] = {
-        "status": "field_grounded",
-        "note": "field-level metadata grounding preserves block-level rows and keeps metadata viewer highlights fail-closed unless exact accepted support exists",
+        "status": "mixed_exact_and_field_grounded",
+        "note": "exact metadata rows may be viewer-highlightable only with exact bbox and text-span support; page-grounded rows remain trace-only",
     }
     validation_report["metadata_bbox_registry_health"] = _metadata_bbox_registry_health(
         metadata_grounding_registry,
@@ -508,8 +508,6 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     for row in uncounted_unresolved_exceptions:
         errors.append(f"unresolved_validation_exception:{row['exception_id']}")
     for row in metadata_grounding:
-        if row.get("viewer_highlightable") is not False:
-            errors.append(f"metadata_grounding_highlightable_not_clarified:{row['metadata_grounding_id']}")
         if row.get("bbox_precision") not in {None, "coarse", "exact", "page_grounded_only"}:
             errors.append(f"invalid_metadata_bbox_precision:{row['metadata_grounding_id']}")
         if row.get("bbox_precision") == "exact":
@@ -521,8 +519,12 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                     errors.append(f"orphan_metadata_text_span:{row['metadata_grounding_id']}:{text_span_id}")
             if not row.get("bbox_ids") or not row.get("text_span_ids"):
                 errors.append(f"exact_metadata_missing_grounding_ids:{row['metadata_grounding_id']}")
+            if row.get("viewer_highlightable") is not True:
+                errors.append(f"exact_metadata_not_highlightable:{row['metadata_grounding_id']}")
         if row.get("bbox_precision") == "page_grounded_only" and not row.get("failure_reason"):
             errors.append(f"page_grounded_metadata_missing_failure_reason:{row['metadata_grounding_id']}")
+        if row.get("bbox_precision") != "exact" and row.get("viewer_highlightable") is not False:
+            errors.append(f"non_exact_metadata_highlightable:{row['metadata_grounding_id']}")
     for row in metadata_grounding_registry:
         ref_id = row.get("metadata_grounding_ref_id")
         if not ref_id:
@@ -540,8 +542,11 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"exact_metadata_registry_bbox_missing_coordinates:{ref_id}:{bbox_id}")
         elif bbox_id and bbox_id not in bbox_by_id and not row.get("failure_reason"):
             errors.append(f"unresolved_metadata_registry_missing_failure_reason:{ref_id}:{bbox_id}")
-        if row.get("viewer_highlightable") is not False:
-            errors.append(f"metadata_registry_highlightable_not_clarified:{ref_id}")
+        if row.get("bbox_precision") == "exact":
+            if row.get("viewer_highlightable") is not True:
+                errors.append(f"exact_metadata_registry_not_highlightable:{ref_id}")
+        elif row.get("viewer_highlightable") is not False:
+            errors.append(f"non_exact_metadata_registry_highlightable:{ref_id}")
     for row in graph_nodes:
         if row["node_id"] in seen_ids["node_id"]:
             errors.append(f"duplicate_graph_node_id:{row['node_id']}")
@@ -662,6 +667,7 @@ def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox
         "duplicate_bbox_id_reference_count": len(bbox_ids) - len(set(bbox_ids)),
         "unresolved_bbox_id_count": len(unresolved),
         "exact_metadata_bbox_rows": len(exact_rows),
+        "exact_metadata_viewer_highlightable_rows": sum(1 for row in exact_rows if row.get("viewer_highlightable") is True),
         "unresolved_exact_metadata_bbox_rows": len(unresolved_exact),
         "page_grounded_only_metadata_rows": len(page_rows),
         "metadata_bbox_false_exact_claims": len(unresolved_exact),

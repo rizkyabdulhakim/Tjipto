@@ -34,14 +34,15 @@ class BBoxContractTest(unittest.TestCase):
         self.assertEqual(len(metadata_registry_rows), 112)
         for row in rows:
             self.assertEqual(row["status"], "accepted_metadata_grounding")
-            self.assertFalse(row["viewer_highlightable"])
             self.assertTrue(row["quoted_text"])
             self.assertTrue(row["bbox_refs"])
             self.assertTrue(set(row["bbox_refs"]) <= metadata_grounding_ids)
             if row["bbox_precision"] == "exact":
+                self.assertTrue(row["viewer_highlightable"])
                 self.assertTrue(set(row["bbox_refs"]) <= legal_evidence_bbox_ids)
                 self.assertTrue(row["text_span_ids"])
             else:
+                self.assertFalse(row["viewer_highlightable"])
                 self.assertEqual(row["bbox_precision"], "page_grounded_only")
                 self.assertTrue(set(row["bbox_refs"]).isdisjoint(legal_evidence_bbox_ids))
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())

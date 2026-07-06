@@ -121,12 +121,15 @@ class LegalRuntimeService:
             )
         evidence = store.get(evidence_id)
         if evidence is None:
+            evidence = _metadata_grounding_evidence(store, evidence_id)
+        if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
+        bboxes = store.metadata_bboxes_for(evidence_id) if evidence.get("metadata_grounding") else store.bboxes_for(evidence_id)
         return viewer_payload(
             store,
             corpus_id,
             evidence,
-            store.bboxes_for(evidence_id),
+            bboxes,
             source_document_id=source_document_id,
             page_number=page_number,
             bbox_id=bbox_id,
@@ -160,12 +163,15 @@ class LegalRuntimeService:
             )
         evidence = store.get(evidence_id)
         if evidence is None:
+            evidence = _metadata_grounding_evidence(store, evidence_id)
+        if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
+        bboxes = store.metadata_bboxes_for(evidence_id) if evidence.get("metadata_grounding") else store.bboxes_for(evidence_id)
         return resolve_pdf_access(
             store,
             corpus_id,
             evidence,
-            store.bboxes_for(evidence_id),
+            bboxes,
             source_document_id=source_document_id,
             page_number=page_number,
             bbox_id=bbox_id,
@@ -413,7 +419,9 @@ class LegalRuntimeService:
             "metadata_support": metadata_support,
             "legal_relations": tuple(row["legal_relation"] for row in evidence if row.get("legal_relation")),
             "answer_scope": "direct_evidence" if status == "answer_ready" else "limited_evidence",
-            "warnings": ("metadata_support_not_exact_highlightable",) if metadata_support else (),
+            "warnings": ("metadata_support_not_exact_highlightable",)
+            if any(row.get("viewer_highlightable") is not True for row in metadata_support)
+            else (),
             "insufficient_reasons": (),
         }
 
@@ -590,17 +598,42 @@ def _metadata_fact(row: dict) -> dict:
 
 
 def _metadata_support(row: dict) -> dict:
+    can_resolve = row.get("viewer_ref", {}).get("can_resolve") is True
     return {
-        "support_class": "metadata_support",
+        "support_class": "exact_metadata_citation" if can_resolve else "metadata_support",
         "field": row.get("metadata_field"),
         "answer": row.get("metadata_answer"),
         "evidence_id": row.get("evidence_id"),
         "source_document_id": row.get("source_document_id"),
         "source_role": row.get("source_role"),
         "page_numbers": tuple(row.get("page_numbers") or ()),
-        "citation_available": False,
-        "viewer_highlightable": False,
+        "citation_available": can_resolve,
+        "viewer_highlightable": can_resolve,
+        "viewer_ref": row.get("viewer_ref") if can_resolve else None,
     }
+
+
+def _metadata_grounding_evidence(store, metadata_grounding_id: str | None) -> dict | None:
+    for row in store.metadata_grounding:
+        if row.get("metadata_grounding_id") == metadata_grounding_id:
+            return {
+                "evidence_id": row["metadata_grounding_id"],
+                "metadata_grounding": True,
+                "legal_unit_id": None,
+                "citation": f"Metadata {row.get('source_role')}: {row.get('metadata_field') or 'block'}",
+                "hierarchy": (),
+                "quoted_text": row.get("quoted_text"),
+                "bbox_refs": tuple(row.get("bbox_refs") or ()),
+                "bbox_precision": row.get("bbox_precision"),
+                "viewer_highlightable": row.get("viewer_highlightable"),
+                "page_numbers": tuple(row.get("page_numbers") or ()),
+                "source_document_id": row.get("source_document_id"),
+                "source_pdf_path": row.get("source_pdf_path"),
+                "source_sha256": row.get("source_sha256"),
+                "source_role": row.get("source_role"),
+                "temporal_context": row.get("temporal_context"),
+            }
+    return None
 
 
 def _document_relation_response(store, corpus_id: str, query: str) -> dict | None:

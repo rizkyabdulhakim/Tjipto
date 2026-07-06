@@ -210,14 +210,22 @@ def _metadata_result(store, row: dict, grounding: dict, field: str) -> dict | No
         "temporal_context": row.get("temporal_context"),
         "page_numbers": tuple(grounding.get("page_numbers") or ()),
         "bbox_refs": tuple(grounding.get("bbox_refs") or ()),
+        "bbox_ids": tuple(grounding.get("bbox_ids") or ()),
+        "bbox_precision": grounding.get("bbox_precision"),
         "bbox_count": len(bboxes),
+        "text_span_ids": tuple(grounding.get("text_span_ids") or ()),
+        "viewer_highlightable": grounding.get("viewer_highlightable"),
         "status": "final",
         "route_sources": ("metadata",),
         "route_score": 900.0,
         "route_scores": {"metadata": 900.0},
         "rank_reasons": ("metadata", "answer_evidence"),
         "metadata_grounding": True,
-        "metadata_viewer_resolvable": _bboxes_have_coordinates(bboxes),
+        "metadata_viewer_resolvable": (
+            grounding.get("bbox_precision") == "exact"
+            and grounding.get("viewer_highlightable") is True
+            and _bboxes_have_coordinates(bboxes)
+        ),
     }
 
 

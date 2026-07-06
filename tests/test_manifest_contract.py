@@ -57,7 +57,7 @@ class ManifestContractTest(unittest.TestCase):
         for name in report["referenced_artifacts"]:
             self.assertTrue((FINAL / name).exists(), name)
         self.assertEqual(report["structure_fidelity"]["status"], "corrected")
-        self.assertEqual(report["metadata_grounding_contract"]["status"], "field_grounded")
+        self.assertEqual(report["metadata_grounding_contract"]["status"], "mixed_exact_and_field_grounded")
         self.assertEqual(report["legal_graph_baseline"]["status"], "evidence_backed_minimal_baseline")
         actual_counts = {
             "chunks": len((FINAL / "chunks.jsonl").read_text(encoding="utf-8").splitlines()),

@@ -237,6 +237,7 @@ def rebuild_metadata_grounding(
         registry_rows = exact_bbox_rows or [
             {"bbox_id": bbox_id, "page_number": page_number} for bbox_id, page_number in zip(bbox_refs, page_numbers)
         ]
+        viewer_highlightable = bbox_precision == "exact" and bool(text_span_ids)
         for index, registry_row in enumerate(registry_rows):
             field_registry_rows.append(
                 {
@@ -254,7 +255,7 @@ def rebuild_metadata_grounding(
                     "source_sha256": source_sha256,
                     "status": "accepted_metadata_grounding",
                     "text_span_ids": text_span_ids,
-                    "viewer_highlightable": False,
+                    "viewer_highlightable": viewer_highlightable,
                 }
             )
         failure_reason = None if exact_bbox_refs and text_span_ids else "metadata_exact_bbox_or_text_span_unavailable"
@@ -279,7 +280,7 @@ def rebuild_metadata_grounding(
                 "status": "accepted_metadata_grounding",
                 "temporal_context": source_role,
                 "text_span_ids": text_span_ids,
-                "viewer_highlightable": False,
+                "viewer_highlightable": viewer_highlightable,
             }
             | ({"failure_reason": failure_reason} if failure_reason else {})
         )

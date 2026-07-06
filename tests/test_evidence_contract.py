@@ -143,14 +143,15 @@ class EvidenceContractTest(unittest.TestCase):
                 {"not_found_in_source", None},
             )
         for row in field_grounding:
-            self.assertFalse(row["viewer_highlightable"])
             self.assertFalse(row["runtime_loadable"])
             self.assertTrue(row["quote"])
             if row["bbox_precision"] == "exact":
+                self.assertTrue(row["viewer_highlightable"])
                 self.assertEqual(row["grounding_status"], "text_bbox_exact")
                 self.assertTrue(row["bbox_ids"])
                 self.assertTrue(row["text_span_ids"])
             else:
+                self.assertFalse(row["viewer_highlightable"])
                 self.assertEqual(row["grounding_status"], "field_level_grounded")
                 self.assertEqual(row["bbox_precision"], "page_grounded_only")
                 self.assertIn("failure_reason", row)
