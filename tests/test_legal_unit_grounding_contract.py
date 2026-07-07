@@ -59,8 +59,42 @@ class LegalUnitGroundingContractTest(unittest.TestCase):
                 self.assertEqual(value, 0, key)
         self.assertEqual(health["active_legal_units_without_span_ids"], 0)
         self.assertEqual(health["active_chunks_without_span_ids"], 0)
-        self.assertEqual(health["reviewed_nonruntime_canonical_chunks_without_span_ids"], 3)
+        self.assertEqual(health["source_text_backed_legal_units_without_span_ids_count"], 0)
+        self.assertEqual(health["source_text_backed_chunks_without_span_ids_count"], 0)
+        self.assertNotIn("reviewed_nonruntime_canonical_chunks_without_span_ids", health)
         self.assertEqual(health["status"], "complete")
+
+    def test_effective_clause_rows_are_source_span_linked(self) -> None:
+        units = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "legal_units.jsonl")}
+        chunks = {row["chunk_id"]: row for row in read_jsonl(FINAL / "chunks.jsonl")}
+        spans = {row["text_span_id"]: row for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
+        cases = {
+            "uud_chunk_00624": (
+                "uud_legal_unit_00624",
+                ["uud_text_span::amendment_1_historical::0003::0006"],
+            ),
+            "uud_chunk_00635": (
+                "uud_legal_unit_00635",
+                [
+                    "uud_text_span::amendment_3_historical::0008::0031",
+                    "uud_text_span::amendment_3_historical::0008::0032",
+                ],
+            ),
+            "uud_chunk_00649": (
+                "uud_legal_unit_00649",
+                ["uud_text_span::amendment_4_historical::0006::0005"],
+            ),
+        }
+        for chunk_id, (unit_id, span_ids) in cases.items():
+            unit = units[unit_id]
+            chunk = chunks[chunk_id]
+            self.assertEqual(unit["text_span_ids"], span_ids, unit_id)
+            self.assertEqual(chunk["text_span_ids"], span_ids, chunk_id)
+            for span_id in span_ids:
+                span = spans[span_id]
+                self.assertEqual(span["source_document_id"], unit["source_document_id"], span_id)
+                self.assertIn(span["page_number"], unit["page_numbers"], span_id)
+                self.assertNotIn(span["promotion_status"], {"excluded_nonlegal", "needs_review"}, span_id)
 
 
 def _legal_unit_grounding_cases() -> tuple[dict, ...]:

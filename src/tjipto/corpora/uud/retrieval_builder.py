@@ -80,7 +80,13 @@ def apply_chunk_grounding(
         chunk["temporal_context"] = source.get("temporal_context", source["source_role"])
         chunk["evidence_ids"] = [row["evidence_id"] for row in chunk_evidence]
         chunk["bbox_ids"] = [bbox_id for row in chunk_evidence for bbox_id in row.get("bbox_refs") or ()]
-        chunk["text_span_ids"] = _text_span_ids_for_text(spans_by_page, unit["source_document_id"], page_numbers, chunk["text"])
+        chunk["text_span_ids"] = _text_span_ids_for_text(
+            spans_by_page,
+            unit["source_document_id"],
+            page_numbers,
+            chunk["text"],
+            allow_containing_span=True,
+        )
         chunk["grounding_status"] = "text_span_exact" if chunk["text_span_ids"] else "text_span_unavailable"
         if not chunk["text_span_ids"]:
             chunk["failure_reason"] = "text_span_exact_match_unavailable"
@@ -92,7 +98,13 @@ def apply_chunk_grounding(
         unit_chunk = chunks_by_unit.get(unit["legal_unit_id"])
         unit_evidence = evidence_by_unit.get(unit["legal_unit_id"], [])
         page_numbers = list(range(unit["page_start"], unit["page_end"] + 1))
-        text_span_ids = _text_span_ids_for_text(spans_by_page, unit["source_document_id"], page_numbers, unit["text"])
+        text_span_ids = _text_span_ids_for_text(
+            spans_by_page,
+            unit["source_document_id"],
+            page_numbers,
+            unit["text"],
+            allow_containing_span=True,
+        )
         source = source_meta[unit["source_document_id"]]
         unit["source_role"] = source["source_role"]
         unit["temporal_context"] = source.get("temporal_context", unit["source_role"])
@@ -116,6 +128,8 @@ def _text_span_ids_for_text(
     source_document_id: str,
     page_numbers: list[int],
     text: str,
+    *,
+    allow_containing_span: bool = False,
 ) -> list[str]:
     expected = [compact(line) for line in (text or "").splitlines() if compact(line)]
     if not expected:
@@ -124,6 +138,21 @@ def _text_span_ids_for_text(
     matched_sequence = matching_sequence(rows, text)
     if matched_sequence:
         return [row["text_span_id"] for row in matched_sequence]
+    if allow_containing_span:
+        wanted = compact(text)
+        containing = [row["text_span_id"] for row in rows if wanted and wanted in compact(row.get("text"))]
+        if containing:
+            return containing
+        matched_containing: list[str] = []
+        target_index = 0
+        for row in rows:
+            if target_index >= len(expected):
+                break
+            if expected[target_index] in compact(row.get("text")):
+                matched_containing.append(row["text_span_id"])
+                target_index += 1
+        if target_index >= len(expected):
+            return matched_containing
     matched: list[str] = []
     target_index = 0
     for page_number in page_numbers:

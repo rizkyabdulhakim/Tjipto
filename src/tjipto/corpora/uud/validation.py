@@ -1792,14 +1792,11 @@ def _legal_unit_chunk_span_closure_health(
 
     active_units = [row for row in legal_units if row.get("runtime_loadable") is True]
     active_chunks = [row for row in chunks if row.get("runtime_loadable") is True]
-    reviewed_nonruntime_canonical_without_spans = [
-        row
-        for row in chunks
-        if row.get("runtime_loadable") is False
-        and row.get("canonical_use_allowed") is True
-        and not row.get("text_span_ids")
-        and row.get("provenance_review_status") == "reviewed"
-        and row.get("failure_reason")
+    source_text_backed_units_without_spans = [
+        row for row in legal_units if row.get("text") and not row.get("text_span_ids") and row.get("runtime_loadable") is not False
+    ]
+    source_text_backed_chunks_without_spans = [
+        row for row in chunks if row.get("text") and row.get("canonical_use_allowed") is True and not row.get("text_span_ids")
     ]
     invalid_parent_refs: list[str] = []
     missing_parent_refs: list[dict] = []
@@ -1845,7 +1842,8 @@ def _legal_unit_chunk_span_closure_health(
         "impossible_structural_nesting_count": len(impossible_structural_nesting),
         "active_legal_units_without_span_ids": sum(1 for row in active_units if not row.get("text_span_ids")),
         "active_chunks_without_span_ids": sum(1 for row in active_chunks if not row.get("text_span_ids")),
-        "reviewed_nonruntime_canonical_chunks_without_span_ids": len(reviewed_nonruntime_canonical_without_spans),
+        "source_text_backed_legal_units_without_span_ids_count": len(source_text_backed_units_without_spans),
+        "source_text_backed_chunks_without_span_ids_count": len(source_text_backed_chunks_without_spans),
         "invalid_legal_unit_span_ref_count": unit_span_errors["invalid_ref_count"],
         "invalid_chunk_span_ref_count": chunk_span_errors["invalid_ref_count"],
         "source_page_span_mismatch_count": unit_span_errors["source_page_mismatch_count"] + chunk_span_errors["source_page_mismatch_count"],
