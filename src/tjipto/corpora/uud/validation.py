@@ -1079,17 +1079,54 @@ def _promotion_decision_audit_health(
     actual = {(row.get("record_type"), row.get("record_id")) for row in promotion_decisions}
     duplicate_decision_ids = len(promotion_decisions) - len({row.get("decision_id") for row in promotion_decisions})
     blocked = [row for row in promotion_decisions if row.get("decision") == "keep_non_exact"]
+    attempted = [row for row in promotion_decisions if row.get("promotion_attempted") is True]
     false_exact = [
         row
         for row in promotion_decisions
         if row.get("decision") == "promote_exact"
         and not (row.get("exact_quote_available") and row.get("exact_span_available") and row.get("exact_bbox_available"))
     ]
+    required_fields = {
+        "promotion_attempt_method",
+        "promotion_attempt_result",
+        "quote_match_status",
+        "span_match_status",
+        "subspan_match_status",
+        "bbox_union_status",
+        "matched_span_ids",
+        "matched_page_numbers",
+        "matched_text_excerpt",
+        "blocker_evidence",
+        "can_be_exact_citation",
+        "can_be_exact_highlight",
+    }
+    generic_reasons = {"non_exact_grounding", "page_grounded_only", "field_level_grounded", "blocked", "insufficient_evidence"}
     counts = {
         "promotion_decision_count": len(promotion_decisions),
         "expected_promotion_decision_count": len(expected),
         "blocked_decision_count": len(blocked),
         "promotion_blocked_count": int(promotion_engine_health.get("promotion_blocked_count") or 0),
+        "promotion_attempted_count": len(attempted),
+        "promotion_attempt_missing_count": len(promotion_decisions) - len(attempted),
+        "exact_quote_match_count": sum(1 for row in promotion_decisions if row.get("quote_match_status") == "exact_full_quote_match"),
+        "span_sequence_candidate_count": sum(
+            1 for row in promotion_decisions if row.get("span_match_status") == "normalized_span_sequence_match"
+        ),
+        "subspan_match_candidate_count": sum(1 for row in promotion_decisions if row.get("subspan_match_status") == "matched"),
+        "bbox_union_candidate_count": sum(1 for row in promotion_decisions if row.get("bbox_union_status") == "bbox_union_available"),
+        "bbox_union_not_supported_count": sum(
+            1 for row in promotion_decisions if row.get("bbox_union_status") == "not_supported_by_current_bbox_artifact"
+        ),
+        "new_exact_promotion_count": sum(1 for row in promotion_decisions if row.get("decision") == "promote_exact"),
+        "kept_non_exact_after_attempt_count": len(blocked),
+        "generic_blocker_reason_count": sum(1 for row in blocked if row.get("failure_reason") in generic_reasons),
+        "false_highlightable_claim_count": sum(
+            1
+            for row in promotion_decisions
+            if row.get("highlightable") is True
+            and not (row.get("exact_quote_available") and row.get("exact_span_available") and row.get("exact_bbox_available"))
+        ),
+        "missing_feasibility_field_count": sum(1 for row in promotion_decisions if required_fields - set(row)),
         "missing_decision_count": len(expected - actual),
         "unexpected_decision_count": len(actual - expected),
         "duplicate_decision_id_count": duplicate_decision_ids,
@@ -1109,6 +1146,10 @@ def _promotion_decision_audit_health(
                 "duplicate_decision_id_count",
                 "blocked_decision_missing_reason_count",
                 "false_exact_decision_count",
+                "promotion_attempt_missing_count",
+                "generic_blocker_reason_count",
+                "false_highlightable_claim_count",
+                "missing_feasibility_field_count",
             )
         )
         else "incomplete",

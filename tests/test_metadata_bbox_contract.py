@@ -96,6 +96,18 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(audit["status"], "complete")
         self.assertEqual(audit["promotion_decision_count"], promotion["promotion_blocked_count"])
         self.assertEqual(audit["blocked_decision_count"], promotion["promotion_blocked_count"])
+        self.assertEqual(audit["promotion_attempted_count"], promotion["promotion_blocked_count"])
+        self.assertEqual(audit["promotion_attempt_missing_count"], 0)
+        self.assertEqual(audit["exact_quote_match_count"], 74)
+        self.assertEqual(audit["span_sequence_candidate_count"], 71)
+        self.assertEqual(audit["subspan_match_candidate_count"], 2)
+        self.assertEqual(audit["bbox_union_candidate_count"], 52)
+        self.assertEqual(audit["bbox_union_not_supported_count"], 17)
+        self.assertEqual(audit["new_exact_promotion_count"], 0)
+        self.assertEqual(audit["kept_non_exact_after_attempt_count"], 74)
+        self.assertEqual(audit["generic_blocker_reason_count"], 0)
+        self.assertEqual(audit["false_highlightable_claim_count"], 0)
+        self.assertEqual(audit["missing_feasibility_field_count"], 0)
         self.assertEqual(audit["missing_decision_count"], 0)
         self.assertEqual(audit["unexpected_decision_count"], 0)
         self.assertEqual(audit["blocked_decision_missing_reason_count"], 0)
@@ -124,12 +136,28 @@ class MetadataBBoxContractTest(unittest.TestCase):
                 "current_grounding_status",
                 "candidate_status",
                 "failure_reason",
+                "promotion_attempt_method",
+                "promotion_attempt_result",
+                "quote_match_status",
+                "span_match_status",
+                "subspan_match_status",
+                "bbox_union_status",
+                "matched_span_ids",
+                "matched_page_numbers",
+                "matched_text_excerpt",
+                "blocker_evidence",
+                "can_be_exact_citation",
+                "can_be_exact_highlight",
                 "policy_reason",
                 "review_status",
             ):
                 self.assertIn(field, row, row["decision_id"])
             self.assertTrue(row["failure_reason"], row["decision_id"])
+            self.assertTrue(row["promotion_attempted"], row["decision_id"])
+            self.assertEqual(row["promotion_attempt_result"], "blocked_after_feasibility_check", row["decision_id"])
             self.assertFalse(row["highlightable"], row["decision_id"])
+            self.assertFalse(row["can_be_exact_citation"], row["decision_id"])
+            self.assertFalse(row["can_be_exact_highlight"], row["decision_id"])
 
     def test_fixture_metadata_rows_keep_stable_exact_grounding_ids(self) -> None:
         rows = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}

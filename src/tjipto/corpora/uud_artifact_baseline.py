@@ -141,6 +141,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         evidence=evidence,
         metadata_grounding=metadata_grounding,
         bbox_rows=bbox_rows,
+        page_text_spans=page_text_spans,
         pages=pages,
     )
     write_jsonl(final_dir / "legal_units.jsonl", legal_units)
