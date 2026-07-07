@@ -4,7 +4,14 @@ import json
 from pathlib import Path
 import unittest
 
-from tjipto.corpora.disposition import SPAN_DISPOSITION_FIELDS
+from tjipto.corpora.disposition import (
+    LEGAL_FORCES,
+    PROMOTION_STATUSES,
+    REVIEW_STATUSES,
+    SEMANTIC_CLASSIFICATIONS,
+    SPAN_DISPOSITION_FIELDS,
+    SPAN_ROLES,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +46,11 @@ class TextSpanDispositionContractTest(unittest.TestCase):
             self.assertTrue(span["semantic_classification"], span["text_span_id"])
             self.assertTrue(span["promotion_status"], span["text_span_id"])
             self.assertTrue(span["legal_force"], span["text_span_id"])
+            self.assertIn(span["span_role"], SPAN_ROLES, span["text_span_id"])
+            self.assertIn(span["semantic_classification"], SEMANTIC_CLASSIFICATIONS, span["text_span_id"])
+            self.assertIn(span["promotion_status"], PROMOTION_STATUSES, span["text_span_id"])
+            self.assertIn(span["legal_force"], LEGAL_FORCES, span["text_span_id"])
+            self.assertIn(span["review_status"], REVIEW_STATUSES, span["text_span_id"])
 
     def test_excluded_and_needs_review_spans_fail_closed(self) -> None:
         for span in self.spans:
@@ -117,10 +129,21 @@ class TextSpanDispositionContractTest(unittest.TestCase):
     def test_validation_report_matches_disposition_counts(self) -> None:
         health = read_json(FINAL / "validation_report.json")["all_text_disposition_health"]
         self.assertEqual(health["page_text_span_count"], len(self.spans))
+        self.assertEqual(health["classified_span_count"], len(self.spans))
         self.assertEqual(health["span_disposition_missing_count"], 0)
         self.assertEqual(health["semantic_classification_present_count"], len(self.spans))
         self.assertEqual(health["promotion_status_present_count"], len(self.spans))
         self.assertEqual(health["legal_force_present_count"], len(self.spans))
+        self.assertEqual(health["missing_source_ref_count"], 0)
+        self.assertEqual(health["missing_page_ref_count"], 0)
+        self.assertEqual(health["missing_bbox_coordinate_count"], 0)
+        self.assertEqual(health["invalid_bbox_coordinate_count"], 0)
+        self.assertEqual(health["invalid_span_role_count"], 0)
+        self.assertEqual(health["invalid_semantic_classification_count"], 0)
+        self.assertEqual(health["invalid_legal_force_count"], 0)
+        self.assertEqual(health["invalid_promotion_status_count"], 0)
+        self.assertEqual(health["invalid_review_status_count"], 0)
+        self.assertEqual(health["ambiguous_disposition_count"], 0)
         self.assertEqual(health["needs_review_count"], 0)
         self.assertEqual(health["status"], "complete")
 

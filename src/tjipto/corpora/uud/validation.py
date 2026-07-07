@@ -6,7 +6,16 @@ import re
 from time import perf_counter
 import unicodedata
 
-from tjipto.corpora.disposition import EXCLUDED_STATUSES, PROMOTED_STATUSES, SPAN_DISPOSITION_FIELDS
+from tjipto.corpora.disposition import (
+    EXCLUDED_STATUSES,
+    LEGAL_FORCES,
+    PROMOTED_STATUSES,
+    PROMOTION_STATUSES,
+    REVIEW_STATUSES,
+    SEMANTIC_CLASSIFICATIONS,
+    SPAN_DISPOSITION_FIELDS,
+    SPAN_ROLES,
+)
 from tjipto.corpora.intent_config import contains_intent_phrase, resolve_instrument_intent
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
@@ -481,9 +490,25 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"empty_text_span:{row['text_span_id']}")
         if row.get("bbox_precision") != "exact":
             errors.append(f"text_span_missing_exact_bbox:{row['text_span_id']}")
+        if row.get("source_document_id") not in source_document_ids:
+            errors.append(f"text_span_unknown_source_document:{row['text_span_id']}:{row.get('source_document_id')}")
+        if not isinstance(row.get("page_number"), int):
+            errors.append(f"text_span_missing_page_number:{row['text_span_id']}")
+        if not _valid_coordinates(row):
+            errors.append(f"text_span_invalid_bbox_coordinates:{row['text_span_id']}")
         for field in SPAN_DISPOSITION_FIELDS:
             if field not in row:
                 errors.append(f"text_span_missing_disposition_field:{row['text_span_id']}:{field}")
+        if row.get("span_role") not in SPAN_ROLES:
+            errors.append(f"text_span_invalid_span_role:{row['text_span_id']}:{row.get('span_role')}")
+        if row.get("semantic_classification") not in SEMANTIC_CLASSIFICATIONS:
+            errors.append(f"text_span_invalid_semantic_classification:{row['text_span_id']}:{row.get('semantic_classification')}")
+        if row.get("legal_force") not in LEGAL_FORCES:
+            errors.append(f"text_span_invalid_legal_force:{row['text_span_id']}:{row.get('legal_force')}")
+        if row.get("promotion_status") not in PROMOTION_STATUSES:
+            errors.append(f"text_span_invalid_promotion_status:{row['text_span_id']}:{row.get('promotion_status')}")
+        if row.get("review_status") not in REVIEW_STATUSES:
+            errors.append(f"text_span_invalid_review_status:{row['text_span_id']}:{row.get('review_status')}")
         if row.get("promotion_status") in EXCLUDED_STATUSES and not row.get("exclusion_reason"):
             errors.append(f"excluded_text_span_missing_reason:{row['text_span_id']}")
         if row.get("promotion_status") == "needs_review":
@@ -502,6 +527,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"text_span_unknown_metadata_target:{row['text_span_id']}:{target_id}")
             elif target_type == "source_conflict" and target_id not in source_conflict_ids:
                 errors.append(f"text_span_unknown_source_conflict_target:{row['text_span_id']}:{target_id}")
+        elif row.get("promotion_target_id") and row.get("promotion_target_type") not in {"legal_unit", "chunk"}:
+            errors.append(f"text_span_ambiguous_nonpromoted_target:{row['text_span_id']}:{row.get('promotion_target_type')}")
     semantic_precedence = _semantic_precedence_health(page_text_spans, legal_units, source_conflicts)
     for key, value in semantic_precedence.items():
         if key.endswith("_count") and value:
@@ -917,23 +944,76 @@ def _all_text_disposition_health(
         if row.get("promotion_status") in PROMOTED_STATUSES and not _target_exists(row, legal_targets, metadata_targets, conflict_targets)
     ]
     needs_review_rows = [row for row in page_text_spans if row.get("promotion_status") == "needs_review"]
+    missing_source_refs = [row for row in page_text_spans if not row.get("source_document_id")]
+    missing_page_refs = [row for row in page_text_spans if not isinstance(row.get("page_number"), int)]
+    missing_bbox_coordinates = [row for row in page_text_spans if any(key not in row for key in ("x0", "y0", "x1", "y1"))]
+    invalid_bbox_coordinates = [row for row in page_text_spans if not _valid_coordinates(row)]
+    invalid_span_roles = [row for row in page_text_spans if row.get("span_role") not in SPAN_ROLES]
+    invalid_semantic_classifications = [
+        row for row in page_text_spans if row.get("semantic_classification") not in SEMANTIC_CLASSIFICATIONS
+    ]
+    invalid_legal_forces = [row for row in page_text_spans if row.get("legal_force") not in LEGAL_FORCES]
+    invalid_promotion_statuses = [row for row in page_text_spans if row.get("promotion_status") not in PROMOTION_STATUSES]
+    invalid_review_statuses = [row for row in page_text_spans if row.get("review_status") not in REVIEW_STATUSES]
+    ambiguous_dispositions = [
+        row
+        for row in page_text_spans
+        if row.get("promotion_status") not in PROMOTED_STATUSES
+        and row.get("promotion_target_id")
+        and row.get("promotion_target_type") not in {"legal_unit", "chunk"}
+    ]
     return {
         "page_text_span_count": len(page_text_spans),
+        "classified_span_count": sum(1 for row in page_text_spans if row.get("semantic_classification") in SEMANTIC_CLASSIFICATIONS),
         "span_disposition_present_count": len(page_text_spans) - len(missing_fields),
         "span_disposition_missing_count": len(missing_fields),
         "semantic_classification_present_count": sum(1 for row in page_text_spans if bool(row.get("semantic_classification"))),
         "known_unreferenced_span_count": len(span_ids - referenced_span_ids),
         "promotion_status_present_count": sum(1 for row in page_text_spans if "promotion_status" in row),
         "legal_force_present_count": sum(1 for row in page_text_spans if "legal_force" in row),
+        "missing_source_ref_count": len(missing_source_refs),
+        "missing_page_ref_count": len(missing_page_refs),
+        "missing_bbox_coordinate_count": len(missing_bbox_coordinates),
+        "invalid_bbox_coordinate_count": len(invalid_bbox_coordinates),
+        "invalid_span_role_count": len(invalid_span_roles),
+        "invalid_semantic_classification_count": len(invalid_semantic_classifications),
+        "invalid_legal_force_count": len(invalid_legal_forces),
+        "invalid_promotion_status_count": len(invalid_promotion_statuses),
+        "invalid_review_status_count": len(invalid_review_statuses),
+        "ambiguous_disposition_count": len(ambiguous_dispositions),
         "exclusion_reason_missing_for_excluded_count": len(excluded_missing_reason),
         "needs_review_count": len(needs_review_rows),
         "runtime_loadable_needs_review_count": sum(1 for row in needs_review_rows if row.get("runtime_loadable") is True),
         "canonical_use_allowed_needs_review_count": sum(1 for row in needs_review_rows if row.get("canonical_use_allowed") is True),
         "fake_grounding_id_count": len(fake_grounding_ids),
         "status": "complete"
-        if page_text_spans and not missing_fields and not excluded_missing_reason and not fake_grounding_ids
+        if page_text_spans
+        and not missing_fields
+        and not excluded_missing_reason
+        and not fake_grounding_ids
+        and not missing_source_refs
+        and not missing_page_refs
+        and not missing_bbox_coordinates
+        and not invalid_bbox_coordinates
+        and not invalid_span_roles
+        and not invalid_semantic_classifications
+        and not invalid_legal_forces
+        and not invalid_promotion_statuses
+        and not invalid_review_statuses
+        and not ambiguous_dispositions
         else "incomplete",
     }
+
+
+def _valid_coordinates(row: dict) -> bool:
+    try:
+        x0 = float(row["x0"])
+        y0 = float(row["y0"])
+        x1 = float(row["x1"])
+        y1 = float(row["y1"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return x0 < x1 and y0 < y1
 
 
 def _target_exists(row: dict, legal_targets: set[str], metadata_targets: set[str], conflict_targets: set[str]) -> bool:
