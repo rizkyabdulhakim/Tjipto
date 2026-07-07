@@ -630,13 +630,15 @@ class RuntimeContractTest(unittest.TestCase):
     def test_ask_explains_known_source_anomalies_safely(self) -> None:
         for case in _source_conflict_cases():
             result = self.service.ask("uud", case["query"])
-            self.assertEqual(result["status"], "insufficient_evidence", case["query"])
+            self.assertEqual(result["status"], case["expected_status"], case["query"])
             self.assertEqual(result["route"], "source_anomaly_explanation", case["query"])
             self.assertEqual(result["source_conflict"]["source_conflict_id"], case["source_conflict_id"], case["query"])
+            self.assertEqual(bool(result["citations"]), case["has_citations"], case["query"])
+            self.assertEqual(bool(result["viewer_refs"]), case["has_viewer_refs"], case["query"])
+            self.assertEqual(len(result.get("trace_support", ())), case["trace_support_count"], case["query"])
             for reason in case["expected_insufficient_reasons"]:
                 self.assertIn(reason, result["insufficient_reasons"], case["query"])
-            self.assertFalse(result["citations"], case["query"])
-            self.assertFalse(result["viewer_refs"], case["query"])
+            self.assertIn("source_conflict_not_final_legal_authority", result["warnings"], case["query"])
 
     def test_viewer_payload_is_multi_page_and_public_safe(self) -> None:
         evidence_id = "uud_current_consolidated_final_citation_evidence_00232"

@@ -1088,23 +1088,27 @@ def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
     conflict = _matched_source_conflict(store, query)
     if conflict is None:
         return _source_anomaly_fallback()
+    support = _source_conflict_support(store, conflict)
     reasons = _source_conflict_reasons(store, query)
-    answer = _source_anomaly_answer(store, conflict, query)
+    exact_provenance = bool(support["evidence"])
+    trace_only = bool(support["trace_support"]) and not exact_provenance
+    answer = _source_anomaly_answer(store, conflict, query, exact_provenance=exact_provenance, trace_only=trace_only)
     return {
-        "status": "insufficient_evidence",
+        "status": "limited_answer" if exact_provenance or trace_only else "insufficient_evidence",
         "route": "source_anomaly_explanation",
         "intent": "structured_lookup",
-        "answer_type": "none",
+        "answer_type": "source_conflict_provenance" if exact_provenance or trace_only else "none",
         "answer": answer,
-        "context_pack": empty_context_pack("source_anomaly"),
-        "evidence": (),
-        "citations": (),
-        "viewer_refs": (),
+        "context_pack": support["context_pack"],
+        "evidence": support["evidence"],
+        "citations": support["citations"],
+        "viewer_refs": support["viewer_refs"],
         "metadata_facts": (),
         "legal_relations": (),
-        "answer_scope": "insufficient_evidence",
-        "warnings": (),
-        "insufficient_reasons": tuple(dict.fromkeys(reasons)),
+        "trace_support": support["trace_support"],
+        "answer_scope": support["answer_scope"],
+        "warnings": support["warnings"],
+        "insufficient_reasons": tuple(dict.fromkeys(reasons)) if not exact_provenance else (),
         "source_conflict": _public_source_conflict(conflict),
     }
 
@@ -1221,13 +1225,72 @@ def _public_source_conflict(conflict: dict) -> dict:
     }
 
 
-def _source_anomaly_answer(store, conflict: dict, query: str) -> str:
+def _source_conflict_support(store, conflict: dict) -> dict:
+    evidence_rows = tuple(
+        row | {"route_sources": ("exact",), "candidate_type": "source_conflict_provenance"}
+        for evidence_id in conflict.get("evidence_ids") or ()
+        if (row := store.get(evidence_id)) is not None
+    )
+    context_pack = assemble_context_pack(store, evidence_rows) if evidence_rows else empty_context_pack("source_anomaly")
+    evidence = context_pack["answer_evidence"]
+    trace_support: tuple[dict, ...] = ()
+    answer_scope = "insufficient_evidence"
+    if evidence:
+        answer_scope = "source_conflict_exact_provenance"
+    else:
+        trace_support = (_source_conflict_trace_support(conflict, context_pack["validation_reasons"]),)
+        answer_scope = "source_conflict_trace" if trace_support else "insufficient_evidence"
+    return {
+        "context_pack": context_pack,
+        "evidence": evidence,
+        "citations": context_pack["citation_payloads"] if evidence else (),
+        "viewer_refs": context_pack["viewer_refs"] if evidence else (),
+        "trace_support": trace_support,
+        "answer_scope": answer_scope,
+        "warnings": ("source_conflict_not_final_legal_authority",) if evidence or trace_support else (),
+    }
+
+
+def _source_conflict_trace_support(conflict: dict, validation_reasons: dict) -> dict:
+    first_reason = next(iter(validation_reasons.values()), None)
+    return {
+        "support_class": "source_conflict_trace",
+        "source_conflict_id": conflict.get("source_conflict_id"),
+        "type": conflict.get("type"),
+        "classification": conflict.get("classification"),
+        "source_document_id": conflict.get("source_document_id"),
+        "page_numbers": tuple(conflict.get("page_numbers") or conflict.get("affected_pages") or ()),
+        "text_span_ids": tuple(conflict.get("text_span_ids") or ()),
+        "evidence_ids": tuple(conflict.get("evidence_ids") or ()),
+        "bbox_ids": tuple(conflict.get("bbox_ids") or ()),
+        "citation_available": False,
+        "viewer_highlightable": False,
+        "viewer_ref": None,
+        "failure_reason": conflict.get("failure_reason") or first_reason or "source_conflict_trace_only",
+    }
+
+
+def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenance: bool, trace_only: bool) -> str:
     intent = _source_conflict_intent(store)
     decision = conflict.get("resolution_decision") or {}
     folded = (query or "").casefold()
+    classification = conflict.get("classification") or "source_conflict_recorded"
+    role_label = _source_conflict_role_label(store, conflict)
+    reviewer_suffix = _source_conflict_reviewer_suffix(decision.get("reviewer_decision"))
+    if exact_provenance:
+        return (
+            f"Catatan konflik sumber pada {role_label} mencatat {classification}. "
+            f"Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final.{reviewer_suffix}"
+        )
+    if trace_only:
+        return (
+            f"Catatan konflik sumber pada {role_label} mencatat {classification}. "
+            "Jejak sumber tersedia, tetapi belum memenuhi syarat sitasi atau highlight exact."
+            f"{reviewer_suffix}"
+        )
     values = {
-        "classification": conflict.get("classification") or "",
-        "reviewer_decision": decision.get("reviewer_decision") or "",
+        "classification": classification,
+        "reviewer_decision": decision.get("reviewer_decision") or "Reviewer decision unavailable",
     }
     for rule in intent.get("answer_rules") or ():
         terms = tuple(str(term).casefold() for term in rule.get("query_terms") or ())
@@ -1235,3 +1298,17 @@ def _source_anomaly_answer(store, conflict: dict, query: str) -> str:
         if (terms and any(term in folded for term in terms)) or (types and conflict.get("type") in types):
             return str(rule.get("template") or "").format_map(values)
     return str(intent.get("default_answer_template") or "").format_map(values)
+
+
+def _source_conflict_role_label(store, conflict: dict) -> str:
+    source = _source_document_meta(store, conflict.get("source_document_id"))
+    source_role = str(source.get("source_role") or "")
+    labels = _source_conflict_intent(store).get("role_labels") or {}
+    return str(labels.get(source_role) or source_role or conflict.get("source_document_id") or "sumber historis")
+
+
+def _source_conflict_reviewer_suffix(reviewer_decision: object) -> str:
+    text = str(reviewer_decision or "").strip()
+    if not text:
+        return ""
+    return f" Reviewer decision: {text}."
