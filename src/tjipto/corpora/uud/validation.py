@@ -350,8 +350,16 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         page_text_spans=page_text_spans,
         graph_nodes=graph_nodes,
     )
+    closure_non_error_count_keys = {
+        "legal_unit_count",
+        "chunk_count",
+        "legal_unit_exact_span_link_count",
+        "chunk_exact_span_link_count",
+        "legal_unit_containing_span_link_count",
+        "chunk_containing_span_link_count",
+    }
     for key, value in closure.items():
-        if key.endswith("_count") and key not in {"legal_unit_count", "chunk_count"} and value:
+        if key.endswith("_count") and key not in closure_non_error_count_keys and value:
             errors.append(f"legal_unit_chunk_span_closure_{key}:{value}")
     if closure["status"] != "complete":
         errors.append("legal_unit_chunk_span_closure_incomplete")
@@ -1835,6 +1843,12 @@ def _legal_unit_chunk_span_closure_health(
     counts = {
         "legal_unit_count": len(legal_units),
         "chunk_count": len(chunks),
+        "legal_unit_exact_span_link_count": sum(1 for row in legal_units if row.get("grounding_status") == "text_span_exact"),
+        "chunk_exact_span_link_count": sum(1 for row in chunks if row.get("grounding_status") == "text_span_exact"),
+        "legal_unit_containing_span_link_count": sum(
+            1 for row in legal_units if row.get("grounding_status") == "text_span_containing_match"
+        ),
+        "chunk_containing_span_link_count": sum(1 for row in chunks if row.get("grounding_status") == "text_span_containing_match"),
         "legal_unit_chunk_mismatch_count": len(legal_unit_chunk_mismatches),
         "missing_parent_ref_count": len(missing_parent_refs),
         "invalid_parent_ref_count": len(invalid_parent_refs),
@@ -1852,10 +1866,18 @@ def _legal_unit_chunk_span_closure_health(
         "orphan_structural_unit_count": len(orphan_structural_units),
         "missing_legal_unit_graph_node_count": sum(1 for row in legal_units if row["legal_unit_id"] not in legal_unit_graph_ids),
     }
+    non_error_count_keys = {
+        "legal_unit_count",
+        "chunk_count",
+        "legal_unit_exact_span_link_count",
+        "chunk_exact_span_link_count",
+        "legal_unit_containing_span_link_count",
+        "chunk_containing_span_link_count",
+    }
     return {
         **counts,
         "status": "complete"
-        if not any(value for key, value in counts.items() if key.endswith("_count") and key not in {"legal_unit_count", "chunk_count"})
+        if not any(value for key, value in counts.items() if key.endswith("_count") and key not in non_error_count_keys)
         else "incomplete",
     }
 

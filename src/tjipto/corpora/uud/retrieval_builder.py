@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from tjipto.corpora.uud.provenance_exceptions import apply_review_category
+from tjipto.corpora.uud.provenance_exceptions import (
+    ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
+    apply_review_category,
+    review_category,
+)
 from tjipto.corpora.uud.structure_builder import compact, matching_sequence
 
 
@@ -80,14 +84,14 @@ def apply_chunk_grounding(
         chunk["temporal_context"] = source.get("temporal_context", source["source_role"])
         chunk["evidence_ids"] = [row["evidence_id"] for row in chunk_evidence]
         chunk["bbox_ids"] = [bbox_id for row in chunk_evidence for bbox_id in row.get("bbox_refs") or ()]
-        chunk["text_span_ids"] = _text_span_ids_for_text(
+        chunk["text_span_ids"], chunk_grounding_status = _text_span_match_for_text(
             spans_by_page,
             unit["source_document_id"],
             page_numbers,
             chunk["text"],
-            allow_containing_span=True,
+            allow_containing_span=not chunk_evidence and review_category(chunk) == ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
         )
-        chunk["grounding_status"] = "text_span_exact" if chunk["text_span_ids"] else "text_span_unavailable"
+        chunk["grounding_status"] = chunk_grounding_status
         if not chunk["text_span_ids"]:
             chunk["failure_reason"] = "text_span_exact_match_unavailable"
         chunk["runtime_loadable"] = unit.get("runtime_loadable") is not False and bool(chunk_evidence) and bool(chunk["text_span_ids"])
@@ -98,12 +102,12 @@ def apply_chunk_grounding(
         unit_chunk = chunks_by_unit.get(unit["legal_unit_id"])
         unit_evidence = evidence_by_unit.get(unit["legal_unit_id"], [])
         page_numbers = list(range(unit["page_start"], unit["page_end"] + 1))
-        text_span_ids = _text_span_ids_for_text(
+        text_span_ids, grounding_status = _text_span_match_for_text(
             spans_by_page,
             unit["source_document_id"],
             page_numbers,
             unit["text"],
-            allow_containing_span=True,
+            allow_containing_span=not unit_evidence and review_category(unit) == ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
         )
         source = source_meta[unit["source_document_id"]]
         unit["source_role"] = source["source_role"]
@@ -111,7 +115,7 @@ def apply_chunk_grounding(
         unit["page_numbers"] = page_numbers
         unit["text_span_ids"] = text_span_ids
         unit["bbox_ids"] = [bbox_id for row in unit_evidence for bbox_id in row.get("bbox_refs") or ()]
-        unit["grounding_status"] = "text_span_exact" if text_span_ids else "text_span_unavailable"
+        unit["grounding_status"] = grounding_status
         unit["validation_status"] = "accepted_grounding" if text_span_ids else "grounding_unavailable"
         if not text_span_ids:
             unit["failure_reason"] = "text_span_exact_match_unavailable"
@@ -131,18 +135,35 @@ def _text_span_ids_for_text(
     *,
     allow_containing_span: bool = False,
 ) -> list[str]:
+    return _text_span_match_for_text(
+        spans_by_page,
+        source_document_id,
+        page_numbers,
+        text,
+        allow_containing_span=allow_containing_span,
+    )[0]
+
+
+def _text_span_match_for_text(
+    spans_by_page: dict[tuple[str, int], list[dict]],
+    source_document_id: str,
+    page_numbers: list[int],
+    text: str,
+    *,
+    allow_containing_span: bool = False,
+) -> tuple[list[str], str]:
     expected = [compact(line) for line in (text or "").splitlines() if compact(line)]
     if not expected:
-        return []
+        return [], "text_span_unavailable"
     rows = [span for page_number in page_numbers for span in spans_by_page.get((source_document_id, page_number), [])]
     matched_sequence = matching_sequence(rows, text)
     if matched_sequence:
-        return [row["text_span_id"] for row in matched_sequence]
+        return [row["text_span_id"] for row in matched_sequence], "text_span_exact"
     if allow_containing_span:
         wanted = compact(text)
         containing = [row["text_span_id"] for row in rows if wanted and wanted in compact(row.get("text"))]
         if containing:
-            return containing
+            return containing, "text_span_containing_match"
         matched_containing: list[str] = []
         target_index = 0
         for row in rows:
@@ -152,7 +173,7 @@ def _text_span_ids_for_text(
                 matched_containing.append(row["text_span_id"])
                 target_index += 1
         if target_index >= len(expected):
-            return matched_containing
+            return matched_containing, "text_span_containing_match"
     matched: list[str] = []
     target_index = 0
     for page_number in page_numbers:
@@ -164,8 +185,8 @@ def _text_span_ids_for_text(
             matched.append(span["text_span_id"])
             target_index += 1
         if target_index >= len(expected):
-            return matched
-    return []
+            return matched, "text_span_exact"
+    return [], "text_span_unavailable"
 
 
 def _chunk_validation(chunk: dict) -> tuple[str, str]:

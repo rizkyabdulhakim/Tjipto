@@ -81,6 +81,10 @@
   "legal_unit_chunk_span_closure_health": {
     "legal_unit_count": 651,
     "chunk_count": 651,
+    "legal_unit_exact_span_link_count": 645,
+    "chunk_exact_span_link_count": 645,
+    "legal_unit_containing_span_link_count": 3,
+    "chunk_containing_span_link_count": 3,
     "legal_unit_chunk_mismatch_count": 0,
     "missing_parent_ref_count": 0,
     "invalid_parent_ref_count": 0,

@@ -54,13 +54,23 @@ class LegalUnitGroundingContractTest(unittest.TestCase):
         health = read_json(FINAL / "validation_report.json")["legal_unit_chunk_span_closure_health"]
         self.assertEqual(health["legal_unit_count"], 651)
         self.assertEqual(health["chunk_count"], 651)
+        non_error_count_keys = {
+            "legal_unit_count",
+            "chunk_count",
+            "legal_unit_exact_span_link_count",
+            "chunk_exact_span_link_count",
+            "legal_unit_containing_span_link_count",
+            "chunk_containing_span_link_count",
+        }
         for key, value in health.items():
-            if key.endswith("_count") and key not in {"legal_unit_count", "chunk_count"}:
+            if key.endswith("_count") and key not in non_error_count_keys:
                 self.assertEqual(value, 0, key)
         self.assertEqual(health["active_legal_units_without_span_ids"], 0)
         self.assertEqual(health["active_chunks_without_span_ids"], 0)
         self.assertEqual(health["source_text_backed_legal_units_without_span_ids_count"], 0)
         self.assertEqual(health["source_text_backed_chunks_without_span_ids_count"], 0)
+        self.assertEqual(health["legal_unit_containing_span_link_count"], 3)
+        self.assertEqual(health["chunk_containing_span_link_count"], 3)
         self.assertNotIn("reviewed_nonruntime_canonical_chunks_without_span_ids", health)
         self.assertEqual(health["status"], "complete")
 
@@ -90,6 +100,8 @@ class LegalUnitGroundingContractTest(unittest.TestCase):
             chunk = chunks[chunk_id]
             self.assertEqual(unit["text_span_ids"], span_ids, unit_id)
             self.assertEqual(chunk["text_span_ids"], span_ids, chunk_id)
+            self.assertEqual(unit["grounding_status"], "text_span_containing_match", unit_id)
+            self.assertEqual(chunk["grounding_status"], "text_span_containing_match", chunk_id)
             for span_id in span_ids:
                 span = spans[span_id]
                 self.assertEqual(span["source_document_id"], unit["source_document_id"], span_id)
