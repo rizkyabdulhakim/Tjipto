@@ -27,8 +27,11 @@ Frontend:
 ```powershell
 cd apps/web
 npm ci
+npm run lint
+npm run test
 npm run typecheck
 npm run build
+npm audit --omit=dev
 ```
 
 Handoff:
@@ -39,4 +42,4 @@ Expand-Archive tjipto-clean.zip tjipto-clean
 python scripts/verify_clean_handoff.py tjipto-clean
 ```
 
-Do not submit or audit working ZIPs containing `.git`, `node_modules`, `dist`, logs, bytecode, or test caches. Use the clean archive as the audit/release package.
+Local `apps/web/node_modules`, `apps/web/dist`, and Python caches are development artifacts; they must never be release artifacts. Use `git archive HEAD`, not a working-tree ZIP, as the audit/release package.

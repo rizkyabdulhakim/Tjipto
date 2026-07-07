@@ -32,6 +32,24 @@ class CleanHandoffContractTest(unittest.TestCase):
             )
             self.assertEqual(forbidden_entries(archive), [])
 
+    def test_git_archive_ignores_local_frontend_install_artifacts(self) -> None:
+        probe = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=ROOT, capture_output=True, text=True)  # nosec B603 B607
+        if probe.returncode != 0:
+            self.skipTest("git archive production check requires a git checkout")
+        with tempfile.TemporaryDirectory() as tmp:
+            local_root = Path(tmp) / "work"
+            subprocess.run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(local_root)], check=True)  # nosec B603 B607
+            (local_root / "apps/web/node_modules/pkg").mkdir(parents=True)
+            (local_root / "apps/web/dist").mkdir(parents=True)
+            archive = Path(tmp) / "tjipto-clean.zip"
+            subprocess.run(  # nosec B603 B607
+                ["git", "archive", "--format=zip", "--worktree-attributes", "HEAD", "-o", str(archive)],
+                cwd=local_root,
+                check=True,
+            )
+            self.assertEqual(forbidden_entries(archive), [])
+            self.assertNotEqual(forbidden_entries(local_root), [])
+
     def test_verifier_fails_on_noisy_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
