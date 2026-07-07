@@ -6,6 +6,8 @@ export interface Citation {
   documentId: string;
   documentTitle: string;
   regulationType: RegulationType;
+  authorityKind?: "legal_citation" | "source_conflict_provenance";
+  authorityLabel?: string;
   viewerMode?: "evidence" | "document";
   legalUnitId?: string;
   sourceDocumentId?: string;
@@ -38,6 +40,7 @@ export interface SupportItem {
   label: string;
   detail?: string;
   kind: "metadata" | "trace" | "document_relation";
+  clickable?: boolean;
 }
 
 export interface ChatThread {

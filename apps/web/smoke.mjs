@@ -98,6 +98,16 @@ async function expectNoExactCitationUi(page) {
 }
 
 async function runEvidenceContractSmoke(browser) {
+  const provenancePage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await ask(provenancePage, "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?");
+  await provenancePage.locator('[data-runtime-status="limited_answer"]').waitFor();
+  await provenancePage.locator('[data-provenance-note="true"]').waitFor();
+  await provenancePage.locator('[data-citation-kind="source_conflict_provenance"]').first().waitFor();
+  await provenancePage.locator('[data-citation-footer="true"] button[data-citation-kind="source_conflict_provenance"]').first().click();
+  await provenancePage.locator('[data-evidence-panel="normal"]').waitFor();
+  await provenancePage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  await provenancePage.close();
+
   const metadataPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(metadataPage, "kapan perubahan pertama ditetapkan");
   await metadataPage.locator('[data-runtime-status="answer_ready"]').waitFor();
@@ -107,9 +117,10 @@ async function runEvidenceContractSmoke(browser) {
   await metadataPage.close();
 
   const tracePage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
-  await ask(tracePage, "amandemen keempat mengubah pasal 31?");
-  await tracePage.locator('[data-runtime-status="insufficient_evidence"]').waitFor();
+  await ask(tracePage, "Apa konflik sumber Aturan Tambahan Pasal III Perubahan Keempat?");
+  await tracePage.locator('[data-runtime-status="limited_answer"]').waitFor();
   await tracePage.locator('[data-support-kind="trace-support"]').waitFor();
+  await tracePage.locator('[data-support-clickable="false"]').first().waitFor();
   await expectNoExactCitationUi(tracePage);
   await tracePage.close();
 

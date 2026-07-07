@@ -100,6 +100,7 @@ function CitationChip({
   return (
     <span className="relative inline-block align-baseline">
       <button
+        data-citation-kind={citation.authorityKind ?? "legal_citation"}
         onClick={onClick}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
@@ -135,7 +136,7 @@ function CitationChip({
                 color: "var(--tj-accent)",
               }}
             >
-              {citation.regulationType.replace("_", " ")}
+              {citation.authorityLabel ?? citation.regulationType.replace("_", " ")}
             </span>
             <span style={{ fontSize: 11, color: "var(--tj-text-muted)" }}>
               Halaman {citation.pageNumber}
@@ -150,6 +151,14 @@ function CitationChip({
           <span className="block" style={{ fontSize: 12, color: "var(--tj-text-secondary)" }}>
             {location}
           </span>
+          {citation.authorityKind === "source_conflict_provenance" && (
+            <span
+              className="block mt-2"
+              style={{ fontSize: 11, color: "var(--tj-text-muted)" }}
+            >
+              Bukan kesimpulan hukum final.
+            </span>
+          )}
           <span
             className="block mt-2 pt-2 border-t border-[var(--tj-border-subtle)]"
             style={{ fontSize: 11, color: "var(--tj-accent)", fontWeight: 500 }}
@@ -295,18 +304,29 @@ function CitationFooter({
   onClick: (c: Citation) => void;
   activeId?: number;
 }) {
+  const hasProvenance = citations.some((c) => c.authorityKind === "source_conflict_provenance");
   return (
     <div data-citation-footer="true" className="mt-5 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] overflow-hidden">
       <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[var(--tj-border-subtle)]">
         <FileText size={13} className="text-[var(--tj-text-secondary)]" />
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.02em", color: "var(--tj-text-secondary)" }}>
-          SUMBER · {citations.length} sitasi
+          {hasProvenance ? "JEJAK AUDIT SUMBER" : "SUMBER"} · {citations.length} sitasi
         </span>
       </div>
+      {hasProvenance && (
+        <div
+          data-provenance-note="true"
+          className="px-3.5 py-2 border-b border-[var(--tj-border-subtle)]"
+          style={{ fontSize: 12, color: "var(--tj-text-muted)" }}
+        >
+          Bukan kesimpulan hukum final. Sitasi ini ditampilkan sebagai provenance sumber yang dapat diaudit.
+        </div>
+      )}
       <ul>
         {citations.map((c) => (
           <li key={c.id}>
             <button
+              data-citation-kind={c.authorityKind ?? "legal_citation"}
               onClick={() => onClick(c)}
               className={`w-full flex items-start gap-3 px-3.5 py-2.5 text-left transition-colors border-b border-[var(--tj-border-subtle)] last:border-b-0 ${
                 activeId === c.id
@@ -334,6 +354,14 @@ function CitationFooter({
                 >
                   {c.documentTitle}
                 </span>
+                {c.authorityKind === "source_conflict_provenance" && (
+                  <span
+                    className="block truncate mt-0.5"
+                    style={{ fontSize: 11, color: "var(--tj-accent)", fontWeight: 600 }}
+                  >
+                    {c.authorityLabel ?? "Jejak audit sumber"}
+                  </span>
+                )}
                 <span
                   className="block truncate mt-0.5"
                   style={{ fontSize: 12, color: "var(--tj-text-muted)" }}
@@ -388,7 +416,11 @@ function SupportFooter({
           </div>
           <ul className="mt-1 space-y-1">
             {rows?.map((row) => (
-              <li key={row.id} style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
+              <li
+                key={row.id}
+                data-support-clickable={row.clickable ? "true" : "false"}
+                style={{ fontSize: 12, color: "var(--tj-text-muted)" }}
+              >
                 <span style={{ color: "var(--tj-text-primary)", fontWeight: 600 }}>{row.label}</span>
                 {row.detail ? ` · ${row.detail}` : ""}
               </li>

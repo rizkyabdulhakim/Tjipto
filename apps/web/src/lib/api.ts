@@ -1,4 +1,4 @@
-import type { Citation } from "./types";
+import type { Citation, SupportItem } from "./types";
 import type { PdfBBox } from "./pdfBBox";
 
 const API_BASE =
@@ -16,8 +16,12 @@ export interface ValidationReasons {
 
 export interface TjiptoAskResponse {
   status: string;
+  route?: string;
   answer_type?: string;
   answer?: string;
+  answer_scope?: string;
+  warnings?: string[];
+  insufficient_reasons?: string[];
   citations?: CitationPayload[];
   viewer_refs?: ViewerRefPayload[];
   metadata_support?: MetadataSupportPayload[];
@@ -51,15 +55,18 @@ export interface DocumentRelationPayload {
 }
 
 export interface TraceSupportPayload {
+  source_conflict_id?: string;
   relation_id?: string;
   relation_type?: string;
   source_role?: string;
+  classification?: string;
   target_citation?: string;
   evidence_id?: string;
   support_class?: string;
   grounding_level?: string;
   citation_available?: boolean;
   viewer_highlightable?: boolean;
+  failure_reason?: string;
 }
 
 export interface SearchResult {
@@ -240,12 +247,23 @@ export function fallbackAnswer() {
   return "Bukti tidak cukup / database belum tersedia dalam korpus UUD terverifikasi saat ini.";
 }
 
+export function answerTextOrFallback(response: TjiptoAskResponse) {
+  const answer = typeof response.answer === "string" ? response.answer.trim() : "";
+  return answer || fallbackAnswer();
+}
+
 export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation[] {
   const citations = Array.isArray(response.citations) ? response.citations : [];
   const viewerRefs = Array.isArray(response.viewer_refs) ? response.viewer_refs : [];
+  const provenanceCitation =
+    response.route === "source_anomaly_explanation" &&
+    response.answer_scope === "source_conflict_exact_provenance" &&
+    Array.isArray(response.warnings) &&
+    response.warnings.includes("source_conflict_not_final_legal_authority");
   return citations.flatMap((item, index) => {
     if (!item?.evidence_id || !item?.quoted_text) return [];
     const viewer = viewerRefs[index] ?? item.viewer_ref;
+    if (viewer?.can_resolve !== true) return [];
     const pages = Array.isArray(item.page_numbers)
       ? item.page_numbers
       : Array.isArray(viewer?.page_numbers)
@@ -260,6 +278,8 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       viewerRefId: viewer?.evidence_id,
       documentTitle: item.document_title ?? fallbackDocumentTitle(item.corpus_id),
       regulationType: "UUD",
+      authorityKind: provenanceCitation ? "source_conflict_provenance" : "legal_citation",
+      authorityLabel: provenanceCitation ? "Jejak audit sumber" : "Sitasi hukum",
       article: String(item.label ?? item.citation ?? "UUD"),
       pageNumber: Number.isFinite(pageNumber) ? pageNumber : 1,
       excerpt: String(item.quoted_text),
@@ -270,6 +290,42 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       sourceStatusLabel: sourceStatusLabel(item.source_role, item.temporal_context),
     };
   });
+}
+
+export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
+  metadata: SupportItem[];
+  trace: SupportItem[];
+  documentRelations: SupportItem[];
+} {
+  return {
+    metadata: (response.metadata_support ?? []).map((row, index) => ({
+      id: String(row.evidence_id ?? `metadata_${index}`),
+      kind: "metadata",
+      label: String(row.field ?? "metadata_support"),
+      detail:
+        row.support_class === "exact_metadata_citation"
+          ? String(row.answer ?? "Metadata exact tersedia, bukan sitasi hukum final")
+          : String(row.answer ?? "Metadata field-grounded support"),
+      clickable: false,
+    })),
+    trace: (response.trace_support ?? []).map((row, index) => ({
+      id: String(row.source_conflict_id ?? row.relation_id ?? row.evidence_id ?? `trace_${index}`),
+      kind: "trace",
+      label: String(row.target_citation ?? row.classification ?? row.relation_type ?? "trace_support"),
+      detail:
+        row.support_class === "source_conflict_trace"
+          ? "Jejak audit sumber. Trace-only, tidak dapat di-highlight."
+          : "Trace-only, tidak dapat di-highlight.",
+      clickable: false,
+    })),
+    documentRelations: (response.document_relations ?? []).map((row, index) => ({
+      id: String(row.relation_id ?? `document_relation_${index}`),
+      kind: "document_relation",
+      label: String(row.relation_type ?? "document_relation"),
+      detail: "Relasi tingkat dokumen, bukan sitasi atau highlight exact.",
+      clickable: false,
+    })),
+  };
 }
 
 export function mapSearchResultToCitation(item: SearchResult, index: number): Citation | null {
