@@ -310,6 +310,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 document_relations=read_jsonl(FINAL / "document_relations.jsonl"),
                 article_amendment_relations=read_jsonl(FINAL / "article_amendment_relations.jsonl"),
                 page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
+                pdf_health_report=read_json(FINAL / "pdf_health_report.json"),
                 pages=read_jsonl(FINAL / "pages.jsonl"),
                 intent_config=intent_config_for("uud_1945", CorpusRegistry(ROOT).resolve("uud")),
             ),

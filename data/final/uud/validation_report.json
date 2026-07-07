@@ -32,7 +32,8 @@
     "validation_alignment_results.jsonl",
     "validation_exception_review_labels.jsonl",
     "validation_exceptions.jsonl",
-    "page_text_spans.jsonl"
+    "page_text_spans.jsonl",
+    "pdf_health_report.json"
   ],
   "status": "valid",
   "structure_fidelity": {
@@ -232,11 +233,11 @@
     "status": "complete"
   },
   "artifact_origin_health": {
-    "manifest_file_rows": 25,
-    "files_with_origin": 25,
+    "manifest_file_rows": 26,
+    "files_with_origin": 26,
     "files_missing_origin": 0,
     "invalid_origin_values": 0,
-    "generated_count": 20,
+    "generated_count": 21,
     "carried_forward_count": 3,
     "manual_review_artifact_count": 2,
     "deprecated_count": 0,
@@ -288,6 +289,18 @@
     "tracked_exception_count": 0,
     "untracked_mismatch_count": 0,
     "page_grounded_only_metadata_count": 17
+  },
+  "pdf_health": {
+    "status": "native_text_ok",
+    "source_count": 6,
+    "page_count": 63,
+    "native_text_ok_source_count": 6,
+    "native_text_ok_page_count": 63,
+    "ocr_required_count": 0,
+    "ocr_dependency_status": "not_required",
+    "source_unusable_count": 0,
+    "needs_review_count": 0,
+    "repair_required_count": 0
   },
   "span_sequence_grounding_health": {
     "fixable_page_grounded_metadata_count": 0,

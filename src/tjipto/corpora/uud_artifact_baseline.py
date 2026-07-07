@@ -30,6 +30,7 @@ from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import build_validation_report, validate_uud_artifact_dir
 from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.ingestion.pdf.health import build_pdf_health_report
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
@@ -110,6 +111,13 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         metadata_grounding=metadata_grounding,
         source_conflicts=source_conflicts,
     )
+    pdf_health_report = build_pdf_health_report(
+        repo_root=repo_root,
+        corpus_id="uud",
+        source_documents=source_documents,
+        pages=pages,
+        page_text_spans=page_text_spans,
+    )
     metadata_graph_edges = build_metadata_graph_edges(metadata_assertions)
     graph_nodes, graph_edges = build_graph_artifacts(
         source_documents=list(source_documents.values()),
@@ -147,6 +155,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "document_relations.jsonl", document_relations)
     write_jsonl(final_dir / "article_amendment_relations.jsonl", article_amendment_relations)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
+    write_json(final_dir / "pdf_health_report.json", pdf_health_report)
 
     corpus_config = CorpusRegistry(repo_root).resolve("uud")
     validation_report = build_validation_report(
@@ -165,6 +174,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         document_relations=document_relations,
         article_amendment_relations=article_amendment_relations,
         page_text_spans=page_text_spans,
+        pdf_health_report=pdf_health_report,
         pages=pages,
         intent_config=intent_config_for(getattr(corpus_config, "structured_strategy", "generic"), corpus_config),
     )

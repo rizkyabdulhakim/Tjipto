@@ -13,12 +13,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[test]" pytest
-      - run: python -m compileall -q src tests
+      - run: python -m compileall -q src tests scripts
       - run: python -m unittest discover -s tests -v
         env:
           PYTHONPATH: src
-      - run: python -m pytest -q
+      - run: python -m pytest -q -p no:cacheprovider
         env:
+          PYTHONDONTWRITEBYTECODE: "1"
           PYTHONPATH: src:.
       - run: python scripts/evaluate_uud_retrieval.py --strict-known-gaps
       - run: python -m tjipto.corpora.uud_artifact_baseline validate
@@ -36,8 +37,8 @@ jobs:
           unzip -q tjipto-clean.zip -d tjipto-clean
           python scripts/verify_clean_handoff.py tjipto-clean
           cd tjipto-clean
-          python -m compileall -q src tests
-          PYTHONPATH=src python -m unittest discover -s tests -v
+          python -m compileall -q src tests scripts
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m unittest discover -s tests -v
 
   web:
     runs-on: ubuntu-latest

@@ -9,9 +9,9 @@ Do not mutate source PDFs, source hashes, evidence quotes, page text, bbox coord
 Backend:
 
 ```powershell
-python -m compileall -q src tests
+python -m compileall -q src tests scripts
 $env:PYTHONPATH='src'; python -m unittest discover -s tests -v
-$env:PYTHONPATH='src;.'; python -m pytest -q
+$env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONPATH='src;.'; python -m pytest -q -p no:cacheprovider
 ```
 
 Artifacts:

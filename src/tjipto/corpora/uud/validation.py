@@ -23,7 +23,7 @@ from tjipto.corpora.uud.provenance_exceptions import (
 )
 from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
-from tjipto.core.manifest import read_jsonl
+from tjipto.core.manifest import read_json, read_jsonl
 
 
 DECISION_LABELS = {
@@ -79,6 +79,7 @@ def build_validation_report(
     document_relations: list[dict],
     article_amendment_relations: list[dict],
     page_text_spans: list[dict],
+    pdf_health_report: dict | None = None,
     pages: list[dict] | None = None,
     intent_config: dict | None = None,
 ) -> dict:
@@ -110,6 +111,7 @@ def build_validation_report(
             "validation_exception_review_labels.jsonl",
             "validation_exceptions.jsonl",
             "page_text_spans.jsonl",
+            "pdf_health_report.json",
         ],
         "status": "valid",
         "structure_fidelity": {
@@ -233,6 +235,7 @@ def build_validation_report(
         evidence=evidence,
         pages=pages or [],
     )
+    validation_report["pdf_health"] = _pdf_health_summary(pdf_health_report or {})
     validation_report["span_sequence_grounding_health"] = _span_sequence_grounding_health(
         metadata_grounding=metadata_grounding,
         evidence=evidence,
@@ -282,6 +285,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     validation_exceptions = read_jsonl(final_dir / "validation_exceptions.jsonl")
     page_text_spans = read_jsonl(final_dir / "page_text_spans.jsonl") if (final_dir / "page_text_spans.jsonl").exists() else []
     pages = read_jsonl(final_dir / "pages.jsonl") if (final_dir / "pages.jsonl").exists() else []
+    pdf_health_report = read_json(final_dir / "pdf_health_report.json") if (final_dir / "pdf_health_report.json").exists() else {}
 
     errors: list[str] = []
     seen_ids: dict[str, set[str]] = defaultdict(set)
@@ -316,6 +320,15 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         errors.append(f"fixable_chunks_without_span_ids:{grounding['fixable_chunks_without_span_ids']}")
     if grounding["page_grounded_evidence_without_failure_reason"]:
         errors.append(f"page_grounded_evidence_without_failure_reason:{grounding['page_grounded_evidence_without_failure_reason']}")
+    pdf_health = _pdf_health_summary(pdf_health_report)
+    if pdf_health["status"] != "native_text_ok":
+        errors.append(f"pdf_health_status:{pdf_health['status']}")
+    if pdf_health["source_count"] != len(source_document_ids):
+        errors.append(f"pdf_health_source_count:{pdf_health['source_count']}!={len(source_document_ids)}")
+    if pdf_health["page_count"] != len(pages):
+        errors.append(f"pdf_health_page_count:{pdf_health['page_count']}!={len(pages)}")
+    if pdf_health["ocr_required_count"]:
+        errors.append(f"pdf_health_ocr_required_count:{pdf_health['ocr_required_count']}")
     for row in bbox_rows:
         bbox_by_evidence[row["evidence_id"]].append(row)
 
@@ -714,6 +727,23 @@ def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox
         "unresolved_exact_metadata_bbox_rows": len(unresolved_exact),
         "page_grounded_only_metadata_rows": len(page_rows),
         "metadata_bbox_false_exact_claims": len(unresolved_exact),
+    }
+
+
+def _pdf_health_summary(report: dict) -> dict:
+    pages = report.get("pages") or ()
+    sources = report.get("source_documents") or ()
+    return {
+        "status": report.get("status") or "missing",
+        "source_count": int(report.get("source_count") or 0),
+        "page_count": int(report.get("page_count") or 0),
+        "native_text_ok_source_count": int(report.get("native_text_ok_source_count") or 0),
+        "native_text_ok_page_count": int(report.get("native_text_ok_page_count") or 0),
+        "ocr_required_count": int(report.get("ocr_required_count") or 0),
+        "ocr_dependency_status": report.get("ocr_dependency_status") or "unknown",
+        "source_unusable_count": sum(1 for row in sources if row.get("health_decision") == "source_unusable"),
+        "needs_review_count": sum(1 for row in (*sources, *pages) if row.get("health_decision") == "needs_review"),
+        "repair_required_count": sum(1 for row in (*sources, *pages) if row.get("health_decision") == "repair_required"),
     }
 
 

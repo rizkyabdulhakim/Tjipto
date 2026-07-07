@@ -1,0 +1,717 @@
+{
+  "corpus_id": "uud",
+  "status": "native_text_ok",
+  "source_count": 6,
+  "page_count": 63,
+  "native_text_ok_source_count": 6,
+  "native_text_ok_page_count": 63,
+  "ocr_required_count": 0,
+  "ocr_dependency_status": "not_required",
+  "ocr_candidates": [],
+  "source_documents": [
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_1_historical",
+      "path": "data/sources/uud/UUD45_perubahan1.pdf",
+      "path_exists": true,
+      "sha256_match": true,
+      "file_size_match": true,
+      "page_count_match": true,
+      "native_text_ok": true,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_2_historical",
+      "path": "data/sources/uud/UUD45_perubahan2.pdf",
+      "path_exists": true,
+      "sha256_match": true,
+      "file_size_match": true,
+      "page_count_match": true,
+      "native_text_ok": true,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "path": "data/sources/uud/UUD45_perubahan3.pdf",
+      "path_exists": true,
+      "sha256_match": true,
+      "file_size_match": true,
+      "page_count_match": true,
+      "native_text_ok": true,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_4_historical",
+      "path": "data/sources/uud/UUD45_perubahan4.pdf",
+      "path_exists": true,
+      "sha256_match": true,
+      "file_size_match": true,
+      "page_count_match": true,
+      "native_text_ok": true,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "path": "data/sources/uud/UUD45_SatuNaskah.pdf",
+      "path_exists": true,
+      "sha256_match": true,
+      "file_size_match": true,
+      "page_count_match": true,
+      "native_text_ok": true,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "path": "data/sources/uud/UUD45.pdf",
+      "path_exists": true,
+      "sha256_match": true,
+      "file_size_match": true,
+      "page_count_match": true,
+      "native_text_ok": true,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    }
+  ],
+  "pages": [
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_1_historical",
+      "page_number": 1,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 31,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_1_historical",
+      "page_number": 2,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 31,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_1_historical",
+      "page_number": 3,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 27,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_2_historical",
+      "page_number": 1,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 31,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_2_historical",
+      "page_number": 2,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 36,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_2_historical",
+      "page_number": 3,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 23,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_2_historical",
+      "page_number": 4,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 25,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_2_historical",
+      "page_number": 5,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 37,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_2_historical",
+      "page_number": 6,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 32,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_2_historical",
+      "page_number": 7,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 20,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_2_historical",
+      "page_number": 8,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 20,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "page_number": 1,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 28,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "page_number": 2,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 38,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "page_number": 3,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 33,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "page_number": 4,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 25,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "page_number": 5,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 42,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "page_number": 6,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 26,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "page_number": 7,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 35,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "page_number": 8,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 33,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_3_historical",
+      "page_number": 9,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 19,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_4_historical",
+      "page_number": 1,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 35,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_4_historical",
+      "page_number": 2,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 33,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_4_historical",
+      "page_number": 3,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 26,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_4_historical",
+      "page_number": 4,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 37,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_4_historical",
+      "page_number": 5,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 33,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::amendment_4_historical",
+      "page_number": 6,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 26,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 1,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 18,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 2,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 48,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 3,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 44,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 4,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 41,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 5,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 45,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 6,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 44,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 7,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 49,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 8,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 45,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 9,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 43,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 10,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 41,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 11,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 38,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 12,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 41,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 13,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 30,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 14,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 50,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 15,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 40,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 16,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 39,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 17,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 40,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 18,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 49,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 19,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 41,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 20,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 41,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 21,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 55,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 22,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 47,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 23,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 49,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 24,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 34,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 25,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 44,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 26,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 36,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 27,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 42,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::current_consolidated",
+      "page_number": 28,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 23,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "page_number": 1,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 45,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "page_number": 2,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 28,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "page_number": 3,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 27,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "page_number": 4,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 22,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "page_number": 5,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 35,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "page_number": 6,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 27,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "page_number": 7,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 25,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "page_number": 8,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 25,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    },
+    {
+      "corpus_id": "uud",
+      "source_document_id": "uud::original_historical",
+      "page_number": 9,
+      "native_text_available": true,
+      "page_text_matches_artifact": true,
+      "text_span_count": 20,
+      "ocr_required": false,
+      "health_decision": "native_text_ok"
+    }
+  ]
+}

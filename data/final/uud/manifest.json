@@ -163,6 +163,14 @@
       "bytes": 116591,
       "sha256": "afcd4b89997579bbe3a08f5f762d3afb2129b389bc768d064d97d9b061083e33"
     },
+    "pdf_health_report.json": {
+      "origin": "generated",
+      "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
+      "producer": "pdf_health_builder",
+      "build_stage": "ingestion",
+      "bytes": 21421,
+      "sha256": "bee505990f8247e225194f132e393e5d78b3a6ceb3c067fd3ca4d6cab4fad0fb"
+    },
     "retrieval_units.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
@@ -224,8 +232,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 13898,
-      "sha256": "b4e166d921a4938f5d9da80edc2bfd7bfc1fd49ab2106af20c05d8417b7a63d2"
+      "bytes": 14269,
+      "sha256": "90e45bc47ca0f4942300fe1db760beb7a4564099855e176d6850f8f986ccc758"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -254,6 +262,7 @@
   "metadata_grounding": "metadata_grounding.jsonl",
   "metadata_grounding_registry": "metadata_grounding_registry.jsonl",
   "pages": "pages.jsonl",
+  "pdf_health_report": "pdf_health_report.json",
   "retrieval_units": "retrieval_units.jsonl",
   "schema_version": 1,
   "source_conflicts": "source_conflicts.jsonl",
