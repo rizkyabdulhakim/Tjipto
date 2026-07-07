@@ -22,6 +22,7 @@
     "metadata_grounding_records": 112,
     "not_promoted_amends_edges": 8,
     "pages": 63,
+    "promotion_decisions": 74,
     "retrieval_units": 464,
     "source_conflicts": 2,
     "source_documents": 6,
@@ -171,6 +172,14 @@
       "bytes": 21421,
       "sha256": "bee505990f8247e225194f132e393e5d78b3a6ceb3c067fd3ca4d6cab4fad0fb"
     },
+    "promotion_decisions.jsonl": {
+      "origin": "generated",
+      "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
+      "producer": "promotion_builder",
+      "build_stage": "promotion_audit",
+      "bytes": 56204,
+      "sha256": "02c6f613d9a56daa9a1f99dc7a3b671f1933aa271be50ff398da0f254e1a1943"
+    },
     "retrieval_units.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
@@ -225,15 +234,15 @@
       "producer": "manual_review",
       "build_stage": "manual_review",
       "bytes": 18794,
-      "sha256": "c841d105c99eef59d75e6a817f45539cd9f31301ed04535ef508d742a92a2e55"
+      "sha256": "2827646c06181795e390015aeeb6b41ee73d0c95a852ef8fb8884a39cf7aef43"
     },
     "validation_report.json": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 16317,
-      "sha256": "bb7ab9e8aef7350a305ce5584293f2fcd6bc96c128a5b05f4af2a592f554a50a"
+      "bytes": 16792,
+      "sha256": "edd262060e4a11389dbe16a6e52e5c43d5802278a2d31bff41e88fcc4dc019ce"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -263,6 +272,7 @@
   "metadata_grounding_registry": "metadata_grounding_registry.jsonl",
   "pages": "pages.jsonl",
   "pdf_health_report": "pdf_health_report.json",
+  "promotion_decisions": "promotion_decisions.jsonl",
   "retrieval_units": "retrieval_units.jsonl",
   "schema_version": 1,
   "source_conflicts": "source_conflicts.jsonl",

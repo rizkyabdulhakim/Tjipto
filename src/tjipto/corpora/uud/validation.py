@@ -80,6 +80,7 @@ def build_validation_report(
     evidence: list[dict],
     bbox_rows: list[dict],
     retrieval_units: list[dict],
+    promotion_decisions: list[dict],
     metadata_grounding: list[dict],
     metadata_grounding_registry: list[dict],
     manifest_files: dict[str, dict],
@@ -121,6 +122,7 @@ def build_validation_report(
             "validation_exceptions.jsonl",
             "page_text_spans.jsonl",
             "pdf_health_report.json",
+            "promotion_decisions.jsonl",
         ],
         "status": "valid",
         "structure_fidelity": {
@@ -137,6 +139,7 @@ def build_validation_report(
         "evidence_records": len(evidence),
         "bbox_records": len(bbox_rows),
         "retrieval_units": len(retrieval_units),
+        "promotion_decisions": len(promotion_decisions),
         "graph_nodes": len(graph_nodes),
         "graph_edges": len(graph_edges),
         "page_text_spans": len(page_text_spans),
@@ -268,6 +271,13 @@ def build_validation_report(
         page_text_spans=page_text_spans,
         pages=pages or [],
     )
+    validation_report["promotion_decision_audit_health"] = _promotion_decision_audit_health(
+        evidence=evidence,
+        metadata_grounding=metadata_grounding,
+        bbox_rows=bbox_rows,
+        promotion_decisions=promotion_decisions,
+        promotion_engine_health=validation_report["promotion_engine_health"],
+    )
     validation_report["article_relation_runtime_policy_health"] = _article_relation_runtime_policy_health(
         document_relations=document_relations or (),
         article_amendment_relations=article_amendment_relations or (),
@@ -303,6 +313,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     article_amendment_relations = (
         read_jsonl(final_dir / "article_amendment_relations.jsonl") if (final_dir / "article_amendment_relations.jsonl").exists() else []
     )
+    promotion_decisions = read_jsonl(final_dir / "promotion_decisions.jsonl") if (final_dir / "promotion_decisions.jsonl").exists() else []
     graph_nodes = read_jsonl(final_dir / "graph_nodes.jsonl")
     graph_edges = read_jsonl(final_dir / "graph_edges.jsonl")
     source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
@@ -325,6 +336,15 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     metadata_grounding_ref_ids: set[str] = set()
     text_span_ids = {row["text_span_id"] for row in page_text_spans}
     bbox_by_evidence: dict[str, list[dict]] = defaultdict(list)
+    for row in validation_exceptions:
+        for field in ("chunk_id", "unresolved_chunk_reference"):
+            chunk_id = row.get(field)
+            if chunk_id and chunk_id not in chunks_by_id:
+                errors.append(f"validation_exception_unknown_chunk_ref:{row['exception_id']}:{chunk_id}")
+            if field == "unresolved_chunk_reference" and chunk_id in chunks_by_id:
+                label = (row.get("evidence_summary") or {}).get("unit_label")
+                if label and label not in chunks_by_id[chunk_id].get("hierarchy", ()):
+                    errors.append(f"validation_exception_stale_chunk_ref:{row['exception_id']}:{chunk_id}")
     fidelity = _source_quote_fidelity_health(metadata_grounding=metadata_grounding, evidence=evidence, pages=pages)
     if fidelity["untracked_mismatch_count"]:
         errors.append(f"source_quote_untracked_mismatch_count:{fidelity['untracked_mismatch_count']}")
@@ -355,6 +375,15 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     )
     if promotion["status"] != "complete":
         errors.append("promotion_engine_incomplete")
+    promotion_audit = _promotion_decision_audit_health(
+        evidence=evidence,
+        metadata_grounding=metadata_grounding,
+        bbox_rows=bbox_rows,
+        promotion_decisions=promotion_decisions,
+        promotion_engine_health=promotion,
+    )
+    if promotion_audit["status"] != "complete":
+        errors.append("promotion_decision_audit_incomplete")
     pdf_health = _pdf_health_summary(pdf_health_report)
     if pdf_health["status"] != "native_text_ok":
         errors.append(f"pdf_health_status:{pdf_health['status']}")
@@ -1024,6 +1053,66 @@ def _promotion_engine_health(
         "containing_span_exact_overclaim_count",
     }
     return {**counts, "status": "complete" if not any(counts[key] for key in error_keys) else "incomplete"}
+
+
+def _promotion_decision_audit_health(
+    *,
+    evidence: list[dict],
+    metadata_grounding: list[dict],
+    bbox_rows: list[dict],
+    promotion_decisions: list[dict],
+    promotion_engine_health: dict,
+) -> dict:
+    expected = {
+        ("evidence", row["evidence_id"])
+        for row in evidence
+        if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True
+    }
+    expected |= {
+        ("metadata_grounding", row["metadata_grounding_id"])
+        for row in metadata_grounding
+        if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True
+    }
+    expected |= {
+        ("bbox", row["bbox_id"]) for row in bbox_rows if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True
+    }
+    actual = {(row.get("record_type"), row.get("record_id")) for row in promotion_decisions}
+    duplicate_decision_ids = len(promotion_decisions) - len({row.get("decision_id") for row in promotion_decisions})
+    blocked = [row for row in promotion_decisions if row.get("decision") == "keep_non_exact"]
+    false_exact = [
+        row
+        for row in promotion_decisions
+        if row.get("decision") == "promote_exact"
+        and not (row.get("exact_quote_available") and row.get("exact_span_available") and row.get("exact_bbox_available"))
+    ]
+    counts = {
+        "promotion_decision_count": len(promotion_decisions),
+        "expected_promotion_decision_count": len(expected),
+        "blocked_decision_count": len(blocked),
+        "promotion_blocked_count": int(promotion_engine_health.get("promotion_blocked_count") or 0),
+        "missing_decision_count": len(expected - actual),
+        "unexpected_decision_count": len(actual - expected),
+        "duplicate_decision_id_count": duplicate_decision_ids,
+        "blocked_decision_missing_reason_count": sum(1 for row in blocked if not row.get("failure_reason")),
+        "false_exact_decision_count": len(false_exact),
+    }
+    return {
+        **counts,
+        "status": "complete"
+        if counts["promotion_decision_count"] == counts["expected_promotion_decision_count"]
+        and counts["blocked_decision_count"] == counts["promotion_blocked_count"]
+        and not any(
+            counts[key]
+            for key in (
+                "missing_decision_count",
+                "unexpected_decision_count",
+                "duplicate_decision_id_count",
+                "blocked_decision_missing_reason_count",
+                "false_exact_decision_count",
+            )
+        )
+        else "incomplete",
+    }
 
 
 def _article_relation_runtime_policy_health(

@@ -92,6 +92,13 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(promotion["containing_span_exact_overclaim_count"], 0)
         self.assertEqual(promotion["evidence_trace_only_count"], 5)
         self.assertEqual(promotion["metadata_grounding_page_grounded_only_count"], 17)
+        audit = report["promotion_decision_audit_health"]
+        self.assertEqual(audit["status"], "complete")
+        self.assertEqual(audit["promotion_decision_count"], promotion["promotion_blocked_count"])
+        self.assertEqual(audit["blocked_decision_count"], promotion["promotion_blocked_count"])
+        self.assertEqual(audit["missing_decision_count"], 0)
+        self.assertEqual(audit["unexpected_decision_count"], 0)
+        self.assertEqual(audit["blocked_decision_missing_reason_count"], 0)
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):
                 if row["bbox_precision"] == "exact":
@@ -99,6 +106,30 @@ class MetadataBBoxContractTest(unittest.TestCase):
                 else:
                     self.assertFalse(row["viewer_highlightable"], row.get("metadata_grounding_id") or row["metadata_grounding_ref_id"])
                     self.assertIn("failure_reason", row)
+
+    def test_promotion_decisions_cover_non_exact_rows(self) -> None:
+        decisions = read_jsonl(FINAL / "promotion_decisions.jsonl")
+        self.assertEqual(len(decisions), 74)
+        self.assertEqual(len({row["decision_id"] for row in decisions}), len(decisions))
+        self.assertEqual({row["decision"] for row in decisions}, {"keep_non_exact"})
+        self.assertEqual(
+            {row["record_type"] for row in decisions},
+            {"bbox", "evidence", "metadata_grounding"},
+        )
+        for row in decisions:
+            for field in (
+                "record_id",
+                "source_document_id",
+                "page_number",
+                "current_grounding_status",
+                "candidate_status",
+                "failure_reason",
+                "policy_reason",
+                "review_status",
+            ):
+                self.assertIn(field, row, row["decision_id"])
+            self.assertTrue(row["failure_reason"], row["decision_id"])
+            self.assertFalse(row["highlightable"], row["decision_id"])
 
     def test_fixture_metadata_rows_keep_stable_exact_grounding_ids(self) -> None:
         rows = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}

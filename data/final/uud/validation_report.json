@@ -33,7 +33,8 @@
     "validation_exception_review_labels.jsonl",
     "validation_exceptions.jsonl",
     "page_text_spans.jsonl",
-    "pdf_health_report.json"
+    "pdf_health_report.json",
+    "promotion_decisions.jsonl"
   ],
   "status": "valid",
   "structure_fidelity": {
@@ -47,6 +48,7 @@
     "evidence_records": 464,
     "bbox_records": 1584,
     "retrieval_units": 464,
+    "promotion_decisions": 74,
     "graph_nodes": 2782,
     "graph_edges": 5173,
     "page_text_spans": 2193
@@ -269,11 +271,11 @@
     "status": "complete"
   },
   "artifact_origin_health": {
-    "manifest_file_rows": 26,
-    "files_with_origin": 26,
+    "manifest_file_rows": 27,
+    "files_with_origin": 27,
     "files_missing_origin": 0,
     "invalid_origin_values": 0,
-    "generated_count": 21,
+    "generated_count": 22,
     "carried_forward_count": 3,
     "manual_review_artifact_count": 2,
     "deprecated_count": 0,
@@ -367,6 +369,18 @@
     "invalid_bbox_ref_count": 0,
     "invalid_bbox_coordinate_count": 0,
     "containing_span_exact_overclaim_count": 0,
+    "status": "complete"
+  },
+  "promotion_decision_audit_health": {
+    "promotion_decision_count": 74,
+    "expected_promotion_decision_count": 74,
+    "blocked_decision_count": 74,
+    "promotion_blocked_count": 74,
+    "missing_decision_count": 0,
+    "unexpected_decision_count": 0,
+    "duplicate_decision_id_count": 0,
+    "blocked_decision_missing_reason_count": 0,
+    "false_exact_decision_count": 0,
     "status": "complete"
   },
   "article_relation_runtime_policy_health": {

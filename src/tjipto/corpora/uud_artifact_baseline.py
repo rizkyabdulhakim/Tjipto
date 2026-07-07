@@ -30,6 +30,7 @@ from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import build_validation_report, validate_uud_artifact_dir
 from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.grounding.promotion import build_promotion_decisions
 from tjipto.ingestion.pdf.health import build_pdf_health_report
 
 
@@ -136,6 +137,12 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         evidence=evidence,
         bbox_rows=bbox_rows,
     )
+    promotion_decisions = build_promotion_decisions(
+        evidence=evidence,
+        metadata_grounding=metadata_grounding,
+        bbox_rows=bbox_rows,
+        pages=pages,
+    )
     write_jsonl(final_dir / "legal_units.jsonl", legal_units)
     write_jsonl(final_dir / "chunks.jsonl", chunks)
     write_jsonl(final_dir / "evidence_registry.jsonl", evidence)
@@ -155,6 +162,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "document_relations.jsonl", document_relations)
     write_jsonl(final_dir / "article_amendment_relations.jsonl", article_amendment_relations)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
+    write_jsonl(final_dir / "promotion_decisions.jsonl", promotion_decisions)
     write_json(final_dir / "pdf_health_report.json", pdf_health_report)
 
     corpus_config = CorpusRegistry(repo_root).resolve("uud")
@@ -173,6 +181,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         graph_edges=graph_edges,
         document_relations=document_relations,
         article_amendment_relations=article_amendment_relations,
+        promotion_decisions=promotion_decisions,
         page_text_spans=page_text_spans,
         pdf_health_report=pdf_health_report,
         pages=pages,

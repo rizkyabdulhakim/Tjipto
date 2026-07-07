@@ -125,6 +125,18 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         self.assertNotIn("bbox_id", row)
         self.assertNotIn("text_span_id", row)
 
+    def test_validation_exception_chunk_references_are_current(self) -> None:
+        exceptions = read_jsonl(FINAL / "validation_exceptions.jsonl")
+        for row in exceptions:
+            for field in ("chunk_id", "unresolved_chunk_reference"):
+                chunk_id = row.get(field)
+                if chunk_id:
+                    self.assertIn(chunk_id, self.chunks, row["exception_id"])
+            chunk_id = row.get("unresolved_chunk_reference")
+            label = (row.get("evidence_summary") or {}).get("unit_label")
+            if chunk_id and label:
+                self.assertIn(label, self.chunks[chunk_id]["hierarchy"], row["exception_id"])
+
     def test_all_text_disposition_health_is_reported_without_fake_classification(self) -> None:
         spans = read_jsonl(FINAL / "page_text_spans.jsonl")
         referenced = {span_id for row in (*self.units.values(), *self.chunks.values()) for span_id in row.get("text_span_ids") or ()}
