@@ -56,8 +56,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "bbox_builder",
       "build_stage": "bbox_build",
-      "bytes": 1099482,
-      "sha256": "e186c051c13392cb86048a1f206e7f0b7630d6332177c7bb37c7eb841834c8ed"
+      "bytes": 1102773,
+      "sha256": "88062e0e6aa3b45fed822be6ecba796a4ed2a576d51b5dc6883ebdeeac3bc5f3"
     },
     "chunks.jsonl": {
       "origin": "generated",
@@ -232,8 +232,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 15671,
-      "sha256": "330d4e2b3c7ae1b3eb006cec63e2f7f9fe7cb92f6a10c7d385828bffde07cf0d"
+      "bytes": 16317,
+      "sha256": "bb7ab9e8aef7350a305ce5584293f2fcd6bc96c128a5b05f4af2a592f554a50a"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

@@ -351,6 +351,24 @@
     "invalid_bbox_coordinates": 0,
     "untracked_grounding_exception_count": 0
   },
+  "promotion_engine_health": {
+    "evidence_exact_count": 459,
+    "evidence_page_grounded_only_count": 5,
+    "evidence_trace_only_count": 5,
+    "bbox_exact_count": 1537,
+    "bbox_page_grounded_only_count": 47,
+    "bbox_non_highlightable_count": 52,
+    "metadata_grounding_exact_count": 20,
+    "metadata_grounding_page_grounded_only_count": 17,
+    "promotable_exact_count": 0,
+    "promotion_blocked_count": 74,
+    "missing_promotion_reason_count": 0,
+    "false_exact_claim_count": 0,
+    "invalid_bbox_ref_count": 0,
+    "invalid_bbox_coordinate_count": 0,
+    "containing_span_exact_overclaim_count": 0,
+    "status": "complete"
+  },
   "article_relation_runtime_policy_health": {
     "article_relation_total_count": 63,
     "article_relation_exact_support_count": 32,

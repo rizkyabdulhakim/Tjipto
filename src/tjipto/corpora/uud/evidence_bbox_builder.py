@@ -43,6 +43,7 @@ def build_evidence_and_bboxes(
             for bbox in bbox_records:
                 bbox["bbox_precision"] = "page_grounded_only"
                 bbox["viewer_highlightable"] = False
+                bbox["failure_reason"] = "instrument_trace_only_not_public_citation"
         elif unit["unit_type"] == "decision_clause_record":
             for bbox in bbox_records:
                 bbox["viewer_highlightable"] = False

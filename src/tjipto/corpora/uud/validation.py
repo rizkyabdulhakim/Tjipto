@@ -259,6 +259,15 @@ def build_validation_report(
         bbox_rows=bbox_rows,
         page_text_spans=page_text_spans,
     )
+    validation_report["promotion_engine_health"] = _promotion_engine_health(
+        evidence=evidence,
+        metadata_grounding=metadata_grounding,
+        bbox_rows=bbox_rows,
+        legal_units=legal_units,
+        chunks=chunks,
+        page_text_spans=page_text_spans,
+        pages=pages or [],
+    )
     validation_report["article_relation_runtime_policy_health"] = _article_relation_runtime_policy_health(
         document_relations=document_relations or (),
         article_amendment_relations=article_amendment_relations or (),
@@ -335,6 +344,17 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         errors.append(f"fixable_chunks_without_span_ids:{grounding['fixable_chunks_without_span_ids']}")
     if grounding["page_grounded_evidence_without_failure_reason"]:
         errors.append(f"page_grounded_evidence_without_failure_reason:{grounding['page_grounded_evidence_without_failure_reason']}")
+    promotion = _promotion_engine_health(
+        evidence=evidence,
+        metadata_grounding=metadata_grounding,
+        bbox_rows=bbox_rows,
+        legal_units=legal_units,
+        chunks=chunks,
+        page_text_spans=page_text_spans,
+        pages=pages,
+    )
+    if promotion["status"] != "complete":
+        errors.append("promotion_engine_incomplete")
     pdf_health = _pdf_health_summary(pdf_health_report)
     if pdf_health["status"] != "native_text_ok":
         errors.append(f"pdf_health_status:{pdf_health['status']}")
@@ -909,7 +929,101 @@ def _can_match_span_sequence(row: dict, spans: list[dict]) -> bool:
 
 def _has_exact_bbox_refs(row: dict, bbox_by_id: dict[str, dict]) -> bool:
     refs = row.get("bbox_refs") or ()
-    return bool(refs) and all(bbox_by_id.get(ref, {}).get("bbox_precision") == "exact" for ref in refs)
+    return bool(refs) and all(
+        (bbox := bbox_by_id.get(ref))
+        and bbox.get("bbox_precision") == "exact"
+        and all(bbox.get(key) is not None for key in ("x0", "y0", "x1", "y1"))
+        for ref in refs
+    )
+
+
+def _promotion_engine_health(
+    *,
+    evidence: list[dict],
+    metadata_grounding: list[dict],
+    bbox_rows: list[dict],
+    legal_units: list[dict],
+    chunks: list[dict],
+    page_text_spans: list[dict],
+    pages: list[dict],
+) -> dict:
+    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    span_rows = [row for row in page_text_spans if row.get("text_span_id")]
+    page_text = {(row["source_document_id"], row["page_number"]): row.get("text", "") for row in pages}
+    unit_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    chunk_by_unit = {row["legal_unit_id"]: row for row in chunks}
+    non_exact_evidence = [row for row in evidence if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True]
+    non_exact_metadata = [
+        row for row in metadata_grounding if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True
+    ]
+    non_exact_bbox = [row for row in bbox_rows if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True]
+    promotable_exact = [
+        row
+        for row in (*non_exact_evidence, *non_exact_metadata)
+        if _quote_in_pages(row, page_text) and _can_match_span_sequence(row, span_rows) and _has_exact_bbox_refs(row, bbox_by_id)
+    ]
+    exact_evidence = [row for row in evidence if row.get("bbox_precision") == "exact"]
+    exact_metadata = [row for row in metadata_grounding if row.get("bbox_precision") == "exact"]
+    false_exact = [
+        row
+        for row in (*exact_evidence, *exact_metadata)
+        if not row.get("text_span_ids") or not _has_exact_bbox_refs(row, bbox_by_id) or row.get("viewer_highlightable") is not True
+    ]
+    exact_bbox_rows = [row for row in bbox_rows if row.get("bbox_precision") == "exact"]
+    invalid_exact_bbox_refs = [
+        bbox_id for row in (*exact_evidence, *exact_metadata) for bbox_id in row.get("bbox_refs") or () if bbox_id not in bbox_by_id
+    ]
+    invalid_exact_coordinates = [
+        row
+        for row in exact_bbox_rows
+        if not (
+            all(row.get(key) is not None for key in ("x0", "y0", "x1", "y1"))
+            and row.get("x1", 0) >= row.get("x0", 0)
+            and row.get("y1", 0) >= row.get("y0", 0)
+        )
+    ]
+    missing_reason = [
+        row
+        for row in (*non_exact_evidence, *non_exact_metadata, *non_exact_bbox)
+        if not (row.get("failure_reason") or row.get("rejection_reason") or row.get("grounding_status"))
+    ]
+    containing_overclaims = []
+    for row in exact_evidence:
+        unit = unit_by_id.get(row.get("legal_unit_id"), {})
+        chunk = chunk_by_unit.get(row.get("legal_unit_id"), {})
+        if row.get("viewer_highlightable") is True and "text_span_containing_match" in {
+            unit.get("grounding_status"),
+            chunk.get("grounding_status"),
+        }:
+            containing_overclaims.append(row)
+    counts = {
+        "evidence_exact_count": len(exact_evidence),
+        "evidence_page_grounded_only_count": sum(1 for row in evidence if row.get("bbox_precision") == "page_grounded_only"),
+        "evidence_trace_only_count": sum(1 for row in evidence if row.get("failure_reason") == "instrument_trace_only_not_public_citation"),
+        "bbox_exact_count": len(exact_bbox_rows),
+        "bbox_page_grounded_only_count": sum(1 for row in bbox_rows if row.get("bbox_precision") == "page_grounded_only"),
+        "bbox_non_highlightable_count": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is not True),
+        "metadata_grounding_exact_count": len(exact_metadata),
+        "metadata_grounding_page_grounded_only_count": sum(
+            1 for row in metadata_grounding if row.get("bbox_precision") == "page_grounded_only"
+        ),
+        "promotable_exact_count": len(promotable_exact),
+        "promotion_blocked_count": len(non_exact_evidence) + len(non_exact_metadata) + len(non_exact_bbox),
+        "missing_promotion_reason_count": len(missing_reason),
+        "false_exact_claim_count": len(false_exact),
+        "invalid_bbox_ref_count": len(invalid_exact_bbox_refs),
+        "invalid_bbox_coordinate_count": len(invalid_exact_coordinates),
+        "containing_span_exact_overclaim_count": len(containing_overclaims),
+    }
+    error_keys = {
+        "promotable_exact_count",
+        "missing_promotion_reason_count",
+        "false_exact_claim_count",
+        "invalid_bbox_ref_count",
+        "invalid_bbox_coordinate_count",
+        "containing_span_exact_overclaim_count",
+    }
+    return {**counts, "status": "complete" if not any(counts[key] for key in error_keys) else "incomplete"}
 
 
 def _article_relation_runtime_policy_health(

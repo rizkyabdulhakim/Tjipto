@@ -20,6 +20,8 @@ class BBoxContractTest(unittest.TestCase):
             self.assertIn(row["bbox_precision"], {"exact", "coarse", "page_grounded_only"})
             if row["viewer_highlightable"]:
                 self.assertEqual(row["bbox_precision"], "exact")
+            if row["bbox_precision"] != "exact" or row["viewer_highlightable"] is not True:
+                self.assertIn("failure_reason", row, row["bbox_id"])
             self.assertGreaterEqual(row["x1"], row["x0"])
             self.assertGreaterEqual(row["y1"], row["y0"])
             self.assertTrue(row["text"])

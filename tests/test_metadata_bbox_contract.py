@@ -82,6 +82,16 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(grounding["fixable_chunks_without_span_ids"], 0)
         self.assertEqual(grounding["page_grounded_evidence_without_failure_reason"], 0)
         self.assertEqual(grounding["false_exact_metadata_claims"], 0)
+        promotion = report["promotion_engine_health"]
+        self.assertEqual(promotion["status"], "complete")
+        self.assertEqual(promotion["promotable_exact_count"], 0)
+        self.assertEqual(promotion["missing_promotion_reason_count"], 0)
+        self.assertEqual(promotion["false_exact_claim_count"], 0)
+        self.assertEqual(promotion["invalid_bbox_ref_count"], 0)
+        self.assertEqual(promotion["invalid_bbox_coordinate_count"], 0)
+        self.assertEqual(promotion["containing_span_exact_overclaim_count"], 0)
+        self.assertEqual(promotion["evidence_trace_only_count"], 5)
+        self.assertEqual(promotion["metadata_grounding_page_grounded_only_count"], 17)
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):
                 if row["bbox_precision"] == "exact":

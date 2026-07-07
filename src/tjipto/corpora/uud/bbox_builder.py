@@ -52,6 +52,7 @@ def apply_inserted_bab_heading_bbox_policy(bbox_rows: list[dict], evidence: list
         if evidence_row and evidence_row.get("citation") == row.get("text"):
             continue
         row["viewer_highlightable"] = False
+        row["failure_reason"] = "inserted_bab_heading_not_owned_by_bab_record"
     by_evidence: dict[str, list[dict]] = defaultdict(list)
     for row in bbox_rows:
         by_evidence[row["evidence_id"]].append(row)
