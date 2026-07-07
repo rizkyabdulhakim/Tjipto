@@ -78,6 +78,26 @@
     "runtime_chunks_missing_text_span_ids": 0,
     "non_runtime_chunks_missing_status_or_reason": 0
   },
+  "legal_unit_chunk_span_closure_health": {
+    "legal_unit_count": 651,
+    "chunk_count": 651,
+    "legal_unit_chunk_mismatch_count": 0,
+    "missing_parent_ref_count": 0,
+    "invalid_parent_ref_count": 0,
+    "hierarchy_cycle_count": 0,
+    "impossible_structural_nesting_count": 0,
+    "active_legal_units_without_span_ids": 0,
+    "active_chunks_without_span_ids": 0,
+    "reviewed_nonruntime_canonical_chunks_without_span_ids": 3,
+    "invalid_legal_unit_span_ref_count": 0,
+    "invalid_chunk_span_ref_count": 0,
+    "source_page_span_mismatch_count": 0,
+    "excluded_span_link_count": 0,
+    "chunk_text_mismatch_count": 0,
+    "orphan_structural_unit_count": 0,
+    "missing_legal_unit_graph_node_count": 0,
+    "status": "complete"
+  },
   "provenance_exception_health": {
     "total_reviewed_exceptions": 31,
     "validate_text_provenance_needs_review_count": 0,

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import unittest
 
-from tjipto.core.manifest import read_jsonl
+from tjipto.core.manifest import read_json, read_jsonl
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +49,18 @@ class LegalUnitGroundingContractTest(unittest.TestCase):
                 "bbox_ids",
             ):
                 self.assertEqual(row[field], case[field], case["legal_unit_id"])
+
+    def test_stage3_legal_unit_chunk_span_closure_health_is_complete(self) -> None:
+        health = read_json(FINAL / "validation_report.json")["legal_unit_chunk_span_closure_health"]
+        self.assertEqual(health["legal_unit_count"], 651)
+        self.assertEqual(health["chunk_count"], 651)
+        for key, value in health.items():
+            if key.endswith("_count") and key not in {"legal_unit_count", "chunk_count"}:
+                self.assertEqual(value, 0, key)
+        self.assertEqual(health["active_legal_units_without_span_ids"], 0)
+        self.assertEqual(health["active_chunks_without_span_ids"], 0)
+        self.assertEqual(health["reviewed_nonruntime_canonical_chunks_without_span_ids"], 3)
+        self.assertEqual(health["status"], "complete")
 
 
 def _legal_unit_grounding_cases() -> tuple[dict, ...]:
