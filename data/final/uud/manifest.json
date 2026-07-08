@@ -105,8 +105,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "graph_builder",
       "build_stage": "graph_build",
-      "bytes": 1778863,
-      "sha256": "690d941bb6211cf82c394c14caaecace35f8cfd9262d5569450d12bcdac2e374"
+      "bytes": 3547772,
+      "sha256": "68b76fc442dd15154e82af12da955644dccaa0ab69f01b1025b5ad8d072119dd"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -241,8 +241,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 19832,
-      "sha256": "a395aba2c4e5607093daffeb81a6f50d60bbb835404be1b673aa4f245af71965"
+      "bytes": 20635,
+      "sha256": "e0c9fb12d93e6045913115fda7b956affcde7c4adaf37d8362bba31b31e2ec4a"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

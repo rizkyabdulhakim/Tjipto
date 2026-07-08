@@ -293,7 +293,7 @@ def build_validation_report(
         bbox_rows=bbox_rows,
     )
     validation_report["legal_graph_baseline"] = {
-        "status": "evidence_backed_minimal_baseline",
+        "status": "authority_aware_evidence_gated",
         "actual_edge_type_counts": _edge_type_counts(graph_edges),
         "actual_promoted_legal_edge_type_counts": _edge_type_counts(
             [row for row in graph_edges if row.get("edge_type") in LEGAL_EDGE_TYPES]
@@ -307,6 +307,12 @@ def build_validation_report(
             1 for row in graph_edges if row.get("edge_type") in LEGAL_EDGE_TYPES and row.get("runtime_loadable") is True
         ),
     }
+    validation_report["legal_graph_authority_health"] = _legal_graph_authority_health(
+        graph_edges=graph_edges,
+        article_amendment_relations=article_amendment_relations or (),
+        evidence=evidence,
+        bbox_rows=bbox_rows,
+    )
     return validation_report
 
 
@@ -804,6 +810,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         if row["node_id"] in seen_ids["node_id"]:
             errors.append(f"duplicate_graph_node_id:{row['node_id']}")
         seen_ids["node_id"].add(row["node_id"])
+    article_relation_ids = {row["relation_id"] for row in article_amendment_relations}
+    graph_edge_keys = {(row.get("edge_type"), row.get("source_id"), row.get("target_id")) for row in graph_edges}
     for row in graph_edges:
         if row["edge_id"] in seen_ids["edge_id"]:
             errors.append(f"duplicate_graph_edge_id:{row['edge_id']}")
@@ -813,6 +821,42 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         edge_type = row.get("edge_type")
         if edge_type not in PROVENANCE_EDGE_TYPES | LEGAL_EDGE_TYPES:
             errors.append(f"invalid_graph_edge_type:{row['edge_id']}:{edge_type}")
+        if row.get("edge_authority_level") not in {"final_legal_authority", "evidence_backed_relation", "provenance", "trace", "nonlegal"}:
+            errors.append(f"graph_edge_invalid_authority_level:{row['edge_id']}:{row.get('edge_authority_level')}")
+        if row.get("citation_final") is not False:
+            errors.append(f"graph_edge_false_final_citation:{row['edge_id']}")
+        if row.get("evidence_requirement") not in {"exact_bbox", "page_grounded", "trace_only", "none"}:
+            errors.append(f"graph_edge_invalid_evidence_requirement:{row['edge_id']}:{row.get('evidence_requirement')}")
+        if row.get("source_role") not in {"canonical", "historical", "amendment", "consolidated", "anomaly"}:
+            errors.append(f"graph_edge_invalid_source_role:{row['edge_id']}:{row.get('source_role')}")
+        if row.get("relation_support") not in {"exact", "trace_only", "structural", "metadata", "source_anomaly"}:
+            errors.append(f"graph_edge_invalid_relation_support:{row['edge_id']}:{row.get('relation_support')}")
+        if not row.get("reason"):
+            errors.append(f"graph_edge_missing_reason:{row['edge_id']}")
+        for bbox_id in row.get("bbox_refs") or ():
+            if bbox_id not in bbox_by_id:
+                errors.append(f"graph_edge_invalid_bbox_ref:{row['edge_id']}:{bbox_id}")
+        if row.get("viewer_highlightable") is True and not row.get("bbox_refs"):
+            errors.append(f"graph_edge_highlightable_without_bbox:{row['edge_id']}")
+        if row.get("article_relation_ref") and row["article_relation_ref"] not in article_relation_ids:
+            errors.append(f"graph_edge_orphan_article_relation_ref:{row['edge_id']}:{row['article_relation_ref']}")
+        if edge_type in {"MODIFIES", "DELETES"}:
+            evidence_row = evidence_by_id.get(row.get("evidence_ref"))
+            exact = bool(evidence_row and evidence_row.get("bbox_precision") == "exact" and evidence_row.get("viewer_highlightable") is True)
+            if not evidence_row:
+                errors.append(f"graph_relation_edge_invalid_evidence:{row['edge_id']}:{row.get('evidence_ref')}")
+            if row.get("relation_support") == "trace_only":
+                if row.get("citation_final") is not False or row.get("viewer_highlightable") is not False:
+                    errors.append(f"graph_trace_relation_promoted:{row['edge_id']}")
+            if row.get("edge_authority_level") == "evidence_backed_relation":
+                if not exact:
+                    errors.append(f"graph_authority_edge_without_exact_evidence:{row['edge_id']}")
+                if not row.get("bbox_refs") or any(bbox_id not in bbox_by_id for bbox_id in row.get("bbox_refs") or ()):
+                    errors.append(f"graph_authority_edge_without_bbox:{row['edge_id']}")
+        if edge_type == "PART_OF" and ("CONTAINS", row.get("target_id"), row.get("source_id")) not in graph_edge_keys:
+            errors.append(f"graph_part_of_without_contains:{row['edge_id']}")
+        if edge_type == "FOLLOWS" and ("PRECEDES", row.get("target_id"), row.get("source_id")) not in graph_edge_keys:
+            errors.append(f"graph_follows_without_precedes:{row['edge_id']}")
         if edge_type in LEGAL_EDGE_TYPES:
             if row.get("source_document_id") not in {unit["source_document_id"] for unit in legal_units}:
                 errors.append(f"legal_edge_missing_source_document:{row['edge_id']}")
@@ -1312,6 +1356,66 @@ def _article_relation_runtime_policy_health(
         "document_relation_exact_support_partial_trace_omitted_count": len(partial_groups),
         "relation_runtime_policy_slow_gate_status": "covered_by_runtime_policy_test",
         "document_relation_count": len(document_relations),
+    }
+
+
+def _legal_graph_authority_health(
+    *,
+    graph_edges: list[dict] | tuple[dict, ...],
+    article_amendment_relations: list[dict] | tuple[dict, ...],
+    evidence: list[dict],
+    bbox_rows: list[dict],
+) -> dict:
+    evidence_by_id = {row["evidence_id"]: row for row in evidence}
+    bbox_ids = {row["bbox_id"] for row in bbox_rows}
+    relation_edges = [row for row in graph_edges if row.get("edge_type") in {"MODIFIES", "DELETES"}]
+    article_relation_refs = {row.get("article_relation_ref") for row in relation_edges if row.get("article_relation_ref")}
+    exact_edges = [row for row in relation_edges if row.get("relation_support") == "exact"]
+    trace_edges = [row for row in relation_edges if row.get("relation_support") == "trace_only"]
+    authority_without_evidence = [
+        row
+        for row in graph_edges
+        if row.get("edge_authority_level") == "evidence_backed_relation" and row.get("evidence_ref") and row.get("evidence_ref") not in evidence_by_id
+    ]
+    authority_without_bbox = [
+        row
+        for row in exact_edges
+        if not row.get("bbox_refs") or any(bbox_id not in bbox_ids for bbox_id in row.get("bbox_refs") or ())
+    ]
+    trace_promoted = [
+        row
+        for row in trace_edges
+        if row.get("citation_final") is not False or row.get("viewer_highlightable") is not False
+    ]
+    missing_fields = [
+        row
+        for row in graph_edges
+        if {
+            "edge_authority_level",
+            "citation_final",
+            "viewer_highlightable",
+            "evidence_requirement",
+            "source_role",
+            "relation_support",
+            "reason",
+        }
+        - set(row)
+    ]
+    return {
+        "status": "complete" if not (authority_without_evidence or authority_without_bbox or trace_promoted or missing_fields) else "incomplete",
+        "graph_edge_count": len(graph_edges),
+        "article_relation_count": len(article_amendment_relations),
+        "article_relation_graph_ref_count": len(article_relation_refs),
+        "evidence_backed_relation_edge_count": len(exact_edges),
+        "trace_only_relation_edge_count": len(trace_edges),
+        "non_citable_edge_count": sum(1 for row in graph_edges if row.get("citation_final") is False),
+        "viewer_highlightable_relation_edge_count": sum(1 for row in relation_edges if row.get("viewer_highlightable") is True),
+        "authority_without_evidence_count": len(authority_without_evidence),
+        "authority_without_bbox_count": len(authority_without_bbox),
+        "trace_promoted_count": len(trace_promoted),
+        "missing_authority_field_count": len(missing_fields),
+        "authority_level_counts": dict(sorted(Counter(row.get("edge_authority_level") for row in graph_edges).items())),
+        "relation_support_counts": dict(sorted(Counter(row.get("relation_support") for row in graph_edges).items())),
     }
 
 

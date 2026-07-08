@@ -25,6 +25,7 @@ def build_graph_artifacts(
     bab_nodes_by_source_label: dict[tuple[str, str], str] = {}
     legal_units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     evidence_by_unit = {row["legal_unit_id"]: row for row in evidence}
+    evidence_by_id = {row["evidence_id"]: row for row in evidence}
     source_by_id = {row["source_document_id"]: row for row in source_documents}
     metadata_by_key = {(row.get("source_role"), row.get("metadata_field")): row for row in metadata_grounding}
 
@@ -39,6 +40,7 @@ def build_graph_artifacts(
         if edge_id in seen_edges:
             return
         seen_edges.add(edge_id)
+        authority = _edge_authority_payload(edge_type, payload, evidence_by_id, source_by_id)
         edges.append(
             {
                 "edge_id": edge_id,
@@ -47,6 +49,7 @@ def build_graph_artifacts(
                 "source_id": source_id,
                 "target_id": target_id,
                 **payload,
+                **authority,
             }
         )
 
@@ -227,6 +230,10 @@ def build_graph_artifacts(
                         "MODIFIES",
                         source_document_id=row["source_document_id"],
                         evidence_ref=row["evidence_id"],
+                        source_legal_unit_id=row["legal_unit_id"],
+                        target_legal_unit_id=target["legal_unit_id"],
+                        target_citation=target.get("unit_label"),
+                        article_relation_ref=_article_relation_ref("MODIFIES", row["evidence_id"], target["legal_unit_id"], target.get("unit_label")),
                         runtime_loadable=True,
                         validation_status="accepted_instrument_scope",
                         confidence_policy="explicit_scope_article_reference",
@@ -244,6 +251,10 @@ def build_graph_artifacts(
                     "DELETES",
                     source_document_id=delete_clause["source_document_id"],
                     evidence_ref=delete_clause["evidence_id"],
+                    source_legal_unit_id=delete_clause["legal_unit_id"],
+                    target_legal_unit_id=target["legal_unit_id"],
+                    target_citation=target.get("unit_label"),
+                    article_relation_ref=_article_relation_ref("DELETES", delete_clause["evidence_id"], target["legal_unit_id"], target.get("unit_label")),
                     runtime_loadable=True,
                     validation_status="accepted_instrument_clause",
                     confidence_policy="explicit_delete_clause_reference",
@@ -313,6 +324,75 @@ def _edge_id(edge_type: str, source_id: str, target_id: str, evidence_ref: str |
         usedforsecurity=False,
     ).hexdigest()
     return f"edge::{digest}"
+
+
+def _edge_authority_payload(edge_type: str, payload: dict, evidence_by_id: dict[str, dict], source_by_id: dict[str, dict]) -> dict:
+    evidence = evidence_by_id.get(str(payload.get("evidence_ref") or ""))
+    exact = bool(evidence and evidence.get("bbox_precision") == "exact" and evidence.get("viewer_highlightable") is True)
+    trace = bool(evidence and not exact)
+    source_document_id = payload.get("source_document_id") or (evidence or {}).get("source_document_id")
+    source_role = _source_role_class(source_by_id.get(str(source_document_id or ""), {}).get("source_role"))
+    if edge_type in {"MODIFIES", "DELETES"}:
+        return {
+            "edge_authority_level": "evidence_backed_relation" if exact else "trace",
+            "citation_final": False,
+            "viewer_highlightable": exact,
+            "evidence_requirement": "exact_bbox" if exact else "trace_only",
+            "source_role": source_role,
+            "relation_support": "exact" if exact else "trace_only",
+            "reason": "exact_article_relation_evidence_bbox" if exact else (evidence or {}).get("failure_reason", "trace_only_relation_not_citable"),
+            "bbox_refs": list((evidence or {}).get("bbox_refs") or ()),
+        }
+    if edge_type in {"HAS_EFFECTIVE_RULE"}:
+        support = "metadata"
+        authority = "provenance"
+        requirement = "page_grounded"
+    elif edge_type in {"HAS_SOURCE_ANOMALY"}:
+        support = "source_anomaly"
+        authority = "provenance"
+        requirement = "trace_only"
+    elif edge_type in {"CONTAINS", "PART_OF", "PRECEDES", "FOLLOWS", "INSERTED_AFTER"}:
+        support = "structural"
+        authority = "evidence_backed_relation" if evidence else "trace"
+        requirement = "exact_bbox" if exact else ("page_grounded" if trace else "none")
+    elif edge_type in {"HAS_SIGNATORY", "HAS_DECISION_SESSION"}:
+        support = "exact" if exact else "trace_only"
+        authority = "evidence_backed_relation" if exact else "trace"
+        requirement = "exact_bbox" if exact else "trace_only"
+    elif edge_type == "EXCLUDED_BECAUSE":
+        support = "structural"
+        authority = "nonlegal"
+        requirement = "none"
+    else:
+        support = "structural"
+        authority = "provenance"
+        requirement = "exact_bbox" if exact else ("page_grounded" if trace else "none")
+    return {
+        "edge_authority_level": authority,
+        "citation_final": False,
+        "viewer_highlightable": False,
+        "evidence_requirement": requirement,
+        "source_role": source_role,
+        "relation_support": support,
+        "reason": payload.get("confidence_policy") or payload.get("validation_status") or "graph_provenance_edge",
+        "bbox_refs": list((evidence or {}).get("bbox_refs") or ()),
+    }
+
+
+def _source_role_class(source_role: str | None) -> str:
+    if source_role == "current_consolidated":
+        return "consolidated"
+    if source_role == "original_historical":
+        return "historical"
+    if str(source_role or "").startswith("amendment_"):
+        return "amendment"
+    return "canonical"
+
+
+def _article_relation_ref(relation_type: str, evidence_id: str, target_unit_id: str, target_citation: str | None) -> str | None:
+    if not str(target_citation or "").startswith(("Pasal ", "Ayat ")):
+        return None
+    return f"uud_article_amendment_relation::{relation_type.lower()}::{evidence_id}::{target_unit_id}"
 
 
 def _is_false_inserted_bab_parent(child: dict, parent: dict) -> bool:

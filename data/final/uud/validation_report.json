@@ -472,7 +472,7 @@
     "document_relation_count": 8
   },
   "legal_graph_baseline": {
-    "status": "evidence_backed_minimal_baseline",
+    "status": "authority_aware_evidence_gated",
     "actual_edge_type_counts": {
       "BELONGS_TO_SOURCE_ROLE": 464,
       "CONTAINS": 813,
@@ -539,5 +539,32 @@
       "SUPPLEMENTS"
     ],
     "runtime_loadable_legal_edges": 1497
+  },
+  "legal_graph_authority_health": {
+    "status": "complete",
+    "graph_edge_count": 5173,
+    "article_relation_count": 63,
+    "article_relation_graph_ref_count": 63,
+    "evidence_backed_relation_edge_count": 33,
+    "trace_only_relation_edge_count": 31,
+    "non_citable_edge_count": 5173,
+    "viewer_highlightable_relation_edge_count": 33,
+    "authority_without_evidence_count": 0,
+    "authority_without_bbox_count": 0,
+    "trace_promoted_count": 0,
+    "missing_authority_field_count": 0,
+    "authority_level_counts": {
+      "evidence_backed_relation": 1463,
+      "nonlegal": 6,
+      "provenance": 3449,
+      "trace": 255
+    },
+    "relation_support_counts": {
+      "exact": 37,
+      "metadata": 3,
+      "source_anomaly": 2,
+      "structural": 5097,
+      "trace_only": 34
+    }
   }
 }
