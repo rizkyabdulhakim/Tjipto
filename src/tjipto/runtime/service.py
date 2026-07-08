@@ -87,10 +87,11 @@ class LegalRuntimeService:
         if not routed["matches"]:
             return routed | {"status": routed["status"], **_empty_citation_fields()}
         context_pack = assemble_context_pack(store, routed["matches"])
+        citations = tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"])
         return routed | {
             "status": "found",
             "context_pack": context_pack,
-            "citation_payloads": context_pack["citation_payloads"],
+            "citation_payloads": citations,
             "viewer_refs": context_pack["viewer_refs"],
             "validation_reasons": context_pack["validation_reasons"],
         }
@@ -122,18 +123,31 @@ class LegalRuntimeService:
         evidence = store.get(evidence_id)
         if evidence is None:
             evidence = _metadata_grounding_evidence(store, evidence_id)
+        synthetic_bboxes: list[dict] | None = None
+        if evidence is None:
+            evidence, synthetic_bboxes = _source_conflict_viewer_evidence(store, evidence_id)
         if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
-        bboxes = store.metadata_bboxes_for(evidence_id) if evidence.get("metadata_grounding") else store.bboxes_for(evidence_id)
-        return viewer_payload(
+        bboxes = (
+            synthetic_bboxes
+            if synthetic_bboxes is not None
+            else store.metadata_bboxes_for(evidence_id)
+            if evidence.get("metadata_grounding")
+            else store.bboxes_for(evidence_id)
+        )
+        return _viewer_with_authority(
             store,
-            corpus_id,
             evidence,
-            bboxes,
-            source_document_id=source_document_id,
-            page_number=page_number,
-            bbox_id=bbox_id,
-            source_pdf_path=source_pdf_path,
+            viewer_payload(
+                store,
+                corpus_id,
+                evidence,
+                bboxes,
+                source_document_id=source_document_id,
+                page_number=page_number,
+                bbox_id=bbox_id,
+                source_pdf_path=source_pdf_path,
+            ),
         )
 
     def pdf_access(
@@ -164,9 +178,18 @@ class LegalRuntimeService:
         evidence = store.get(evidence_id)
         if evidence is None:
             evidence = _metadata_grounding_evidence(store, evidence_id)
+        synthetic_bboxes: list[dict] | None = None
+        if evidence is None:
+            evidence, synthetic_bboxes = _source_conflict_viewer_evidence(store, evidence_id)
         if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
-        bboxes = store.metadata_bboxes_for(evidence_id) if evidence.get("metadata_grounding") else store.bboxes_for(evidence_id)
+        bboxes = (
+            synthetic_bboxes
+            if synthetic_bboxes is not None
+            else store.metadata_bboxes_for(evidence_id)
+            if evidence.get("metadata_grounding")
+            else store.bboxes_for(evidence_id)
+        )
         return resolve_pdf_access(
             store,
             corpus_id,
@@ -331,7 +354,7 @@ class LegalRuntimeService:
                 "answer": self._answer_text("answer_ready", evidence, templates),
                 "context_pack": context_pack,
                 "evidence": evidence,
-                "citations": context_pack["citation_payloads"],
+                "citations": tuple(_citation_with_authority(store, item) for item in context_pack["citation_payloads"]),
                 "viewer_refs": context_pack["viewer_refs"],
                 "metadata_facts": (),
                 "legal_relations": (),
@@ -403,9 +426,16 @@ class LegalRuntimeService:
                 "insufficient_reasons": tuple(sorted(set(context_pack["validation_reasons"].values()))),
             }
         status = "limited_answer" if ask_route == "lexical_fallback" else "answer_ready"
-        metadata_support = tuple(_metadata_support(row) for row in evidence if row.get("metadata_field"))
-        citations = () if metadata_support else context_pack["citation_payloads"]
-        viewer_refs = () if metadata_support else context_pack["viewer_refs"]
+        metadata_support = tuple(_metadata_support(store, row) for row in evidence if row.get("metadata_field"))
+        if metadata_support:
+            exact_metadata = tuple(
+                row for row in context_pack["citation_payloads"] if row.get("metadata_field") and row.get("viewer_ref", {}).get("can_resolve") is True
+            )
+            citations = tuple(_citation_with_authority(store, row) for row in exact_metadata)
+            viewer_refs = tuple(row["viewer_ref"] for row in exact_metadata)
+        else:
+            citations = tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"])
+            viewer_refs = context_pack["viewer_refs"]
         return routed | {
             "status": status,
             "route": ask_route,
@@ -443,6 +473,82 @@ def _empty_citation_fields() -> dict:
 def _answer_templates(store) -> dict[str, str]:
     configured: dict = getattr(getattr(store, "config", None), "setting", lambda *args: {})("answer_templates", {})
     return _ANSWER_TEMPLATES | dict(configured or {})
+
+
+def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> dict:
+    authority_kind = _authority_kind(store, row, can_resolve=can_resolve, conflict=conflict)
+    return {
+        "authority_kind": authority_kind,
+        "authority_label": {
+            "legal_citation": "Sitasi hukum",
+            "metadata_source": "Metadata sumber",
+            "metadata_trace": "Metadata trace",
+            "source_conflict_provenance": "Jejak audit sumber",
+            "source_anomaly": "Source anomaly",
+            "instrument_provenance": "Instrument provenance",
+        }[authority_kind],
+        "citation_final": authority_kind == "legal_citation",
+    }
+
+
+def _authority_kind(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> str:
+    viewer_resolvable = (
+        can_resolve
+        if can_resolve is not None
+        else row.get("viewer_ref", {}).get("can_resolve") is True or row.get("viewer_highlightable") is True
+    )
+    if row.get("metadata_grounding") or row.get("metadata_field"):
+        return "metadata_source" if viewer_resolvable else "metadata_trace"
+    conflict_row = conflict or _source_conflict_by_evidence(store, row.get("evidence_id"))
+    if conflict_row is not None or row.get("source_conflict_id"):
+        return "source_anomaly" if _is_source_anomaly_conflict(conflict_row or row) else "source_conflict_provenance"
+    if _row_is_instrument_provenance(store, row):
+        return "instrument_provenance"
+    return "legal_citation"
+
+
+def _source_conflict_by_evidence(store, evidence_id: object) -> dict | None:
+    if store is None or not evidence_id:
+        return None
+    return next(
+        (
+            row
+            for row in store.source_conflicts
+            if evidence_id == row.get("source_conflict_id") or evidence_id in set(row.get("evidence_ids") or ())
+        ),
+        None,
+    )
+
+
+def _is_source_anomaly_conflict(row: dict) -> bool:
+    classification = str(row.get("classification") or "").casefold()
+    return (
+        row.get("provenance_exception_category") == "accepted_noncanonical_source_conflict_trace_only"
+        or "anomaly" in classification
+        or "typo" in classification
+    )
+
+
+def _row_is_instrument_provenance(store, row: dict) -> bool:
+    candidate_type = str(row.get("candidate_type") or "")
+    if candidate_type == "article_amendment_relation" or candidate_type.startswith("instrument_"):
+        return True
+    if store is None:
+        return False
+    try:
+        units = store.legal_units
+    except (KeyError, OSError, ValueError):
+        return False
+    unit = next((item for item in units if item.get("legal_unit_id") == row.get("legal_unit_id")), {})
+    return bool(unit) and _is_instrument_unit(store, unit)
+
+
+def _citation_with_authority(store, row: dict, *, conflict: dict | None = None) -> dict:
+    return row | _authority_policy(store, row, conflict=conflict)
+
+
+def _viewer_with_authority(store, evidence: dict, payload: dict) -> dict:
+    return payload | _authority_policy(store, evidence, can_resolve=payload.get("viewer_highlightable") is True)
 
 
 def _catalog_search(store, corpus_id: str, query: str, limit: int, filters: dict) -> tuple[dict, ...]:
@@ -597,10 +703,10 @@ def _metadata_fact(row: dict) -> dict:
     }
 
 
-def _metadata_support(row: dict) -> dict:
+def _metadata_support(store, row: dict) -> dict:
     can_resolve = row.get("viewer_ref", {}).get("can_resolve") is True
     return {
-        "support_class": "exact_metadata_citation" if can_resolve else "metadata_support",
+        "support_class": "exact_metadata_citation" if can_resolve else "metadata_trace",
         "field": row.get("metadata_field"),
         "answer": row.get("metadata_answer"),
         "evidence_id": row.get("evidence_id"),
@@ -610,7 +716,7 @@ def _metadata_support(row: dict) -> dict:
         "citation_available": can_resolve,
         "viewer_highlightable": can_resolve,
         "viewer_ref": row.get("viewer_ref") if can_resolve else None,
-    }
+    } | _authority_policy(store, row, can_resolve=can_resolve)
 
 
 def _metadata_grounding_evidence(store, metadata_grounding_id: str | None) -> dict | None:
@@ -734,7 +840,7 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
             "warnings": ("article_relation_trace_only_not_citable",),
             "insufficient_reasons": (),
         }
-    citations = tuple(_article_relation_citation(row) for row in answer_evidence)
+    citations = tuple(_citation_with_authority(store, _article_relation_citation(row)) for row in answer_evidence)
     viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence)
     partial = bool(trace_support)
     public_evidence = () if partial and not target.get("target_citation") else answer_evidence
@@ -1233,25 +1339,36 @@ def _source_conflict_support(store, conflict: dict) -> dict:
     )
     context_pack = assemble_context_pack(store, evidence_rows) if evidence_rows else empty_context_pack("source_anomaly")
     evidence = context_pack["answer_evidence"]
+    synthetic_support = _synthetic_source_conflict_support(store, conflict) if not evidence else None
     trace_support: tuple[dict, ...] = ()
     answer_scope = "insufficient_evidence"
     if evidence:
         answer_scope = "source_conflict_exact_provenance"
+    elif synthetic_support is not None:
+        answer_scope = "source_conflict_exact_provenance"
     else:
-        trace_support = (_source_conflict_trace_support(conflict, context_pack["validation_reasons"]),)
+        trace_support = (_source_conflict_trace_support(store, conflict, context_pack["validation_reasons"]),)
         answer_scope = "source_conflict_trace" if trace_support else "insufficient_evidence"
     return {
-        "context_pack": context_pack,
-        "evidence": evidence,
-        "citations": context_pack["citation_payloads"] if evidence else (),
-        "viewer_refs": context_pack["viewer_refs"] if evidence else (),
+        "context_pack": synthetic_support["context_pack"] if synthetic_support is not None else context_pack,
+        "evidence": synthetic_support["evidence"] if synthetic_support is not None else evidence,
+        "citations": tuple(_citation_with_authority(store, row, conflict=conflict) for row in context_pack["citation_payloads"])
+        if evidence
+        else synthetic_support["citations"]
+        if synthetic_support is not None
+        else (),
+        "viewer_refs": context_pack["viewer_refs"] if evidence else synthetic_support["viewer_refs"] if synthetic_support is not None else (),
         "trace_support": trace_support,
         "answer_scope": answer_scope,
-        "warnings": ("source_conflict_not_final_legal_authority",) if evidence or trace_support else (),
+        "warnings": (
+            ("source_conflict_not_final_legal_authority",)
+            if evidence or synthetic_support is not None or trace_support
+            else ()
+        ),
     }
 
 
-def _source_conflict_trace_support(conflict: dict, validation_reasons: dict) -> dict:
+def _source_conflict_trace_support(store, conflict: dict, validation_reasons: dict) -> dict:
     first_reason = next(iter(validation_reasons.values()), None)
     return {
         "support_class": "source_conflict_trace",
@@ -1267,7 +1384,7 @@ def _source_conflict_trace_support(conflict: dict, validation_reasons: dict) -> 
         "viewer_highlightable": False,
         "viewer_ref": None,
         "failure_reason": conflict.get("failure_reason") or first_reason or "source_conflict_trace_only",
-    }
+    } | _authority_policy(store, conflict, can_resolve=False, conflict=conflict)
 
 
 def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenance: bool, trace_only: bool) -> str:
@@ -1312,3 +1429,72 @@ def _source_conflict_reviewer_suffix(reviewer_decision: object) -> str:
     if not text:
         return ""
     return f" Reviewer decision: {text}."
+
+
+def _source_conflict_viewer_evidence(store, evidence_id: str | None) -> tuple[dict | None, list[dict] | None]:
+    if store is None or not evidence_id:
+        return None, None
+    conflict = next((row for row in store.source_conflicts if row.get("source_conflict_id") == evidence_id), None)
+    if conflict is None:
+        return None, None
+    synthetic = _synthetic_source_conflict_support(store, conflict)
+    if synthetic is None:
+        return None, None
+    return synthetic["evidence"][0], list(synthetic["bboxes"])
+
+
+def _synthetic_source_conflict_support(store, conflict: dict) -> dict | None:
+    bboxes = tuple(store.exact_bboxes_for_text_spans(tuple(conflict.get("text_span_ids") or ())))
+    if not bboxes:
+        return None
+    evidence = _synthetic_source_conflict_evidence(store, conflict, bboxes)
+    viewer_ref = {
+        "action": "viewer",
+        "evidence_id": evidence["evidence_id"],
+        "source_document_id": evidence.get("source_document_id"),
+        "page_numbers": evidence["page_numbers"],
+        "bbox_count": len(bboxes),
+        "can_resolve": True,
+    }
+    citation = evidence | {
+        "label": conflict.get("classification"),
+        "document_title": _document_title(store, _source_document_meta(store, conflict.get("source_document_id"))),
+        "viewer_ref": viewer_ref,
+        "bbox_count": len(bboxes),
+        "evidence_status": conflict.get("status"),
+    }
+    return {
+        "context_pack": {
+            "answer_evidence": (evidence,),
+            "supporting_context": (),
+            "excluded_results": (),
+            "citation_payloads": (),
+            "viewer_refs": (viewer_ref,),
+            "validation_reasons": {evidence["evidence_id"]: "source_conflict_exact_span_bbox"},
+        },
+        "evidence": (evidence,),
+        "citations": (_citation_with_authority(store, citation, conflict=conflict),),
+        "viewer_refs": (viewer_ref,),
+        "bboxes": bboxes,
+    }
+
+
+def _synthetic_source_conflict_evidence(store, conflict: dict, bboxes: tuple[dict, ...]) -> dict:
+    source = _source_document_meta(store, conflict.get("source_document_id"))
+    pages = tuple(dict.fromkeys(int(row["page_number"]) for row in bboxes if row.get("page_number")))
+    quoted_text = "\n".join(dict.fromkeys(str(row.get("text") or "").strip() for row in bboxes if str(row.get("text") or "").strip()))
+    return {
+        "evidence_id": conflict.get("source_conflict_id"),
+        "legal_unit_id": None,
+        "citation": f"Source anomaly: {conflict.get('classification')}",
+        "quoted_text": quoted_text,
+        "bbox_refs": tuple(row["bbox_id"] for row in bboxes if row.get("bbox_id")),
+        "bbox_precision": "exact",
+        "viewer_highlightable": True,
+        "page_numbers": pages,
+        "source_document_id": conflict.get("source_document_id"),
+        "source_pdf_path": bboxes[0].get("source_pdf_path"),
+        "source_sha256": bboxes[0].get("source_sha256"),
+        "source_role": source.get("source_role"),
+        "temporal_context": source.get("temporal_context"),
+    }

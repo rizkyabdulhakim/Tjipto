@@ -93,7 +93,15 @@ def _validate(case: dict[str, Any], response: dict[str, Any]) -> list[str]:
         if legal_unit_id in citation_legal_unit_ids:
             errors.append(f"forbidden_legal_unit_returned:{legal_unit_id}")
     if metadata and (citations or response.get("viewer_refs")):
-        errors.append("metadata_support_exposed_as_exact_citation")
+        metadata_citations = [
+            row
+            for row in citations
+            if row.get("authority_kind") == "metadata_source" and row.get("citation_final") is False
+        ]
+        if len(metadata_citations) != len(citations) or (
+            response.get("viewer_refs") and len(tuple(response.get("viewer_refs", ()))) != len(metadata_citations)
+        ):
+            errors.append("metadata_support_exposed_as_exact_citation")
     if trace and any(row.get("citation_available") or row.get("viewer_highlightable") for row in trace):
         errors.append("trace_support_claims_citation_or_highlight")
     if documents and (citations or response.get("viewer_refs") or any(row.get("highlightable") for row in documents)):
@@ -106,10 +114,10 @@ def _validate(case: dict[str, Any], response: dict[str, Any]) -> list[str]:
 
 
 def _support_type(response: dict[str, Any]) -> str:
-    if response.get("citations"):
-        return "citation"
     if response.get("metadata_support"):
         return "metadata_support"
+    if response.get("citations"):
+        return "citation"
     if response.get("trace_support"):
         return "trace_support"
     if response.get("document_relations"):

@@ -31,6 +31,9 @@ export interface TjiptoAskResponse {
 
 export interface MetadataSupportPayload {
   support_class?: "metadata_support" | "metadata_trace" | "exact_metadata_citation";
+  authority_kind?: Citation["authorityKind"];
+  authority_label?: string;
+  citation_final?: boolean;
   field?: string;
   answer?: string;
   evidence_id?: string;
@@ -55,6 +58,9 @@ export interface DocumentRelationPayload {
 }
 
 export interface TraceSupportPayload {
+  authority_kind?: Citation["authorityKind"];
+  authority_label?: string;
+  citation_final?: boolean;
   source_conflict_id?: string;
   relation_id?: string;
   relation_type?: string;
@@ -112,6 +118,9 @@ export interface CitationPayload {
   quoted_text: string;
   source_role?: string;
   temporal_context?: string;
+  authority_kind?: Citation["authorityKind"];
+  authority_label?: string;
+  citation_final?: boolean;
   page_numbers?: number[];
   bbox_count?: number;
   viewer_ref?: ViewerRefPayload;
@@ -131,6 +140,9 @@ export interface ViewerPayload {
   source_role?: string;
   temporal_context?: string;
   source_status_label?: string;
+  authority_kind?: Citation["authorityKind"];
+  authority_label?: string;
+  citation_final?: boolean;
   page_numbers?: number[];
   bbox_count?: number;
   bbox_rectangles?: (PdfBBox & {
@@ -255,15 +267,11 @@ export function answerTextOrFallback(response: TjiptoAskResponse) {
 export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation[] {
   const citations = Array.isArray(response.citations) ? response.citations : [];
   const viewerRefs = Array.isArray(response.viewer_refs) ? response.viewer_refs : [];
-  const provenanceCitation =
-    response.route === "source_anomaly_explanation" &&
-    response.answer_scope === "source_conflict_exact_provenance" &&
-    Array.isArray(response.warnings) &&
-    response.warnings.includes("source_conflict_not_final_legal_authority");
   return citations.flatMap((item, index) => {
     if (!item?.evidence_id || !item?.quoted_text) return [];
     const viewer = viewerRefs[index] ?? item.viewer_ref;
     if (viewer?.can_resolve !== true) return [];
+    const authorityKind = item.authority_kind ?? fallbackAuthorityKind(response);
     const pages = Array.isArray(item.page_numbers)
       ? item.page_numbers
       : Array.isArray(viewer?.page_numbers)
@@ -278,8 +286,9 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       viewerRefId: viewer?.evidence_id,
       documentTitle: item.document_title ?? fallbackDocumentTitle(item.corpus_id),
       regulationType: "UUD",
-      authorityKind: provenanceCitation ? "source_conflict_provenance" : "legal_citation",
-      authorityLabel: provenanceCitation ? "Jejak audit sumber" : "Sitasi hukum",
+      authorityKind,
+      authorityLabel: item.authority_label ?? fallbackAuthorityLabel(authorityKind),
+      citationFinal: item.citation_final ?? authorityKind === "legal_citation",
       article: String(item.label ?? item.citation ?? "UUD"),
       pageNumber: Number.isFinite(pageNumber) ? pageNumber : 1,
       excerpt: String(item.quoted_text),
@@ -301,21 +310,22 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
     metadata: (response.metadata_support ?? []).map((row, index) => ({
       id: String(row.evidence_id ?? `metadata_${index}`),
       kind: "metadata",
-      label: String(row.field ?? "metadata_support"),
-      detail:
-        row.support_class === "exact_metadata_citation"
-          ? String(row.answer ?? "Metadata exact tersedia, bukan sitasi hukum final")
-          : String(row.answer ?? "Metadata field-grounded support"),
+      label: row.authority_label ?? (row.authority_kind === "metadata_trace" ? "Metadata trace" : "Metadata sumber"),
+      detail: [row.field, row.answer ?? (row.support_class === "exact_metadata_citation" ? "Metadata exact tersedia" : "Metadata trace-only")]
+        .filter(Boolean)
+        .join(" · "),
       clickable: false,
     })),
     trace: (response.trace_support ?? []).map((row, index) => ({
       id: String(row.source_conflict_id ?? row.relation_id ?? row.evidence_id ?? `trace_${index}`),
       kind: "trace",
-      label: String(row.target_citation ?? row.classification ?? row.relation_type ?? "trace_support"),
-      detail:
-        row.support_class === "source_conflict_trace"
-          ? "Jejak audit sumber. Trace-only, tidak dapat di-highlight."
-          : "Trace-only, tidak dapat di-highlight.",
+      label: row.authority_label ?? String(row.target_citation ?? row.classification ?? row.relation_type ?? "trace_support"),
+      detail: [
+        row.classification,
+        row.support_class === "source_conflict_trace" ? "Trace-only, tidak dapat di-highlight." : "Trace-only support.",
+      ]
+        .filter(Boolean)
+        .join(" · "),
       clickable: false,
     })),
     documentRelations: (response.document_relations ?? []).map((row, index) => ({
@@ -368,4 +378,27 @@ function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
   if (role?.startsWith("amendment_")) return "Historis (sumber perubahan)";
   if (role === "original_historical") return "Historis (naskah asli)";
   return undefined;
+}
+
+function fallbackAuthorityKind(response: TjiptoAskResponse): Citation["authorityKind"] {
+  if (
+    response.route === "source_anomaly_explanation" &&
+    response.answer_scope === "source_conflict_exact_provenance" &&
+    Array.isArray(response.warnings) &&
+    response.warnings.includes("source_conflict_not_final_legal_authority")
+  ) {
+    return "source_conflict_provenance";
+  }
+  return "legal_citation";
+}
+
+function fallbackAuthorityLabel(authorityKind: Citation["authorityKind"]) {
+  return {
+    legal_citation: "Sitasi hukum",
+    metadata_source: "Metadata sumber",
+    metadata_trace: "Metadata trace",
+    source_conflict_provenance: "Jejak audit sumber",
+    source_anomaly: "Source anomaly",
+    instrument_provenance: "Instrument provenance",
+  }[authorityKind ?? "legal_citation"];
 }

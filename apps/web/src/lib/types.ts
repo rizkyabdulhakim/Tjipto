@@ -6,8 +6,15 @@ export interface Citation {
   documentId: string;
   documentTitle: string;
   regulationType: RegulationType;
-  authorityKind?: "legal_citation" | "source_conflict_provenance";
+  authorityKind?:
+    | "legal_citation"
+    | "metadata_source"
+    | "metadata_trace"
+    | "source_conflict_provenance"
+    | "source_anomaly"
+    | "instrument_provenance";
   authorityLabel?: string;
+  citationFinal?: boolean;
   viewerMode?: "evidence" | "document";
   legalUnitId?: string;
   sourceDocumentId?: string;

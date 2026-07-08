@@ -17,6 +17,9 @@ class EvidenceStore:
         self._source_conflicts: list[dict] | None = None
         self._graph_edges: list[dict] | None = None
         self._bbox_by_evidence: dict[str, list[dict]] | None = None
+        self._bbox_rows: list[dict] | None = None
+        self._page_text_spans: list[dict] | None = None
+        self._page_text_span_by_id: dict[str, dict] | None = None
 
     @property
     def evidence(self) -> list[dict]:
@@ -84,20 +87,26 @@ class EvidenceStore:
             self._source_conflicts = _optional_jsonl(self.config, "source_conflicts")
         return self._source_conflicts
 
+    @property
+    def page_text_spans(self) -> list[dict]:
+        if self._page_text_spans is None:
+            self._page_text_spans = _optional_jsonl(self.config, "page_text_spans")
+        return self._page_text_spans
+
     def get(self, evidence_id: str) -> dict | None:
         return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)
 
     def bboxes_for(self, evidence_id: str) -> list[dict]:
         if self._bbox_by_evidence is None:
             grouped: dict[str, list[dict]] = {}
-            for row in self.config.jsonl("bbox"):
+            for row in self._bbox_rows_all():
                 grouped.setdefault(row["evidence_id"], []).append(row)
             self._bbox_by_evidence = grouped
         return self._bbox_by_evidence.get(evidence_id, [])
 
     def metadata_bboxes_for(self, metadata_grounding_id: str) -> list[dict]:
         if self._metadata_bbox_by_grounding is None:
-            bbox_by_id = {row["bbox_id"]: row for row in self.config.jsonl("bbox")}
+            bbox_by_id = {row["bbox_id"]: row for row in self._bbox_rows_all()}
             grouped: dict[str, list[dict]] = {}
             for row in _optional_jsonl(self.config, "metadata_grounding_registry"):
                 bbox = bbox_by_id.get(row["bbox_id"])
@@ -105,9 +114,45 @@ class EvidenceStore:
             self._metadata_bbox_by_grounding = grouped
         return self._metadata_bbox_by_grounding.get(metadata_grounding_id, [])
 
+    def exact_bboxes_for_text_spans(self, text_span_ids: tuple[str, ...] | list[str]) -> list[dict]:
+        matches: list[dict] = []
+        seen: set[str] = set()
+        for text_span_id in text_span_ids:
+            span = self._page_text_span(text_span_id)
+            if not span or span.get("bbox_precision") != "exact":
+                continue
+            for bbox in self._bbox_rows_all():
+                if not _same_span_bbox(span, bbox):
+                    continue
+                bbox_id = str(bbox.get("bbox_id") or "")
+                if bbox_id in seen or bbox.get("bbox_precision") != "exact" or bbox.get("viewer_highlightable") is not True:
+                    continue
+                seen.add(bbox_id)
+                matches.append(bbox)
+        return matches
+
+    def _bbox_rows_all(self) -> list[dict]:
+        if self._bbox_rows is None:
+            self._bbox_rows = self.config.jsonl("bbox")
+        return self._bbox_rows
+
+    def _page_text_span(self, text_span_id: str) -> dict | None:
+        if self._page_text_span_by_id is None:
+            self._page_text_span_by_id = {
+                row["text_span_id"]: row for row in self.page_text_spans if row.get("text_span_id")
+            }
+        return self._page_text_span_by_id.get(text_span_id)
+
 
 def _optional_jsonl(config, logical_key: str) -> list[dict]:
     try:
         return config.jsonl(logical_key)
     except (KeyError, OSError, ValueError):
         return []
+
+
+def _same_span_bbox(span: dict, bbox: dict) -> bool:
+    return all(
+        span.get(field) == bbox.get(field)
+        for field in ("source_document_id", "source_sha256", "page_number", "text", "x0", "y0", "x1", "y1")
+    )

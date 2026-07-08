@@ -113,15 +113,20 @@ async function runEvidenceContractSmoke(browser) {
   await metadataPage.locator('[data-runtime-status="answer_ready"]').waitFor();
   await metadataPage.locator('[data-support-kind="metadata-support"]').waitFor();
   await metadataPage.locator('[data-support-kind="metadata-support"]').getByText("19 Oktober 1999").waitFor();
-  await expectNoExactCitationUi(metadataPage);
+  await metadataPage.locator('[data-citation-kind="metadata_source"]').first().waitFor();
+  await metadataPage.locator('[data-citation-footer="true"] button[data-citation-kind="metadata_source"]').first().click();
+  await metadataPage.locator('[data-evidence-panel="normal"]').waitFor();
+  await metadataPage.locator('[data-bbox-highlight="active"]').first().waitFor();
   await metadataPage.close();
 
   const tracePage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(tracePage, "Apa konflik sumber Aturan Tambahan Pasal III Perubahan Keempat?");
   await tracePage.locator('[data-runtime-status="limited_answer"]').waitFor();
-  await tracePage.locator('[data-support-kind="trace-support"]').waitFor();
-  await tracePage.locator('[data-support-clickable="false"]').first().waitFor();
-  await expectNoExactCitationUi(tracePage);
+  await tracePage.locator('[data-provenance-note="true"]').waitFor();
+  await tracePage.locator('[data-citation-kind="source_anomaly"]').first().waitFor();
+  await tracePage.locator('[data-citation-footer="true"] button[data-citation-kind="source_anomaly"]').first().click();
+  await tracePage.locator('[data-evidence-panel="normal"]').waitFor();
+  await tracePage.locator('[data-bbox-highlight="active"]').first().waitFor();
   await tracePage.close();
 
   const relationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });

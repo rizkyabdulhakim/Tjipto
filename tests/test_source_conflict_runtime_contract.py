@@ -35,17 +35,22 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
             self.assertEqual(len(result.get("trace_support", ())), case["trace_support_count"], query)
             self.assertIn("source_conflict_not_final_legal_authority", result["warnings"], query)
 
-    def test_trace_only_source_conflicts_do_not_create_fake_citations(self) -> None:
+    def test_source_anomaly_reuses_existing_exact_span_bbox_without_becoming_final(self) -> None:
         result = self.service.ask("uud", "Apa konflik sumber Aturan Tambahan Pasal III Perubahan Keempat?")
         self.assertEqual(result["status"], "limited_answer")
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
-        self.assertTrue(result["trace_support"])
-        support = result["trace_support"][0]
-        self.assertEqual(support["support_class"], "source_conflict_trace")
-        self.assertFalse(support["citation_available"])
-        self.assertFalse(support["viewer_highlightable"])
-        self.assertIsNone(support["viewer_ref"])
+        self.assertTrue(result["citations"])
+        self.assertTrue(result["viewer_refs"])
+        self.assertFalse(result["trace_support"])
+        citation = result["citations"][0]
+        self.assertEqual(citation["authority_kind"], "source_anomaly")
+        self.assertFalse(citation["citation_final"])
+        self.assertEqual(citation["evidence_id"], "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict")
+        viewer = self.service.viewer("uud", citation["evidence_id"])
+        self.assertEqual(viewer["authority_kind"], "source_anomaly")
+        self.assertFalse(viewer["citation_final"])
+        self.assertEqual(viewer["status"], "viewer_payload_ready")
+        self.assertTrue(viewer["viewer_highlightable"])
+        self.assertGreater(viewer["bbox_count"], 0)
 
     def test_exact_source_conflict_provenance_can_resolve_existing_viewer_policy(self) -> None:
         result = self.service.ask("uud", "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?")
@@ -54,7 +59,12 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertTrue(result["citations"])
         self.assertTrue(result["viewer_refs"])
         self.assertFalse(result["trace_support"])
+        self.assertEqual(result["citations"][0]["authority_kind"], "source_conflict_provenance")
+        self.assertFalse(result["citations"][0]["citation_final"])
         self.assertTrue(all(row["can_resolve"] for row in result["viewer_refs"]))
+        viewer = self.service.viewer("uud", result["citations"][0]["evidence_id"])
+        self.assertEqual(viewer["authority_kind"], "source_conflict_provenance")
+        self.assertFalse(viewer["citation_final"])
         self.assertNotIn("Reviewer decision: .", result["answer"])
 
     def test_vague_source_conflict_query_fails_closed(self) -> None:

@@ -89,6 +89,8 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(citation["status"], "found")
         self.assertNotIn("matches", citation)
         self.assertNotIn("context_pack", citation)
+        self.assertEqual(citation["citation_payloads"][0]["authority_kind"], "legal_citation")
+        self.assertTrue(citation["citation_payloads"][0]["citation_final"])
         self.assertNotIn("source_sha256", citation["citation_payloads"][0])
         self.assertNotIn("source_pdf_path", citation["citation_payloads"][0])
         self.assertNotIn("source_sha256", citation["viewer_refs"][0])
@@ -190,15 +192,22 @@ class RuntimeHttpContractTest(unittest.TestCase):
                 self.assertTrue(result["metadata_support"], case["query"])
                 support = result["metadata_support"][0]
                 if support["support_class"] == "exact_metadata_citation":
+                    self.assertTrue(result["citations"], case["query"])
+                    self.assertTrue(result["viewer_refs"], case["query"])
                     self.assertTrue(support["citation_available"], case["query"])
                     self.assertTrue(support["viewer_highlightable"], case["query"])
                     self.assertTrue(support["viewer_ref"]["can_resolve"], case["query"])
+                    self.assertEqual(support["authority_kind"], "metadata_source", case["query"])
+                    self.assertFalse(support["citation_final"], case["query"])
+                    self.assertEqual(result["citations"][0]["authority_kind"], "metadata_source", case["query"])
+                    self.assertFalse(result["citations"][0]["citation_final"], case["query"])
                     self.assertNotIn("source_sha256", json.dumps(support), case["query"])
                     self.assertNotIn("source_pdf_path", json.dumps(support), case["query"])
                 else:
                     self.assertFalse(support["citation_available"], case["query"])
                     self.assertFalse(support["viewer_highlightable"], case["query"])
                     self.assertIsNone(support["viewer_ref"], case["query"])
+                    self.assertEqual(support["authority_kind"], "metadata_trace", case["query"])
             if "relation_target_labels" in case:
                 self.assertEqual(
                     {row["target_label"] for row in result["legal_relations"]},

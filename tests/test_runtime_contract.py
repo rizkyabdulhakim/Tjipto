@@ -403,20 +403,26 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertEqual(result["answer_type"], "metadata_fact", case["query"])
                 self.assertEqual(result["metadata_facts"][0]["field"], case["field"], case["query"])
                 self.assertEqual(result["metadata_facts"][0]["answer"], case["answer"], case["query"])
-                self.assertFalse(result["citations"], case["query"])
-                self.assertFalse(result["viewer_refs"], case["query"])
                 self.assertEqual(result["metadata_support"][0]["evidence_id"], case["evidence_id"], case["query"])
                 self.assertEqual(result["metadata_support"][0]["field"], case["field"], case["query"])
                 self.assertEqual(result["metadata_support"][0]["answer"], case["answer"], case["query"])
                 support = result["metadata_support"][0]
                 if support["support_class"] == "exact_metadata_citation":
+                    self.assertTrue(result["citations"], case["query"])
+                    self.assertTrue(result["viewer_refs"], case["query"])
                     self.assertTrue(support["citation_available"], case["query"])
                     self.assertTrue(support["viewer_highlightable"], case["query"])
                     self.assertTrue(support["viewer_ref"]["can_resolve"], case["query"])
+                    self.assertEqual(support["authority_kind"], "metadata_source", case["query"])
+                    self.assertFalse(support["citation_final"], case["query"])
                 else:
+                    self.assertFalse(result["citations"], case["query"])
+                    self.assertFalse(result["viewer_refs"], case["query"])
                     self.assertFalse(support["citation_available"], case["query"])
                     self.assertFalse(support["viewer_highlightable"], case["query"])
                     self.assertIsNone(support["viewer_ref"], case["query"])
+                    self.assertEqual(support["authority_kind"], "metadata_trace", case["query"])
+                    self.assertFalse(support["citation_final"], case["query"])
             else:
                 self.assertFalse(result["metadata_facts"], case["query"])
                 self.assertFalse(result["citations"], case["query"])
@@ -427,22 +433,27 @@ class RuntimeContractTest(unittest.TestCase):
         result = self.service.ask("uud", "kapan perubahan pertama ditetapkan")
         support = result["metadata_support"][0]
         self.assertEqual(support["support_class"], "exact_metadata_citation")
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
+        self.assertTrue(result["citations"])
+        self.assertTrue(result["viewer_refs"])
+        self.assertEqual(result["citations"][0]["authority_kind"], "metadata_source")
+        self.assertFalse(result["citations"][0]["citation_final"])
         self.assertTrue(support["viewer_ref"]["can_resolve"])
         viewer = self.service.viewer("uud", support["evidence_id"])
         self.assertEqual(viewer["status"], "viewer_payload_ready")
         self.assertTrue(viewer["viewer_highlightable"])
         self.assertTrue(viewer["bbox_rectangles"])
         self.assertTrue(all(row["bbox_precision"] == "exact" for row in viewer["bbox_rectangles"]))
+        self.assertEqual(viewer["authority_kind"], "metadata_source")
+        self.assertFalse(viewer["citation_final"])
 
     def test_page_grounded_metadata_support_is_not_clickable(self) -> None:
         result = self.service.ask("uud", "tanggal berlaku perubahan ketiga UUD")
         support = result["metadata_support"][0]
-        self.assertEqual(support["support_class"], "metadata_support")
+        self.assertEqual(support["support_class"], "metadata_trace")
         self.assertFalse(support["citation_available"])
         self.assertFalse(support["viewer_highlightable"])
         self.assertIsNone(support["viewer_ref"])
+        self.assertEqual(support["authority_kind"], "metadata_trace")
 
     def test_original_metadata_role_does_not_fall_back_to_amendments(self) -> None:
         for query in ("kapan UUD asli ditetapkan", "kapan naskah asli ditetapkan"):
@@ -626,6 +637,8 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["evidence"][0]["evidence_id"], case["evidence_id"], case["query"])
             self.assertEqual(result["citations"][0]["citation"], case["citation"], case["query"])
             self.assertEqual(result["citations"][0]["evidence_id"], case["evidence_id"], case["query"])
+            self.assertEqual(result["citations"][0]["authority_kind"], "instrument_provenance", case["query"])
+            self.assertFalse(result["citations"][0]["citation_final"], case["query"])
 
     def test_ask_explains_known_source_anomalies_safely(self) -> None:
         for case in _source_conflict_cases():
@@ -639,6 +652,22 @@ class RuntimeContractTest(unittest.TestCase):
             for reason in case["expected_insufficient_reasons"]:
                 self.assertIn(reason, result["insufficient_reasons"], case["query"])
             self.assertIn("source_conflict_not_final_legal_authority", result["warnings"], case["query"])
+            if result["citations"]:
+                expected_kind = (
+                    "source_anomaly"
+                    if case["classification"] == "source_pdf_contains_pasal_iii_conflict"
+                    else "source_conflict_provenance"
+                )
+                self.assertEqual(result["citations"][0]["authority_kind"], expected_kind, case["query"])
+                self.assertFalse(result["citations"][0]["citation_final"], case["query"])
+            if result["trace_support"]:
+                self.assertFalse(result["trace_support"][0]["citation_final"], case["query"])
+
+    def test_exact_legal_citation_remains_the_only_final_authority(self) -> None:
+        result = self.service.ask("uud", "Pasal 1 ayat (3)")
+        self.assertTrue(result["citations"])
+        self.assertEqual(result["citations"][0]["authority_kind"], "legal_citation")
+        self.assertTrue(result["citations"][0]["citation_final"])
 
     def test_viewer_payload_is_multi_page_and_public_safe(self) -> None:
         evidence_id = "uud_current_consolidated_final_citation_evidence_00232"
