@@ -218,6 +218,18 @@ class RuntimeHttpContractTest(unittest.TestCase):
                 if field in case:
                     self.assertEqual(result[field], case[field], case["query"])
 
+    def test_penandatangan_alias_uses_metadata_public_contract(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "penandatangan perubahan pertama UUD"})
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["route"], "metadata_fact")
+        self.assertEqual(result["intent"], "metadata_lookup")
+        self.assertEqual(result["metadata_facts"][0]["field"], "signatories")
+        self.assertTrue(result["citations"])
+        self.assertTrue(result["viewer_refs"])
+        self.assertEqual(result["citations"][0]["authority_kind"], "metadata_source")
+        self.assertEqual(result["citations"][0]["authority_label"], "Metadata sumber")
+        self.assertFalse(result["citations"][0]["citation_final"])
+
     def test_local_dev_cors_only(self) -> None:
         request = Request(
             self.base_url + "/legal/uud/ask",

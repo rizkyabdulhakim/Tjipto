@@ -455,6 +455,33 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertIsNone(support["viewer_ref"])
         self.assertEqual(support["authority_kind"], "metadata_trace")
 
+    def test_metadata_alias_preempts_generic_instrument_fallback_when_supported(self) -> None:
+        result = self.service.ask("uud", "apa aturan mulai berlaku perubahan pertama")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["route"], "metadata_fact")
+        self.assertEqual(result["intent"], "metadata_lookup")
+        self.assertEqual(result["metadata_facts"][0]["field"], "effective_rule")
+        self.assertEqual(result["metadata_facts"][0]["answer"], "dan mulai berlaku pada tanggal ditetapkan.")
+        support = result["metadata_support"][0]
+        self.assertEqual(support["authority_kind"], "metadata_trace")
+        self.assertFalse(support["citation_final"])
+        self.assertFalse(result["citations"])
+        self.assertFalse(result["viewer_refs"])
+
+    def test_penandatangan_alias_routes_to_metadata_provenance_not_instrument(self) -> None:
+        result = self.service.ask("uud", "penandatangan perubahan pertama UUD")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["route"], "metadata_fact")
+        self.assertEqual(result["intent"], "metadata_lookup")
+        self.assertEqual(result["metadata_facts"][0]["field"], "signatories")
+        self.assertIn("Prof. Dr. H.M. Amien Rais", result["metadata_facts"][0]["answer"])
+        support = result["metadata_support"][0]
+        self.assertEqual(support["authority_kind"], "metadata_source")
+        self.assertFalse(support["citation_final"])
+        self.assertTrue(result["citations"])
+        self.assertEqual(result["citations"][0]["authority_kind"], "metadata_source")
+        self.assertFalse(result["citations"][0]["citation_final"])
+
     def test_original_metadata_role_does_not_fall_back_to_amendments(self) -> None:
         for query in ("kapan UUD asli ditetapkan", "kapan naskah asli ditetapkan"):
             result = self.service.ask("uud", query)

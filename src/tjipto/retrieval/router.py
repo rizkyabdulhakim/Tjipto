@@ -120,6 +120,32 @@ def route_retrieval(
                 "reason": "citation_not_found",
             }
 
+    metadata_all = tuple(metadata_lookup(store, normalized["normalized_query"], len(store.document_metadata)))
+    metadata = filter_evidence(metadata_all, filters)
+    if metadata:
+        ranked, trace = merge_ranked(store, {"metadata": metadata}, filters)
+        return envelope | {
+            "status": "found",
+            "route": "metadata",
+            "intent": "metadata_lookup",
+            "matches": ranked[:limit],
+            "expansion_trace": trace,
+        }
+    if metadata_all:
+        return envelope | {
+            "status": "no_results",
+            "route": "no_results",
+            "intent": "metadata_lookup",
+            "reason": "filters_removed_all",
+        }
+    if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config):
+        return envelope | {
+            "status": "no_results",
+            "route": "metadata_not_found",
+            "intent": "metadata_lookup",
+            "reason": "metadata_not_found",
+        }
+
     structured_all = tuple(
         structured_lookup(
             store,
@@ -151,32 +177,6 @@ def route_retrieval(
             "route": "structured_not_found",
             "intent": "structured_lookup",
             "reason": "structured_not_found",
-        }
-
-    metadata_all = tuple(metadata_lookup(store, normalized["normalized_query"], len(store.document_metadata)))
-    metadata = filter_evidence(metadata_all, filters)
-    if metadata:
-        ranked, trace = merge_ranked(store, {"metadata": metadata}, filters)
-        return envelope | {
-            "status": "found",
-            "route": "metadata",
-            "intent": "metadata_lookup",
-            "matches": ranked[:limit],
-            "expansion_trace": trace,
-        }
-    if metadata_all:
-        return envelope | {
-            "status": "no_results",
-            "route": "no_results",
-            "intent": "metadata_lookup",
-            "reason": "filters_removed_all",
-        }
-    if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config):
-        return envelope | {
-            "status": "no_results",
-            "route": "metadata_not_found",
-            "intent": "metadata_lookup",
-            "reason": "metadata_not_found",
         }
 
     matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))

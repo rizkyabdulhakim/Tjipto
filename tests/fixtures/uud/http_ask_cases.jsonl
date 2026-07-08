@@ -2,6 +2,7 @@
 {"query":"negara hukum","status":"limited_answer","route":"lexical_fallback","has_citations":true,"has_viewer_refs":true}
 {"query":"tanggal perubahan kedua UUD","status":"answer_ready","route":"metadata_fact","has_citations":true,"has_viewer_refs":true,"metadata_field":"date"}
 {"query":"tempat penetapan perubahan kedua UUD","status":"answer_ready","route":"metadata_fact","has_citations":true,"has_viewer_refs":true,"metadata_field":"place","metadata_answer":"Jakarta"}
+{"query":"apa aturan mulai berlaku perubahan pertama","status":"answer_ready","route":"metadata_fact","intent":"metadata_lookup","has_citations":false,"has_viewer_refs":false,"metadata_field":"effective_rule","metadata_answer":"dan mulai berlaku pada tanggal ditetapkan."}
 {"query":"apa saja ayat dalam Pasal 1","status":"answer_ready","route":"legal_relation","relation_target_labels":["(1)","(2)","(3)"]}
 {"query":"relasi amandemen Pasal 1","status":"insufficient_evidence","route":"legal_relation","intent":"legal_relation_lookup","citations":[],"viewer_refs":[],"insufficient_reasons":["insufficient_evidence"]}
 {"query":"aturan KUHP tentang pencurian","status":"insufficient_evidence","route":"lexical_fallback","citations":[],"viewer_refs":[]}

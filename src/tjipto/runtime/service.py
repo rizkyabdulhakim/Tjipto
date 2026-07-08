@@ -10,7 +10,7 @@ from tjipto.corpora.parser_dispatch import parse_legal_reference
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
-from tjipto.retrieval.metadata import normalize_filters, public_filters
+from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
@@ -1130,6 +1130,8 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
     config = getattr(store, "config", None)
     intent = intent_config_for(getattr(config, "structured_strategy", "generic"), config)
     decision = resolve_instrument_intent(query, intent, corpus=getattr(config, "corpus_id", ""))
+    if metadata_lookup(store, query, 1) and decision.reason not in {"analysis_metadata_conflict", "unsupported_analysis_intent"}:
+        return None
     if decision.target_status == "not_instrument":
         return None
     if decision.target_status == "instrument_unresolved":
