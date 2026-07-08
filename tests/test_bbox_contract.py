@@ -93,6 +93,27 @@ class BBoxContractTest(unittest.TestCase):
                 if bbox["viewer_highlightable"]:
                     self.assertNotIn("Pasal ", bbox["text"])
 
+    def test_634_span_exposure_policy_complete(self) -> None:
+        report = read_json(FINAL / "validation_report.json")["viewer_provenance_coverage_health"]
+        self.assertEqual(report["bbox_key_absent_span_count"], 634)
+        self.assertEqual(report["missing_exposure_policy_count"], 0)
+        self.assertEqual(report["false_highlight_exposure_policy_count"], 0)
+        self.assertEqual(report["legal_citation_highlight_count"], 0)
+        self.assertEqual(report["metadata_source_highlight_count"], 0)
+        self.assertEqual(report["source_anomaly_provenance_highlight_count"], 0)
+        self.assertEqual(
+            sum(
+                report[f"{policy}_count"]
+                for policy in (
+                    "blocked_no_word_level_bbox",
+                    "nonlegal_excluded_position",
+                    "raw_provenance_position",
+                    "structural_provenance_position",
+                )
+            ),
+            634,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

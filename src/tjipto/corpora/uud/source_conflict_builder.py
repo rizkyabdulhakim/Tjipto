@@ -53,6 +53,9 @@ def apply_source_conflict_grounding(
         row["blocked_raw_provenance_reason"] = (
             "source_anomaly_anchor_only_until_exact_span_available" if blocked_text_span_ids else None
         )
+        row["blocked_raw_provenance_text_span_reasons"] = {
+            text_span_id: row["blocked_raw_provenance_reason"] for text_span_id in blocked_text_span_ids
+        }
         row["provenance_bbox_status"] = _provenance_bbox_status(row["text_span_ids"], raw_provenance_text_span_ids)
         row["provenance_highlight_scope"] = _provenance_highlight_scope(row["text_span_ids"], raw_provenance_text_span_ids)
         row["final_evidence_available"] = bool(row["evidence_ids"] and row["bbox_ids"])

@@ -719,6 +719,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             "raw_provenance_bbox_ids",
             "raw_provenance_text_span_ids",
             "blocked_raw_provenance_text_span_ids",
+            "blocked_raw_provenance_text_span_reasons",
             "provenance_bbox_status",
             "provenance_highlight_scope",
             "final_evidence_available",
@@ -756,6 +757,11 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"source_conflict_invalid_blocked_raw_provenance_spans:{row['source_conflict_id']}")
             if row.get("blocked_raw_provenance_reason") != "source_anomaly_anchor_only_until_exact_span_available":
                 errors.append(f"source_conflict_invalid_blocked_raw_provenance_reason:{row['source_conflict_id']}")
+            span_reasons = row.get("blocked_raw_provenance_text_span_reasons") or {}
+            if set(span_reasons) != expected_blocked:
+                errors.append(f"source_conflict_invalid_blocked_raw_provenance_span_reason_keys:{row['source_conflict_id']}")
+            if any(reason != row.get("blocked_raw_provenance_reason") for reason in span_reasons.values()):
+                errors.append(f"source_conflict_invalid_blocked_raw_provenance_span_reason:{row['source_conflict_id']}")
         if raw_status == "exact_raw_provenance_bbox_unavailable" and raw_count:
             errors.append(f"source_conflict_invalid_raw_provenance_status:{row['source_conflict_id']}")
         if row.get("provenance_exception_category") == ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY:
@@ -840,6 +846,20 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"graph_edge_highlightable_without_bbox:{row['edge_id']}")
         if row.get("article_relation_ref") and row["article_relation_ref"] not in article_relation_ids:
             errors.append(f"graph_edge_orphan_article_relation_ref:{row['edge_id']}:{row['article_relation_ref']}")
+        provenance_ref = row.get("provenance_ref")
+        provenance_kind = row.get("provenance_ref_kind")
+        if provenance_ref or provenance_kind:
+            if provenance_kind not in {"metadata_grounding", "source_conflict", "document_metadata", "graph_only"}:
+                errors.append(f"graph_edge_invalid_provenance_ref_kind:{row['edge_id']}:{provenance_kind}")
+            if row.get("provenance_support") not in {"exact_bbox", "page_grounded", "trace_only", "structural", "nonlegal"}:
+                errors.append(f"graph_edge_invalid_provenance_support:{row['edge_id']}:{row.get('provenance_support')}")
+            if provenance_kind == "metadata_grounding" and provenance_ref not in metadata_grounding_ids:
+                errors.append(f"graph_edge_orphan_metadata_provenance_ref:{row['edge_id']}:{provenance_ref}")
+            if provenance_kind == "source_conflict" and provenance_ref not in source_conflict_ids:
+                errors.append(f"graph_edge_orphan_source_conflict_provenance_ref:{row['edge_id']}:{provenance_ref}")
+        evidence_ref = row.get("evidence_ref")
+        if evidence_ref and evidence_ref not in evidence_by_id:
+            errors.append(f"graph_edge_non_evidence_evidence_ref:{row['edge_id']}:{evidence_ref}")
         if edge_type in {"MODIFIES", "DELETES"}:
             evidence_row = evidence_by_id.get(row.get("evidence_ref"))
             exact = bool(evidence_row and evidence_row.get("bbox_precision") == "exact" and evidence_row.get("viewer_highlightable") is True)
@@ -881,14 +901,6 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                     errors.append(f"structural_sequence_missing_source_role:{row['edge_id']}")
                 if not row.get("temporal_context"):
                     errors.append(f"structural_sequence_missing_temporal_context:{row['edge_id']}")
-            evidence_ref = row.get("evidence_ref")
-            if (
-                evidence_ref
-                and evidence_ref not in evidence_by_id
-                and evidence_ref not in metadata_grounding_ids
-                and evidence_ref not in source_conflict_ids
-            ):
-                errors.append(f"legal_edge_unknown_evidence_ref:{row['edge_id']}:{evidence_ref}")
     for row in document_relations:
         if row["relation_id"] in seen_ids["document_relation_id"]:
             errors.append(f"duplicate_document_relation_id:{row['relation_id']}")
@@ -1316,9 +1328,19 @@ def _metadata_exact_promotion_feasibility_health(*, promotion_decisions: list[di
             f"{category}_count": sum(1 for row in metadata_rows if row.get("metadata_exact_promotion_feasibility") == category)
             for category in sorted(categories)
         },
+        "metadata_decision_sentence_continues_beyond_field_count": sum(
+            1 for row in metadata_rows if row.get("failure_reason") == "metadata_decision_sentence_continues_beyond_field"
+        ),
+        "metadata_publication_block_requires_page_level_support_count": sum(
+            1 for row in metadata_rows if row.get("failure_reason") == "metadata_publication_block_requires_page_level_support"
+        ),
         "missing_feasibility_count": sum(1 for row in metadata_rows if row.get("metadata_exact_promotion_feasibility") not in categories),
+        "missing_final_reason_count": sum(1 for row in metadata_rows if not row.get("failure_reason")),
     }
-    return {**counts, "status": "complete" if counts["missing_feasibility_count"] == 0 else "incomplete"}
+    return {
+        **counts,
+        "status": "complete" if counts["missing_feasibility_count"] == 0 and counts["missing_final_reason_count"] == 0 else "incomplete",
+    }
 
 
 def _article_relation_runtime_policy_health(
@@ -2533,6 +2555,15 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
         "blocked_by_missing_exact_bbox",
         "blocked_by_no_word_level_bbox_artifact",
     }
+    allowed_exposure_policies = {
+        "legal_citation_highlight",
+        "metadata_source_highlight",
+        "source_anomaly_provenance_highlight",
+        "structural_provenance_position",
+        "raw_provenance_position",
+        "nonlegal_excluded_position",
+        "blocked_no_word_level_bbox",
+    }
     counts = {
         "page_text_span_count": len(page_text_spans),
         "bbox_registry_row_count": len(bbox_rows),
@@ -2546,8 +2577,19 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
             f"{reason}_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") == reason)
             for reason in sorted(allowed_reasons)
         },
+        **{
+            f"{policy}_count": sum(1 for row in absent_rows if row.get("exposure_policy") == policy)
+            for policy in sorted(allowed_exposure_policies)
+        },
         "missing_bucket_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_bucket") not in allowed_buckets),
         "missing_reason_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") not in allowed_reasons),
+        "missing_exposure_policy_count": sum(1 for row in absent_rows if row.get("exposure_policy") not in allowed_exposure_policies),
+        "false_highlight_exposure_policy_count": sum(
+            1
+            for row in absent_rows
+            if row.get("exposure_policy")
+            in {"legal_citation_highlight", "metadata_source_highlight", "source_anomaly_provenance_highlight"}
+        ),
         "invalid_present_status_count": sum(
             1 for row in page_text_spans if row.get("bbox_registry_coverage_status") not in {"bbox_key_present", "bbox_key_absent"}
         ),
@@ -2557,7 +2599,16 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
         "status": "complete"
         if counts["bbox_key_absent_span_count"]
         == sum(counts[f"{bucket}_count"] for bucket in sorted(allowed_buckets))
-        and not any(counts[key] for key in ("missing_bucket_count", "missing_reason_count", "invalid_present_status_count"))
+        and not any(
+            counts[key]
+            for key in (
+                "missing_bucket_count",
+                "missing_reason_count",
+                "missing_exposure_policy_count",
+                "false_highlight_exposure_policy_count",
+                "invalid_present_status_count",
+            )
+        )
         else "incomplete",
     }
 

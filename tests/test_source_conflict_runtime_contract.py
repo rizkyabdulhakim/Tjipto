@@ -4,10 +4,12 @@ import json
 from pathlib import Path
 import unittest
 
+from tjipto.core.manifest import read_jsonl
 from tjipto.runtime.service import LegalRuntimeService
 
 
 ROOT = Path(__file__).resolve().parents[1]
+FINAL = ROOT / "data/final/uud"
 
 
 class SourceConflictRuntimeContractTest(unittest.TestCase):
@@ -57,6 +59,20 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(
             result["source_conflict"]["blocked_raw_provenance_reason"],
             "source_anomaly_anchor_only_until_exact_span_available",
+        )
+        conflict = next(
+            row
+            for row in read_jsonl(FINAL / "source_conflicts.jsonl")
+            if row["source_conflict_id"] == "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict"
+        )
+        self.assertEqual(len(conflict["text_span_ids"]), 3)
+        self.assertEqual(len(conflict["raw_provenance_text_span_ids"]), 1)
+        self.assertEqual(
+            conflict["blocked_raw_provenance_text_span_reasons"],
+            {
+                "uud_text_span::amendment_4_historical::0005::0019": "source_anomaly_anchor_only_until_exact_span_available",
+                "uud_text_span::amendment_4_historical::0006::0000": "source_anomaly_anchor_only_until_exact_span_available",
+            },
         )
         viewer = self.service.viewer("uud", citation["evidence_id"])
         self.assertEqual(viewer["authority_kind"], "source_anomaly")

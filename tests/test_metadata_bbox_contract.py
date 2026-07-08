@@ -123,7 +123,10 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(feasibility["blocked_by_text_boundary_count"], 1)
         self.assertEqual(feasibility["blocked_by_no_exact_bbox_count"], 0)
         self.assertEqual(feasibility["blocked_by_layout_count"], 8)
+        self.assertEqual(feasibility["metadata_decision_sentence_continues_beyond_field_count"], 9)
+        self.assertEqual(feasibility["metadata_publication_block_requires_page_level_support_count"], 4)
         self.assertEqual(feasibility["missing_feasibility_count"], 0)
+        self.assertEqual(feasibility["missing_final_reason_count"], 0)
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):
                 if row["bbox_precision"] == "exact":

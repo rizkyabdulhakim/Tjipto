@@ -342,6 +342,8 @@ class GraphContractTest(unittest.TestCase):
         nodes = {row["node_id"] for row in read_jsonl(ROOT / "data/final/uud/graph_nodes.jsonl")}
         article_relations = {row["relation_id"]: row for row in read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")}
         evidence = {row["evidence_id"]: row for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")}
+        metadata_grounding = {row["metadata_grounding_id"] for row in read_jsonl(ROOT / "data/final/uud/metadata_grounding.jsonl")}
+        source_conflicts = {row["source_conflict_id"] for row in read_jsonl(ROOT / "data/final/uud/source_conflicts.jsonl")}
         bbox_ids = {row["bbox_id"] for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")}
         actual_counts: dict[str, int] = {}
         for row in edges:
@@ -358,6 +360,7 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["authority_without_evidence_count"], 0)
         self.assertEqual(authority["authority_without_bbox_count"], 0)
         self.assertEqual(authority["missing_authority_field_count"], 0)
+        self.assertFalse([row for row in edges if row.get("evidence_ref") and row["evidence_ref"] not in evidence])
         self.assertNotIn("legal_edge_types", report)
         self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "AMENDED_BY", "AMENDS", "RENAMES", "SUPPLEMENTS"})
         for edge_type in report["not_promoted_edge_types"]:
@@ -402,8 +405,18 @@ class GraphContractTest(unittest.TestCase):
             self.assertTrue(row["reason"])
             if row.get("runtime_loadable") is True:
                 self.assertTrue(row.get("evidence_ref"))
+                self.assertIn(row["evidence_ref"], evidence)
                 self.assertTrue(row.get("validation_status"))
                 self.assertTrue(row.get("confidence_policy"))
+            if row.get("provenance_ref"):
+                self.assertIn(row["provenance_ref_kind"], {"metadata_grounding", "source_conflict", "document_metadata", "graph_only"})
+                self.assertIn(row["provenance_support"], {"exact_bbox", "page_grounded", "trace_only", "structural", "nonlegal"})
+                if row["provenance_ref_kind"] == "metadata_grounding":
+                    self.assertIn(row["provenance_ref"], metadata_grounding)
+                    self.assertFalse(row.get("evidence_ref"))
+                if row["provenance_ref_kind"] == "source_conflict":
+                    self.assertIn(row["provenance_ref"], source_conflicts)
+                    self.assertFalse(row.get("evidence_ref"))
             if row["edge_type"] in {"MODIFIES", "DELETES"}:
                 source = evidence[row["evidence_ref"]]
                 self.assertTrue(set(row["bbox_refs"]) <= bbox_ids)

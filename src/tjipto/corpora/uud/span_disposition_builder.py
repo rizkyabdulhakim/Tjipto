@@ -247,6 +247,7 @@ def _apply_bbox_registry_coverage(
         span["bbox_registry_coverage_status"] = "bbox_key_absent"
         span["bbox_registry_coverage_bucket"] = bucket
         span["bbox_registry_coverage_reason"] = reason
+        span["exposure_policy"] = _exposure_policy(bucket, reason)
 
 
 def _legal_coverage_context(legal_units: list[dict], chunks_by_unit: dict[str, dict]) -> dict[str, dict]:
@@ -280,6 +281,16 @@ def _missing_bbox_coverage(*, span: dict, legal_context: dict, metadata_rows: li
             return "legal_citation_candidate", "blocked_by_no_word_level_bbox_artifact"
         return "raw_span_only_with_reason", "blocked_by_no_word_level_bbox_artifact"
     return "raw_span_only_with_reason", "blocked_by_missing_exact_bbox"
+
+
+def _exposure_policy(bucket: str, reason: str) -> str:
+    if bucket == "structural_provenance_only":
+        return "structural_provenance_position"
+    if bucket == "nonlegal_excluded_provenance":
+        return "nonlegal_excluded_position"
+    if reason == "blocked_by_no_word_level_bbox_artifact":
+        return "blocked_no_word_level_bbox"
+    return "raw_provenance_position"
 
 
 def _bbox_registry_key(row: dict) -> tuple[object, ...]:
