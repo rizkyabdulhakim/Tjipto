@@ -121,11 +121,11 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         self.assertEqual(health["invalid_provenance_exception_category_count"], 0)
         self.assertEqual(health["invalid_provenance_review_status_count"], 0)
         self.assertEqual(health["final_evidence_available_count"], 1)
-        self.assertEqual(health["raw_provenance_exact_available_count"], 1)
-        self.assertEqual(health["raw_provenance_partial_available_count"], 1)
+        self.assertEqual(health["raw_provenance_exact_available_count"], 2)
+        self.assertEqual(health["raw_provenance_partial_available_count"], 0)
         self.assertEqual(health["raw_provenance_unavailable_count"], 0)
-        self.assertEqual(health["all_relevant_span_highlight_count"], 1)
-        self.assertEqual(health["anchor_only_highlight_count"], 1)
+        self.assertEqual(health["all_relevant_span_highlight_count"], 2)
+        self.assertEqual(health["anchor_only_highlight_count"], 0)
         self.assertEqual(health["contradictory_failure_reason_count"], 0)
 
     def test_unresolved_needs_review_count_is_zero_or_explicitly_tracked(self) -> None:

@@ -28,7 +28,9 @@ class MetadataBBoxContractTest(unittest.TestCase):
 
     def test_metadata_grounding_registry_exact_rows_resolve_to_bbox_registry(self) -> None:
         registry_rows = read_jsonl(FINAL / "metadata_grounding_registry.jsonl")
-        bboxes = {row["bbox_id"]: row for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
+        bboxes = {row["bbox_id"]: row for row in read_jsonl(FINAL / "bbox_registry.jsonl")} | {
+            row["word_bbox_id"]: row for row in read_jsonl(FINAL / "word_bboxes.jsonl")
+        }
         exact_rows = [row for row in registry_rows if row["bbox_precision"] == "exact"]
         unresolved_rows = [row for row in registry_rows if row["bbox_id"] not in bboxes]
         self.assertTrue(exact_rows)
@@ -50,7 +52,9 @@ class MetadataBBoxContractTest(unittest.TestCase):
 
     def test_metadata_grounding_distinguishes_exact_from_page_grounded(self) -> None:
         registry_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "metadata_grounding_registry.jsonl")}
-        bbox_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
+        bbox_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")} | {
+            row["word_bbox_id"] for row in read_jsonl(FINAL / "word_bboxes.jsonl")
+        }
         text_span_ids = {row["text_span_id"] for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
         exact_rows = []
         for row in read_jsonl(FINAL / "metadata_grounding.jsonl"):
@@ -93,7 +97,7 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(promotion["invalid_bbox_coordinate_count"], 0)
         self.assertEqual(promotion["containing_span_exact_overclaim_count"], 0)
         self.assertEqual(promotion["evidence_trace_only_count"], 5)
-        self.assertEqual(promotion["metadata_grounding_page_grounded_only_count"], 13)
+        self.assertEqual(promotion["metadata_grounding_page_grounded_only_count"], 5)
         audit = report["promotion_decision_audit_health"]
         feasibility = report["metadata_exact_promotion_feasibility_health"]
         self.assertEqual(audit["status"], "complete")
@@ -101,13 +105,13 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(audit["blocked_decision_count"], promotion["promotion_blocked_count"])
         self.assertEqual(audit["promotion_attempted_count"], promotion["promotion_blocked_count"])
         self.assertEqual(audit["promotion_attempt_missing_count"], 0)
-        self.assertEqual(audit["exact_quote_match_count"], 70)
-        self.assertEqual(audit["span_sequence_candidate_count"], 67)
-        self.assertEqual(audit["subspan_match_candidate_count"], 2)
+        self.assertEqual(audit["exact_quote_match_count"], 62)
+        self.assertEqual(audit["span_sequence_candidate_count"], 61)
+        self.assertEqual(audit["subspan_match_candidate_count"], 0)
         self.assertEqual(audit["bbox_union_candidate_count"], 52)
-        self.assertEqual(audit["bbox_union_not_supported_count"], 13)
+        self.assertEqual(audit["bbox_union_not_supported_count"], 5)
         self.assertEqual(audit["new_exact_promotion_count"], 0)
-        self.assertEqual(audit["kept_non_exact_after_attempt_count"], 70)
+        self.assertEqual(audit["kept_non_exact_after_attempt_count"], 62)
         self.assertEqual(audit["generic_blocker_reason_count"], 0)
         self.assertEqual(audit["false_highlightable_claim_count"], 0)
         self.assertEqual(audit["missing_feasibility_field_count"], 0)
@@ -115,22 +119,22 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(audit["unexpected_decision_count"], 0)
         self.assertEqual(audit["blocked_decision_missing_reason_count"], 0)
         self.assertEqual(feasibility["status"], "complete")
-        self.assertEqual(feasibility["audited_metadata_row_count"], 13)
+        self.assertEqual(feasibility["audited_metadata_row_count"], 5)
         self.assertEqual(feasibility["promotable_exact_count"], 0)
         self.assertEqual(feasibility["exact_span_found_but_bbox_missing_count"], 0)
         self.assertEqual(feasibility["multi_span_exact_possible_count"], 0)
         self.assertEqual(feasibility["page_level_only_by_policy_count"], 4)
         self.assertEqual(feasibility["blocked_by_text_boundary_count"], 1)
         self.assertEqual(feasibility["blocked_by_no_exact_bbox_count"], 0)
-        self.assertEqual(feasibility["blocked_by_layout_count"], 8)
-        self.assertEqual(feasibility["metadata_decision_sentence_continues_beyond_field_count"], 9)
+        self.assertEqual(feasibility["blocked_by_layout_count"], 0)
+        self.assertEqual(feasibility["metadata_decision_sentence_continues_beyond_field_count"], 1)
         self.assertEqual(feasibility["metadata_publication_block_requires_page_level_support_count"], 4)
         self.assertEqual(feasibility["missing_feasibility_count"], 0)
         self.assertEqual(feasibility["missing_final_reason_count"], 0)
         self.assertEqual(feasibility["missing_field_bbox_feasibility_count"], 0)
         self.assertEqual(
             feasibility["field_bbox_feasibility_counts"],
-            {"blocked_by_layout": 7, "page_level_only": 4, "sentence_extends_beyond_field": 2},
+            {"blocked_by_layout": 1, "page_level_only": 4},
         )
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):

@@ -34,6 +34,7 @@ ARTIFACT_FILES = (
     ("validation_exceptions", "validation_exceptions.jsonl"),
     ("validation_report", "validation_report.json"),
     ("page_text_spans", "page_text_spans.jsonl"),
+    ("word_bboxes", "word_bboxes.jsonl"),
 )
 
 COUNT_FILES = (
@@ -62,6 +63,7 @@ COUNT_FILES = (
     ("validation_exception_review_labels", "validation_exception_review_labels.jsonl"),
     ("validation_exceptions", "validation_exceptions.jsonl"),
     ("page_text_spans", "page_text_spans.jsonl"),
+    ("word_bboxes", "word_bboxes.jsonl"),
 )
 
 LEGACY_COUNTS = {
@@ -116,6 +118,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "validation_exceptions": "validation_exceptions.jsonl",
         "validation_report": "validation_report.json",
         "page_text_spans": "page_text_spans.jsonl",
+        "word_bboxes": "word_bboxes.jsonl",
     }
     return manifest
 

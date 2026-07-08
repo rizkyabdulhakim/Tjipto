@@ -463,10 +463,10 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["metadata_facts"][0]["field"], "effective_rule")
         self.assertEqual(result["metadata_facts"][0]["answer"], "dan mulai berlaku pada tanggal ditetapkan.")
         support = result["metadata_support"][0]
-        self.assertEqual(support["authority_kind"], "metadata_trace")
+        self.assertEqual(support["authority_kind"], "metadata_source")
         self.assertFalse(support["citation_final"])
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
+        self.assertTrue(result["citations"])
+        self.assertTrue(result["viewer_refs"])
 
     def test_penandatangan_alias_routes_to_metadata_provenance_not_instrument(self) -> None:
         result = self.service.ask("uud", "penandatangan perubahan pertama UUD")

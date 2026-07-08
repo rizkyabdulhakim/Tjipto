@@ -32,6 +32,7 @@ from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.grounding.promotion import build_promotion_decisions
 from tjipto.ingestion.pdf.health import build_pdf_health_report
+from tjipto.ingestion.pdf.words import build_word_bbox_rows
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
@@ -65,6 +66,18 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     docs = {source_id: fitz.open(repo_root / meta["path"]) for source_id, meta in source_documents.items()}
     try:
         pdf_lines_by_source = {source_id: pdf_lines(doc) for source_id, doc in docs.items()}
+        word_bboxes = [
+            row
+            for source_id, doc in docs.items()
+            for row in build_word_bbox_rows(
+                doc=doc,
+                corpus_id="uud",
+                source_document_id=source_id,
+                source_meta=source_documents[source_id],
+                bbox_id_prefix="uud_word_bbox",
+                extractor_version=getattr(fitz, "VersionBind", None),
+            )
+        ]
     finally:
         for doc in docs.values():
             doc.close()
@@ -91,12 +104,13 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         metadata_grounding=metadata_grounding,
         evidence=evidence,
         bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
         legal_units=legal_units,
         page_text_spans=page_text_spans,
         source_conflicts=source_conflicts,
     )
 
-    apply_source_conflict_grounding(source_conflicts, evidence, bbox_rows, page_text_spans)
+    apply_source_conflict_grounding(source_conflicts, evidence, bbox_rows, word_bboxes, page_text_spans)
     bbox_rows.sort(key=lambda row: (row["source_document_id"], row["page_number"], row["bbox_id"]))
     metadata_assertions = build_metadata_assertions(evidence, metadata_grounding, bbox_rows)
     legal_units.sort(key=lambda row: row["legal_unit_id"])
@@ -108,6 +122,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     apply_page_text_span_dispositions(
         page_text_spans=page_text_spans,
         bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
         legal_units=legal_units,
         chunks=chunks,
         metadata_grounding=metadata_grounding,
@@ -164,6 +179,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "document_relations.jsonl", document_relations)
     write_jsonl(final_dir / "article_amendment_relations.jsonl", article_amendment_relations)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
+    write_jsonl(final_dir / "word_bboxes.jsonl", word_bboxes)
     write_jsonl(final_dir / "promotion_decisions.jsonl", promotion_decisions)
     write_json(final_dir / "pdf_health_report.json", pdf_health_report)
 
@@ -185,6 +201,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         article_amendment_relations=article_amendment_relations,
         promotion_decisions=promotion_decisions,
         page_text_spans=page_text_spans,
+        word_bboxes=word_bboxes,
         pdf_health_report=pdf_health_report,
         pages=pages,
         intent_config=intent_config_for(getattr(corpus_config, "structured_strategy", "generic"), corpus_config),

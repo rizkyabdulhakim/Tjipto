@@ -4,6 +4,7 @@ import json
 
 from tjipto.corpora.uud.specs import SOURCE_CONFLICT_SPECS
 from tjipto.evidence.store import exact_bboxes_for_text_spans
+from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, word_rows_by_page
 
 
 def build_source_conflicts() -> list[dict]:
@@ -14,11 +15,13 @@ def apply_source_conflict_grounding(
     source_conflicts: list[dict],
     evidence: list[dict],
     bbox_rows: list[dict],
+    word_bboxes: list[dict],
     page_text_spans: list[dict],
 ) -> None:
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_by_evidence: dict[str, list[str]] = {}
     span_by_id = {row["text_span_id"]: row for row in page_text_spans if row.get("text_span_id")}
+    words_by_page = word_rows_by_page(word_bboxes)
     for row in bbox_rows:
         bbox_by_evidence.setdefault(row["evidence_id"], []).append(row["bbox_id"])
     for row in source_conflicts:
@@ -36,11 +39,24 @@ def apply_source_conflict_grounding(
             bbox_rows,
         )
         raw_provenance_bbox_ids = [bbox["bbox_id"] for bbox in raw_provenance_bboxes if bbox.get("bbox_id")]
-        raw_provenance_text_span_ids = [
-            text_span_id
-            for text_span_id in row["text_span_ids"]
-            if _text_span_has_exact_bbox(span_by_id.get(text_span_id), raw_provenance_bboxes)
-        ]
+        raw_provenance_text_span_ids = []
+        for text_span_id in row["text_span_ids"]:
+            span = span_by_id.get(text_span_id)
+            if _text_span_has_exact_bbox(span, raw_provenance_bboxes):
+                raw_provenance_text_span_ids.append(text_span_id)
+                continue
+            match = align_text_to_word_bboxes(
+                text=span.get("text") if span else None,
+                source_document_id=row["source_document_id"],
+                page_numbers=[span["page_number"]] if span else [],
+                words_by_page=words_by_page,
+                reference_bbox=span,
+            )
+            if not match:
+                continue
+            raw_provenance_text_span_ids.append(text_span_id)
+            raw_provenance_bbox_ids.extend(match["matched_word_bbox_ids"])
+        raw_provenance_bbox_ids = list(dict.fromkeys(raw_provenance_bbox_ids))
         blocked_text_span_ids = [
             text_span_id for text_span_id in row["text_span_ids"] if text_span_id not in set(raw_provenance_text_span_ids)
         ]

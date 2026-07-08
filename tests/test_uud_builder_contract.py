@@ -26,6 +26,7 @@ from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.validation import build_validation_report
+from tjipto.ingestion.pdf.words import build_word_bbox_rows
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +34,28 @@ FINAL = ROOT / "data/final/uud"
 
 
 class UudBuilderContractTest(unittest.TestCase):
+    def _word_bboxes(self) -> list[dict]:
+        import fitz
+
+        source_documents = {row["source_document_id"]: row for row in build_source_documents(ROOT)}
+        docs = {source_id: fitz.open(ROOT / meta["path"]) for source_id, meta in source_documents.items()}
+        try:
+            return [
+                row
+                for source_id, doc in docs.items()
+                for row in build_word_bbox_rows(
+                    doc=doc,
+                    corpus_id="uud",
+                    source_document_id=source_id,
+                    source_meta=source_documents[source_id],
+                    bbox_id_prefix="uud_word_bbox",
+                    extractor_version=getattr(fitz, "VersionBind", None),
+                )
+            ]
+        finally:
+            for doc in docs.values():
+                doc.close()
+
     def test_builder_does_not_strip_old_final_artifact_rows(self) -> None:
         source = (ROOT / "src/tjipto/corpora/uud_artifact_baseline.py").read_text(encoding="utf-8")
         self.assertNotIn("<= 609", source)
@@ -242,6 +265,7 @@ class UudBuilderContractTest(unittest.TestCase):
             metadata_grounding=metadata_grounding,
             evidence=read_jsonl(FINAL / "evidence_registry.jsonl"),
             bbox_rows=read_jsonl(FINAL / "bbox_registry.jsonl"),
+            word_bboxes=read_jsonl(FINAL / "word_bboxes.jsonl"),
             legal_units=read_jsonl(FINAL / "legal_units.jsonl"),
             page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
             source_conflicts=read_jsonl(FINAL / "source_conflicts.jsonl"),
@@ -265,6 +289,7 @@ class UudBuilderContractTest(unittest.TestCase):
             ),
             evidence=read_jsonl(FINAL / "evidence_registry.jsonl"),
             bbox_rows=read_jsonl(FINAL / "bbox_registry.jsonl"),
+            word_bboxes=read_jsonl(FINAL / "word_bboxes.jsonl"),
             legal_units=read_jsonl(FINAL / "legal_units.jsonl"),
             page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
             source_conflicts=read_jsonl(FINAL / "source_conflicts.jsonl"),
@@ -306,6 +331,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 promotion_decisions=read_jsonl(FINAL / "promotion_decisions.jsonl"),
                 metadata_grounding=read_jsonl(FINAL / "metadata_grounding.jsonl"),
                 metadata_grounding_registry=read_jsonl(FINAL / "metadata_grounding_registry.jsonl"),
+                word_bboxes=read_jsonl(FINAL / "word_bboxes.jsonl"),
                 manifest_files=read_json(FINAL / "manifest.json")["files"],
                 graph_nodes=read_jsonl(FINAL / "graph_nodes.jsonl"),
                 graph_edges=read_jsonl(FINAL / "graph_edges.jsonl"),
@@ -325,9 +351,13 @@ class UudBuilderContractTest(unittest.TestCase):
             source_conflicts,
             read_jsonl(FINAL / "evidence_registry.jsonl"),
             read_jsonl(FINAL / "bbox_registry.jsonl"),
+            read_jsonl(FINAL / "word_bboxes.jsonl"),
             read_jsonl(FINAL / "page_text_spans.jsonl"),
         )
         self.assertEqual(source_conflicts, read_jsonl(FINAL / "source_conflicts.jsonl"))
+
+    def test_word_bbox_registry_exists_and_is_deterministic(self) -> None:
+        self.assertEqual(self._word_bboxes(), read_jsonl(FINAL / "word_bboxes.jsonl"))
 
     def test_absent_span_keys_are_fully_classified_with_specific_reasons(self) -> None:
         spans = read_jsonl(FINAL / "page_text_spans.jsonl")
@@ -340,9 +370,9 @@ class UudBuilderContractTest(unittest.TestCase):
             bucket_counts,
             Counter(
                 {
+                    "legal_citation_candidate": 153,
                     "metadata_provenance_candidate": 9,
                     "nonlegal_excluded_provenance": 358,
-                    "raw_span_only_with_reason": 153,
                     "source_anomaly_provenance_candidate": 17,
                     "structural_provenance_only": 97,
                 }
@@ -352,6 +382,8 @@ class UudBuilderContractTest(unittest.TestCase):
             self.assertEqual(row["bbox_registry_coverage_status"], "bbox_key_absent")
             self.assertTrue(row["bbox_registry_coverage_bucket"])
             self.assertTrue(row["bbox_registry_coverage_reason"])
+            if row["bbox_registry_coverage_reason"] == "exact_word_bbox_available":
+                self.assertTrue(row["word_bbox_ids"])
 
     def test_metadata_block_reuses_existing_exact_bbox_rows_when_safe(self) -> None:
         rows = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}

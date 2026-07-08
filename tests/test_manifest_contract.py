@@ -44,6 +44,7 @@ class ManifestContractTest(unittest.TestCase):
             "graph_edges": len((FINAL / "graph_edges.jsonl").read_text(encoding="utf-8").splitlines()),
             "page_text_spans": len((FINAL / "page_text_spans.jsonl").read_text(encoding="utf-8").splitlines()),
             "promotion_decisions": len((FINAL / "promotion_decisions.jsonl").read_text(encoding="utf-8").splitlines()),
+            "word_bboxes": len((FINAL / "word_bboxes.jsonl").read_text(encoding="utf-8").splitlines()),
         }
         for key, value in actual_counts.items():
             self.assertEqual(report["final_artifact_counts"][key], value)
@@ -110,4 +111,5 @@ def _expected_manifest_counts() -> dict[str, int]:
         "validation_alignment_results": _jsonl_count("validation_alignment_results.jsonl"),
         "validation_exception_review_labels": _jsonl_count("validation_exception_review_labels.jsonl"),
         "validation_exceptions": _jsonl_count("validation_exceptions.jsonl"),
+        "word_bboxes": _jsonl_count("word_bboxes.jsonl"),
     }

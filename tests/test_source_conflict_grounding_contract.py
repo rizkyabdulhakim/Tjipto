@@ -16,7 +16,9 @@ class SourceConflictGroundingContractTest(unittest.TestCase):
         conflicts = {row["source_conflict_id"]: row for row in read_jsonl(FINAL / "source_conflicts.jsonl")}
         text_span_ids = {row["text_span_id"] for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
         evidence_ids = {row["evidence_id"] for row in read_jsonl(FINAL / "evidence_registry.jsonl")}
-        bbox_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
+        bbox_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")} | {
+            row["word_bbox_id"] for row in read_jsonl(FINAL / "word_bboxes.jsonl")
+        }
         for case in _source_conflict_cases():
             row = conflicts[case["source_conflict_id"]]
             self.assertEqual(row["text_span_ids"], case["text_span_ids"])

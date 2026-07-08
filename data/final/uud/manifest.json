@@ -19,17 +19,18 @@
     "metadata_assertions": 1319,
     "metadata_graph_edges": 449,
     "metadata_grounding": 37,
-    "metadata_grounding_records": 187,
+    "metadata_grounding_records": 376,
     "not_promoted_amends_edges": 8,
     "pages": 63,
-    "promotion_decisions": 70,
+    "promotion_decisions": 62,
     "retrieval_units": 464,
     "source_conflicts": 2,
     "source_documents": 6,
     "validation_alignment_results": 610,
     "validation_exception_review_labels": 9,
     "validation_exceptions": 19,
-    "page_text_spans": 2193
+    "page_text_spans": 2193,
+    "word_bboxes": 11336
   },
   "document_metadata": "document_metadata.jsonl",
   "document_relations": "document_relations.jsonl",
@@ -145,16 +146,16 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "metadata_build",
-      "bytes": 98582,
-      "sha256": "8f03bb1a478386e049d0195795ba58f1a32524cc273c31c4eba94677966e84d2"
+      "bytes": 120650,
+      "sha256": "a1b16e34b27b4b350edd4140f88a4d3e7d30acaeedabcaf6933b2b32ea63e047"
     },
     "metadata_grounding_registry.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "metadata_build",
-      "bytes": 405532,
-      "sha256": "33b02309add2ea1ce5f7b3bd66badea5ef32c84eeb6d65a211a84c1c9cd5b57c"
+      "bytes": 632939,
+      "sha256": "fd107130b39b3716d507b91ab4cacad453dea80a768cf0ffab8388665805cd63"
     },
     "pages.jsonl": {
       "origin": "generated",
@@ -177,8 +178,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "promotion_builder",
       "build_stage": "promotion_audit",
-      "bytes": 125944,
-      "sha256": "e3a3a9336c7fbc1dbaca88fb30e89e38003937c88923ef957b0bed0efd91c73f"
+      "bytes": 110419,
+      "sha256": "f3192430406ca9ae925fd0876ffd81dd8c0fffb4015db15e3abc0649bcf715c4"
     },
     "retrieval_units.jsonl": {
       "origin": "generated",
@@ -193,8 +194,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "source_conflict_builder",
       "build_stage": "validation",
-      "bytes": 6652,
-      "sha256": "671538871a1ef62a9f89556054f630b7eca3d3605a36bec96007e248127381af"
+      "bytes": 6607,
+      "sha256": "405080459c0b1288b1e4a4f1c292fad5a1af00b9f14efd5a92ab628f86a9c22d"
     },
     "source_documents.jsonl": {
       "origin": "generated",
@@ -241,16 +242,24 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 22307,
-      "sha256": "18d6499260c5abfe8b0e9a8a4cb3f1bceb6d0001015bb3589728918dc435e303"
+      "bytes": 22607,
+      "sha256": "30a77c0d99e1d16d504ca7ee179ecf10eff4ab8db18e90576c3c50dfec9cf5ba"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "text_span_builder",
       "build_stage": "ingestion",
-      "bytes": 2634284,
-      "sha256": "b1a80a6e5d0cfbb159733f67e1018565704b9e47b5cc16b08278107fc9b57ebe"
+      "bytes": 2700194,
+      "sha256": "d70048206a35fc74d3585efab51399e988d976317eadb6f1d47ff9b2e5d4e766"
+    },
+    "word_bboxes.jsonl": {
+      "origin": "generated",
+      "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
+      "producer": "word_bbox_builder",
+      "build_stage": "ingestion",
+      "bytes": 7978577,
+      "sha256": "cb6fb8d6272796c1eadc9afb62bf7c96fd1db71391b53ab45e6f0443270949af"
     }
   },
   "fixtures": {
@@ -291,5 +300,6 @@
   "validation_exception_review_labels": "validation_exception_review_labels.jsonl",
   "validation_exceptions": "validation_exceptions.jsonl",
   "validation_report": "validation_report.json",
-  "page_text_spans": "page_text_spans.jsonl"
+  "page_text_spans": "page_text_spans.jsonl",
+  "word_bboxes": "word_bboxes.jsonl"
 }

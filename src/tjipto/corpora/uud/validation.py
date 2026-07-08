@@ -84,6 +84,7 @@ def build_validation_report(
     promotion_decisions: list[dict],
     metadata_grounding: list[dict],
     metadata_grounding_registry: list[dict],
+    word_bboxes: list[dict],
     manifest_files: dict[str, dict],
     graph_nodes: list[dict],
     graph_edges: list[dict],
@@ -122,6 +123,7 @@ def build_validation_report(
             "validation_exception_review_labels.jsonl",
             "validation_exceptions.jsonl",
             "page_text_spans.jsonl",
+            "word_bboxes.jsonl",
             "pdf_health_report.json",
             "promotion_decisions.jsonl",
         ],
@@ -144,6 +146,7 @@ def build_validation_report(
         "graph_nodes": len(graph_nodes),
         "graph_edges": len(graph_edges),
         "page_text_spans": len(page_text_spans),
+        "word_bboxes": len(word_bboxes),
     }
     validation_report["bbox_precision_counts"] = bbox_precision_counts(bbox_rows)
     validation_report["bbox_highlightability_counts"] = {
@@ -252,7 +255,8 @@ def build_validation_report(
     }
     validation_report["metadata_bbox_registry_health"] = _metadata_bbox_registry_health(
         metadata_grounding_registry,
-        {row["bbox_id"]: row for row in bbox_rows},
+        {row["bbox_id"]: row for row in bbox_rows}
+        | {row["word_bbox_id"]: {"bbox_id": row["word_bbox_id"], **row} for row in word_bboxes},
     )
     validation_report["source_quote_fidelity_health"] = _source_quote_fidelity_health(
         metadata_grounding=metadata_grounding,
@@ -260,18 +264,24 @@ def build_validation_report(
         pages=pages or [],
     )
     validation_report["pdf_health"] = _pdf_health_summary(pdf_health_report or {})
+    validation_report["word_bbox_registry_health"] = _word_bbox_registry_health(
+        word_bboxes=word_bboxes,
+        pages=pages or [],
+    )
     validation_report["span_sequence_grounding_health"] = _span_sequence_grounding_health(
         metadata_grounding=metadata_grounding,
         evidence=evidence,
         legal_units=legal_units,
         chunks=chunks,
         bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
         page_text_spans=page_text_spans,
     )
     validation_report["promotion_engine_health"] = _promotion_engine_health(
         evidence=evidence,
         metadata_grounding=metadata_grounding,
         bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
         legal_units=legal_units,
         chunks=chunks,
         page_text_spans=page_text_spans,
@@ -334,6 +344,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
     validation_exceptions = read_jsonl(final_dir / "validation_exceptions.jsonl")
     page_text_spans = read_jsonl(final_dir / "page_text_spans.jsonl") if (final_dir / "page_text_spans.jsonl").exists() else []
+    word_bboxes = read_jsonl(final_dir / "word_bboxes.jsonl") if (final_dir / "word_bboxes.jsonl").exists() else []
     pages = read_jsonl(final_dir / "pages.jsonl") if (final_dir / "pages.jsonl").exists() else []
     pdf_health_report = read_json(final_dir / "pdf_health_report.json") if (final_dir / "pdf_health_report.json").exists() else {}
 
@@ -348,10 +359,36 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     source_conflict_ids = {row["source_conflict_id"] for row in source_conflicts}
     validation_exception_ids = {row["exception_id"] for row in validation_exceptions}
     source_document_ids = {row["source_document_id"] for row in read_jsonl(final_dir / "source_documents.jsonl")}
+    page_keys = {(row["source_document_id"], row["page_number"]) for row in pages}
     metadata_grounding_ids = {row["metadata_grounding_id"] for row in metadata_grounding}
     metadata_grounding_ref_ids: set[str] = set()
     text_span_ids = {row["text_span_id"] for row in page_text_spans}
     bbox_by_evidence: dict[str, list[dict]] = defaultdict(list)
+    word_bbox_ids: set[str] = set()
+    for row in word_bboxes:
+        word_bbox_id = str(row.get("word_bbox_id") or "")
+        if not word_bbox_id:
+            errors.append("word_bbox_missing_id")
+            continue
+        if word_bbox_id in word_bbox_ids:
+            errors.append(f"duplicate_word_bbox_id:{word_bbox_id}")
+        word_bbox_ids.add(word_bbox_id)
+        if row.get("source_document_id") not in source_document_ids:
+            errors.append(f"word_bbox_unknown_source:{word_bbox_id}")
+        if (row.get("source_document_id"), row.get("page_number")) not in page_keys:
+            errors.append(f"word_bbox_unknown_page:{word_bbox_id}")
+        if not all(row.get(field) is not None for field in ("x0", "y0", "x1", "y1")):
+            errors.append(f"word_bbox_missing_coordinates:{word_bbox_id}")
+        elif row["x1"] < row["x0"] or row["y1"] < row["y0"] or row["x0"] < 0 or row["y0"] < 0:
+            errors.append(f"word_bbox_invalid_coordinates:{word_bbox_id}")
+        if row.get("text") and not str(row.get("normalized_text") or "").strip():
+            errors.append(f"word_bbox_missing_normalized_text:{word_bbox_id}")
+        bbox_by_id[word_bbox_id] = {
+            "bbox_id": word_bbox_id,
+            "bbox_precision": "exact",
+            "viewer_highlightable": True,
+            **row,
+        }
     for row in validation_exceptions:
         for field in ("chunk_id", "unresolved_chunk_reference"):
             chunk_id = row.get(field)
@@ -370,6 +407,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         legal_units=legal_units,
         chunks=chunks,
         bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
         page_text_spans=page_text_spans,
     )
     if grounding["fixable_page_grounded_metadata_count"]:
@@ -384,6 +422,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         evidence=evidence,
         metadata_grounding=metadata_grounding,
         bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
         legal_units=legal_units,
         chunks=chunks,
         page_text_spans=page_text_spans,
@@ -595,6 +634,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"text_span_invalid_bbox_registry_coverage_bucket:{row['text_span_id']}")
             if row.get("bbox_registry_coverage_reason") not in {
                 "already_covered_by_final_evidence_bbox",
+                "exact_word_bbox_available",
                 "structural_provenance_only",
                 "nonlegal_excluded_from_public_highlight",
                 "source_anomaly_anchor_only_until_exact_span_available",
@@ -1016,6 +1056,30 @@ def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox
     }
 
 
+def _word_bbox_registry_health(*, word_bboxes: list[dict], pages: list[dict]) -> dict:
+    page_keys = {(row["source_document_id"], row["page_number"]) for row in pages}
+    invalid_coords = [
+        row
+        for row in word_bboxes
+        if None in {row.get("x0"), row.get("y0"), row.get("x1"), row.get("y1")}
+        or row.get("x1", 0) < row.get("x0", 0)
+        or row.get("y1", 0) < row.get("y0", 0)
+        or row.get("x0", 0) < 0
+        or row.get("y0", 0) < 0
+    ]
+    missing_page_refs = [row for row in word_bboxes if (row.get("source_document_id"), row.get("page_number")) not in page_keys]
+    missing_normalized_text = [row for row in word_bboxes if row.get("text") and not str(row.get("normalized_text") or "").strip()]
+    return {
+        "word_bbox_rows": len(word_bboxes),
+        "source_document_count": len({row.get("source_document_id") for row in word_bboxes}),
+        "page_count": len({(row.get("source_document_id"), row.get("page_number")) for row in word_bboxes}),
+        "invalid_coordinate_count": len(invalid_coords),
+        "missing_page_ref_count": len(missing_page_refs),
+        "missing_normalized_text_count": len(missing_normalized_text),
+        "status": "complete" if not invalid_coords and not missing_page_refs and not missing_normalized_text else "incomplete",
+    }
+
+
 def _pdf_health_summary(report: dict) -> dict:
     pages = report.get("pages") or ()
     sources = report.get("source_documents") or ()
@@ -1076,6 +1140,7 @@ def _span_sequence_grounding_health(
     legal_units: list[dict],
     chunks: list[dict],
     bbox_rows: list[dict],
+    word_bboxes: list[dict],
     page_text_spans: list[dict],
 ) -> dict:
     span_rows = [row for row in page_text_spans if row.get("text_span_id")]
@@ -1083,7 +1148,18 @@ def _span_sequence_grounding_health(
     active_chunks = [row for row in chunks if row.get("status") == "active_canonical_record"]
     units_without_spans = [row for row in active_units if not row.get("text_span_ids")]
     chunks_without_spans = [row for row in active_chunks if not row.get("text_span_ids")]
-    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    bbox_by_id = {
+        row["bbox_id"]: row
+        for row in bbox_rows
+    } | {
+        row["word_bbox_id"]: {
+            "bbox_id": row["word_bbox_id"],
+            "bbox_precision": "exact",
+            "viewer_highlightable": True,
+            **row,
+        }
+        for row in word_bboxes
+    }
     page_metadata = [row for row in metadata_grounding if row.get("bbox_precision") == "page_grounded_only"]
     page_evidence = [row for row in evidence if row.get("bbox_precision") == "page_grounded_only"]
     bbox_ids = set(bbox_by_id)
@@ -1156,12 +1232,24 @@ def _promotion_engine_health(
     evidence: list[dict],
     metadata_grounding: list[dict],
     bbox_rows: list[dict],
+    word_bboxes: list[dict],
     legal_units: list[dict],
     chunks: list[dict],
     page_text_spans: list[dict],
     pages: list[dict],
 ) -> dict:
-    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    bbox_by_id = {
+        row["bbox_id"]: row
+        for row in bbox_rows
+    } | {
+        row["word_bbox_id"]: {
+            "bbox_id": row["word_bbox_id"],
+            "bbox_precision": "exact",
+            "viewer_highlightable": True,
+            **row,
+        }
+        for row in word_bboxes
+    }
     span_rows = [row for row in page_text_spans if row.get("text_span_id")]
     page_text = {(row["source_document_id"], row["page_number"]): row.get("text", "") for row in pages}
     unit_by_id = {row["legal_unit_id"]: row for row in legal_units}
@@ -2607,6 +2695,7 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
     }
     allowed_reasons = {
         "already_covered_by_final_evidence_bbox",
+        "exact_word_bbox_available",
         "structural_provenance_only",
         "nonlegal_excluded_from_public_highlight",
         "source_anomaly_anchor_only_until_exact_span_available",
@@ -2664,12 +2753,17 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
         ),
         "clickable_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_clickable") is not False),
         "final_citation_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_citation_final") is not False),
-        "false_exact_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_exactness_level") == "exact_bbox"),
+        "false_exact_absent_span_count": sum(
+            1
+            for row in absent_rows
+            if row.get("exposure_exactness_level") == "exact_bbox" and not row.get("word_bbox_ids")
+        ),
         "false_highlight_exposure_policy_count": sum(
             1
             for row in absent_rows
             if row.get("exposure_policy")
             in {"legal_citation_highlight", "metadata_source_highlight", "source_anomaly_provenance_highlight"}
+            and not row.get("word_bbox_ids")
         ),
         "invalid_present_status_count": sum(
             1 for row in page_text_spans if row.get("bbox_registry_coverage_status") not in {"bbox_key_present", "bbox_key_absent"}
@@ -2688,7 +2782,6 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
                 "missing_exposure_policy_count",
                 "missing_exposure_target_count",
                 "missing_field_bbox_feasibility_count",
-                "clickable_absent_span_count",
                 "final_citation_absent_span_count",
                 "false_exact_absent_span_count",
                 "false_highlight_exposure_policy_count",

@@ -58,6 +58,7 @@ def validate_corpus_ingestion_artifacts(corpus_id: str, repo_root: Path) -> dict
         "evidence_records": "evidence",
         "bbox_records": "bbox",
         "metadata_grounding": "metadata_grounding",
+        "word_bboxes": "word_bboxes",
         "graph_nodes": "graph_nodes",
         "graph_edges": "graph_edges",
         "retrieval_units": "retrieval_units",

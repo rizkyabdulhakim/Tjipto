@@ -18,6 +18,8 @@ class EvidenceStore:
         self._graph_edges: list[dict] | None = None
         self._bbox_by_evidence: dict[str, list[dict]] | None = None
         self._bbox_rows: list[dict] | None = None
+        self._word_bboxes: list[dict] | None = None
+        self._word_bbox_by_id: dict[str, dict] | None = None
         self._page_text_spans: list[dict] | None = None
         self._page_text_span_by_id: dict[str, dict] | None = None
 
@@ -106,7 +108,7 @@ class EvidenceStore:
 
     def metadata_bboxes_for(self, metadata_grounding_id: str) -> list[dict]:
         if self._metadata_bbox_by_grounding is None:
-            bbox_by_id = {row["bbox_id"]: row for row in self._bbox_rows_all()}
+            bbox_by_id = self._bbox_rows_by_id()
             grouped: dict[str, list[dict]] = {}
             for row in _optional_jsonl(self.config, "metadata_grounding_registry"):
                 bbox = bbox_by_id.get(row["bbox_id"])
@@ -116,12 +118,43 @@ class EvidenceStore:
 
     def exact_bboxes_for_text_spans(self, text_span_ids: tuple[str, ...] | list[str]) -> list[dict]:
         spans = [self._page_text_span(text_span_id) for text_span_id in text_span_ids]
-        return exact_bboxes_for_text_spans(spans, self._bbox_rows_all())
+        matches = exact_bboxes_for_text_spans(spans, self._bbox_rows_all())
+        if matches:
+            return matches
+        bbox_by_id = self._bbox_rows_by_id()
+        rows: list[dict] = []
+        seen: set[str] = set()
+        for span in spans:
+            if not span:
+                continue
+            for bbox_id in span.get("word_bbox_ids") or ():
+                bbox = bbox_by_id.get(bbox_id)
+                if not bbox or bbox_id in seen:
+                    continue
+                seen.add(bbox_id)
+                rows.append(bbox)
+        return rows
 
     def _bbox_rows_all(self) -> list[dict]:
         if self._bbox_rows is None:
             self._bbox_rows = self.config.jsonl("bbox")
         return self._bbox_rows
+
+    def _word_bboxes_all(self) -> list[dict]:
+        if self._word_bboxes is None:
+            self._word_bboxes = _optional_jsonl(self.config, "word_bboxes")
+        return self._word_bboxes
+
+    def _bbox_rows_by_id(self) -> dict[str, dict]:
+        rows = {row["bbox_id"]: row for row in self._bbox_rows_all()}
+        for row in self._word_bboxes_all():
+            rows[row["word_bbox_id"]] = {
+                "bbox_id": row["word_bbox_id"],
+                "bbox_precision": "exact",
+                "viewer_highlightable": True,
+                **row,
+            }
+        return rows
 
     def _page_text_span(self, text_span_id: str) -> dict | None:
         if self._page_text_span_by_id is None:

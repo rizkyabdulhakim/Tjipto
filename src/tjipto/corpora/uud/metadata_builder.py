@@ -7,6 +7,7 @@ import unicodedata
 from tjipto.evidence.store import exact_bboxes_for_text_spans
 from tjipto.corpora.uud.specs import METADATA_BLOCK_SPECS
 from tjipto.corpora.uud.structure_builder import compact, matching_sequence
+from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, word_rows_by_page
 
 
 AMENDMENT_FIELD_STATUSES = {
@@ -187,6 +188,7 @@ def rebuild_metadata_grounding(
     metadata_grounding: list[dict],
     evidence: list[dict],
     bbox_rows: list[dict],
+    word_bboxes: list[dict],
     legal_units: list[dict],
     page_text_spans: list[dict],
     source_conflicts: list[dict],
@@ -195,6 +197,7 @@ def rebuild_metadata_grounding(
     bboxes_by_evidence: dict[str, list[dict]] = defaultdict(list)
     for row in bbox_rows:
         bboxes_by_evidence[row["evidence_id"]].append(row)
+    words_by_page = word_rows_by_page(word_bboxes)
     spans_by_id = {row["text_span_id"]: row for row in page_text_spans if row.get("text_span_id")}
     source_role_by_id = {row["source_document_id"]: row["source_role"] for row in document_metadata}
     units_by_key = {(source_role_by_id[row["source_document_id"]], row.get("unit_label")): row for row in legal_units}
@@ -213,6 +216,14 @@ def rebuild_metadata_grounding(
         exact_bbox_rows = []
         if text_span_ids and _allow_global_exact_bbox_reuse(row.get("source_role", ""), "block"):
             exact_bbox_rows = exact_bboxes_for_text_spans([spans_by_id.get(text_span_id) for text_span_id in text_span_ids], bbox_rows)
+        if not exact_bbox_rows and _allow_word_exact_bbox_promotion(row.get("source_role", ""), row.get("metadata_field", "block")):
+            exact_bbox_rows = _word_exact_bbox_rows(
+                quoted_text=str(row.get("quoted_text") or ""),
+                source_document_id=str(row.get("source_document_id") or ""),
+                page_numbers=page_numbers,
+                page_text_spans=page_text_spans,
+                words_by_page=words_by_page,
+            )
         exact_bbox_refs = [item["bbox_id"] for item in exact_bbox_rows]
         block_row = row | {
             "bbox_ids": exact_bbox_refs,
@@ -252,17 +263,28 @@ def rebuild_metadata_grounding(
         text_span_ids = _exact_text_span_ids(quoted_text, source_document_id, page_numbers, page_text_spans)
         if not exact_bbox_rows and text_span_ids and _allow_global_exact_bbox_reuse(source_role, metadata_field):
             exact_bbox_rows = exact_bboxes_for_text_spans([spans_by_id.get(text_span_id) for text_span_id in text_span_ids], bbox_rows)
+        if not text_span_ids:
+            text_span_ids = _supporting_text_span_ids(quoted_text, source_document_id, page_numbers, page_text_spans)
+        if not exact_bbox_rows and _allow_word_exact_bbox_promotion(source_role, metadata_field):
+            exact_bbox_rows = _word_exact_bbox_rows(
+                quoted_text=quoted_text,
+                source_document_id=source_document_id,
+                page_numbers=page_numbers,
+                page_text_spans=page_text_spans,
+                words_by_page=words_by_page,
+            )
         exact_bbox_refs = [row["bbox_id"] for row in exact_bbox_rows]
+        exact_safe = bool(exact_bbox_refs and text_span_ids)
         bbox_refs = exact_bbox_refs or [
             f"uud_metadata_field_bbox::{source_role}::{metadata_field}::{index:04d}" for index, _ in enumerate(page_numbers)
         ]
-        bbox_precision = "exact" if exact_bbox_refs else "page_grounded_only"
-        grounding_status = "text_bbox_exact" if exact_bbox_refs and text_span_ids else "field_level_grounded"
-        failure_reason = None if exact_bbox_refs and text_span_ids else _metadata_failure_reason(source_role, metadata_field, donor_id)
+        bbox_precision = "exact" if exact_safe else "page_grounded_only"
+        grounding_status = "text_bbox_exact" if exact_safe else "field_level_grounded"
+        failure_reason = None if exact_safe else _metadata_failure_reason(source_role, metadata_field, donor_id)
         registry_rows = exact_bbox_rows or [
             {"bbox_id": bbox_id, "page_number": page_number} for bbox_id, page_number in zip(bbox_refs, page_numbers)
         ]
-        viewer_highlightable = bbox_precision == "exact" and bool(text_span_ids)
+        viewer_highlightable = exact_safe
         for index, registry_row in enumerate(registry_rows):
             field_registry_rows.append(
                 {
@@ -580,6 +602,12 @@ def _allow_global_exact_bbox_reuse(source_role: str, metadata_field: str) -> boo
     return True
 
 
+def _allow_word_exact_bbox_promotion(source_role: str, metadata_field: str) -> bool:
+    if source_role == "current_consolidated" and metadata_field in {"block", "institution", "official_title", "source_publication"}:
+        return False
+    return True
+
+
 def _evidence_metadata_assertions(row: dict, bbox_by_id: dict[str, dict]) -> list[dict]:
     evidence_link = _evidence_link(row, bbox_by_id)
     return [
@@ -867,6 +895,72 @@ def _exact_text_span_ids(
     matched = [row["text_span_id"] for row in rows if compact(row.get("text")) in wanted]
     matched_text = {compact(row.get("text")) for row in rows if compact(row.get("text")) in wanted}
     return matched if set(wanted) <= matched_text else []
+
+
+def _supporting_text_span_ids(
+    quoted_text: str,
+    source_document_id: str,
+    page_numbers: list[int] | tuple[int, ...],
+    page_text_spans: list[dict],
+) -> list[str]:
+    target = compact(quoted_text)
+    if not target:
+        return []
+    rows = [row for row in page_text_spans if row["source_document_id"] == source_document_id and row["page_number"] in set(page_numbers)]
+    return [row["text_span_id"] for row in rows if target and target in compact(row.get("text"))]
+
+
+def _word_exact_bbox_rows(
+    *,
+    quoted_text: str,
+    source_document_id: str,
+    page_numbers: list[int] | tuple[int, ...],
+    page_text_spans: list[dict],
+    words_by_page: dict[tuple[str, int], list[dict]],
+) -> list[dict]:
+    reference_span = next(
+        (
+            row
+            for row in page_text_spans
+            if row["source_document_id"] == source_document_id
+            and row["page_number"] in set(page_numbers)
+            and compact(quoted_text) in compact(row.get("text"))
+        ),
+        None,
+    )
+    match = align_text_to_word_bboxes(
+        text=quoted_text,
+        source_document_id=source_document_id,
+        page_numbers=list(page_numbers),
+        words_by_page=words_by_page,
+        reference_bbox=reference_span,
+    )
+    if not match:
+        return []
+    bbox_rows: list[dict] = []
+    lookup = {row["word_bbox_id"]: row for rows in words_by_page.values() for row in rows}
+    for bbox_id in match["matched_word_bbox_ids"]:
+        row = lookup[bbox_id]
+        bbox_rows.append(
+            {
+                "bbox_id": row["word_bbox_id"],
+                "bbox_precision": "exact",
+                "viewer_highlightable": True,
+                "page_number": row["page_number"],
+                "source_document_id": row["source_document_id"],
+                "source_pdf": row["source_pdf"],
+                "source_pdf_path": row["source_pdf_path"],
+                "source_sha256": row["source_sha256"],
+                "page_width": row.get("page_width"),
+                "page_height": row.get("page_height"),
+                "text": row["text"],
+                "x0": row["x0"],
+                "y0": row["y0"],
+                "x1": row["x1"],
+                "y1": row["y1"],
+            }
+        )
+    return bbox_rows
 
 
 def _ordinal_label(source_role: str) -> str:

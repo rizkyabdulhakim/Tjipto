@@ -52,28 +52,18 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(citation["authority_kind"], "source_anomaly")
         self.assertFalse(citation["citation_final"])
         self.assertEqual(citation["evidence_id"], "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict")
-        self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "partial_exact_raw_provenance_bbox_available")
-        self.assertEqual(result["source_conflict"]["provenance_highlight_scope"], "anchor_span_only")
+        self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "exact_raw_provenance_bbox_available")
+        self.assertEqual(result["source_conflict"]["provenance_highlight_scope"], "all_relevant_spans")
         self.assertEqual(result["source_conflict"]["source_anomaly_kind"], "source_marker_sequence_anomaly")
-        self.assertEqual(result["source_conflict"]["blocked_raw_provenance_text_span_count"], 2)
-        self.assertEqual(
-            result["source_conflict"]["blocked_raw_provenance_reason"],
-            "source_anomaly_anchor_only_until_exact_span_available",
-        )
+        self.assertEqual(result["source_conflict"]["blocked_raw_provenance_text_span_count"], 0)
         conflict = next(
             row
             for row in read_jsonl(FINAL / "source_conflicts.jsonl")
             if row["source_conflict_id"] == "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict"
         )
         self.assertEqual(len(conflict["text_span_ids"]), 3)
-        self.assertEqual(len(conflict["raw_provenance_text_span_ids"]), 1)
-        self.assertEqual(
-            conflict["blocked_raw_provenance_text_span_reasons"],
-            {
-                "uud_text_span::amendment_4_historical::0005::0019": "source_anomaly_anchor_only_until_exact_span_available",
-                "uud_text_span::amendment_4_historical::0006::0000": "source_anomaly_anchor_only_until_exact_span_available",
-            },
-        )
+        self.assertEqual(len(conflict["raw_provenance_text_span_ids"]), 3)
+        self.assertEqual(conflict["blocked_raw_provenance_text_span_reasons"], {})
         viewer = self.service.viewer("uud", citation["evidence_id"])
         self.assertEqual(viewer["authority_kind"], "source_anomaly")
         self.assertFalse(viewer["citation_final"])

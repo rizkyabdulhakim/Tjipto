@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, word_rows_by_page
 from tjipto.corpora.uud.span_disposition_policy import (
     classification_for_role,
     role_for_legal_unit,
@@ -14,6 +15,7 @@ def apply_page_text_span_dispositions(
     *,
     page_text_spans: list[dict],
     bbox_rows: list[dict],
+    word_bboxes: list[dict],
     legal_units: list[dict],
     chunks: list[dict],
     metadata_grounding: list[dict],
@@ -39,6 +41,7 @@ def apply_page_text_span_dispositions(
     _apply_bbox_registry_coverage(
         page_text_spans=page_text_spans,
         bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
         legal_units=legal_units,
         chunks_by_unit=chunks_by_unit,
         metadata_grounding=metadata_grounding,
@@ -228,6 +231,7 @@ def _apply_bbox_registry_coverage(
     *,
     page_text_spans: list[dict],
     bbox_rows: list[dict],
+    word_bboxes: list[dict],
     legal_units: list[dict],
     chunks_by_unit: dict[str, dict],
     metadata_grounding: list[dict],
@@ -235,6 +239,7 @@ def _apply_bbox_registry_coverage(
     bbox_keys = {_bbox_registry_key(row) for row in bbox_rows}
     legal_context = _legal_coverage_context(legal_units, chunks_by_unit)
     metadata_context = _rows_by_span(metadata_grounding)
+    words_by_page = word_rows_by_page(word_bboxes)
     for span in page_text_spans:
         if _bbox_registry_key(span) in bbox_keys:
             span["bbox_registry_coverage_status"] = "bbox_key_present"
@@ -254,6 +259,7 @@ def _apply_bbox_registry_coverage(
         span["exposure_citation_final"] = False
         span["exposure_exactness_level"] = "position_only"
         span["field_bbox_feasibility"] = _field_bbox_feasibility(reason)
+        _apply_word_bbox_promotion(span, words_by_page)
 
 
 def _legal_coverage_context(legal_units: list[dict], chunks_by_unit: dict[str, dict]) -> dict[str, dict]:
@@ -300,6 +306,8 @@ def _exposure_policy(bucket: str, reason: str) -> str:
 
 
 def _field_bbox_feasibility(reason: str) -> str:
+    if reason == "exact_word_bbox_available":
+        return "exact_safe"
     if reason == "blocked_by_no_word_level_bbox_artifact":
         return "requires_word_level_bbox"
     if reason == "blocked_by_layout":
@@ -324,6 +332,40 @@ def _bbox_registry_key(row: dict) -> tuple[object, ...]:
         row.get("x1"),
         row.get("y1"),
     )
+
+
+def _apply_word_bbox_promotion(
+    span: dict,
+    words_by_page: dict[tuple[str, int], list[dict]],
+) -> None:
+    if span.get("bbox_registry_coverage_reason") not in {
+        "blocked_by_no_word_level_bbox_artifact",
+        "source_anomaly_anchor_only_until_exact_span_available",
+    }:
+        return
+    match = align_text_to_word_bboxes(
+        text=span.get("text"),
+        source_document_id=span["source_document_id"],
+        page_numbers=[span["page_number"]],
+        words_by_page=words_by_page,
+        reference_bbox=span,
+    )
+    if not match:
+        return
+    span["word_bbox_ids"] = match["matched_word_bbox_ids"]
+    span["word_bbox_match_method"] = match["match_method"]
+    span["word_bbox_match_confidence"] = match["match_confidence"]
+    span["word_bbox_candidate_count"] = match["candidate_count"]
+    span["word_bbox_distance_to_existing_span_bbox"] = match["distance_to_existing_span_bbox"]
+    span["bbox_registry_coverage_reason"] = "exact_word_bbox_available"
+    span["exposure_clickable"] = True
+    span["exposure_exactness_level"] = "exact_bbox"
+    span["field_bbox_feasibility"] = "exact_safe"
+    if span.get("promotion_status") == "promoted_source_conflict":
+        span["exposure_policy"] = "source_anomaly_provenance_highlight"
+    elif span.get("promotion_status") == "promoted_legal_unit":
+        span["bbox_registry_coverage_bucket"] = "legal_citation_candidate"
+        span["exposure_policy"] = "legal_citation_highlight"
 
 
 def _is_marker_only_text(text: str | None) -> bool:
