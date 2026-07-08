@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from copy import deepcopy
+import json
 
 from tjipto.corpora.uud.provenance_exceptions import ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
 from tjipto.corpora.uud.specs import SOURCE_CONFLICT_SPECS
@@ -8,7 +8,7 @@ from tjipto.evidence.store import exact_bboxes_for_text_spans
 
 
 def build_source_conflicts() -> list[dict]:
-    return deepcopy(list(SOURCE_CONFLICT_SPECS))
+    return json.loads(json.dumps(SOURCE_CONFLICT_SPECS))
 
 
 def apply_source_conflict_grounding(

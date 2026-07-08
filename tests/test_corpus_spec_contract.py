@@ -110,6 +110,9 @@ class CorpusSpecContractTest(unittest.TestCase):
     def test_uud_source_conflict_specs_own_taxonomy_and_anchor_terms(self) -> None:
         expected = _expectations()["source_conflict_specs"]
         rows = list(SOURCE_CONFLICT_SPECS)
+        for row in rows:
+            self.assertIsInstance(row.get("anchor_terms"), list)
+            self.assertIsInstance(row.get("query_anchor_terms"), list)
         self.assertEqual({row["source_anomaly_kind"] for row in rows}, set(expected["source_anomaly_kinds"]))
         self.assertEqual(
             {row.get("source_mapping_kind") for row in rows if row.get("source_mapping_kind")},
