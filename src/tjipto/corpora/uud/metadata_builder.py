@@ -4,6 +4,7 @@ from collections import defaultdict
 import re
 import unicodedata
 
+from tjipto.evidence.store import exact_bboxes_for_text_spans
 from tjipto.corpora.uud.specs import METADATA_BLOCK_SPECS
 from tjipto.corpora.uud.structure_builder import compact, matching_sequence
 
@@ -194,23 +195,41 @@ def rebuild_metadata_grounding(
     bboxes_by_evidence: dict[str, list[dict]] = defaultdict(list)
     for row in bbox_rows:
         bboxes_by_evidence[row["evidence_id"]].append(row)
+    spans_by_id = {row["text_span_id"]: row for row in page_text_spans if row.get("text_span_id")}
     source_role_by_id = {row["source_document_id"]: row["source_role"] for row in document_metadata}
     units_by_key = {(source_role_by_id[row["source_document_id"]], row.get("unit_label")): row for row in legal_units}
-    block_rows = [
-        row
-        | {
-            "bbox_precision": "page_grounded_only",
-            "grounding_status": row.get("grounding_status") or "block_level_grounded",
-            "failure_reason": row.get("failure_reason")
+    block_rows: list[dict] = []
+    block_registry_rows: list[dict] = []
+    for row in metadata_grounding:
+        if str(row.get("metadata_grounding_id", "")).startswith("uud_metadata_field_grounding::"):
+            continue
+        page_numbers = list(row.get("page_numbers") or ())
+        text_span_ids = _exact_text_span_ids(
+            str(row.get("quoted_text") or ""),
+            str(row.get("source_document_id") or ""),
+            page_numbers,
+            page_text_spans,
+        )
+        exact_bbox_rows = []
+        if text_span_ids and _allow_global_exact_bbox_reuse(row.get("source_role", ""), "block"):
+            exact_bbox_rows = exact_bboxes_for_text_spans([spans_by_id.get(text_span_id) for text_span_id in text_span_ids], bbox_rows)
+        exact_bbox_refs = [item["bbox_id"] for item in exact_bbox_rows]
+        block_row = row | {
+            "bbox_ids": exact_bbox_refs,
+            "bbox_precision": "exact" if exact_bbox_refs and text_span_ids else "page_grounded_only",
+            "grounding_status": "text_bbox_exact" if exact_bbox_refs and text_span_ids else row.get("grounding_status") or "block_level_grounded",
+            "text_span_ids": text_span_ids,
+            "failure_reason": None
+            if exact_bbox_refs and text_span_ids
+            else row.get("failure_reason")
             or _metadata_failure_reason(
                 row.get("source_role", ""), row.get("metadata_field", "block"), row.get("metadata_grounding_id", "")
             ),
-            "viewer_highlightable": False,
+            "viewer_highlightable": bool(exact_bbox_refs and text_span_ids),
         }
-        for row in metadata_grounding
-        if not str(row.get("metadata_grounding_id", "")).startswith("uud_metadata_field_grounding::")
-    ]
-    block_registry_rows = [_block_registry_row(row) for row in block_rows]
+        block_row["bbox_refs"] = exact_bbox_refs or block_row["bbox_refs"]
+        block_rows.append(block_row)
+        block_registry_rows.extend(_block_registry_rows(block_row, exact_bbox_rows))
     source_conflicts_by_role: dict[str, list[dict]] = defaultdict(list)
     for row in source_conflicts:
         source_conflicts_by_role[source_role_by_id[row["source_document_id"]]].append(row)
@@ -230,8 +249,10 @@ def rebuild_metadata_grounding(
     ) -> str:
         field_id = f"uud_metadata_field_grounding::{source_role}::{metadata_field}"
         exact_bbox_rows = _exact_bbox_rows(quoted_text, bboxes_by_evidence.get(donor_id, []))
-        exact_bbox_refs = [row["bbox_id"] for row in exact_bbox_rows]
         text_span_ids = _exact_text_span_ids(quoted_text, source_document_id, page_numbers, page_text_spans)
+        if not exact_bbox_rows and text_span_ids and _allow_global_exact_bbox_reuse(source_role, metadata_field):
+            exact_bbox_rows = exact_bboxes_for_text_spans([spans_by_id.get(text_span_id) for text_span_id in text_span_ids], bbox_rows)
+        exact_bbox_refs = [row["bbox_id"] for row in exact_bbox_rows]
         bbox_refs = exact_bbox_refs or [
             f"uud_metadata_field_bbox::{source_role}::{metadata_field}::{index:04d}" for index, _ in enumerate(page_numbers)
         ]
@@ -498,23 +519,45 @@ def rebuild_metadata_grounding(
     return document_metadata, all_grounding_rows, all_registry_rows
 
 
-def _block_registry_row(row: dict) -> dict:
+def _block_registry_rows(row: dict, exact_bbox_rows: list[dict]) -> list[dict]:
+    if row.get("bbox_precision") == "exact":
+        return [
+            {
+                "bbox_id": bbox_row["bbox_id"],
+                "bbox_precision": "exact",
+                "corpus_id": row["corpus_id"],
+                "failure_reason": None,
+                "metadata_grounding_id": row["metadata_grounding_id"],
+                "metadata_grounding_ref_id": _metadata_grounding_ref_id(row["metadata_grounding_id"], "block", bbox_row["bbox_id"], index),
+                "page_number": bbox_row["page_number"],
+                "quoted_text": row["quoted_text"],
+                "source_document_id": row["source_document_id"],
+                "source_pdf_path": row["source_pdf_path"],
+                "source_sha256": row["source_sha256"],
+                "status": row["status"],
+                "text_span_ids": row.get("text_span_ids", []),
+                "viewer_highlightable": True,
+            }
+            for index, bbox_row in enumerate(exact_bbox_rows)
+        ]
     bbox_id = row["bbox_refs"][0]
-    return {
-        "bbox_id": bbox_id,
-        "bbox_precision": "page_grounded_only",
-        "corpus_id": row["corpus_id"],
-        "failure_reason": row["failure_reason"],
-        "metadata_grounding_id": row["metadata_grounding_id"],
-        "metadata_grounding_ref_id": _metadata_grounding_ref_id(row["metadata_grounding_id"], "block", bbox_id, 0),
-        "page_number": row["page_numbers"][0],
-        "quoted_text": row["quoted_text"],
-        "source_document_id": row["source_document_id"],
-        "source_pdf_path": row["source_pdf_path"],
-        "source_sha256": row["source_sha256"],
-        "status": row["status"],
-        "viewer_highlightable": False,
-    }
+    return [
+        {
+            "bbox_id": bbox_id,
+            "bbox_precision": "page_grounded_only",
+            "corpus_id": row["corpus_id"],
+            "failure_reason": row["failure_reason"],
+            "metadata_grounding_id": row["metadata_grounding_id"],
+            "metadata_grounding_ref_id": _metadata_grounding_ref_id(row["metadata_grounding_id"], "block", bbox_id, 0),
+            "page_number": row["page_numbers"][0],
+            "quoted_text": row["quoted_text"],
+            "source_document_id": row["source_document_id"],
+            "source_pdf_path": row["source_pdf_path"],
+            "source_sha256": row["source_sha256"],
+            "status": row["status"],
+            "viewer_highlightable": False,
+        }
+    ]
 
 
 def _metadata_failure_reason(source_role: str, metadata_field: str, donor_id: str) -> str:
@@ -529,6 +572,12 @@ def _metadata_failure_reason(source_role: str, metadata_field: str, donor_id: st
 
 def _metadata_grounding_ref_id(metadata_grounding_id: str, metadata_field: str, bbox_id: str, index: int) -> str:
     return f"metadata_grounding_ref::{metadata_grounding_id}::{metadata_field}::{bbox_id}::{index:04d}"
+
+
+def _allow_global_exact_bbox_reuse(source_role: str, metadata_field: str) -> bool:
+    if source_role == "current_consolidated" and metadata_field in {"institution", "official_title", "source_publication"}:
+        return False
+    return True
 
 
 def _evidence_metadata_assertions(row: dict, bbox_by_id: dict[str, dict]) -> list[dict]:

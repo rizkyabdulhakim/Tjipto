@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 import unittest
 
@@ -222,11 +223,11 @@ class UudBuilderContractTest(unittest.TestCase):
             if not row["metadata_grounding_id"].startswith("uud_metadata_field_grounding::")
         ]
         self.assertEqual(
-            build_metadata_block_grounding(
+            [_raw_metadata_block_contract(row) for row in build_metadata_block_grounding(
                 pages_by_source=pages_by_source,
                 source_documents=source_documents,
-            ),
-            [{key: row[key] for key in row if key not in {"bbox_precision", "grounding_status", "failure_reason"}} for row in expected],
+            )],
+            [_raw_metadata_block_contract(row) for row in expected],
         )
 
     def test_document_metadata_rebuilds_from_specs_and_grounding(self) -> None:
@@ -328,8 +329,79 @@ class UudBuilderContractTest(unittest.TestCase):
         )
         self.assertEqual(source_conflicts, read_jsonl(FINAL / "source_conflicts.jsonl"))
 
+    def test_absent_span_keys_are_fully_classified_with_specific_reasons(self) -> None:
+        spans = read_jsonl(FINAL / "page_text_spans.jsonl")
+        bbox_rows = read_jsonl(FINAL / "bbox_registry.jsonl")
+        bbox_keys = {_span_bbox_key(row) for row in bbox_rows}
+        missing = [row for row in spans if _span_bbox_key(row) not in bbox_keys]
+        self.assertEqual(len(missing), 634)
+        bucket_counts = Counter(row["bbox_registry_coverage_bucket"] for row in missing)
+        self.assertEqual(
+            bucket_counts,
+            Counter(
+                {
+                    "metadata_provenance_candidate": 9,
+                    "nonlegal_excluded_provenance": 358,
+                    "raw_span_only_with_reason": 153,
+                    "source_anomaly_provenance_candidate": 17,
+                    "structural_provenance_only": 97,
+                }
+            ),
+        )
+        for row in missing:
+            self.assertEqual(row["bbox_registry_coverage_status"], "bbox_key_absent")
+            self.assertTrue(row["bbox_registry_coverage_bucket"])
+            self.assertTrue(row["bbox_registry_coverage_reason"])
+
+    def test_metadata_block_reuses_existing_exact_bbox_rows_when_safe(self) -> None:
+        rows = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}
+        for metadata_grounding_id in (
+            "uud_metadata_block_final_evidence::amendment_1_historical::instrument_closing_issuance_page_0003",
+            "uud_metadata_block_final_evidence::amendment_2_historical::instrument_closing_issuance_page_0008",
+            "uud_metadata_block_final_evidence::amendment_3_historical::instrument_closing_issuance_page_0009",
+            "uud_metadata_block_final_evidence::amendment_4_historical::instrument_closing_issuance_page_0006",
+        ):
+            row = rows[metadata_grounding_id]
+            self.assertEqual(row["bbox_precision"], "exact")
+            self.assertTrue(row["viewer_highlightable"])
+            self.assertTrue(row["bbox_ids"])
+            self.assertTrue(row["text_span_ids"])
+        consolidated = rows["uud_metadata_block_final_evidence::current_consolidated::source_publication_page_0001"]
+        self.assertEqual(consolidated["bbox_precision"], "page_grounded_only")
+        self.assertFalse(consolidated["viewer_highlightable"])
+        self.assertEqual(consolidated["failure_reason"], "metadata_publication_block_requires_page_level_support")
+
     def test_excluded_records_rebuild_from_specs(self) -> None:
         self.assertEqual(list(EXCLUDED_RECORD_SPECS), read_jsonl(FINAL / "excluded_records.jsonl"))
+
+
+def _span_bbox_key(row: dict) -> tuple[object, ...]:
+    return (
+        row.get("source_document_id"),
+        row.get("source_sha256"),
+        row.get("page_number"),
+        row.get("text"),
+        row.get("x0"),
+        row.get("y0"),
+        row.get("x1"),
+        row.get("y1"),
+    )
+
+
+def _raw_metadata_block_contract(row: dict) -> dict:
+    return {
+        "corpus_id": row["corpus_id"],
+        "metadata_grounding_id": row["metadata_grounding_id"],
+        "page_numbers": row["page_numbers"],
+        "provenance": row["provenance"],
+        "quoted_text": row["quoted_text"],
+        "source_document_id": row["source_document_id"],
+        "source_pdf_path": row["source_pdf_path"],
+        "source_role": row["source_role"],
+        "source_sha256": row["source_sha256"],
+        "status": row["status"],
+        "temporal_context": row["temporal_context"],
+    }
 
 
 if __name__ == "__main__":

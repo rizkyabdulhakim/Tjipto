@@ -4,6 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 import re
 from time import perf_counter
+from typing import cast
 import unicodedata
 
 from tjipto.corpora.disposition import (
@@ -165,6 +166,10 @@ def build_validation_report(
         source_conflicts,
     )
     validation_report["source_conflict_provenance_health"] = _source_conflict_provenance_health(source_conflicts)
+    validation_report["viewer_provenance_coverage_health"] = _viewer_provenance_coverage_health(
+        page_text_spans=page_text_spans,
+        bbox_rows=bbox_rows,
+    )
     validation_report["all_text_disposition_health"] = _all_text_disposition_health(
         page_text_spans,
         legal_units,
@@ -277,7 +282,7 @@ def build_validation_report(
         metadata_grounding=metadata_grounding,
         bbox_rows=bbox_rows,
         promotion_decisions=promotion_decisions,
-        promotion_engine_health=validation_report["promotion_engine_health"],
+        promotion_engine_health=cast(dict, validation_report["promotion_engine_health"]),
     )
     validation_report["metadata_exact_promotion_feasibility_health"] = _metadata_exact_promotion_feasibility_health(
         promotion_decisions=promotion_decisions
@@ -332,6 +337,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     chunks_by_id = {row["chunk_id"]: row for row in chunks}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    bbox_registry_keys = {_span_bbox_key(row) for row in bbox_rows}
     graph_node_ids = {row["node_id"] for row in graph_nodes}
     source_conflict_ids = {row["source_conflict_id"] for row in source_conflicts}
     validation_exception_ids = {row["exception_id"] for row in validation_exceptions}
@@ -568,6 +574,31 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"empty_text_span:{row['text_span_id']}")
         if row.get("bbox_precision") != "exact":
             errors.append(f"text_span_missing_exact_bbox:{row['text_span_id']}")
+        expected_coverage_status = "bbox_key_present" if _span_bbox_key(row) in bbox_registry_keys else "bbox_key_absent"
+        if row.get("bbox_registry_coverage_status") != expected_coverage_status:
+            errors.append(f"text_span_invalid_bbox_registry_coverage_status:{row['text_span_id']}")
+        if expected_coverage_status == "bbox_key_absent":
+            if row.get("bbox_registry_coverage_bucket") not in {
+                "legal_citation_candidate",
+                "metadata_provenance_candidate",
+                "source_anomaly_provenance_candidate",
+                "structural_provenance_only",
+                "nonlegal_excluded_provenance",
+                "raw_span_only_with_reason",
+            }:
+                errors.append(f"text_span_invalid_bbox_registry_coverage_bucket:{row['text_span_id']}")
+            if row.get("bbox_registry_coverage_reason") not in {
+                "already_covered_by_final_evidence_bbox",
+                "structural_provenance_only",
+                "nonlegal_excluded_from_public_highlight",
+                "source_anomaly_anchor_only_until_exact_span_available",
+                "metadata_page_grounded_only_by_policy",
+                "blocked_by_text_mismatch",
+                "blocked_by_layout",
+                "blocked_by_missing_exact_bbox",
+                "blocked_by_no_word_level_bbox_artifact",
+            }:
+                errors.append(f"text_span_invalid_bbox_registry_coverage_reason:{row['text_span_id']}")
         if row.get("source_document_id") not in source_document_ids:
             errors.append(f"text_span_unknown_source_document:{row['text_span_id']}:{row.get('source_document_id')}")
         if not isinstance(row.get("page_number"), int):
@@ -2361,6 +2392,70 @@ def _chunk_self_contained_health(chunks: list[dict], units_by_id: dict[str, dict
             1 for row in non_runtime_chunks if not (row.get("validation_basis") or row.get("failure_reason") or row.get("grounding_status"))
         ),
     }
+
+
+def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows: list[dict]) -> dict:
+    bbox_registry_keys = {_span_bbox_key(row) for row in bbox_rows}
+    absent_rows = [row for row in page_text_spans if _span_bbox_key(row) not in bbox_registry_keys]
+    allowed_buckets = {
+        "legal_citation_candidate",
+        "metadata_provenance_candidate",
+        "source_anomaly_provenance_candidate",
+        "structural_provenance_only",
+        "nonlegal_excluded_provenance",
+        "raw_span_only_with_reason",
+    }
+    allowed_reasons = {
+        "already_covered_by_final_evidence_bbox",
+        "structural_provenance_only",
+        "nonlegal_excluded_from_public_highlight",
+        "source_anomaly_anchor_only_until_exact_span_available",
+        "metadata_page_grounded_only_by_policy",
+        "blocked_by_text_mismatch",
+        "blocked_by_layout",
+        "blocked_by_missing_exact_bbox",
+        "blocked_by_no_word_level_bbox_artifact",
+    }
+    counts = {
+        "page_text_span_count": len(page_text_spans),
+        "bbox_registry_row_count": len(bbox_rows),
+        "bbox_key_present_span_count": len(page_text_spans) - len(absent_rows),
+        "bbox_key_absent_span_count": len(absent_rows),
+        **{
+            f"{bucket}_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_bucket") == bucket)
+            for bucket in sorted(allowed_buckets)
+        },
+        **{
+            f"{reason}_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") == reason)
+            for reason in sorted(allowed_reasons)
+        },
+        "missing_bucket_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_bucket") not in allowed_buckets),
+        "missing_reason_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") not in allowed_reasons),
+        "invalid_present_status_count": sum(
+            1 for row in page_text_spans if row.get("bbox_registry_coverage_status") not in {"bbox_key_present", "bbox_key_absent"}
+        ),
+    }
+    return {
+        **counts,
+        "status": "complete"
+        if counts["bbox_key_absent_span_count"]
+        == sum(counts[f"{bucket}_count"] for bucket in sorted(allowed_buckets))
+        and not any(counts[key] for key in ("missing_bucket_count", "missing_reason_count", "invalid_present_status_count"))
+        else "incomplete",
+    }
+
+
+def _span_bbox_key(row: dict) -> tuple[object, ...]:
+    return (
+        row.get("source_document_id"),
+        row.get("source_sha256"),
+        row.get("page_number"),
+        row.get("text"),
+        row.get("x0"),
+        row.get("y0"),
+        row.get("x1"),
+        row.get("y1"),
+    )
 
 
 def _artifact_origin_health(manifest_files: dict[str, dict]) -> dict:

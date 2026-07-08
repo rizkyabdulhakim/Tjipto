@@ -107,6 +107,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     retrieval_units.sort(key=lambda row: row["retrieval_unit_id"])
     apply_page_text_span_dispositions(
         page_text_spans=page_text_spans,
+        bbox_rows=bbox_rows,
         legal_units=legal_units,
         chunks=chunks,
         metadata_grounding=metadata_grounding,

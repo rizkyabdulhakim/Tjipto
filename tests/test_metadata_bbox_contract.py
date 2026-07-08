@@ -14,12 +14,14 @@ FINAL = ROOT / "data/final/uud"
 class MetadataBBoxContractTest(unittest.TestCase):
     def test_metadata_grounding_registry_has_stable_row_identity(self) -> None:
         rows = read_jsonl(FINAL / "metadata_grounding_registry.jsonl")
+        report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
         ref_ids = [row.get("metadata_grounding_ref_id") for row in rows]
         bbox_ids = [row["bbox_id"] for row in rows]
-        self.assertEqual(len(rows), 112)
+        self.assertEqual(len(rows), report["metadata_bbox_registry_health"]["metadata_grounding_registry_rows"])
         self.assertEqual(sum(1 for ref_id in ref_ids if ref_id), len(rows))
         self.assertEqual(len(set(ref_ids)), len(rows))
-        self.assertGreater(len(bbox_ids) - len(set(bbox_ids)), 0)
+        duplicate_count = len(bbox_ids) - len(set(bbox_ids))
+        self.assertEqual(duplicate_count, report["metadata_bbox_registry_health"]["duplicate_bbox_id_reference_count"])
         for bbox_id in {bbox_id for bbox_id in bbox_ids if bbox_ids.count(bbox_id) > 1}:
             duplicate_refs = [row["metadata_grounding_ref_id"] for row in rows if row["bbox_id"] == bbox_id]
             self.assertEqual(len(duplicate_refs), len(set(duplicate_refs)))
@@ -91,7 +93,7 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(promotion["invalid_bbox_coordinate_count"], 0)
         self.assertEqual(promotion["containing_span_exact_overclaim_count"], 0)
         self.assertEqual(promotion["evidence_trace_only_count"], 5)
-        self.assertEqual(promotion["metadata_grounding_page_grounded_only_count"], 17)
+        self.assertEqual(promotion["metadata_grounding_page_grounded_only_count"], 13)
         audit = report["promotion_decision_audit_health"]
         feasibility = report["metadata_exact_promotion_feasibility_health"]
         self.assertEqual(audit["status"], "complete")
@@ -99,13 +101,13 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(audit["blocked_decision_count"], promotion["promotion_blocked_count"])
         self.assertEqual(audit["promotion_attempted_count"], promotion["promotion_blocked_count"])
         self.assertEqual(audit["promotion_attempt_missing_count"], 0)
-        self.assertEqual(audit["exact_quote_match_count"], 74)
-        self.assertEqual(audit["span_sequence_candidate_count"], 71)
+        self.assertEqual(audit["exact_quote_match_count"], 70)
+        self.assertEqual(audit["span_sequence_candidate_count"], 67)
         self.assertEqual(audit["subspan_match_candidate_count"], 2)
         self.assertEqual(audit["bbox_union_candidate_count"], 52)
-        self.assertEqual(audit["bbox_union_not_supported_count"], 17)
+        self.assertEqual(audit["bbox_union_not_supported_count"], 13)
         self.assertEqual(audit["new_exact_promotion_count"], 0)
-        self.assertEqual(audit["kept_non_exact_after_attempt_count"], 74)
+        self.assertEqual(audit["kept_non_exact_after_attempt_count"], 70)
         self.assertEqual(audit["generic_blocker_reason_count"], 0)
         self.assertEqual(audit["false_highlightable_claim_count"], 0)
         self.assertEqual(audit["missing_feasibility_field_count"], 0)
@@ -113,10 +115,10 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(audit["unexpected_decision_count"], 0)
         self.assertEqual(audit["blocked_decision_missing_reason_count"], 0)
         self.assertEqual(feasibility["status"], "complete")
-        self.assertEqual(feasibility["audited_metadata_row_count"], 17)
+        self.assertEqual(feasibility["audited_metadata_row_count"], 13)
         self.assertEqual(feasibility["promotable_exact_count"], 0)
         self.assertEqual(feasibility["exact_span_found_but_bbox_missing_count"], 0)
-        self.assertEqual(feasibility["multi_span_exact_possible_count"], 4)
+        self.assertEqual(feasibility["multi_span_exact_possible_count"], 0)
         self.assertEqual(feasibility["page_level_only_by_policy_count"], 4)
         self.assertEqual(feasibility["blocked_by_text_mismatch_count"], 1)
         self.assertEqual(feasibility["blocked_by_no_exact_bbox_count"], 0)
@@ -132,7 +134,8 @@ class MetadataBBoxContractTest(unittest.TestCase):
 
     def test_promotion_decisions_cover_non_exact_rows(self) -> None:
         decisions = read_jsonl(FINAL / "promotion_decisions.jsonl")
-        self.assertEqual(len(decisions), 74)
+        report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(decisions), report["promotion_decision_audit_health"]["promotion_decision_count"])
         self.assertEqual(len({row["decision_id"] for row in decisions}), len(decisions))
         self.assertEqual({row["decision"] for row in decisions}, {"keep_non_exact"})
         self.assertEqual(

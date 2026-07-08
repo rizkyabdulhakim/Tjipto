@@ -19,33 +19,7 @@ class ManifestContractTest(unittest.TestCase):
         self.assertEqual(manifest["status"], "final")
         self.assertEqual(
             manifest["counts"],
-            {
-                "article_amendment_relations": 63,
-                "article_versions": 218,
-                "bbox_records": 1584,
-                "chunks": 651,
-                "document_metadata": 6,
-                "document_relations": 8,
-                "evidence_records": 464,
-                "excluded_records": 6,
-                "graph_edges": len((FINAL / "graph_edges.jsonl").read_text(encoding="utf-8").splitlines()),
-                "graph_nodes": len((FINAL / "graph_nodes.jsonl").read_text(encoding="utf-8").splitlines()),
-                "legal_units": 651,
-                "metadata_assertions": 1319,
-                "metadata_grounding": 37,
-                "metadata_grounding_records": 112,
-                "metadata_graph_edges": 449,
-                "page_text_spans": len((FINAL / "page_text_spans.jsonl").read_text(encoding="utf-8").splitlines()),
-                "pages": 63,
-                "promotion_decisions": 74,
-                "retrieval_units": 464,
-                "source_conflicts": 2,
-                "source_documents": 6,
-                "validation_alignment_results": 610,
-                "validation_exception_review_labels": 9,
-                "validation_exceptions": 19,
-                "not_promoted_amends_edges": 8,
-            },
+            _expected_manifest_counts(),
         )
         for source_path, expected_sha in manifest["source_files"].items():
             self.assertEqual(file_sha256(ROOT / source_path), expected_sha)
@@ -103,3 +77,37 @@ class ManifestContractTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _jsonl_count(name: str) -> int:
+    return len((FINAL / name).read_text(encoding="utf-8").splitlines())
+
+
+def _expected_manifest_counts() -> dict[str, int]:
+    return {
+        "article_amendment_relations": _jsonl_count("article_amendment_relations.jsonl"),
+        "article_versions": _jsonl_count("article_versions.jsonl"),
+        "bbox_records": _jsonl_count("bbox_registry.jsonl"),
+        "chunks": _jsonl_count("chunks.jsonl"),
+        "document_metadata": _jsonl_count("document_metadata.jsonl"),
+        "document_relations": _jsonl_count("document_relations.jsonl"),
+        "evidence_records": _jsonl_count("evidence_registry.jsonl"),
+        "excluded_records": _jsonl_count("excluded_records.jsonl"),
+        "graph_edges": _jsonl_count("graph_edges.jsonl"),
+        "graph_nodes": _jsonl_count("graph_nodes.jsonl"),
+        "legal_units": _jsonl_count("legal_units.jsonl"),
+        "metadata_assertions": _jsonl_count("metadata.jsonl"),
+        "metadata_graph_edges": _jsonl_count("metadata_graph_edges.jsonl"),
+        "metadata_grounding": _jsonl_count("metadata_grounding.jsonl"),
+        "metadata_grounding_records": _jsonl_count("metadata_grounding_registry.jsonl"),
+        "not_promoted_amends_edges": 8,
+        "page_text_spans": _jsonl_count("page_text_spans.jsonl"),
+        "pages": _jsonl_count("pages.jsonl"),
+        "promotion_decisions": _jsonl_count("promotion_decisions.jsonl"),
+        "retrieval_units": _jsonl_count("retrieval_units.jsonl"),
+        "source_conflicts": _jsonl_count("source_conflicts.jsonl"),
+        "source_documents": _jsonl_count("source_documents.jsonl"),
+        "validation_alignment_results": _jsonl_count("validation_alignment_results.jsonl"),
+        "validation_exception_review_labels": _jsonl_count("validation_exception_review_labels.jsonl"),
+        "validation_exceptions": _jsonl_count("validation_exceptions.jsonl"),
+    }

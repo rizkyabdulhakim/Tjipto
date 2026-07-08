@@ -13,6 +13,7 @@ from tjipto.corpora.uud.span_disposition_policy import (
 def apply_page_text_span_dispositions(
     *,
     page_text_spans: list[dict],
+    bbox_rows: list[dict],
     legal_units: list[dict],
     chunks: list[dict],
     metadata_grounding: list[dict],
@@ -35,6 +36,13 @@ def apply_page_text_span_dispositions(
         else:
             disposition = _instrument_text_disposition(span, instrument_units) or _fallback_disposition(span)
             _apply(span, disposition)
+    _apply_bbox_registry_coverage(
+        page_text_spans=page_text_spans,
+        bbox_rows=bbox_rows,
+        legal_units=legal_units,
+        chunks_by_unit=chunks_by_unit,
+        metadata_grounding=metadata_grounding,
+    )
 
 
 def _legal_span_refs(legal_units: list[dict], chunks_by_unit: dict[str, dict]) -> dict[str, dict]:
@@ -206,6 +214,90 @@ def _row_refs(rows: list[dict], id_key: str) -> dict[str, dict]:
         for span_id in row.get("text_span_ids") or ():
             refs.setdefault(span_id, row)
     return refs
+
+
+def _rows_by_span(rows: list[dict]) -> dict[str, list[dict]]:
+    refs: dict[str, list[dict]] = {}
+    for row in rows:
+        for span_id in row.get("text_span_ids") or ():
+            refs.setdefault(span_id, []).append(row)
+    return refs
+
+
+def _apply_bbox_registry_coverage(
+    *,
+    page_text_spans: list[dict],
+    bbox_rows: list[dict],
+    legal_units: list[dict],
+    chunks_by_unit: dict[str, dict],
+    metadata_grounding: list[dict],
+) -> None:
+    bbox_keys = {_bbox_registry_key(row) for row in bbox_rows}
+    legal_context = _legal_coverage_context(legal_units, chunks_by_unit)
+    metadata_context = _rows_by_span(metadata_grounding)
+    for span in page_text_spans:
+        if _bbox_registry_key(span) in bbox_keys:
+            span["bbox_registry_coverage_status"] = "bbox_key_present"
+            continue
+        bucket, reason = _missing_bbox_coverage(
+            span=span,
+            legal_context=legal_context.get(span["text_span_id"], {}),
+            metadata_rows=metadata_context.get(span["text_span_id"], []),
+        )
+        span["bbox_registry_coverage_status"] = "bbox_key_absent"
+        span["bbox_registry_coverage_bucket"] = bucket
+        span["bbox_registry_coverage_reason"] = reason
+
+
+def _legal_coverage_context(legal_units: list[dict], chunks_by_unit: dict[str, dict]) -> dict[str, dict]:
+    refs: dict[str, dict] = {}
+    for unit in legal_units:
+        chunk = chunks_by_unit.get(unit["legal_unit_id"], {})
+        for span_id in unit.get("text_span_ids") or chunk.get("text_span_ids") or ():
+            context = refs.setdefault(span_id, {"chunk_statuses": set(), "runtime_flags": set()})
+            if chunk.get("status"):
+                context["chunk_statuses"].add(chunk["status"])
+            context["runtime_flags"].add(bool(chunk.get("runtime_loadable")))
+    return refs
+
+
+def _missing_bbox_coverage(*, span: dict, legal_context: dict, metadata_rows: list[dict]) -> tuple[str, str]:
+    if span.get("promotion_status") == "promoted_metadata" or metadata_rows:
+        reasons = {row.get("failure_reason") for row in metadata_rows}
+        if "metadata_publication_block_requires_page_level_support" in reasons:
+            return "metadata_provenance_candidate", "metadata_page_grounded_only_by_policy"
+        if "metadata_decision_sentence_continues_beyond_field" in reasons:
+            return "metadata_provenance_candidate", "blocked_by_layout"
+        return "metadata_provenance_candidate", "blocked_by_missing_exact_bbox"
+    if span.get("promotion_status") == "promoted_source_conflict":
+        return "source_anomaly_provenance_candidate", "source_anomaly_anchor_only_until_exact_span_available"
+    if span.get("promotion_status") == "excluded_nonlegal" or _is_marker_only_text(span.get("text")):
+        return "nonlegal_excluded_provenance", "nonlegal_excluded_from_public_highlight"
+    if span.get("promotion_status") == "excluded_structural":
+        return "structural_provenance_only", "structural_provenance_only"
+    if span.get("promotion_status") == "promoted_legal_unit":
+        if True in legal_context.get("runtime_flags", set()):
+            return "legal_citation_candidate", "blocked_by_no_word_level_bbox_artifact"
+        return "raw_span_only_with_reason", "blocked_by_no_word_level_bbox_artifact"
+    return "raw_span_only_with_reason", "blocked_by_missing_exact_bbox"
+
+
+def _bbox_registry_key(row: dict) -> tuple[object, ...]:
+    return (
+        row.get("source_document_id"),
+        row.get("source_sha256"),
+        row.get("page_number"),
+        row.get("text"),
+        row.get("x0"),
+        row.get("y0"),
+        row.get("x1"),
+        row.get("y1"),
+    )
+
+
+def _is_marker_only_text(text: str | None) -> bool:
+    stripped = (text or "").strip()
+    return bool(stripped) and re.fullmatch(r"[*_\-\s\u00ad]+\)?", stripped) is not None
 
 
 def _apply(span: dict, disposition: dict) -> None:
