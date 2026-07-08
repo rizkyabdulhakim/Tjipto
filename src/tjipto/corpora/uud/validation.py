@@ -656,6 +656,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             "anchor_terms",
             "query_anchor_terms",
             "source_anomaly_kind",
+            "provenance_summary",
+            "final_authority_policy",
         ):
             if field not in row:
                 errors.append(f"source_conflict_missing_{field}:{row['source_conflict_id']}")
@@ -667,6 +669,15 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"source_conflict_invalid_source_anomaly_kind:{row['source_conflict_id']}")
         if row.get("source_anomaly_kind") == "renumbering_provenance" and row.get("source_mapping_kind") != "historical_to_canonical_mapping":
             errors.append(f"source_conflict_invalid_source_mapping_kind:{row['source_conflict_id']}")
+        if not str(row.get("provenance_summary") or "").strip():
+            errors.append(f"source_conflict_missing_provenance_summary:{row['source_conflict_id']}")
+        if not str(row.get("final_authority_policy") or "").strip():
+            errors.append(f"source_conflict_missing_final_authority_policy:{row['source_conflict_id']}")
+        if row.get("source_anomaly_kind") == "source_marker_sequence_anomaly":
+            if row.get("provenance_exception_category") != ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY:
+                errors.append(f"source_conflict_invalid_provenance_exception_category:{row['source_conflict_id']}")
+            if row.get("provenance_review_status") != "reviewed":
+                errors.append(f"source_conflict_invalid_provenance_review_status:{row['source_conflict_id']}")
         for field in (
             "raw_provenance_bbox_ids",
             "raw_provenance_text_span_ids",
@@ -2108,6 +2119,10 @@ def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
         ),
         "missing_anchor_terms_count": sum(1 for row in source_conflicts if not row.get("anchor_terms")),
         "missing_query_anchor_terms_count": sum(1 for row in source_conflicts if not row.get("query_anchor_terms")),
+        "missing_provenance_summary_count": sum(1 for row in source_conflicts if not str(row.get("provenance_summary") or "").strip()),
+        "missing_final_authority_policy_count": sum(
+            1 for row in source_conflicts if not str(row.get("final_authority_policy") or "").strip()
+        ),
         "unknown_source_anomaly_kind_count": sum(
             1
             for row in source_conflicts
@@ -2118,6 +2133,18 @@ def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
             for row in source_conflicts
             if row.get("source_anomaly_kind") == "renumbering_provenance"
             and row.get("source_mapping_kind") != "historical_to_canonical_mapping"
+        ),
+        "invalid_provenance_exception_category_count": sum(
+            1
+            for row in source_conflicts
+            if row.get("source_anomaly_kind") == "source_marker_sequence_anomaly"
+            and row.get("provenance_exception_category") != ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
+        ),
+        "invalid_provenance_review_status_count": sum(
+            1
+            for row in source_conflicts
+            if row.get("source_anomaly_kind") == "source_marker_sequence_anomaly"
+            and row.get("provenance_review_status") != "reviewed"
         ),
         "final_evidence_available_count": sum(1 for row in source_conflicts if row.get("final_evidence_available") is True),
         "raw_provenance_exact_available_count": sum(
@@ -2150,8 +2177,12 @@ def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
     error_keys = {
         "missing_anchor_terms_count",
         "missing_query_anchor_terms_count",
+        "missing_provenance_summary_count",
+        "missing_final_authority_policy_count",
         "unknown_source_anomaly_kind_count",
         "invalid_source_mapping_kind_count",
+        "invalid_provenance_exception_category_count",
+        "invalid_provenance_review_status_count",
         "unknown_highlight_scope_count",
         "contradictory_failure_reason_count",
     }

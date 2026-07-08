@@ -25,6 +25,8 @@ class SourceConflictGroundingContractTest(unittest.TestCase):
             self.assertEqual(row["source_anomaly_kind"], case["source_anomaly_kind"])
             self.assertTrue(row["anchor_terms"])
             self.assertTrue(row["query_anchor_terms"])
+            self.assertTrue(row["provenance_summary"])
+            self.assertTrue(row["final_authority_policy"])
             self.assertEqual(row["grounding_status"], "text_span_exact")
             self.assertEqual(row["validation_status"], "accepted_source_conflict_record")
             self.assertTrue(set(row["text_span_ids"]) <= text_span_ids)

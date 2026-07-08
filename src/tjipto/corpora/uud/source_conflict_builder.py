@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 
-from tjipto.corpora.uud.provenance_exceptions import ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
 from tjipto.corpora.uud.specs import SOURCE_CONFLICT_SPECS
 from tjipto.evidence.store import exact_bboxes_for_text_spans
 
@@ -50,9 +49,6 @@ def apply_source_conflict_grounding(
         row["provenance_bbox_status"] = _provenance_bbox_status(row["text_span_ids"], raw_provenance_text_span_ids)
         row["provenance_highlight_scope"] = _provenance_highlight_scope(row["text_span_ids"], raw_provenance_text_span_ids)
         row["final_evidence_available"] = bool(row["evidence_ids"] and row["bbox_ids"])
-        if row.get("type") == "source_marker_sequence_conflict":
-            row["provenance_exception_category"] = ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
-            row["provenance_review_status"] = "reviewed"
         if not row["evidence_ids"] or not row["bbox_ids"]:
             row["failure_reason"] = _source_conflict_failure_reason(
                 text_span_ids=row["text_span_ids"],

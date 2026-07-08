@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from shutil import copytree
+import tempfile
 import unittest
 
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.uud.specs import SOURCE_CONFLICT_SPECS
+from tjipto.corpora.uud.validation import validate_uud_artifact_dir
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -113,6 +116,8 @@ class CorpusSpecContractTest(unittest.TestCase):
         for row in rows:
             self.assertIsInstance(row.get("anchor_terms"), list)
             self.assertIsInstance(row.get("query_anchor_terms"), list)
+            for field in expected["policy_fields"]:
+                self.assertTrue(str(row.get(field) or "").strip(), field)
         self.assertEqual({row["source_anomaly_kind"] for row in rows}, set(expected["source_anomaly_kinds"]))
         self.assertEqual(
             {row.get("source_mapping_kind") for row in rows if row.get("source_mapping_kind")},
@@ -124,6 +129,20 @@ class CorpusSpecContractTest(unittest.TestCase):
             self.assertIn(value, anchor_terms)
         for value in expected["query_anchor_terms"]:
             self.assertIn(value, query_anchor_terms)
+
+    def test_validation_fails_when_source_conflict_policy_field_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "uud"
+            copytree(ROOT / "data/final/uud", target)
+            path = target / "source_conflicts.jsonl"
+            rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            rows[0].pop("provenance_summary", None)
+            path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+            errors = validate_uud_artifact_dir(target)
+            self.assertIn(
+                f"source_conflict_missing_provenance_summary:{rows[0]['source_conflict_id']}",
+                errors,
+            )
 
 
 if __name__ == "__main__":

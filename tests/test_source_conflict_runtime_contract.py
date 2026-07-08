@@ -80,6 +80,16 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertNotIn("Reviewer decision: .", result["answer"])
         self.assertNotIn("masih berlaku", result["answer"])
 
+    def test_runtime_source_anomaly_presenter_does_not_hardcode_uud_specific_phrases(self) -> None:
+        source = (ROOT / "src/tjipto/runtime/service.py").read_text(encoding="utf-8")
+        for text in (
+            "Pasal 25E",
+            "Pasal 25A",
+            "renumbering historis dari",
+            "historical-to-canonical mapping untuk jejak audit",
+        ):
+            self.assertNotIn(text, source)
+
     def test_vague_source_conflict_query_fails_closed(self) -> None:
         for case in _source_conflict_negative_cases():
             result = self.service.ask("uud", case["query"])

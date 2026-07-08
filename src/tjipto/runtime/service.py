@@ -1400,24 +1400,22 @@ def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenanc
     decision = conflict.get("resolution_decision") or {}
     folded = (query or "").casefold()
     classification = conflict.get("classification") or "source_conflict_recorded"
+    summary = str(conflict.get("provenance_summary") or classification).strip()
+    authority_policy = str(
+        conflict.get("final_authority_policy") or "Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final."
+    ).strip()
     role_label = _source_conflict_role_label(store, conflict)
     reviewer_suffix = _source_conflict_reviewer_suffix(decision.get("reviewer_decision"))
-    if conflict.get("source_anomaly_kind") == "renumbering_provenance":
-        return (
-            f"Catatan pada {role_label} merekam renumbering historis dari Pasal 25E ke rujukan kanonik Pasal 25A. "
-            "Sistem menampilkannya sebagai historical-to-canonical mapping untuk jejak audit, bukan otoritas hukum final untuk penggunaan saat ini."
-            f"{reviewer_suffix}"
-        )
     if exact_provenance:
         provenance_note = _source_conflict_provenance_note(conflict)
         return (
-            f"Catatan konflik sumber pada {role_label} mencatat {classification}. "
-            f"Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final. {provenance_note}{reviewer_suffix}"
+            f"Catatan konflik sumber pada {role_label} mencatat {summary}. "
+            f"{authority_policy} {provenance_note}{reviewer_suffix}"
         )
     if trace_only:
         return (
-            f"Catatan konflik sumber pada {role_label} mencatat {classification}. "
-            "Jejak sumber tersedia, tetapi belum memenuhi syarat sitasi atau highlight exact."
+            f"Catatan konflik sumber pada {role_label} mencatat {summary}. "
+            f"{authority_policy} Jejak sumber tersedia, tetapi belum memenuhi syarat sitasi atau highlight exact."
             f"{reviewer_suffix}"
         )
     values = {

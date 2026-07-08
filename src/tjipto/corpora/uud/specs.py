@@ -321,6 +321,10 @@ SOURCE_CONFLICT_SPECS = (
         "classification": "source_pdf_contains_pasal_iii_conflict",
         "corpus_id": "uud",
         "provenance": {"donor_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict"},
+        "provenance_exception_category": ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
+        "provenance_review_status": "reviewed",
+        "provenance_summary": "source_pdf_contains_pasal_iii_conflict",
+        "final_authority_policy": "Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final.",
         "query_anchor_terms": ["aturan tambahan", "pasal iii", "pasal ii", "pasal 3"],
         "resolution_decision": {
             "canonical_reference_for_current_uud": "uud_1945_current_consolidated_text_aturan_tambahan_pasal_ii",
@@ -349,6 +353,8 @@ SOURCE_CONFLICT_SPECS = (
         "classification": "source_article_renumbering_conflict",
         "corpus_id": "uud",
         "provenance": {"donor_id": "uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict"},
+        "provenance_summary": "renumbering historis dari Pasal 25E ke rujukan kanonik Pasal 25A",
+        "final_authority_policy": "Sistem menampilkannya sebagai historical-to-canonical mapping untuk jejak audit, bukan otoritas hukum final untuk penggunaan saat ini.",
         "query_anchor_terms": ["pasal 25e", "pasal 25a", "25e", "25a"],
         "resolution_decision": {
             "canonical_reference_for_current_uud": "uud_current_consolidated_final_citation_evidence_00401",
