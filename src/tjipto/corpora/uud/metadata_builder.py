@@ -603,8 +603,6 @@ def _allow_global_exact_bbox_reuse(source_role: str, metadata_field: str) -> boo
 
 
 def _allow_word_exact_bbox_promotion(source_role: str, metadata_field: str) -> bool:
-    if source_role == "current_consolidated" and metadata_field in {"block", "institution", "official_title", "source_publication"}:
-        return False
     return True
 
 
@@ -907,7 +905,20 @@ def _supporting_text_span_ids(
     if not target:
         return []
     rows = [row for row in page_text_spans if row["source_document_id"] == source_document_id and row["page_number"] in set(page_numbers)]
-    return [row["text_span_id"] for row in rows if target and target in compact(row.get("text"))]
+    direct = [row["text_span_id"] for row in rows if target and target in compact(row.get("text"))]
+    if direct:
+        return direct
+    for start in range(len(rows)):
+        joined = ""
+        matched: list[str] = []
+        for row in rows[start:]:
+            matched.append(row["text_span_id"])
+            joined = compact(f"{joined} {row.get('text')}")
+            if target in joined:
+                return matched
+            if len(joined) > len(target) + 120 and target not in joined:
+                break
+    return []
 
 
 def _word_exact_bbox_rows(

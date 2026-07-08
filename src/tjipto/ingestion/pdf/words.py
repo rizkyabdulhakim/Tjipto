@@ -4,6 +4,8 @@ import re
 from typing import cast
 import unicodedata
 
+STABLE_EXTRACTOR_VERSION = "pymupdf_words"
+
 
 def build_word_bbox_rows(
     *,
@@ -14,7 +16,7 @@ def build_word_bbox_rows(
     bbox_id_prefix: str,
     extractor: str = "pymupdf",
     bbox_source: str = "pymupdf_words",
-    extractor_version: str | None = None,
+    extractor_version: str | None = STABLE_EXTRACTOR_VERSION,
 ) -> list[dict]:
     rows: list[dict] = []
     for page_number in range(1, doc.page_count + 1):
@@ -48,7 +50,7 @@ def build_word_bbox_rows(
                     "y1": y1,
                     "bbox_source": bbox_source,
                     "extractor": extractor,
-                    "extractor_version": extractor_version,
+                    "extractor_version": extractor_version or STABLE_EXTRACTOR_VERSION,
                 }
             )
     return rows

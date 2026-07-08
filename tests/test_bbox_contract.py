@@ -100,39 +100,46 @@ class BBoxContractTest(unittest.TestCase):
         self.assertEqual(report["missing_exposure_policy_count"], 0)
         self.assertEqual(report["missing_exposure_target_count"], 0)
         self.assertEqual(report["missing_field_bbox_feasibility_count"], 0)
-        self.assertEqual(report["clickable_absent_span_count"], 170)
+        self.assertEqual(report["clickable_absent_span_count"], 178)
         self.assertEqual(report["final_citation_absent_span_count"], 0)
         self.assertEqual(report["false_exact_absent_span_count"], 0)
         self.assertEqual(report["false_highlight_exposure_policy_count"], 0)
         self.assertEqual(report["legal_citation_highlight_count"], 153)
-        self.assertEqual(report["metadata_source_highlight_count"], 0)
+        self.assertEqual(report["metadata_source_highlight_count"], 8)
         self.assertEqual(report["source_anomaly_provenance_highlight_count"], 17)
         self.assertEqual(
             sum(
                 report[f"{policy}_count"]
                 for policy in (
                     "legal_citation_highlight",
+                    "metadata_source_highlight",
                     "nonlegal_excluded_position",
-                    "raw_provenance_position",
                     "source_anomaly_provenance_highlight",
                     "structural_provenance_position",
                 )
             ),
             634,
         )
-        self.assertEqual(report["exact_word_bbox_available_count"], 170)
-        self.assertEqual(report["exact_safe_feasibility_count"], 170)
+        self.assertEqual(report["exact_word_bbox_available_count"], 178)
+        self.assertEqual(report["exact_safe_feasibility_count"], 178)
         self.assertEqual(report["requires_word_level_bbox_feasibility_count"], 0)
 
     def test_word_bbox_rows_are_valid_and_nonempty(self) -> None:
         rows = read_jsonl(FINAL / "word_bboxes.jsonl")
         self.assertEqual(len(rows), 11336)
+        self.assertEqual({row["extractor_version"] for row in rows}, {"pymupdf_words"})
         for row in rows:
             self.assertTrue(row["normalized_text"])
             self.assertGreaterEqual(row["x1"], row["x0"])
             self.assertGreaterEqual(row["y1"], row["y0"])
             self.assertGreater(row["page_width"], 0)
             self.assertGreater(row["page_height"], 0)
+
+    def test_highlight_registry_contract_includes_word_bboxes(self) -> None:
+        report = read_json(FINAL / "validation_report.json")["highlight_registry_contract"]
+        self.assertEqual(report["status"], "complete")
+        self.assertEqual(report["architecture"], "bbox_registry_union_word_bboxes")
+        self.assertEqual(report["official_viewer_highlight_ref_sources"], ["bbox_registry", "word_bboxes"])
 
 
 if __name__ == "__main__":

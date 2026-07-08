@@ -19,10 +19,10 @@
     "metadata_assertions": 1319,
     "metadata_graph_edges": 449,
     "metadata_grounding": 37,
-    "metadata_grounding_records": 376,
+    "metadata_grounding_records": 417,
     "not_promoted_amends_edges": 8,
     "pages": 63,
-    "promotion_decisions": 62,
+    "promotion_decisions": 57,
     "retrieval_units": 464,
     "source_conflicts": 2,
     "source_documents": 6,
@@ -130,32 +130,32 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "metadata_build",
-      "bytes": 1050933,
-      "sha256": "8e6c1e78c4db624586bfac1f7a275652f377ffc85114ce185a1593700db0be3d"
+      "bytes": 1051703,
+      "sha256": "bb6477f45e1093e9f99547405504195adad93a0f1662e84822b7c49d168231ce"
     },
     "metadata_graph_edges.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "graph_build",
-      "bytes": 421186,
-      "sha256": "ac4b55ab0f21a4f93354e3792c8d4c1c8d9ea9dbb8b77c1534e53d2c9ec27d23"
+      "bytes": 421956,
+      "sha256": "6ffb65008700f38b471b5ae00bf896c12e09b9f6b4137671906247b800d7a30e"
     },
     "metadata_grounding.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "metadata_build",
-      "bytes": 120650,
-      "sha256": "a1b16e34b27b4b350edd4140f88a4d3e7d30acaeedabcaf6933b2b32ea63e047"
+      "bytes": 125131,
+      "sha256": "56b9982142b0d2ed67be1c7e95d35cb93f128e86ee8191d8f22863445f78d898"
     },
     "metadata_grounding_registry.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "metadata_builder",
       "build_stage": "metadata_build",
-      "bytes": 632939,
-      "sha256": "fd107130b39b3716d507b91ab4cacad453dea80a768cf0ffab8388665805cd63"
+      "bytes": 682179,
+      "sha256": "c5a08fb320d787ec7c3daf7c679872c391dae6b5f86638db5c4ab06132cd300e"
     },
     "pages.jsonl": {
       "origin": "generated",
@@ -178,8 +178,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "promotion_builder",
       "build_stage": "promotion_audit",
-      "bytes": 110419,
-      "sha256": "f3192430406ca9ae925fd0876ffd81dd8c0fffb4015db15e3abc0649bcf715c4"
+      "bytes": 100886,
+      "sha256": "fa41d0d3a47e09633685ec2be9572e04f6911b4574ab14224323cf33177d1d2c"
     },
     "retrieval_units.jsonl": {
       "origin": "generated",
@@ -242,24 +242,24 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "validation_pipeline",
       "build_stage": "validation",
-      "bytes": 22607,
-      "sha256": "30a77c0d99e1d16d504ca7ee179ecf10eff4ab8db18e90576c3c50dfec9cf5ba"
+      "bytes": 22822,
+      "sha256": "88a4fcc1120f6d6a92da38b4de2c840ca42b29d7161b39f7dd701b1f80969494"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "text_span_builder",
       "build_stage": "ingestion",
-      "bytes": 2700194,
-      "sha256": "d70048206a35fc74d3585efab51399e988d976317eadb6f1d47ff9b2e5d4e766"
+      "bytes": 2704539,
+      "sha256": "26de66c8ae23f9a1e16c2c4b7e810aabc376b3e7153bd5db3df1c1627441e780"
     },
     "word_bboxes.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "word_bbox_builder",
       "build_stage": "ingestion",
-      "bytes": 7978577,
-      "sha256": "cb6fb8d6272796c1eadc9afb62bf7c96fd1db71391b53ab45e6f0443270949af"
+      "bytes": 8035257,
+      "sha256": "a8e97a9a563fe6f38aa72701564991b16eeb856fb2ff62c6fe2baf3b6ef1b2eb"
     }
   },
   "fixtures": {

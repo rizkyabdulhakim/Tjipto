@@ -69,7 +69,12 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertFalse(viewer["citation_final"])
         self.assertEqual(viewer["status"], "viewer_payload_ready")
         self.assertTrue(viewer["viewer_highlightable"])
-        self.assertGreater(viewer["bbox_count"], 0)
+        self.assertEqual(viewer["bbox_count"], len(conflict["raw_provenance_bbox_ids"]))
+        self.assertEqual(
+            [row["bbox_id"] for row in viewer["bbox_rectangles"]],
+            conflict["raw_provenance_bbox_ids"],
+        )
+        self.assertEqual(result["viewer_refs"][0]["bbox_count"], len(conflict["raw_provenance_bbox_ids"]))
 
     def test_exact_source_conflict_provenance_can_resolve_existing_viewer_policy(self) -> None:
         result = self.service.ask("uud", "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?")

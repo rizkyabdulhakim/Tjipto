@@ -49,7 +49,6 @@ class UudBuilderContractTest(unittest.TestCase):
                     source_document_id=source_id,
                     source_meta=source_documents[source_id],
                     bbox_id_prefix="uud_word_bbox",
-                    extractor_version=getattr(fitz, "VersionBind", None),
                 )
             ]
         finally:
@@ -371,8 +370,8 @@ class UudBuilderContractTest(unittest.TestCase):
             Counter(
                 {
                     "legal_citation_candidate": 153,
-                    "metadata_provenance_candidate": 9,
-                    "nonlegal_excluded_provenance": 358,
+                    "metadata_provenance_candidate": 8,
+                    "nonlegal_excluded_provenance": 359,
                     "source_anomaly_provenance_candidate": 17,
                     "structural_provenance_only": 97,
                 }
@@ -399,9 +398,9 @@ class UudBuilderContractTest(unittest.TestCase):
             self.assertTrue(row["bbox_ids"])
             self.assertTrue(row["text_span_ids"])
         consolidated = rows["uud_metadata_block_final_evidence::current_consolidated::source_publication_page_0001"]
-        self.assertEqual(consolidated["bbox_precision"], "page_grounded_only")
-        self.assertFalse(consolidated["viewer_highlightable"])
-        self.assertEqual(consolidated["failure_reason"], "metadata_publication_block_requires_page_level_support")
+        self.assertEqual(consolidated["bbox_precision"], "exact")
+        self.assertTrue(consolidated["viewer_highlightable"])
+        self.assertTrue(consolidated["bbox_ids"])
 
     def test_excluded_records_rebuild_from_specs(self) -> None:
         self.assertEqual(list(EXCLUDED_RECORD_SPECS), read_jsonl(FINAL / "excluded_records.jsonl"))

@@ -268,6 +268,13 @@ def build_validation_report(
         word_bboxes=word_bboxes,
         pages=pages or [],
     )
+    validation_report["highlight_registry_contract"] = {
+        "status": "complete",
+        "architecture": "bbox_registry_union_word_bboxes",
+        "bbox_registry_rows": len(bbox_rows),
+        "word_bbox_rows": len(word_bboxes),
+        "official_viewer_highlight_ref_sources": ["bbox_registry", "word_bboxes"],
+    }
     validation_report["span_sequence_grounding_health"] = _span_sequence_grounding_health(
         metadata_grounding=metadata_grounding,
         evidence=evidence,

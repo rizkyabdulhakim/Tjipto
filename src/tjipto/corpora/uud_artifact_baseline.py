@@ -75,7 +75,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
                 source_document_id=source_id,
                 source_meta=source_documents[source_id],
                 bbox_id_prefix="uud_word_bbox",
-                extractor_version=getattr(fitz, "VersionBind", None),
             )
         ]
     finally:

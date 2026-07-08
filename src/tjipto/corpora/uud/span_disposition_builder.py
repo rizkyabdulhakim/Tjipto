@@ -275,6 +275,8 @@ def _legal_coverage_context(legal_units: list[dict], chunks_by_unit: dict[str, d
 
 
 def _missing_bbox_coverage(*, span: dict, legal_context: dict, metadata_rows: list[dict]) -> tuple[str, str]:
+    if span.get("promotion_status") == "excluded_nonlegal" or _is_marker_only_text(span.get("text")):
+        return "nonlegal_excluded_provenance", "nonlegal_excluded_from_public_highlight"
     if span.get("promotion_status") == "promoted_metadata" or metadata_rows:
         reasons = {row.get("failure_reason") for row in metadata_rows}
         if "metadata_publication_block_requires_page_level_support" in reasons:
@@ -284,8 +286,6 @@ def _missing_bbox_coverage(*, span: dict, legal_context: dict, metadata_rows: li
         return "metadata_provenance_candidate", "blocked_by_missing_exact_bbox"
     if span.get("promotion_status") == "promoted_source_conflict":
         return "source_anomaly_provenance_candidate", "source_anomaly_anchor_only_until_exact_span_available"
-    if span.get("promotion_status") == "excluded_nonlegal" or _is_marker_only_text(span.get("text")):
-        return "nonlegal_excluded_provenance", "nonlegal_excluded_from_public_highlight"
     if span.get("promotion_status") == "excluded_structural":
         return "structural_provenance_only", "structural_provenance_only"
     if span.get("promotion_status") == "promoted_legal_unit":
@@ -339,6 +339,8 @@ def _apply_word_bbox_promotion(
     words_by_page: dict[tuple[str, int], list[dict]],
 ) -> None:
     if span.get("bbox_registry_coverage_reason") not in {
+        "blocked_by_missing_exact_bbox",
+        "blocked_by_layout",
         "blocked_by_no_word_level_bbox_artifact",
         "source_anomaly_anchor_only_until_exact_span_available",
     }:
@@ -363,6 +365,8 @@ def _apply_word_bbox_promotion(
     span["field_bbox_feasibility"] = "exact_safe"
     if span.get("promotion_status") == "promoted_source_conflict":
         span["exposure_policy"] = "source_anomaly_provenance_highlight"
+    elif span.get("bbox_registry_coverage_bucket") == "metadata_provenance_candidate":
+        span["exposure_policy"] = "metadata_source_highlight"
     elif span.get("promotion_status") == "promoted_legal_unit":
         span["bbox_registry_coverage_bucket"] = "legal_citation_candidate"
         span["exposure_policy"] = "legal_citation_highlight"

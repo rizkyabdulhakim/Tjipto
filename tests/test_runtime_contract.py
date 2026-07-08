@@ -11,6 +11,7 @@ import pytest
 
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.provenance import validate_corpus_provenance
+from tjipto.core.manifest import read_jsonl
 from tjipto.evidence.store import EvidenceStore
 from tjipto.graph.store import GraphStore
 from tjipto.retrieval.candidates import merge_ranked
@@ -447,13 +448,16 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(viewer["citation_final"])
 
     def test_page_grounded_metadata_support_is_not_clickable(self) -> None:
+        self.assertFalse(
+            [row for row in read_jsonl(ROOT / "data/final/uud/metadata_grounding.jsonl") if row["bbox_precision"] == "page_grounded_only"]
+        )
         result = self.service.ask("uud", "tanggal berlaku perubahan ketiga UUD")
         support = result["metadata_support"][0]
-        self.assertEqual(support["support_class"], "metadata_trace")
-        self.assertFalse(support["citation_available"])
-        self.assertFalse(support["viewer_highlightable"])
-        self.assertIsNone(support["viewer_ref"])
-        self.assertEqual(support["authority_kind"], "metadata_trace")
+        self.assertEqual(support["support_class"], "exact_metadata_citation")
+        self.assertTrue(support["citation_available"])
+        self.assertTrue(support["viewer_highlightable"])
+        self.assertEqual(support["authority_kind"], "metadata_source")
+        self.assertFalse(support["citation_final"])
 
     def test_metadata_alias_preempts_generic_instrument_fallback_when_supported(self) -> None:
         result = self.service.ask("uud", "apa aturan mulai berlaku perubahan pertama")

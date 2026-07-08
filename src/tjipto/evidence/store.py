@@ -118,16 +118,17 @@ class EvidenceStore:
 
     def exact_bboxes_for_text_spans(self, text_span_ids: tuple[str, ...] | list[str]) -> list[dict]:
         spans = [self._page_text_span(text_span_id) for text_span_id in text_span_ids]
-        matches = exact_bboxes_for_text_spans(spans, self._bbox_rows_all())
-        if matches:
-            return matches
         bbox_by_id = self._bbox_rows_by_id()
         rows: list[dict] = []
         seen: set[str] = set()
         for span in spans:
             if not span:
                 continue
-            for bbox_id in span.get("word_bbox_ids") or ():
+            span_matches = exact_bboxes_for_text_spans([span], self._bbox_rows_all())
+            if not span_matches:
+                span_matches = [bbox_by_id[bbox_id] for bbox_id in span.get("word_bbox_ids") or () if bbox_id in bbox_by_id]
+            for bbox in span_matches:
+                bbox_id = str(bbox.get("bbox_id") or "")
                 bbox = bbox_by_id.get(bbox_id)
                 if not bbox or bbox_id in seen:
                     continue
