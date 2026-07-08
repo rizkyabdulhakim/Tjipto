@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 import re
 from time import perf_counter
@@ -712,6 +712,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         for field in (
             "raw_provenance_bbox_ids",
             "raw_provenance_text_span_ids",
+            "blocked_raw_provenance_text_span_ids",
             "provenance_bbox_status",
             "provenance_highlight_scope",
             "final_evidence_available",
@@ -742,6 +743,13 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"source_conflict_invalid_raw_provenance_status:{row['source_conflict_id']}")
         if raw_status == "partial_exact_raw_provenance_bbox_available" and not (0 < raw_count < all_count):
             errors.append(f"source_conflict_invalid_raw_provenance_status:{row['source_conflict_id']}")
+        if raw_status == "partial_exact_raw_provenance_bbox_available":
+            blocked = set(row.get("blocked_raw_provenance_text_span_ids") or ())
+            expected_blocked = set(row.get("text_span_ids") or ()) - set(row.get("raw_provenance_text_span_ids") or ())
+            if blocked != expected_blocked:
+                errors.append(f"source_conflict_invalid_blocked_raw_provenance_spans:{row['source_conflict_id']}")
+            if row.get("blocked_raw_provenance_reason") != "source_anomaly_anchor_only_until_exact_span_available":
+                errors.append(f"source_conflict_invalid_blocked_raw_provenance_reason:{row['source_conflict_id']}")
         if raw_status == "exact_raw_provenance_bbox_unavailable" and raw_count:
             errors.append(f"source_conflict_invalid_raw_provenance_status:{row['source_conflict_id']}")
         if row.get("provenance_exception_category") == ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY:
@@ -894,6 +902,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"article_relation_trace_false_exact_grounding:{row['relation_id']}")
             if row.get("viewer_highlightable") is not False or row.get("citation_available") is not False:
                 errors.append(f"article_relation_trace_public_citation:{row['relation_id']}")
+            if not row.get("trace_only_reason"):
+                errors.append(f"article_relation_trace_missing_reason:{row['relation_id']}")
 
     return tuple(sorted(set(errors)))
 
@@ -1252,9 +1262,9 @@ def _metadata_exact_promotion_feasibility_health(*, promotion_decisions: list[di
         "exact_span_found_but_bbox_missing",
         "multi_span_exact_possible",
         "page_level_only_by_policy",
-        "blocked_by_text_mismatch",
+        "blocked_by_text_boundary",
         "blocked_by_no_exact_bbox",
-        "blocked_by_source_layout",
+        "blocked_by_layout",
     }
     counts = {
         "audited_metadata_row_count": len(metadata_rows),
@@ -1287,10 +1297,13 @@ def _article_relation_runtime_policy_health(
     for row in article_amendment_relations:
         groups[row.get("source_role")].add(str(row.get("support_class")))
     partial_groups = [support for support in groups.values() if {"exact_article_relation", "trace_article_relation"} <= support]
+    trace_reason_counts = Counter(row.get("trace_only_reason") for row in trace_rows)
     return {
         "article_relation_total_count": len(article_amendment_relations),
         "article_relation_exact_support_count": len(exact_rows),
         "article_relation_trace_only_count": len(trace_rows),
+        "article_relation_trace_missing_reason_count": trace_reason_counts.get(None, 0) + trace_reason_counts.get("", 0),
+        "article_relation_trace_reason_counts": dict(sorted((key, value) for key, value in trace_reason_counts.items() if key)),
         "article_relation_promoted_from_scope_count": sum(1 for row in exact_rows if "scope" in str(row.get("evidence_id") or "")),
         "article_relation_unpromoted_trace_count": len(trace_rows),
         "article_relation_invalid_bbox_refs": len(invalid_refs),

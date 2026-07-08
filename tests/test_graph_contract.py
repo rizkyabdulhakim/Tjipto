@@ -304,6 +304,11 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(health["article_relation_total_count"], len(rows))
         self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
         self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
+        self.assertEqual(health["article_relation_trace_missing_reason_count"], 0)
+        self.assertEqual(
+            health["article_relation_trace_reason_counts"],
+            {"instrument_trace_only_not_public_citation": 31},
+        )
         self.assertEqual(health["article_relation_invalid_bbox_refs"], 0)
         self.assertEqual(health["article_relation_invalid_coordinates"], 0)
         self.assertEqual(health["article_relation_partial_answer_risk_count"], 1)
@@ -325,6 +330,7 @@ class GraphContractTest(unittest.TestCase):
                 self.assertTrue(source["viewer_highlightable"])
             else:
                 self.assertEqual(row["grounding_level"], "page_grounded_trace")
+                self.assertEqual(row["trace_only_reason"], "instrument_trace_only_not_public_citation")
                 self.assertFalse(row["viewer_highlightable"])
                 self.assertFalse(row["citation_available"])
 

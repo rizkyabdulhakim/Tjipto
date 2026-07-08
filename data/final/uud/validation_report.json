@@ -444,9 +444,9 @@
   },
   "metadata_exact_promotion_feasibility_health": {
     "audited_metadata_row_count": 13,
+    "blocked_by_layout_count": 8,
     "blocked_by_no_exact_bbox_count": 0,
-    "blocked_by_source_layout_count": 8,
-    "blocked_by_text_mismatch_count": 1,
+    "blocked_by_text_boundary_count": 1,
     "exact_span_found_but_bbox_missing_count": 0,
     "multi_span_exact_possible_count": 0,
     "page_level_only_by_policy_count": 4,
@@ -458,6 +458,10 @@
     "article_relation_total_count": 63,
     "article_relation_exact_support_count": 32,
     "article_relation_trace_only_count": 31,
+    "article_relation_trace_missing_reason_count": 0,
+    "article_relation_trace_reason_counts": {
+      "instrument_trace_only_not_public_citation": 31
+    },
     "article_relation_promoted_from_scope_count": 31,
     "article_relation_unpromoted_trace_count": 31,
     "article_relation_invalid_bbox_refs": 0,

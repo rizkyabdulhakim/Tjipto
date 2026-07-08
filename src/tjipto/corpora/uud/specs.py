@@ -318,12 +318,12 @@ SOURCE_CONFLICT_SPECS = (
     {
         "affected_pages": [5, 6],
         "anchor_terms": ["ATURAN TAMBAHAN", "Pasal III"],
-        "classification": "source_pdf_contains_pasal_iii_conflict",
+        "classification": "source_pdf_contains_pasal_iii_anomaly",
         "corpus_id": "uud",
         "provenance": {"donor_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict"},
         "provenance_exception_category": ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
         "provenance_review_status": "reviewed",
-        "provenance_summary": "source_pdf_contains_pasal_iii_conflict",
+        "provenance_summary": "source_pdf_contains_pasal_iii_anomaly",
         "final_authority_policy": "Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final.",
         "query_anchor_terms": ["aturan tambahan", "pasal iii", "pasal ii", "pasal 3"],
         "resolution_decision": {
@@ -345,12 +345,12 @@ SOURCE_CONFLICT_SPECS = (
         "source_conflict_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict",
         "source_document_id": "uud::amendment_4_historical",
         "status": ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
-        "type": "source_marker_sequence_conflict",
+        "type": "source_marker_sequence_anomaly",
     },
     {
         "affected_pages": [1, 3],
         "anchor_terms": ["Pasal 25E", "Pasal 25A"],
-        "classification": "source_article_renumbering_conflict",
+        "classification": "source_article_renumbering_provenance",
         "corpus_id": "uud",
         "provenance": {"donor_id": "uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict"},
         "provenance_summary": "renumbering historis dari Pasal 25E ke rujukan kanonik Pasal 25A",
@@ -369,7 +369,7 @@ SOURCE_CONFLICT_SPECS = (
         "source_conflict_id": "uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict",
         "source_document_id": "uud::amendment_2_historical",
         "status": "source_discrepancy_recorded",
-        "type": "article_renumbering_conflict",
+        "type": "article_renumbering_provenance",
     },
 )
 

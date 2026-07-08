@@ -543,7 +543,7 @@ def _row_is_instrument_provenance(store, row: dict) -> bool:
         units = store.legal_units
     except (KeyError, OSError, ValueError):
         return False
-    unit = next((item for item in units if item.get("legal_unit_id") == row.get("legal_unit_id")), {})
+    unit: dict = next((item for item in units if item.get("legal_unit_id") == row.get("legal_unit_id")), {})
     return bool(unit) and _is_instrument_unit(store, unit)
 
 
@@ -1066,6 +1066,7 @@ def _public_article_relation(row: dict) -> dict:
         "bbox_refs": tuple(row.get("bbox_refs") or ()),
         "support_class": row.get("support_class"),
         "grounding_level": row.get("grounding_level"),
+        "trace_only_reason": row.get("trace_only_reason"),
         "citation_available": row.get("citation_available") is True,
         "viewer_highlightable": row.get("viewer_highlightable") is True,
     }
@@ -1447,6 +1448,7 @@ def _source_conflict_reviewer_suffix(reviewer_decision: object) -> str:
 def _source_conflict_contract_fields(conflict: dict) -> dict:
     raw_bbox_ids = tuple(conflict.get("raw_provenance_bbox_ids") or ())
     raw_text_span_ids = tuple(conflict.get("raw_provenance_text_span_ids") or ())
+    blocked_text_span_ids = tuple(conflict.get("blocked_raw_provenance_text_span_ids") or ())
     return {
         "final_evidence_available": bool(conflict.get("final_evidence_available")),
         "source_anomaly_kind": conflict.get("source_anomaly_kind"),
@@ -1455,6 +1457,8 @@ def _source_conflict_contract_fields(conflict: dict) -> dict:
         "provenance_highlight_scope": conflict.get("provenance_highlight_scope"),
         "raw_provenance_bbox_count": len(raw_bbox_ids),
         "raw_provenance_text_span_count": len(raw_text_span_ids),
+        "blocked_raw_provenance_text_span_count": len(blocked_text_span_ids),
+        "blocked_raw_provenance_reason": conflict.get("blocked_raw_provenance_reason"),
     }
 
 

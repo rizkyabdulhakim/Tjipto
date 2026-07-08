@@ -53,6 +53,11 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "partial_exact_raw_provenance_bbox_available")
         self.assertEqual(result["source_conflict"]["provenance_highlight_scope"], "anchor_span_only")
         self.assertEqual(result["source_conflict"]["source_anomaly_kind"], "source_marker_sequence_anomaly")
+        self.assertEqual(result["source_conflict"]["blocked_raw_provenance_text_span_count"], 2)
+        self.assertEqual(
+            result["source_conflict"]["blocked_raw_provenance_reason"],
+            "source_anomaly_anchor_only_until_exact_span_available",
+        )
         viewer = self.service.viewer("uud", citation["evidence_id"])
         self.assertEqual(viewer["authority_kind"], "source_anomaly")
         self.assertFalse(viewer["citation_final"])

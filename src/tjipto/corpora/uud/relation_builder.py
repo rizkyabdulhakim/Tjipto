@@ -43,6 +43,7 @@ def build_article_amendment_relations(
             and all(ref in bbox_ids for ref in bbox_refs)
         )
         support_class = "exact_article_relation" if exact_support else "trace_article_relation"
+        trace_only_reason = None if exact_support else evidence_row.get("failure_reason") or "blocked_by_missing_exact_bbox"
         rows.append(
             {
                 "relation_id": f"uud_article_amendment_relation::{relation_type.lower()}::{evidence_row['evidence_id']}::{target_unit_id}",
@@ -63,6 +64,7 @@ def build_article_amendment_relations(
                 "bbox_precision": evidence_row.get("bbox_precision"),
                 "viewer_highlightable": exact_support,
                 "citation_available": exact_support,
+                "trace_only_reason": trace_only_reason,
                 "runtime_loadable": True,
                 "validator_status": "valid",
             }

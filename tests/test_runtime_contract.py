@@ -546,6 +546,10 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(any(row["citation_available"] for row in pasal["trace_support"]))
         self.assertTrue(all(row["viewer_highlightable"] for row in pasal["article_amendment_relations"]))
         self.assertFalse(any(row["viewer_highlightable"] for row in pasal["trace_support"]))
+        self.assertEqual(
+            {row["trace_only_reason"] for row in pasal["trace_support"]},
+            {"instrument_trace_only_not_public_citation"},
+        )
         self.assertFalse(pasal["context_pack"]["viewer_refs"])
         self.assertFalse(pasal["context_pack"]["citation_payloads"])
 
@@ -579,6 +583,10 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(unsupported["trace_support"])
         self.assertEqual({row["target_citation"] for row in unsupported["trace_support"]}, {"Pasal 31"})
         self.assertFalse(any(row["citation_available"] or row["viewer_highlightable"] for row in unsupported["trace_support"]))
+        self.assertEqual(
+            {row["trace_only_reason"] for row in unsupported["trace_support"]},
+            {"instrument_trace_only_not_public_citation"},
+        )
 
         exact = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
         self.assertEqual(exact["status"], "answer_ready")
@@ -683,7 +691,7 @@ class RuntimeContractTest(unittest.TestCase):
             if result["citations"]:
                 expected_kind = (
                     "source_anomaly"
-                    if case["classification"] == "source_pdf_contains_pasal_iii_conflict"
+                    if case["source_anomaly_kind"] == "source_marker_sequence_anomaly"
                     else "source_conflict_provenance"
                 )
                 self.assertEqual(result["citations"][0]["authority_kind"], expected_kind, case["query"])

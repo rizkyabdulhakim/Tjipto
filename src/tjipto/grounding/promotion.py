@@ -236,16 +236,16 @@ def _metadata_promotion_feasibility(
     if reason == "metadata_publication_block_requires_page_level_support":
         return "page_level_only_by_policy"
     if not exact_quote or span_match_status == "page_level_text_match_only":
-        return "blocked_by_text_mismatch"
+        return "blocked_by_text_boundary"
     if reason == "metadata_decision_sentence_continues_beyond_field":
-        return "blocked_by_source_layout"
+        return "blocked_by_layout"
     if span_match_status == "normalized_span_sequence_match" and len(matched_span_ids) > 1 and not exact_bbox:
         return "multi_span_exact_possible"
     if span_match_status == "normalized_span_sequence_match" and not exact_bbox:
         return "exact_span_found_but_bbox_missing"
     if not exact_bbox:
         return "blocked_by_no_exact_bbox"
-    return "blocked_by_source_layout"
+    return "blocked_by_layout"
 
 
 def _excerpt(text: str | None) -> str:

@@ -120,9 +120,9 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(feasibility["exact_span_found_but_bbox_missing_count"], 0)
         self.assertEqual(feasibility["multi_span_exact_possible_count"], 0)
         self.assertEqual(feasibility["page_level_only_by_policy_count"], 4)
-        self.assertEqual(feasibility["blocked_by_text_mismatch_count"], 1)
+        self.assertEqual(feasibility["blocked_by_text_boundary_count"], 1)
         self.assertEqual(feasibility["blocked_by_no_exact_bbox_count"], 0)
-        self.assertEqual(feasibility["blocked_by_source_layout_count"], 8)
+        self.assertEqual(feasibility["blocked_by_layout_count"], 8)
         self.assertEqual(feasibility["missing_feasibility_count"], 0)
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):
@@ -181,9 +181,9 @@ class MetadataBBoxContractTest(unittest.TestCase):
                         "exact_span_found_but_bbox_missing",
                         "multi_span_exact_possible",
                         "page_level_only_by_policy",
-                        "blocked_by_text_mismatch",
+                        "blocked_by_text_boundary",
                         "blocked_by_no_exact_bbox",
-                        "blocked_by_source_layout",
+                        "blocked_by_layout",
                     },
                 )
 

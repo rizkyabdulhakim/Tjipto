@@ -41,11 +41,18 @@ def apply_source_conflict_grounding(
             for text_span_id in row["text_span_ids"]
             if _text_span_has_exact_bbox(span_by_id.get(text_span_id), raw_provenance_bboxes)
         ]
+        blocked_text_span_ids = [
+            text_span_id for text_span_id in row["text_span_ids"] if text_span_id not in set(raw_provenance_text_span_ids)
+        ]
         row["canonical_use_allowed"] = False
         row["grounding_status"] = "text_span_exact" if row["text_span_ids"] else "grounding_unavailable"
         row["validation_status"] = "accepted_source_conflict_record" if row["text_span_ids"] else "grounding_unavailable"
         row["raw_provenance_bbox_ids"] = raw_provenance_bbox_ids
         row["raw_provenance_text_span_ids"] = raw_provenance_text_span_ids
+        row["blocked_raw_provenance_text_span_ids"] = blocked_text_span_ids
+        row["blocked_raw_provenance_reason"] = (
+            "source_anomaly_anchor_only_until_exact_span_available" if blocked_text_span_ids else None
+        )
         row["provenance_bbox_status"] = _provenance_bbox_status(row["text_span_ids"], raw_provenance_text_span_ids)
         row["provenance_highlight_scope"] = _provenance_highlight_scope(row["text_span_ids"], raw_provenance_text_span_ids)
         row["final_evidence_available"] = bool(row["evidence_ids"] and row["bbox_ids"])
