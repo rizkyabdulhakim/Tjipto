@@ -317,9 +317,11 @@ INSERTED_BAB_SPECS = (
 SOURCE_CONFLICT_SPECS = (
     {
         "affected_pages": [5, 6],
+        "anchor_terms": ("ATURAN TAMBAHAN", "Pasal III"),
         "classification": "source_pdf_contains_pasal_iii_conflict",
         "corpus_id": "uud",
         "provenance": {"donor_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict"},
+        "query_anchor_terms": ("aturan tambahan", "pasal iii", "pasal ii", "pasal 3"),
         "resolution_decision": {
             "canonical_reference_for_current_uud": "uud_1945_current_consolidated_text_aturan_tambahan_pasal_ii",
             "decision_scope": "pipeline_policy_not_final_legal_authority",
@@ -335,6 +337,7 @@ SOURCE_CONFLICT_SPECS = (
             "reviewer_decision": "amendment_4_pasal_iii_is_source_typographical_anomaly",
         },
         "runtime_loadable": False,
+        "source_anomaly_kind": "source_marker_sequence_anomaly",
         "source_conflict_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict",
         "source_document_id": "uud::amendment_4_historical",
         "status": ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
@@ -342,9 +345,11 @@ SOURCE_CONFLICT_SPECS = (
     },
     {
         "affected_pages": [1, 3],
+        "anchor_terms": ("Pasal 25E", "Pasal 25A"),
         "classification": "source_article_renumbering_conflict",
         "corpus_id": "uud",
         "provenance": {"donor_id": "uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict"},
+        "query_anchor_terms": ("pasal 25e", "pasal 25a", "25e", "25a"),
         "resolution_decision": {
             "canonical_reference_for_current_uud": "uud_current_consolidated_final_citation_evidence_00401",
             "historical_source_reference": "uud_source_role_historical_final_citation_evidence_00050",
@@ -353,6 +358,8 @@ SOURCE_CONFLICT_SPECS = (
             "retain_source_text_trace": True,
         },
         "runtime_loadable": False,
+        "source_anomaly_kind": "renumbering_provenance",
+        "source_mapping_kind": "historical_to_canonical_mapping",
         "source_conflict_id": "uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict",
         "source_document_id": "uud::amendment_2_historical",
         "status": "source_discrepancy_recorded",

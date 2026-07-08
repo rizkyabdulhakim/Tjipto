@@ -109,6 +109,13 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         health = self.report["source_conflict_provenance_health"]
         self.assertEqual(health["status"], "complete")
         self.assertEqual(health["source_conflict_count"], 2)
+        self.assertEqual(health["renumbering_provenance_count"], 1)
+        self.assertEqual(health["historical_to_canonical_mapping_count"], 1)
+        self.assertEqual(health["source_marker_sequence_anomaly_count"], 1)
+        self.assertEqual(health["missing_anchor_terms_count"], 0)
+        self.assertEqual(health["missing_query_anchor_terms_count"], 0)
+        self.assertEqual(health["unknown_source_anomaly_kind_count"], 0)
+        self.assertEqual(health["invalid_source_mapping_kind_count"], 0)
         self.assertEqual(health["final_evidence_available_count"], 1)
         self.assertEqual(health["raw_provenance_exact_available_count"], 1)
         self.assertEqual(health["raw_provenance_partial_available_count"], 1)

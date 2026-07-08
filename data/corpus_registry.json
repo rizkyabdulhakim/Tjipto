@@ -173,6 +173,13 @@
         "article_renumbering_conflict",
         "source_marker_sequence_conflict"
       ],
+      "source_anomaly_kinds": [
+        "renumbering_provenance",
+        "source_marker_sequence_anomaly"
+      ],
+      "source_mapping_kinds": [
+        "historical_to_canonical_mapping"
+      ],
       "chunk_policy": {
         "direct_grounding": "text_span_exact",
         "page_context_grounding": "page_grounded_context",
@@ -820,20 +827,6 @@
         "amendment_2_historical": "perubahan kedua",
         "amendment_3_historical": "perubahan ketiga",
         "amendment_4_historical": "perubahan keempat"
-      },
-      "type_anchors": {
-        "article_renumbering_conflict": [
-          "pasal 25e",
-          "pasal 25a",
-          "25e",
-          "25a"
-        ],
-        "source_marker_sequence_conflict": [
-          "aturan tambahan",
-          "pasal iii",
-          "pasal ii",
-          "pasal 3"
-        ]
       },
       "reason_rules": [
         {

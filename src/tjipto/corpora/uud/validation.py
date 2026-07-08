@@ -646,9 +646,27 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         if row["evidence_id"] not in evidence_by_id:
             errors.append(f"orphan_retrieval_evidence:{row['retrieval_unit_id']}")
     for row in source_conflicts:
-        for field in ("page_numbers", "text_span_ids", "bbox_ids", "evidence_ids", "grounding_status", "validation_status"):
+        for field in (
+            "page_numbers",
+            "text_span_ids",
+            "bbox_ids",
+            "evidence_ids",
+            "grounding_status",
+            "validation_status",
+            "anchor_terms",
+            "query_anchor_terms",
+            "source_anomaly_kind",
+        ):
             if field not in row:
                 errors.append(f"source_conflict_missing_{field}:{row['source_conflict_id']}")
+        if not row.get("anchor_terms"):
+            errors.append(f"source_conflict_missing_anchor_terms:{row['source_conflict_id']}")
+        if not row.get("query_anchor_terms"):
+            errors.append(f"source_conflict_missing_query_anchor_terms:{row['source_conflict_id']}")
+        if row.get("source_anomaly_kind") not in {"renumbering_provenance", "source_marker_sequence_anomaly"}:
+            errors.append(f"source_conflict_invalid_source_anomaly_kind:{row['source_conflict_id']}")
+        if row.get("source_anomaly_kind") == "renumbering_provenance" and row.get("source_mapping_kind") != "historical_to_canonical_mapping":
+            errors.append(f"source_conflict_invalid_source_mapping_kind:{row['source_conflict_id']}")
         for field in (
             "raw_provenance_bbox_ids",
             "raw_provenance_text_span_ids",
@@ -2081,6 +2099,26 @@ def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], so
 def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
     counts = {
         "source_conflict_count": len(source_conflicts),
+        "renumbering_provenance_count": sum(1 for row in source_conflicts if row.get("source_anomaly_kind") == "renumbering_provenance"),
+        "historical_to_canonical_mapping_count": sum(
+            1 for row in source_conflicts if row.get("source_mapping_kind") == "historical_to_canonical_mapping"
+        ),
+        "source_marker_sequence_anomaly_count": sum(
+            1 for row in source_conflicts if row.get("source_anomaly_kind") == "source_marker_sequence_anomaly"
+        ),
+        "missing_anchor_terms_count": sum(1 for row in source_conflicts if not row.get("anchor_terms")),
+        "missing_query_anchor_terms_count": sum(1 for row in source_conflicts if not row.get("query_anchor_terms")),
+        "unknown_source_anomaly_kind_count": sum(
+            1
+            for row in source_conflicts
+            if row.get("source_anomaly_kind") not in {"renumbering_provenance", "source_marker_sequence_anomaly"}
+        ),
+        "invalid_source_mapping_kind_count": sum(
+            1
+            for row in source_conflicts
+            if row.get("source_anomaly_kind") == "renumbering_provenance"
+            and row.get("source_mapping_kind") != "historical_to_canonical_mapping"
+        ),
         "final_evidence_available_count": sum(1 for row in source_conflicts if row.get("final_evidence_available") is True),
         "raw_provenance_exact_available_count": sum(
             1 for row in source_conflicts if row.get("provenance_bbox_status") == "exact_raw_provenance_bbox_available"
@@ -2109,7 +2147,14 @@ def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
             and row.get("failure_reason") == "source_conflict_evidence_or_bbox_unavailable"
         ),
     }
-    error_keys = {"unknown_highlight_scope_count", "contradictory_failure_reason_count"}
+    error_keys = {
+        "missing_anchor_terms_count",
+        "missing_query_anchor_terms_count",
+        "unknown_source_anomaly_kind_count",
+        "invalid_source_mapping_kind_count",
+        "unknown_highlight_scope_count",
+        "contradictory_failure_reason_count",
+    }
     return {**counts, "status": "complete" if not any(counts[key] for key in error_keys) else "incomplete"}
 
 

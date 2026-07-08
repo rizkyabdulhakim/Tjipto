@@ -2,7 +2,6 @@
   "source_conflict_intent": {
     "query_terms": ["pasal 25e"],
     "generic_tokens": ["konflik"],
-    "type_anchors": ["source_marker_sequence_conflict"],
     "role_labels": {"amendment_4_historical": "perubahan keempat"},
     "reason_rules": [{"query_terms": ["pasal iii"], "reasons": ["historical_source_typo", "not_runtime_loadable"]}],
     "default_reasons": ["insufficient_promotion_evidence"],
@@ -14,7 +13,15 @@
     "metadata_fields": ["source_anomaly_status"],
     "relation_types": ["HAS_SOURCE_ANOMALY"],
     "source_conflict_types": ["article_renumbering_conflict"],
+    "source_anomaly_kinds": ["renumbering_provenance", "source_marker_sequence_anomaly"],
+    "source_mapping_kinds": ["historical_to_canonical_mapping"],
     "chunk_policy": {"direct_grounding": "text_span_exact"}
+  },
+  "source_conflict_specs": {
+    "source_anomaly_kinds": ["renumbering_provenance", "source_marker_sequence_anomaly"],
+    "source_mapping_kinds": ["historical_to_canonical_mapping"],
+    "anchor_terms": ["Pasal 25E", "ATURAN TAMBAHAN"],
+    "query_anchor_terms": ["pasal 25e", "aturan tambahan"]
   },
   "normalization_aliases": [{"replacement": "UUD 1945"}],
   "query_normalization_enabled": true,

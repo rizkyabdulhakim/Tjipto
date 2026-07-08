@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.uud.specs import SOURCE_CONFLICT_SPECS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +22,7 @@ class CorpusSpecContractTest(unittest.TestCase):
         self.assertIsNotNone(config)
         intent = config.setting("source_conflict_intent")
         expected = _expectations()["source_conflict_intent"]
-        for field in ("query_terms", "generic_tokens", "type_anchors"):
+        for field in ("query_terms", "generic_tokens"):
             for value in expected[field]:
                 self.assertIn(value, intent[field])
         for key, value in expected["role_labels"].items():
@@ -36,7 +37,14 @@ class CorpusSpecContractTest(unittest.TestCase):
         schema = config.setting("schema")
         expected = _expectations()["schema"]
         self.assertIn(config.preferred_source_role, schema["document_roles"])
-        for field in ("unit_hierarchy", "metadata_fields", "relation_types", "source_conflict_types"):
+        for field in (
+            "unit_hierarchy",
+            "metadata_fields",
+            "relation_types",
+            "source_conflict_types",
+            "source_anomaly_kinds",
+            "source_mapping_kinds",
+        ):
             for value in expected[field]:
                 self.assertIn(value, schema[field])
         self.assertEqual(schema["chunk_policy"]["direct_grounding"], expected["chunk_policy"]["direct_grounding"])
@@ -98,6 +106,21 @@ class CorpusSpecContractTest(unittest.TestCase):
         relation_source = (ROOT / "src/tjipto/retrieval/relations.py").read_text(encoding="utf-8")
         for value in _expectations()["relation_source_absent"]:
             self.assertNotIn(value, relation_source)
+
+    def test_uud_source_conflict_specs_own_taxonomy_and_anchor_terms(self) -> None:
+        expected = _expectations()["source_conflict_specs"]
+        rows = list(SOURCE_CONFLICT_SPECS)
+        self.assertEqual({row["source_anomaly_kind"] for row in rows}, set(expected["source_anomaly_kinds"]))
+        self.assertEqual(
+            {row.get("source_mapping_kind") for row in rows if row.get("source_mapping_kind")},
+            set(expected["source_mapping_kinds"]),
+        )
+        anchor_terms = {term for row in rows for term in row.get("anchor_terms", ())}
+        query_anchor_terms = {term for row in rows for term in row.get("query_anchor_terms", ())}
+        for value in expected["anchor_terms"]:
+            self.assertIn(value, anchor_terms)
+        for value in expected["query_anchor_terms"]:
+            self.assertIn(value, query_anchor_terms)
 
 
 if __name__ == "__main__":

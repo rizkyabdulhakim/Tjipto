@@ -22,6 +22,9 @@ class SourceConflictGroundingContractTest(unittest.TestCase):
             self.assertEqual(row["text_span_ids"], case["text_span_ids"])
             self.assertEqual(row["evidence_ids"], case["evidence_ids"])
             self.assertEqual(row["bbox_ids"], case["bbox_ids"])
+            self.assertEqual(row["source_anomaly_kind"], case["source_anomaly_kind"])
+            self.assertTrue(row["anchor_terms"])
+            self.assertTrue(row["query_anchor_terms"])
             self.assertEqual(row["grounding_status"], "text_span_exact")
             self.assertEqual(row["validation_status"], "accepted_source_conflict_record")
             self.assertTrue(set(row["text_span_ids"]) <= text_span_ids)
@@ -31,6 +34,8 @@ class SourceConflictGroundingContractTest(unittest.TestCase):
             self.assertIn(row["provenance_highlight_scope"], {"all_relevant_spans", "anchor_span_only"})
             self.assertTrue(set(row["raw_provenance_text_span_ids"]) <= text_span_ids)
             self.assertTrue(set(row["raw_provenance_bbox_ids"]) <= bbox_ids)
+            if case.get("source_mapping_kind"):
+                self.assertEqual(row["source_mapping_kind"], case["source_mapping_kind"])
             if not row["evidence_ids"] or not row["bbox_ids"]:
                 self.assertEqual(row["failure_reason"], case["failure_reason"])
 

@@ -70,7 +70,7 @@ def _candidate_evidence_refs(row: dict) -> tuple[str, ...]:
 
 
 def _matching_text_spans(row: dict, page_text_spans: list[dict]) -> list[str]:
-    anchors = _anchors(row.get("type"))
+    anchors = _anchor_terms(row)
     if not anchors:
         return []
     pages = set(row.get("affected_pages") or ())
@@ -83,12 +83,8 @@ def _matching_text_spans(row: dict, page_text_spans: list[dict]) -> list[str]:
     ]
 
 
-def _anchors(conflict_type: str | None) -> tuple[str, ...]:
-    if conflict_type == "article_renumbering_conflict":
-        return ("Pasal 25E", "Pasal 25A")
-    if conflict_type == "source_marker_sequence_conflict":
-        return ("ATURAN TAMBAHAN", "Pasal III")
-    return ()
+def _anchor_terms(row: dict) -> tuple[str, ...]:
+    return tuple(str(value) for value in row.get("anchor_terms") or () if str(value).strip())
 
 
 def _text_span_has_exact_bbox(span: dict | None, raw_provenance_bboxes: list[dict]) -> bool:

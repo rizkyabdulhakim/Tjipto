@@ -24,6 +24,9 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["source_conflict"]["type"], case["type"], query)
             self.assertEqual(result["source_conflict"]["classification"], case["classification"], query)
             self.assertEqual(result["source_conflict"]["source_document_id"], case["source_document_id"], query)
+            self.assertEqual(result["source_conflict"]["source_anomaly_kind"], case["source_anomaly_kind"], query)
+            if case.get("source_mapping_kind"):
+                self.assertEqual(result["source_conflict"]["source_mapping_kind"], case["source_mapping_kind"], query)
             self.assertIn("provenance_bbox_status", result["source_conflict"], query)
             self.assertIn("provenance_highlight_scope", result["source_conflict"], query)
             for reason in case["expected_insufficient_reasons"]:
@@ -49,6 +52,7 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(citation["evidence_id"], "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict")
         self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "partial_exact_raw_provenance_bbox_available")
         self.assertEqual(result["source_conflict"]["provenance_highlight_scope"], "anchor_span_only")
+        self.assertEqual(result["source_conflict"]["source_anomaly_kind"], "source_marker_sequence_anomaly")
         viewer = self.service.viewer("uud", citation["evidence_id"])
         self.assertEqual(viewer["authority_kind"], "source_anomaly")
         self.assertFalse(viewer["citation_final"])
@@ -65,6 +69,8 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertFalse(result["trace_support"])
         self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "exact_raw_provenance_bbox_available")
         self.assertEqual(result["source_conflict"]["provenance_highlight_scope"], "all_relevant_spans")
+        self.assertEqual(result["source_conflict"]["source_anomaly_kind"], "renumbering_provenance")
+        self.assertEqual(result["source_conflict"]["source_mapping_kind"], "historical_to_canonical_mapping")
         self.assertEqual(result["citations"][0]["authority_kind"], "source_conflict_provenance")
         self.assertFalse(result["citations"][0]["citation_final"])
         self.assertTrue(all(row["can_resolve"] for row in result["viewer_refs"]))

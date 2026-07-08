@@ -521,6 +521,10 @@ def _source_conflict_by_evidence(store, evidence_id: object) -> dict | None:
 
 
 def _is_source_anomaly_conflict(row: dict) -> bool:
+    if row.get("source_anomaly_kind") == "renumbering_provenance":
+        return False
+    if row.get("source_anomaly_kind") == "source_marker_sequence_anomaly":
+        return True
     classification = str(row.get("classification") or "").casefold()
     return (
         row.get("provenance_exception_category") == "accepted_noncanonical_source_conflict_trace_only"
@@ -1278,8 +1282,8 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
     role_label = str((intent.get("role_labels") or {}).get(source_role) or source_role).casefold()
     if role_label and role_label in folded_query:
         score += 4
-    for token in (intent.get("type_anchors") or {}).get(conflict.get("type"), ()):
-        if token in folded_query:
+    for token in (str(value).casefold() for value in (conflict.get("query_anchor_terms") or conflict.get("anchor_terms") or ())):
+        if token and token in folded_query:
             score += 3
     if score:
         return score
@@ -1289,6 +1293,8 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
             for value in (
                 conflict.get("source_conflict_id"),
                 conflict.get("type"),
+                conflict.get("source_anomaly_kind"),
+                conflict.get("source_mapping_kind"),
                 conflict.get("classification"),
                 conflict.get("source_document_id"),
                 role_label,
@@ -1396,7 +1402,7 @@ def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenanc
     classification = conflict.get("classification") or "source_conflict_recorded"
     role_label = _source_conflict_role_label(store, conflict)
     reviewer_suffix = _source_conflict_reviewer_suffix(decision.get("reviewer_decision"))
-    if conflict.get("type") == "article_renumbering_conflict":
+    if conflict.get("source_anomaly_kind") == "renumbering_provenance":
         return (
             f"Catatan pada {role_label} merekam renumbering historis dari Pasal 25E ke rujukan kanonik Pasal 25A. "
             "Sistem menampilkannya sebagai historical-to-canonical mapping untuk jejak audit, bukan otoritas hukum final untuk penggunaan saat ini."
@@ -1445,6 +1451,8 @@ def _source_conflict_contract_fields(conflict: dict) -> dict:
     raw_text_span_ids = tuple(conflict.get("raw_provenance_text_span_ids") or ())
     return {
         "final_evidence_available": bool(conflict.get("final_evidence_available")),
+        "source_anomaly_kind": conflict.get("source_anomaly_kind"),
+        "source_mapping_kind": conflict.get("source_mapping_kind"),
         "provenance_bbox_status": conflict.get("provenance_bbox_status"),
         "provenance_highlight_scope": conflict.get("provenance_highlight_scope"),
         "raw_provenance_bbox_count": len(raw_bbox_ids),

@@ -673,6 +673,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["status"], case["expected_status"], case["query"])
             self.assertEqual(result["route"], "source_anomaly_explanation", case["query"])
             self.assertEqual(result["source_conflict"]["source_conflict_id"], case["source_conflict_id"], case["query"])
+            self.assertEqual(result["source_conflict"]["source_anomaly_kind"], case["source_anomaly_kind"], case["query"])
             self.assertEqual(bool(result["citations"]), case["has_citations"], case["query"])
             self.assertEqual(bool(result["viewer_refs"]), case["has_viewer_refs"], case["query"])
             self.assertEqual(len(result.get("trace_support", ())), case["trace_support_count"], case["query"])
