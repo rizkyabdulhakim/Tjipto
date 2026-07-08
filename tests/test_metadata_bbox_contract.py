@@ -93,6 +93,7 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(promotion["evidence_trace_only_count"], 5)
         self.assertEqual(promotion["metadata_grounding_page_grounded_only_count"], 17)
         audit = report["promotion_decision_audit_health"]
+        feasibility = report["metadata_exact_promotion_feasibility_health"]
         self.assertEqual(audit["status"], "complete")
         self.assertEqual(audit["promotion_decision_count"], promotion["promotion_blocked_count"])
         self.assertEqual(audit["blocked_decision_count"], promotion["promotion_blocked_count"])
@@ -111,6 +112,16 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(audit["missing_decision_count"], 0)
         self.assertEqual(audit["unexpected_decision_count"], 0)
         self.assertEqual(audit["blocked_decision_missing_reason_count"], 0)
+        self.assertEqual(feasibility["status"], "complete")
+        self.assertEqual(feasibility["audited_metadata_row_count"], 17)
+        self.assertEqual(feasibility["promotable_exact_count"], 0)
+        self.assertEqual(feasibility["exact_span_found_but_bbox_missing_count"], 0)
+        self.assertEqual(feasibility["multi_span_exact_possible_count"], 4)
+        self.assertEqual(feasibility["page_level_only_by_policy_count"], 4)
+        self.assertEqual(feasibility["blocked_by_text_mismatch_count"], 1)
+        self.assertEqual(feasibility["blocked_by_no_exact_bbox_count"], 0)
+        self.assertEqual(feasibility["blocked_by_source_layout_count"], 8)
+        self.assertEqual(feasibility["missing_feasibility_count"], 0)
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):
                 if row["bbox_precision"] == "exact":
@@ -145,6 +156,7 @@ class MetadataBBoxContractTest(unittest.TestCase):
                 "matched_span_ids",
                 "matched_page_numbers",
                 "matched_text_excerpt",
+                "metadata_exact_promotion_feasibility",
                 "blocker_evidence",
                 "can_be_exact_citation",
                 "can_be_exact_highlight",
@@ -158,6 +170,19 @@ class MetadataBBoxContractTest(unittest.TestCase):
             self.assertFalse(row["highlightable"], row["decision_id"])
             self.assertFalse(row["can_be_exact_citation"], row["decision_id"])
             self.assertFalse(row["can_be_exact_highlight"], row["decision_id"])
+            if row["record_type"] == "metadata_grounding":
+                self.assertIn(
+                    row["metadata_exact_promotion_feasibility"],
+                    {
+                        "promotable_exact",
+                        "exact_span_found_but_bbox_missing",
+                        "multi_span_exact_possible",
+                        "page_level_only_by_policy",
+                        "blocked_by_text_mismatch",
+                        "blocked_by_no_exact_bbox",
+                        "blocked_by_source_layout",
+                    },
+                )
 
     def test_fixture_metadata_rows_keep_stable_exact_grounding_ids(self) -> None:
         rows = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}

@@ -24,6 +24,8 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["source_conflict"]["type"], case["type"], query)
             self.assertEqual(result["source_conflict"]["classification"], case["classification"], query)
             self.assertEqual(result["source_conflict"]["source_document_id"], case["source_document_id"], query)
+            self.assertIn("provenance_bbox_status", result["source_conflict"], query)
+            self.assertIn("provenance_highlight_scope", result["source_conflict"], query)
             for reason in case["expected_insufficient_reasons"]:
                 self.assertIn(reason, result["insufficient_reasons"], query)
             for text in case["answer_contains"]:
@@ -45,6 +47,8 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(citation["authority_kind"], "source_anomaly")
         self.assertFalse(citation["citation_final"])
         self.assertEqual(citation["evidence_id"], "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict")
+        self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "partial_exact_raw_provenance_bbox_available")
+        self.assertEqual(result["source_conflict"]["provenance_highlight_scope"], "anchor_span_only")
         viewer = self.service.viewer("uud", citation["evidence_id"])
         self.assertEqual(viewer["authority_kind"], "source_anomaly")
         self.assertFalse(viewer["citation_final"])
@@ -59,6 +63,8 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertTrue(result["citations"])
         self.assertTrue(result["viewer_refs"])
         self.assertFalse(result["trace_support"])
+        self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "exact_raw_provenance_bbox_available")
+        self.assertEqual(result["source_conflict"]["provenance_highlight_scope"], "all_relevant_spans")
         self.assertEqual(result["citations"][0]["authority_kind"], "source_conflict_provenance")
         self.assertFalse(result["citations"][0]["citation_final"])
         self.assertTrue(all(row["can_resolve"] for row in result["viewer_refs"]))
@@ -66,6 +72,7 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(viewer["authority_kind"], "source_conflict_provenance")
         self.assertFalse(viewer["citation_final"])
         self.assertNotIn("Reviewer decision: .", result["answer"])
+        self.assertNotIn("masih berlaku", result["answer"])
 
     def test_vague_source_conflict_query_fails_closed(self) -> None:
         for case in _source_conflict_negative_cases():

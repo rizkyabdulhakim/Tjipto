@@ -105,6 +105,18 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         self.assertEqual(health["duplicated_heading_artifact_issue_confirmed_count"], 2)
         self.assertEqual(health["source_text_accepted_nonruntime_no_evidence_bbox_count"], 8)
 
+    def test_source_conflict_provenance_health_distinguishes_final_and_raw_bbox_status(self) -> None:
+        health = self.report["source_conflict_provenance_health"]
+        self.assertEqual(health["status"], "complete")
+        self.assertEqual(health["source_conflict_count"], 2)
+        self.assertEqual(health["final_evidence_available_count"], 1)
+        self.assertEqual(health["raw_provenance_exact_available_count"], 1)
+        self.assertEqual(health["raw_provenance_partial_available_count"], 1)
+        self.assertEqual(health["raw_provenance_unavailable_count"], 0)
+        self.assertEqual(health["all_relevant_span_highlight_count"], 1)
+        self.assertEqual(health["anchor_only_highlight_count"], 1)
+        self.assertEqual(health["contradictory_failure_reason_count"], 0)
+
     def test_unresolved_needs_review_count_is_zero_or_explicitly_tracked(self) -> None:
         self.assertEqual(self.report["provenance_exception_health"]["unresolved_needs_review_count"], 0)
         unresolved = [

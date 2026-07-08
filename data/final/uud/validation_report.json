@@ -118,6 +118,18 @@
     "noncanonical_conflict_trace_runtime_loadable_count": 0,
     "noncanonical_conflict_trace_canonical_use_allowed_count": 0
   },
+  "source_conflict_provenance_health": {
+    "source_conflict_count": 2,
+    "final_evidence_available_count": 1,
+    "raw_provenance_exact_available_count": 1,
+    "raw_provenance_partial_available_count": 1,
+    "raw_provenance_unavailable_count": 0,
+    "all_relevant_span_highlight_count": 1,
+    "anchor_only_highlight_count": 1,
+    "unknown_highlight_scope_count": 0,
+    "contradictory_failure_reason_count": 0,
+    "status": "complete"
+  },
   "all_text_disposition_health": {
     "page_text_span_count": 2193,
     "classified_span_count": 2193,
@@ -393,6 +405,18 @@
     "duplicate_decision_id_count": 0,
     "blocked_decision_missing_reason_count": 0,
     "false_exact_decision_count": 0,
+    "status": "complete"
+  },
+  "metadata_exact_promotion_feasibility_health": {
+    "audited_metadata_row_count": 17,
+    "blocked_by_no_exact_bbox_count": 0,
+    "blocked_by_source_layout_count": 8,
+    "blocked_by_text_mismatch_count": 1,
+    "exact_span_found_but_bbox_missing_count": 0,
+    "multi_span_exact_possible_count": 4,
+    "page_level_only_by_policy_count": 4,
+    "promotable_exact_count": 0,
+    "missing_feasibility_count": 0,
     "status": "complete"
   },
   "article_relation_runtime_policy_health": {

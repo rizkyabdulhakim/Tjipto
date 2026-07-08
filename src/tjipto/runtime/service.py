@@ -1330,7 +1330,7 @@ def _public_source_conflict(conflict: dict) -> dict:
         "classification": conflict.get("classification"),
         "source_document_id": conflict.get("source_document_id"),
         "status": conflict.get("status"),
-    }
+    } | _source_conflict_contract_fields(conflict)
 
 
 def _source_conflict_support(store, conflict: dict) -> dict:
@@ -1386,7 +1386,7 @@ def _source_conflict_trace_support(store, conflict: dict, validation_reasons: di
         "viewer_highlightable": False,
         "viewer_ref": None,
         "failure_reason": conflict.get("failure_reason") or first_reason or "source_conflict_trace_only",
-    } | _authority_policy(store, conflict, can_resolve=False, conflict=conflict)
+    } | _source_conflict_contract_fields(conflict) | _authority_policy(store, conflict, can_resolve=False, conflict=conflict)
 
 
 def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenance: bool, trace_only: bool) -> str:
@@ -1396,10 +1396,17 @@ def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenanc
     classification = conflict.get("classification") or "source_conflict_recorded"
     role_label = _source_conflict_role_label(store, conflict)
     reviewer_suffix = _source_conflict_reviewer_suffix(decision.get("reviewer_decision"))
+    if conflict.get("type") == "article_renumbering_conflict":
+        return (
+            f"Catatan pada {role_label} merekam renumbering historis dari Pasal 25E ke rujukan kanonik Pasal 25A. "
+            "Sistem menampilkannya sebagai historical-to-canonical mapping untuk jejak audit, bukan otoritas hukum final untuk penggunaan saat ini."
+            f"{reviewer_suffix}"
+        )
     if exact_provenance:
+        provenance_note = _source_conflict_provenance_note(conflict)
         return (
             f"Catatan konflik sumber pada {role_label} mencatat {classification}. "
-            f"Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final.{reviewer_suffix}"
+            f"Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final. {provenance_note}{reviewer_suffix}"
         )
     if trace_only:
         return (
@@ -1431,6 +1438,26 @@ def _source_conflict_reviewer_suffix(reviewer_decision: object) -> str:
     if not text:
         return ""
     return f" Reviewer decision: {text}."
+
+
+def _source_conflict_contract_fields(conflict: dict) -> dict:
+    raw_bbox_ids = tuple(conflict.get("raw_provenance_bbox_ids") or ())
+    raw_text_span_ids = tuple(conflict.get("raw_provenance_text_span_ids") or ())
+    return {
+        "final_evidence_available": bool(conflict.get("final_evidence_available")),
+        "provenance_bbox_status": conflict.get("provenance_bbox_status"),
+        "provenance_highlight_scope": conflict.get("provenance_highlight_scope"),
+        "raw_provenance_bbox_count": len(raw_bbox_ids),
+        "raw_provenance_text_span_count": len(raw_text_span_ids),
+    }
+
+
+def _source_conflict_provenance_note(conflict: dict) -> str:
+    if conflict.get("provenance_highlight_scope") == "all_relevant_spans":
+        return "Highlight viewer tersedia untuk semua span provenance exact yang relevan."
+    if conflict.get("provenance_highlight_scope") == "anchor_span_only":
+        return "Highlight viewer saat ini terbatas pada span anchor exact yang tersedia; span anomali lain tetap tercatat sebagai trace tanpa highlight palsu."
+    return "Viewer tidak menampilkan highlight exact karena belum ada span/BBox provenance yang aman."
 
 
 def _source_conflict_viewer_evidence(store, evidence_id: str | None) -> tuple[dict | None, list[dict] | None]:

@@ -27,6 +27,10 @@ class SourceConflictGroundingContractTest(unittest.TestCase):
             self.assertTrue(set(row["text_span_ids"]) <= text_span_ids)
             self.assertTrue(set(row["evidence_ids"]) <= evidence_ids)
             self.assertTrue(set(row["bbox_ids"]) <= bbox_ids)
+            self.assertIn(row["provenance_bbox_status"], {"exact_raw_provenance_bbox_available", "partial_exact_raw_provenance_bbox_available"})
+            self.assertIn(row["provenance_highlight_scope"], {"all_relevant_spans", "anchor_span_only"})
+            self.assertTrue(set(row["raw_provenance_text_span_ids"]) <= text_span_ids)
+            self.assertTrue(set(row["raw_provenance_bbox_ids"]) <= bbox_ids)
             if not row["evidence_ids"] or not row["bbox_ids"]:
                 self.assertEqual(row["failure_reason"], case["failure_reason"])
 

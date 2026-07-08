@@ -115,21 +115,8 @@ class EvidenceStore:
         return self._metadata_bbox_by_grounding.get(metadata_grounding_id, [])
 
     def exact_bboxes_for_text_spans(self, text_span_ids: tuple[str, ...] | list[str]) -> list[dict]:
-        matches: list[dict] = []
-        seen: set[str] = set()
-        for text_span_id in text_span_ids:
-            span = self._page_text_span(text_span_id)
-            if not span or span.get("bbox_precision") != "exact":
-                continue
-            for bbox in self._bbox_rows_all():
-                if not _same_span_bbox(span, bbox):
-                    continue
-                bbox_id = str(bbox.get("bbox_id") or "")
-                if bbox_id in seen or bbox.get("bbox_precision") != "exact" or bbox.get("viewer_highlightable") is not True:
-                    continue
-                seen.add(bbox_id)
-                matches.append(bbox)
-        return matches
+        spans = [self._page_text_span(text_span_id) for text_span_id in text_span_ids]
+        return exact_bboxes_for_text_spans(spans, self._bbox_rows_all())
 
     def _bbox_rows_all(self) -> list[dict]:
         if self._bbox_rows is None:
@@ -149,6 +136,23 @@ def _optional_jsonl(config, logical_key: str) -> list[dict]:
         return config.jsonl(logical_key)
     except (KeyError, OSError, ValueError):
         return []
+
+
+def exact_bboxes_for_text_spans(text_spans: list[dict | None], bbox_rows: list[dict]) -> list[dict]:
+    matches: list[dict] = []
+    seen: set[str] = set()
+    for span in text_spans:
+        if not span or span.get("bbox_precision") != "exact":
+            continue
+        for bbox in bbox_rows:
+            if not _same_span_bbox(span, bbox):
+                continue
+            bbox_id = str(bbox.get("bbox_id") or "")
+            if bbox_id in seen or bbox.get("bbox_precision") != "exact" or bbox.get("viewer_highlightable") is not True:
+                continue
+            seen.add(bbox_id)
+            matches.append(bbox)
+    return matches
 
 
 def _same_span_bbox(span: dict, bbox: dict) -> bool:

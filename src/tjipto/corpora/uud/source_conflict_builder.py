@@ -4,6 +4,7 @@ from copy import deepcopy
 
 from tjipto.corpora.uud.provenance_exceptions import ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
 from tjipto.corpora.uud.specs import SOURCE_CONFLICT_SPECS
+from tjipto.evidence.store import exact_bboxes_for_text_spans
 
 
 def build_source_conflicts() -> list[dict]:
@@ -18,6 +19,7 @@ def apply_source_conflict_grounding(
 ) -> None:
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_by_evidence: dict[str, list[str]] = {}
+    span_by_id = {row["text_span_id"]: row for row in page_text_spans if row.get("text_span_id")}
     for row in bbox_rows:
         bbox_by_evidence.setdefault(row["evidence_id"], []).append(row["bbox_id"])
     for row in source_conflicts:
@@ -30,14 +32,32 @@ def apply_source_conflict_grounding(
         row["text_span_ids"] = _matching_text_spans(row, page_text_spans)
         row["evidence_ids"] = evidence_ids
         row["bbox_ids"] = [bbox_id for evidence_id in evidence_ids for bbox_id in bbox_by_evidence.get(evidence_id, [])]
+        raw_provenance_bboxes = exact_bboxes_for_text_spans(
+            [span_by_id.get(text_span_id) for text_span_id in row["text_span_ids"]],
+            bbox_rows,
+        )
+        raw_provenance_bbox_ids = [bbox["bbox_id"] for bbox in raw_provenance_bboxes if bbox.get("bbox_id")]
+        raw_provenance_text_span_ids = [
+            text_span_id
+            for text_span_id in row["text_span_ids"]
+            if _text_span_has_exact_bbox(span_by_id.get(text_span_id), raw_provenance_bboxes)
+        ]
         row["canonical_use_allowed"] = False
         row["grounding_status"] = "text_span_exact" if row["text_span_ids"] else "grounding_unavailable"
         row["validation_status"] = "accepted_source_conflict_record" if row["text_span_ids"] else "grounding_unavailable"
+        row["raw_provenance_bbox_ids"] = raw_provenance_bbox_ids
+        row["raw_provenance_text_span_ids"] = raw_provenance_text_span_ids
+        row["provenance_bbox_status"] = _provenance_bbox_status(row["text_span_ids"], raw_provenance_text_span_ids)
+        row["provenance_highlight_scope"] = _provenance_highlight_scope(row["text_span_ids"], raw_provenance_text_span_ids)
+        row["final_evidence_available"] = bool(row["evidence_ids"] and row["bbox_ids"])
         if row.get("type") == "source_marker_sequence_conflict":
             row["provenance_exception_category"] = ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
             row["provenance_review_status"] = "reviewed"
         if not row["evidence_ids"] or not row["bbox_ids"]:
-            row["failure_reason"] = "source_conflict_evidence_or_bbox_unavailable"
+            row["failure_reason"] = _source_conflict_failure_reason(
+                text_span_ids=row["text_span_ids"],
+                raw_provenance_text_span_ids=raw_provenance_text_span_ids,
+            )
 
 
 def _candidate_evidence_refs(row: dict) -> tuple[str, ...]:
@@ -69,3 +89,39 @@ def _anchors(conflict_type: str | None) -> tuple[str, ...]:
     if conflict_type == "source_marker_sequence_conflict":
         return ("ATURAN TAMBAHAN", "Pasal III")
     return ()
+
+
+def _text_span_has_exact_bbox(span: dict | None, raw_provenance_bboxes: list[dict]) -> bool:
+    if not span:
+        return False
+    return any(
+        all(
+            span.get(field) == bbox.get(field)
+            for field in ("source_document_id", "source_sha256", "page_number", "text", "x0", "y0", "x1", "y1")
+        )
+        for bbox in raw_provenance_bboxes
+    )
+
+
+def _provenance_bbox_status(text_span_ids: list[str], raw_provenance_text_span_ids: list[str]) -> str:
+    if not raw_provenance_text_span_ids:
+        return "exact_raw_provenance_bbox_unavailable"
+    if len(raw_provenance_text_span_ids) == len(text_span_ids):
+        return "exact_raw_provenance_bbox_available"
+    return "partial_exact_raw_provenance_bbox_available"
+
+
+def _provenance_highlight_scope(text_span_ids: list[str], raw_provenance_text_span_ids: list[str]) -> str:
+    if not raw_provenance_text_span_ids:
+        return "unavailable"
+    if len(raw_provenance_text_span_ids) == len(text_span_ids):
+        return "all_relevant_spans"
+    return "anchor_span_only"
+
+
+def _source_conflict_failure_reason(*, text_span_ids: list[str], raw_provenance_text_span_ids: list[str]) -> str:
+    if not raw_provenance_text_span_ids:
+        return "final_evidence_unavailable_raw_provenance_bbox_unavailable"
+    if len(raw_provenance_text_span_ids) == len(text_span_ids):
+        return "final_evidence_unavailable_raw_provenance_bbox_available"
+    return "final_evidence_unavailable_partial_raw_provenance_bbox_available"

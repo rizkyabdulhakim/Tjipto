@@ -164,6 +164,7 @@ def build_validation_report(
         legal_units,
         source_conflicts,
     )
+    validation_report["source_conflict_provenance_health"] = _source_conflict_provenance_health(source_conflicts)
     validation_report["all_text_disposition_health"] = _all_text_disposition_health(
         page_text_spans,
         legal_units,
@@ -277,6 +278,9 @@ def build_validation_report(
         bbox_rows=bbox_rows,
         promotion_decisions=promotion_decisions,
         promotion_engine_health=validation_report["promotion_engine_health"],
+    )
+    validation_report["metadata_exact_promotion_feasibility_health"] = _metadata_exact_promotion_feasibility_health(
+        promotion_decisions=promotion_decisions
     )
     validation_report["article_relation_runtime_policy_health"] = _article_relation_runtime_policy_health(
         document_relations=document_relations or (),
@@ -645,17 +649,41 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         for field in ("page_numbers", "text_span_ids", "bbox_ids", "evidence_ids", "grounding_status", "validation_status"):
             if field not in row:
                 errors.append(f"source_conflict_missing_{field}:{row['source_conflict_id']}")
+        for field in (
+            "raw_provenance_bbox_ids",
+            "raw_provenance_text_span_ids",
+            "provenance_bbox_status",
+            "provenance_highlight_scope",
+            "final_evidence_available",
+        ):
+            if field not in row:
+                errors.append(f"source_conflict_missing_{field}:{row['source_conflict_id']}")
         for text_span_id in row.get("text_span_ids") or ():
             if text_span_id not in text_span_ids:
                 errors.append(f"orphan_source_conflict_text_span:{row['source_conflict_id']}:{text_span_id}")
         for bbox_id in row.get("bbox_ids") or ():
             if bbox_id not in bbox_by_id:
                 errors.append(f"orphan_source_conflict_bbox:{row['source_conflict_id']}:{bbox_id}")
+        for bbox_id in row.get("raw_provenance_bbox_ids") or ():
+            if bbox_id not in bbox_by_id:
+                errors.append(f"orphan_source_conflict_raw_bbox:{row['source_conflict_id']}:{bbox_id}")
+        for text_span_id in row.get("raw_provenance_text_span_ids") or ():
+            if text_span_id not in text_span_ids:
+                errors.append(f"orphan_source_conflict_raw_text_span:{row['source_conflict_id']}:{text_span_id}")
         for evidence_id in row.get("evidence_ids") or ():
             if evidence_id not in evidence_by_id:
                 errors.append(f"orphan_source_conflict_evidence:{row['source_conflict_id']}:{evidence_id}")
         if (not row.get("evidence_ids") or not row.get("bbox_ids")) and not row.get("failure_reason"):
             errors.append(f"source_conflict_missing_failure_reason:{row['source_conflict_id']}")
+        raw_status = row.get("provenance_bbox_status")
+        raw_count = len(row.get("raw_provenance_text_span_ids") or ())
+        all_count = len(row.get("text_span_ids") or ())
+        if raw_status == "exact_raw_provenance_bbox_available" and raw_count != all_count:
+            errors.append(f"source_conflict_invalid_raw_provenance_status:{row['source_conflict_id']}")
+        if raw_status == "partial_exact_raw_provenance_bbox_available" and not (0 < raw_count < all_count):
+            errors.append(f"source_conflict_invalid_raw_provenance_status:{row['source_conflict_id']}")
+        if raw_status == "exact_raw_provenance_bbox_unavailable" and raw_count:
+            errors.append(f"source_conflict_invalid_raw_provenance_status:{row['source_conflict_id']}")
         if row.get("provenance_exception_category") == ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY:
             if row.get("runtime_loadable") is True:
                 errors.append(f"noncanonical_conflict_trace_runtime_loadable:{row['source_conflict_id']}")
@@ -1096,6 +1124,7 @@ def _promotion_decision_audit_health(
         "matched_span_ids",
         "matched_page_numbers",
         "matched_text_excerpt",
+        "metadata_exact_promotion_feasibility",
         "blocker_evidence",
         "can_be_exact_citation",
         "can_be_exact_highlight",
@@ -1154,6 +1183,28 @@ def _promotion_decision_audit_health(
         )
         else "incomplete",
     }
+
+
+def _metadata_exact_promotion_feasibility_health(*, promotion_decisions: list[dict]) -> dict:
+    metadata_rows = [row for row in promotion_decisions if row.get("record_type") == "metadata_grounding"]
+    categories = {
+        "promotable_exact",
+        "exact_span_found_but_bbox_missing",
+        "multi_span_exact_possible",
+        "page_level_only_by_policy",
+        "blocked_by_text_mismatch",
+        "blocked_by_no_exact_bbox",
+        "blocked_by_source_layout",
+    }
+    counts = {
+        "audited_metadata_row_count": len(metadata_rows),
+        **{
+            f"{category}_count": sum(1 for row in metadata_rows if row.get("metadata_exact_promotion_feasibility") == category)
+            for category in sorted(categories)
+        },
+        "missing_feasibility_count": sum(1 for row in metadata_rows if row.get("metadata_exact_promotion_feasibility") not in categories),
+    }
+    return {**counts, "status": "complete" if counts["missing_feasibility_count"] == 0 else "incomplete"}
 
 
 def _article_relation_runtime_policy_health(
@@ -2025,6 +2076,41 @@ def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], so
             1 for row in noncanonical_conflicts if row.get("canonical_use_allowed") is True
         ),
     }
+
+
+def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
+    counts = {
+        "source_conflict_count": len(source_conflicts),
+        "final_evidence_available_count": sum(1 for row in source_conflicts if row.get("final_evidence_available") is True),
+        "raw_provenance_exact_available_count": sum(
+            1 for row in source_conflicts if row.get("provenance_bbox_status") == "exact_raw_provenance_bbox_available"
+        ),
+        "raw_provenance_partial_available_count": sum(
+            1 for row in source_conflicts if row.get("provenance_bbox_status") == "partial_exact_raw_provenance_bbox_available"
+        ),
+        "raw_provenance_unavailable_count": sum(
+            1 for row in source_conflicts if row.get("provenance_bbox_status") == "exact_raw_provenance_bbox_unavailable"
+        ),
+        "all_relevant_span_highlight_count": sum(
+            1 for row in source_conflicts if row.get("provenance_highlight_scope") == "all_relevant_spans"
+        ),
+        "anchor_only_highlight_count": sum(
+            1 for row in source_conflicts if row.get("provenance_highlight_scope") == "anchor_span_only"
+        ),
+        "unknown_highlight_scope_count": sum(
+            1
+            for row in source_conflicts
+            if row.get("provenance_highlight_scope") not in {"all_relevant_spans", "anchor_span_only", "unavailable"}
+        ),
+        "contradictory_failure_reason_count": sum(
+            1
+            for row in source_conflicts
+            if row.get("provenance_bbox_status") in {"exact_raw_provenance_bbox_available", "partial_exact_raw_provenance_bbox_available"}
+            and row.get("failure_reason") == "source_conflict_evidence_or_bbox_unavailable"
+        ),
+    }
+    error_keys = {"unknown_highlight_scope_count", "contradictory_failure_reason_count"}
+    return {**counts, "status": "complete" if not any(counts[key] for key in error_keys) else "incomplete"}
 
 
 def _legal_unit_chunk_span_closure_health(

@@ -88,6 +88,15 @@ def _record_decision(
     highlightable = record.get("viewer_highlightable") is True
     reason = _reason(record)
     can_be_exact = exact_quote and span_match_status == "normalized_span_sequence_match" and exact_bbox and highlightable
+    metadata_feasibility = _metadata_promotion_feasibility(
+        record_type=record_type,
+        reason=reason,
+        exact_quote=exact_quote,
+        span_match_status=span_match_status,
+        exact_bbox=exact_bbox,
+        matched_span_ids=matched_span_ids,
+        can_be_exact=can_be_exact,
+    )
     return {
         "bbox_union_status": bbox_union_status,
         "blocker_evidence": _blocker_evidence(
@@ -110,6 +119,7 @@ def _record_decision(
         "matched_page_numbers": page_numbers,
         "matched_span_ids": matched_span_ids,
         "matched_text_excerpt": matched_excerpt,
+        "metadata_exact_promotion_feasibility": metadata_feasibility,
         "page_number": min(page_numbers) if page_numbers else None,
         "policy_reason": reason,
         "promotion_attempt_method": "source_page_span_bbox_feasibility",
@@ -207,6 +217,35 @@ def _blocker_evidence(*, reason: str, quote_match_status: str, span_match_status
         "quote_match_status": quote_match_status,
         "span_match_status": span_match_status,
     }
+
+
+def _metadata_promotion_feasibility(
+    *,
+    record_type: str,
+    reason: str,
+    exact_quote: bool,
+    span_match_status: str,
+    exact_bbox: bool,
+    matched_span_ids: list[str],
+    can_be_exact: bool,
+) -> str | None:
+    if record_type != "metadata_grounding":
+        return None
+    if can_be_exact:
+        return "promotable_exact"
+    if reason == "metadata_publication_block_requires_page_level_support":
+        return "page_level_only_by_policy"
+    if not exact_quote or span_match_status == "page_level_text_match_only":
+        return "blocked_by_text_mismatch"
+    if reason == "metadata_decision_sentence_continues_beyond_field":
+        return "blocked_by_source_layout"
+    if span_match_status == "normalized_span_sequence_match" and len(matched_span_ids) > 1 and not exact_bbox:
+        return "multi_span_exact_possible"
+    if span_match_status == "normalized_span_sequence_match" and not exact_bbox:
+        return "exact_span_found_but_bbox_missing"
+    if not exact_bbox:
+        return "blocked_by_no_exact_bbox"
+    return "blocked_by_source_layout"
 
 
 def _excerpt(text: str | None) -> str:
