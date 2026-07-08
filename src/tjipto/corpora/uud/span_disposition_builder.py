@@ -248,6 +248,12 @@ def _apply_bbox_registry_coverage(
         span["bbox_registry_coverage_bucket"] = bucket
         span["bbox_registry_coverage_reason"] = reason
         span["exposure_policy"] = _exposure_policy(bucket, reason)
+        span["exposure_target_kind"] = span.get("promotion_target_type") or "raw_text_span"
+        span["exposure_target_ref"] = span.get("promotion_target_id") or span["text_span_id"]
+        span["exposure_clickable"] = False
+        span["exposure_citation_final"] = False
+        span["exposure_exactness_level"] = "position_only"
+        span["field_bbox_feasibility"] = _field_bbox_feasibility(reason)
 
 
 def _legal_coverage_context(legal_units: list[dict], chunks_by_unit: dict[str, dict]) -> dict[str, dict]:
@@ -291,6 +297,20 @@ def _exposure_policy(bucket: str, reason: str) -> str:
     if reason == "blocked_by_no_word_level_bbox_artifact":
         return "blocked_no_word_level_bbox"
     return "raw_provenance_position"
+
+
+def _field_bbox_feasibility(reason: str) -> str:
+    if reason == "blocked_by_no_word_level_bbox_artifact":
+        return "requires_word_level_bbox"
+    if reason == "blocked_by_layout":
+        return "blocked_by_layout"
+    if reason == "metadata_page_grounded_only_by_policy":
+        return "page_level_only"
+    if reason == "source_anomaly_anchor_only_until_exact_span_available":
+        return "line_level_only"
+    if reason == "blocked_by_text_mismatch":
+        return "blocked_by_text_boundary"
+    return "page_level_only"
 
 
 def _bbox_registry_key(row: dict) -> tuple[object, ...]:

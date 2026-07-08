@@ -97,6 +97,11 @@ class BBoxContractTest(unittest.TestCase):
         report = read_json(FINAL / "validation_report.json")["viewer_provenance_coverage_health"]
         self.assertEqual(report["bbox_key_absent_span_count"], 634)
         self.assertEqual(report["missing_exposure_policy_count"], 0)
+        self.assertEqual(report["missing_exposure_target_count"], 0)
+        self.assertEqual(report["missing_field_bbox_feasibility_count"], 0)
+        self.assertEqual(report["clickable_absent_span_count"], 0)
+        self.assertEqual(report["final_citation_absent_span_count"], 0)
+        self.assertEqual(report["false_exact_absent_span_count"], 0)
         self.assertEqual(report["false_highlight_exposure_policy_count"], 0)
         self.assertEqual(report["legal_citation_highlight_count"], 0)
         self.assertEqual(report["metadata_source_highlight_count"], 0)
@@ -113,6 +118,8 @@ class BBoxContractTest(unittest.TestCase):
             ),
             634,
         )
+        self.assertEqual(report["requires_word_level_bbox_feasibility_count"], 153)
+        self.assertEqual(report["line_level_only_feasibility_count"], 17)
 
 
 if __name__ == "__main__":

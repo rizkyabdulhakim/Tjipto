@@ -339,6 +339,7 @@ def _edge_authority_payload(edge_type: str, payload: dict, evidence_by_id: dict[
     if edge_type in {"MODIFIES", "DELETES"}:
         return {
             "edge_authority_level": "evidence_backed_relation" if exact else "trace",
+            "graph_finality_policy": "evidence_backed_relation" if exact else "trace_only_relation",
             "citation_final": False,
             "viewer_highlightable": exact,
             "evidence_requirement": "exact_bbox" if exact else "trace_only",
@@ -350,29 +351,36 @@ def _edge_authority_payload(edge_type: str, payload: dict, evidence_by_id: dict[
     if edge_type in {"HAS_EFFECTIVE_RULE"}:
         support = "metadata"
         authority = "provenance"
+        finality = "metadata_provenance"
         requirement = "page_grounded"
     elif edge_type in {"HAS_SOURCE_ANOMALY"}:
         support = "source_anomaly"
         authority = "provenance"
+        finality = "source_anomaly_provenance"
         requirement = "trace_only"
     elif edge_type in {"CONTAINS", "PART_OF", "PRECEDES", "FOLLOWS", "INSERTED_AFTER"}:
         support = "structural"
         authority = "evidence_backed_relation" if evidence else "trace"
+        finality = "structural_relation"
         requirement = "exact_bbox" if exact else ("page_grounded" if trace else "none")
     elif edge_type in {"HAS_SIGNATORY", "HAS_DECISION_SESSION"}:
         support = "exact" if exact else "trace_only"
         authority = "evidence_backed_relation" if exact else "trace"
+        finality = "instrument_provenance"
         requirement = "exact_bbox" if exact else "trace_only"
     elif edge_type == "EXCLUDED_BECAUSE":
         support = "structural"
         authority = "nonlegal"
+        finality = "nonlegal"
         requirement = "none"
     else:
         support = "structural"
         authority = "provenance"
+        finality = "instrument_provenance"
         requirement = "exact_bbox" if exact else ("page_grounded" if trace else "none")
     return {
         "edge_authority_level": authority,
+        "graph_finality_policy": finality,
         "citation_final": False,
         "viewer_highlightable": False,
         "evidence_requirement": requirement,

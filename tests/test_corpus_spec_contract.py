@@ -116,6 +116,23 @@ class CorpusSpecContractTest(unittest.TestCase):
         for row in rows:
             self.assertIsInstance(row.get("anchor_terms"), list)
             self.assertIsInstance(row.get("query_anchor_terms"), list)
+            policy = row.get("source_anomaly_policy")
+            self.assertIsInstance(policy, dict)
+            for field in (
+                "anomaly_kind",
+                "source_role",
+                "canonical_role",
+                "anchor_terms",
+                "affected_span_refs",
+                "provenance_rules",
+                "highlight_policy",
+                "finality_policy",
+                "corpus_id",
+            ):
+                self.assertIn(field, policy)
+            self.assertEqual(policy["corpus_id"], row["corpus_id"])
+            self.assertEqual(policy["anomaly_kind"], row["source_anomaly_kind"])
+            self.assertEqual(policy["finality_policy"], "source_anomaly_provenance")
             for field in expected["policy_fields"]:
                 self.assertTrue(str(row.get(field) or "").strip(), field)
         self.assertEqual({row["source_anomaly_kind"] for row in rows}, set(expected["source_anomaly_kinds"]))

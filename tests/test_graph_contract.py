@@ -360,6 +360,11 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["authority_without_evidence_count"], 0)
         self.assertEqual(authority["authority_without_bbox_count"], 0)
         self.assertEqual(authority["missing_authority_field_count"], 0)
+        self.assertEqual(authority["graph_final_citation_edge_count"], 0)
+        self.assertEqual(authority["invalid_finality_policy_count"], 0)
+        self.assertEqual(authority["finality_policy_counts"]["source_anomaly_provenance"], 2)
+        self.assertEqual(authority["finality_policy_counts"]["metadata_provenance"], 3)
+        self.assertEqual(authority["finality_policy_counts"]["trace_only_relation"], 31)
         self.assertFalse([row for row in edges if row.get("evidence_ref") and row["evidence_ref"] not in evidence])
         self.assertNotIn("legal_edge_types", report)
         self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "AMENDED_BY", "AMENDS", "RENAMES", "SUPPLEMENTS"})
@@ -398,6 +403,19 @@ class GraphContractTest(unittest.TestCase):
             self.assertEqual(row["relation_type"], row["edge_type"])
             self.assertTrue(row.get("source_document_id"))
             self.assertIn(row["edge_authority_level"], {"evidence_backed_relation", "provenance", "trace"})
+            self.assertIn(
+                row["graph_finality_policy"],
+                {
+                    "final_legal_citation",
+                    "evidence_backed_relation",
+                    "instrument_provenance",
+                    "source_anomaly_provenance",
+                    "metadata_provenance",
+                    "structural_relation",
+                    "trace_only_relation",
+                    "nonlegal",
+                },
+            )
             self.assertFalse(row["citation_final"])
             self.assertIn(row["evidence_requirement"], {"exact_bbox", "page_grounded", "trace_only", "none"})
             self.assertIn(row["source_role"], {"canonical", "historical", "amendment", "consolidated", "anomaly"})
@@ -417,6 +435,7 @@ class GraphContractTest(unittest.TestCase):
                 if row["provenance_ref_kind"] == "source_conflict":
                     self.assertIn(row["provenance_ref"], source_conflicts)
                     self.assertFalse(row.get("evidence_ref"))
+                    self.assertEqual(row["graph_finality_policy"], "source_anomaly_provenance")
             if row["edge_type"] in {"MODIFIES", "DELETES"}:
                 source = evidence[row["evidence_ref"]]
                 self.assertTrue(set(row["bbox_refs"]) <= bbox_ids)

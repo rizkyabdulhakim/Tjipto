@@ -167,9 +167,21 @@
     "raw_provenance_position_count": 26,
     "source_anomaly_provenance_highlight_count": 0,
     "structural_provenance_position_count": 97,
+    "blocked_by_layout_feasibility_count": 3,
+    "blocked_by_text_boundary_feasibility_count": 0,
+    "exact_safe_feasibility_count": 0,
+    "line_level_only_feasibility_count": 17,
+    "page_level_only_feasibility_count": 461,
+    "requires_word_level_bbox_feasibility_count": 153,
+    "sentence_extends_beyond_field_feasibility_count": 0,
     "missing_bucket_count": 0,
     "missing_reason_count": 0,
     "missing_exposure_policy_count": 0,
+    "missing_exposure_target_count": 0,
+    "missing_field_bbox_feasibility_count": 0,
+    "clickable_absent_span_count": 0,
+    "final_citation_absent_span_count": 0,
+    "false_exact_absent_span_count": 0,
     "false_highlight_exposure_policy_count": 0,
     "invalid_present_status_count": 0,
     "status": "complete"
@@ -464,6 +476,12 @@
     "metadata_publication_block_requires_page_level_support_count": 4,
     "missing_feasibility_count": 0,
     "missing_final_reason_count": 0,
+    "missing_field_bbox_feasibility_count": 0,
+    "field_bbox_feasibility_counts": {
+      "blocked_by_layout": 7,
+      "page_level_only": 4,
+      "sentence_extends_beyond_field": 2
+    },
     "status": "complete"
   },
   "article_relation_runtime_policy_health": {
@@ -564,12 +582,23 @@
     "authority_without_evidence_count": 0,
     "authority_without_bbox_count": 0,
     "trace_promoted_count": 0,
+    "graph_final_citation_edge_count": 0,
+    "invalid_finality_policy_count": 0,
     "missing_authority_field_count": 0,
     "authority_level_counts": {
       "evidence_backed_relation": 1463,
       "nonlegal": 6,
       "provenance": 3449,
       "trace": 255
+    },
+    "finality_policy_counts": {
+      "evidence_backed_relation": 33,
+      "instrument_provenance": 3451,
+      "metadata_provenance": 3,
+      "nonlegal": 6,
+      "source_anomaly_provenance": 2,
+      "structural_relation": 1647,
+      "trace_only_relation": 31
     },
     "relation_support_counts": {
       "exact": 37,

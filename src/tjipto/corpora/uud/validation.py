@@ -715,6 +715,26 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"source_conflict_invalid_provenance_exception_category:{row['source_conflict_id']}")
             if row.get("provenance_review_status") != "reviewed":
                 errors.append(f"source_conflict_invalid_provenance_review_status:{row['source_conflict_id']}")
+        policy = row.get("source_anomaly_policy") or {}
+        required_policy_fields = {
+            "anomaly_kind",
+            "source_role",
+            "canonical_role",
+            "anchor_terms",
+            "affected_span_refs",
+            "provenance_rules",
+            "highlight_policy",
+            "finality_policy",
+            "corpus_id",
+        }
+        if required_policy_fields - set(policy):
+            errors.append(f"source_conflict_missing_source_anomaly_policy:{row['source_conflict_id']}")
+        if policy.get("corpus_id") != row.get("corpus_id"):
+            errors.append(f"source_conflict_invalid_policy_corpus:{row['source_conflict_id']}")
+        if policy.get("anomaly_kind") != row.get("source_anomaly_kind"):
+            errors.append(f"source_conflict_invalid_policy_anomaly_kind:{row['source_conflict_id']}")
+        if policy.get("finality_policy") != "source_anomaly_provenance":
+            errors.append(f"source_conflict_invalid_policy_finality:{row['source_conflict_id']}")
         for field in (
             "raw_provenance_bbox_ids",
             "raw_provenance_text_span_ids",
@@ -829,6 +849,17 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"invalid_graph_edge_type:{row['edge_id']}:{edge_type}")
         if row.get("edge_authority_level") not in {"final_legal_authority", "evidence_backed_relation", "provenance", "trace", "nonlegal"}:
             errors.append(f"graph_edge_invalid_authority_level:{row['edge_id']}:{row.get('edge_authority_level')}")
+        if row.get("graph_finality_policy") not in {
+            "final_legal_citation",
+            "evidence_backed_relation",
+            "instrument_provenance",
+            "source_anomaly_provenance",
+            "metadata_provenance",
+            "structural_relation",
+            "trace_only_relation",
+            "nonlegal",
+        }:
+            errors.append(f"graph_edge_invalid_finality_policy:{row['edge_id']}:{row.get('graph_finality_policy')}")
         if row.get("citation_final") is not False:
             errors.append(f"graph_edge_false_final_citation:{row['edge_id']}")
         if row.get("evidence_requirement") not in {"exact_bbox", "page_grounded", "trace_only", "none"}:
@@ -1250,6 +1281,7 @@ def _promotion_decision_audit_health(
         "matched_span_ids",
         "matched_page_numbers",
         "matched_text_excerpt",
+        "field_bbox_feasibility",
         "metadata_exact_promotion_feasibility",
         "blocker_evidence",
         "can_be_exact_citation",
@@ -1313,6 +1345,15 @@ def _promotion_decision_audit_health(
 
 def _metadata_exact_promotion_feasibility_health(*, promotion_decisions: list[dict]) -> dict:
     metadata_rows = [row for row in promotion_decisions if row.get("record_type") == "metadata_grounding"]
+    field_feasibility_categories = {
+        "exact_safe",
+        "line_level_only",
+        "sentence_extends_beyond_field",
+        "page_level_only",
+        "requires_word_level_bbox",
+        "blocked_by_layout",
+        "blocked_by_text_boundary",
+    }
     categories = {
         "promotable_exact",
         "exact_span_found_but_bbox_missing",
@@ -1336,10 +1377,18 @@ def _metadata_exact_promotion_feasibility_health(*, promotion_decisions: list[di
         ),
         "missing_feasibility_count": sum(1 for row in metadata_rows if row.get("metadata_exact_promotion_feasibility") not in categories),
         "missing_final_reason_count": sum(1 for row in metadata_rows if not row.get("failure_reason")),
+        "missing_field_bbox_feasibility_count": sum(
+            1 for row in metadata_rows if row.get("field_bbox_feasibility") not in field_feasibility_categories
+        ),
+        "field_bbox_feasibility_counts": dict(sorted(Counter(row.get("field_bbox_feasibility") for row in metadata_rows).items())),
     }
     return {
         **counts,
-        "status": "complete" if counts["missing_feasibility_count"] == 0 and counts["missing_final_reason_count"] == 0 else "incomplete",
+        "status": "complete"
+        if counts["missing_feasibility_count"] == 0
+        and counts["missing_final_reason_count"] == 0
+        and counts["missing_field_bbox_feasibility_count"] == 0
+        else "incomplete",
     }
 
 
@@ -1414,6 +1463,7 @@ def _legal_graph_authority_health(
         for row in graph_edges
         if {
             "edge_authority_level",
+            "graph_finality_policy",
             "citation_final",
             "viewer_highlightable",
             "evidence_requirement",
@@ -1424,7 +1474,15 @@ def _legal_graph_authority_health(
         - set(row)
     ]
     return {
-        "status": "complete" if not (authority_without_evidence or authority_without_bbox or trace_promoted or missing_fields) else "incomplete",
+        "status": "complete"
+        if not (
+            authority_without_evidence
+            or authority_without_bbox
+            or trace_promoted
+            or missing_fields
+            or any(row.get("citation_final") is True for row in graph_edges)
+        )
+        else "incomplete",
         "graph_edge_count": len(graph_edges),
         "article_relation_count": len(article_amendment_relations),
         "article_relation_graph_ref_count": len(article_relation_refs),
@@ -1435,8 +1493,11 @@ def _legal_graph_authority_health(
         "authority_without_evidence_count": len(authority_without_evidence),
         "authority_without_bbox_count": len(authority_without_bbox),
         "trace_promoted_count": len(trace_promoted),
+        "graph_final_citation_edge_count": sum(1 for row in graph_edges if row.get("citation_final") is True),
+        "invalid_finality_policy_count": sum(1 for row in graph_edges if row.get("graph_finality_policy") == "final_legal_citation"),
         "missing_authority_field_count": len(missing_fields),
         "authority_level_counts": dict(sorted(Counter(row.get("edge_authority_level") for row in graph_edges).items())),
+        "finality_policy_counts": dict(sorted(Counter(row.get("graph_finality_policy") for row in graph_edges).items())),
         "relation_support_counts": dict(sorted(Counter(row.get("relation_support") for row in graph_edges).items())),
     }
 
@@ -2564,6 +2625,15 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
         "nonlegal_excluded_position",
         "blocked_no_word_level_bbox",
     }
+    allowed_field_bbox_feasibility = {
+        "exact_safe",
+        "line_level_only",
+        "sentence_extends_beyond_field",
+        "page_level_only",
+        "requires_word_level_bbox",
+        "blocked_by_layout",
+        "blocked_by_text_boundary",
+    }
     counts = {
         "page_text_span_count": len(page_text_spans),
         "bbox_registry_row_count": len(bbox_rows),
@@ -2581,9 +2651,20 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
             f"{policy}_count": sum(1 for row in absent_rows if row.get("exposure_policy") == policy)
             for policy in sorted(allowed_exposure_policies)
         },
+        **{
+            f"{feasibility}_feasibility_count": sum(1 for row in absent_rows if row.get("field_bbox_feasibility") == feasibility)
+            for feasibility in sorted(allowed_field_bbox_feasibility)
+        },
         "missing_bucket_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_bucket") not in allowed_buckets),
         "missing_reason_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") not in allowed_reasons),
         "missing_exposure_policy_count": sum(1 for row in absent_rows if row.get("exposure_policy") not in allowed_exposure_policies),
+        "missing_exposure_target_count": sum(1 for row in absent_rows if not row.get("exposure_target_kind") or not row.get("exposure_target_ref")),
+        "missing_field_bbox_feasibility_count": sum(
+            1 for row in absent_rows if row.get("field_bbox_feasibility") not in allowed_field_bbox_feasibility
+        ),
+        "clickable_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_clickable") is not False),
+        "final_citation_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_citation_final") is not False),
+        "false_exact_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_exactness_level") == "exact_bbox"),
         "false_highlight_exposure_policy_count": sum(
             1
             for row in absent_rows
@@ -2605,6 +2686,11 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
                 "missing_bucket_count",
                 "missing_reason_count",
                 "missing_exposure_policy_count",
+                "missing_exposure_target_count",
+                "missing_field_bbox_feasibility_count",
+                "clickable_absent_span_count",
+                "final_citation_absent_span_count",
+                "false_exact_absent_span_count",
                 "false_highlight_exposure_policy_count",
                 "invalid_present_status_count",
             )

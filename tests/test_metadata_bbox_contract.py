@@ -127,6 +127,11 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(feasibility["metadata_publication_block_requires_page_level_support_count"], 4)
         self.assertEqual(feasibility["missing_feasibility_count"], 0)
         self.assertEqual(feasibility["missing_final_reason_count"], 0)
+        self.assertEqual(feasibility["missing_field_bbox_feasibility_count"], 0)
+        self.assertEqual(
+            feasibility["field_bbox_feasibility_counts"],
+            {"blocked_by_layout": 7, "page_level_only": 4, "sentence_extends_beyond_field": 2},
+        )
         for filename in ("metadata_grounding.jsonl", "metadata_grounding_registry.jsonl"):
             for row in read_jsonl(FINAL / filename):
                 if row["bbox_precision"] == "exact":
@@ -162,6 +167,7 @@ class MetadataBBoxContractTest(unittest.TestCase):
                 "matched_span_ids",
                 "matched_page_numbers",
                 "matched_text_excerpt",
+                "field_bbox_feasibility",
                 "metadata_exact_promotion_feasibility",
                 "blocker_evidence",
                 "can_be_exact_citation",
@@ -177,6 +183,18 @@ class MetadataBBoxContractTest(unittest.TestCase):
             self.assertFalse(row["can_be_exact_citation"], row["decision_id"])
             self.assertFalse(row["can_be_exact_highlight"], row["decision_id"])
             if row["record_type"] == "metadata_grounding":
+                self.assertIn(
+                    row["field_bbox_feasibility"],
+                    {
+                        "exact_safe",
+                        "line_level_only",
+                        "sentence_extends_beyond_field",
+                        "page_level_only",
+                        "requires_word_level_bbox",
+                        "blocked_by_layout",
+                        "blocked_by_text_boundary",
+                    },
+                )
                 self.assertIn(
                     row["metadata_exact_promotion_feasibility"],
                     {

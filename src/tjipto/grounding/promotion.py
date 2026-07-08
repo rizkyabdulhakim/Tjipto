@@ -119,6 +119,12 @@ def _record_decision(
         "matched_page_numbers": page_numbers,
         "matched_span_ids": matched_span_ids,
         "matched_text_excerpt": matched_excerpt,
+        "field_bbox_feasibility": _field_bbox_feasibility(
+            reason=reason,
+            exact_bbox=exact_bbox,
+            can_be_exact=can_be_exact,
+            span_match_status=span_match_status,
+        ),
         "metadata_exact_promotion_feasibility": metadata_feasibility,
         "page_number": min(page_numbers) if page_numbers else None,
         "policy_reason": reason,
@@ -246,6 +252,20 @@ def _metadata_promotion_feasibility(
     if not exact_bbox:
         return "blocked_by_no_exact_bbox"
     return "blocked_by_layout"
+
+
+def _field_bbox_feasibility(*, reason: str, exact_bbox: bool, can_be_exact: bool, span_match_status: str) -> str:
+    if can_be_exact or exact_bbox:
+        return "exact_safe"
+    if reason == "metadata_publication_block_requires_page_level_support":
+        return "page_level_only"
+    if reason == "metadata_decision_sentence_continues_beyond_field":
+        return "sentence_extends_beyond_field" if span_match_status == "subspan_inside_larger_span" else "blocked_by_layout"
+    if span_match_status == "page_level_text_match_only":
+        return "blocked_by_text_boundary"
+    if reason == "instrument_trace_only_not_public_citation":
+        return "requires_word_level_bbox"
+    return "requires_word_level_bbox"
 
 
 def _excerpt(text: str | None) -> str:
