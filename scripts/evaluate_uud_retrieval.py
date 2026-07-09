@@ -60,6 +60,7 @@ def _evaluate(case: dict[str, Any]) -> dict[str, Any]:
             "status": response.get("status"),
             "route": response.get("route"),
             "intent": response.get("intent"),
+            "requested_function": response.get("requested_function"),
             "support_type": _support_type(response),
             "citation_evidence_ids": _ids(response.get("citations", ()), "evidence_id"),
             "citation_legal_unit_ids": _ids(response.get("citations", ()), "legal_unit_id"),
@@ -73,6 +74,7 @@ def _validate(case: dict[str, Any], response: dict[str, Any]) -> list[str]:
     _expect_equal(errors, "status", case.get("expected_status"), response.get("status"))
     _expect_equal(errors, "route", case.get("expected_route"), response.get("route"))
     _expect_equal(errors, "intent", case.get("expected_intent"), response.get("intent"))
+    _expect_equal(errors, "requested_function", case.get("expected_requested_function"), response.get("requested_function"))
     _expect_equal(errors, "support_type", case.get("expected_support_type"), _support_type(response))
     citations = tuple(response.get("citations", ()))
     metadata = tuple(response.get("metadata_support", ()))
@@ -95,9 +97,7 @@ def _validate(case: dict[str, Any], response: dict[str, Any]) -> list[str]:
             errors.append(f"forbidden_legal_unit_returned:{legal_unit_id}")
     if metadata and (citations or response.get("viewer_refs")):
         metadata_citations = [
-            row
-            for row in citations
-            if row.get("authority_kind") == "metadata_source" and row.get("citation_final") is False
+            row for row in citations if row.get("authority_kind") == "metadata_source" and row.get("citation_final") is False
         ]
         if len(metadata_citations) != len(citations) or (
             response.get("viewer_refs") and len(tuple(response.get("viewer_refs", ()))) != len(metadata_citations)

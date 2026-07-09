@@ -576,8 +576,12 @@ class RuntimeContractTest(unittest.TestCase):
 
         for query in (
             "perubahan keempat menghapus pasal 16?",
+            "perubahan keempat mencabut pasal 16?",
             "penghapusan Pasal 16 oleh perubahan keempat",
+            "pasal 16 dicabut perubahan keempat?",
+            "pencabutan pasal 16 oleh perubahan keempat",
             "pasal 16 dihapus oleh amandemen keempat?",
+            "penghapusan pasal 16",
         ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "answer_ready", query)
@@ -718,9 +722,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertIn("source_conflict_not_final_legal_authority", result["warnings"], case["query"])
             if result["citations"]:
                 expected_kind = (
-                    "source_anomaly"
-                    if case["source_anomaly_kind"] == "source_marker_sequence_anomaly"
-                    else "source_conflict_provenance"
+                    "source_anomaly" if case["source_anomaly_kind"] == "source_marker_sequence_anomaly" else "source_conflict_provenance"
                 )
                 self.assertEqual(result["citations"][0]["authority_kind"], expected_kind, case["query"])
                 self.assertFalse(result["citations"][0]["citation_final"], case["query"])
@@ -849,7 +851,16 @@ class RuntimeContractTest(unittest.TestCase):
             "apa sanksi tindak pidana berat?",
             "hukuman bagi koruptor",
             "denda korupsi",
+            "denda korupsi presiden",
+            "sanksi presiden korupsi",
+            "apa pidana untuk tindak pidana berat presiden?",
+            "apa sanksi untuk tindak pidana berat presiden?",
+            "hukuman korupsi presiden",
             "ancaman hukuman korupsi",
+            "ancaman pidana korupsi presiden",
+            "apa sanksi korupsi menurut pasal 7A?",
+            "korupsi dalam pasal 7A hukuman apa",
+            "penjara korupsi menurut pasal 7A",
             "pidana mati korupsi",
             "pemberantasan korupsi",
         ):

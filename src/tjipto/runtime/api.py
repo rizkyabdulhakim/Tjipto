@@ -78,7 +78,7 @@ def _public_search(result: dict) -> dict:
 
 
 def _public_ask(result: dict) -> dict:
-    return {
+    public = {
         "status": result.get("status"),
         "answer": result.get("answer"),
         "intent": result.get("intent"),
@@ -94,6 +94,10 @@ def _public_ask(result: dict) -> dict:
         "warnings": tuple(result.get("warnings", ())),
         "insufficient_reasons": tuple(_public_reason(row) or row for row in result.get("insufficient_reasons", ())),
     }
+    for key in ("requested_function", "target_reference", "legal_domain"):
+        if result.get(key) is not None:
+            public[key] = result[key]
+    return public
 
 
 def _public_citation_response(result: dict) -> dict:

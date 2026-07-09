@@ -112,46 +112,51 @@
       "out_of_corpus_terms": [
         "harga",
         "tanah",
-        "jakarta",
-        "hukuman pidana",
-        "sanksi pidana",
-        "ancaman pidana"
+        "jakarta"
       ],
-      "out_of_corpus_intents": [
-        {
-          "name": "general_criminal_law",
-          "topic_terms": [
-            "korupsi",
-            "koruptor",
-            "penyuapan",
-            "suap",
-            "gratifikasi",
-            "tindak pidana berat"
-          ],
-          "scope_terms": [
-            "pidana",
-            "tindak pidana",
-            "hukuman",
-            "sanksi",
-            "ancaman",
-            "denda",
-            "penjara",
-            "pidana mati",
-            "pemberantasan"
-          ],
-          "valid_context_terms": [
-            "pasal 7a",
-            "presiden",
-            "wakil presiden",
-            "diberhentikan",
-            "pemberhentian",
-            "impeachment",
-            "pengkhianatan",
-            "perbuatan tercela",
-            "tidak lagi memenuhi syarat"
-          ]
-        }
-      ]
+      "legal_intent_policy": {
+        "unsupported_functions": [
+          {
+            "requested_function": "criminal_punishment",
+            "legal_domain": "criminal_law",
+            "rejection_reason": "unsupported_legal_function",
+            "topic_terms": [
+              "korupsi",
+              "koruptor",
+              "penyuapan",
+              "suap",
+              "gratifikasi",
+              "tindak pidana berat"
+            ],
+            "strict_function_terms": [
+              "hukuman",
+              "sanksi",
+              "ancaman",
+              "ancaman pidana",
+              "denda",
+              "penjara",
+              "pidana mati",
+              "pemberantasan"
+            ],
+            "ambiguous_function_terms": [
+              "pidana",
+              "tindak pidana"
+            ],
+            "answerable_context_terms": [
+              "pasal 7a",
+              "diberhentikan",
+              "pemberhentian",
+              "impeachment",
+              "pengkhianatan",
+              "alasan",
+              "maksud",
+              "menyebut",
+              "perbuatan tercela",
+              "tidak lagi memenuhi syarat"
+            ]
+          }
+        ]
+      }
     },
     "schema": {
       "document_roles": [
@@ -759,12 +764,40 @@
         "amendment_4_historical": "Keempat"
       },
       "document_relation": {
+        "relation_families": {
+          "DELETE_OR_REMOVE_PROVISION": {
+            "terms": [
+              "menghapus",
+              "dihapus",
+              "penghapusan",
+              "hapus",
+              "mencabut",
+              "dicabut",
+              "pencabutan",
+              "repeal",
+              "remove",
+              "delete"
+            ],
+            "relation_types": [
+              "DELETES"
+            ]
+          },
+          "MODIFY_PROVISION": {
+            "terms": [
+              "mengubah",
+              "diubah",
+              "dirubah",
+              "amends",
+              "amended"
+            ],
+            "relation_types": [
+              "MODIFIES",
+              "DELETES"
+            ]
+          }
+        },
         "change_terms": [
           "mengubah",
-          "menghapus",
-          "penghapusan",
-          "dihapus",
-          "hapus",
           "diubah",
           "dirubah",
           "amends",

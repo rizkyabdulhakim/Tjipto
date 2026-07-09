@@ -1,0 +1,82 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
+from tjipto.corpora.parser_dispatch import parse_legal_reference
+
+
+@dataclass(frozen=True)
+class LegalIntent:
+    requested_function: str = "unknown"
+    target_reference: str | None = None
+    relation_type: str | None = None
+    legal_domain: str | None = None
+    answerability: str = "unknown"
+    rejection_reason: str | None = None
+    route: str | None = None
+    intent: str | None = None
+
+
+def classify_legal_intent(store, query: str) -> LegalIntent:
+    guard = store.config.setting("scope_guard", {}) or {}
+    current = contains_intent_phrase(query, tuple(guard.get("current_fact_terms") or ()))
+    subject = contains_intent_phrase(query, tuple(guard.get("current_fact_subjects") or ()))
+    identity = contains_intent_phrase(query, tuple(guard.get("identity_question_terms") or ()))
+    legal_scope = contains_intent_phrase(query, tuple(guard.get("legal_scope_terms") or ()))
+    if subject and (current or (identity and not legal_scope)):
+        return LegalIntent(
+            "current_fact",
+            answerability="unsupported",
+            rejection_reason="current_fact_unsupported",
+            route="current_fact_unsupported",
+            intent="current_fact_query",
+        )
+    if contains_intent_phrase(query, tuple(guard.get("out_of_corpus_terms") or ())):
+        return LegalIntent(
+            "out_of_corpus_domain",
+            answerability="unsupported",
+            rejection_reason="unsupported_scope",
+            route="unsupported_scope",
+            intent="out_of_corpus",
+        )
+    for row in (guard.get("legal_intent_policy", {}) or {}).get("unsupported_functions", ()):
+        topic = contains_intent_phrase(query, tuple(row.get("topic_terms") or ()))
+        strict = contains_intent_phrase(query, tuple(row.get("strict_function_terms") or ()))
+        ambiguous = contains_intent_phrase(query, tuple(row.get("ambiguous_function_terms") or ()))
+        answerable = contains_intent_phrase(query, tuple(row.get("answerable_context_terms") or ()))
+        if topic and (strict or (ambiguous and not answerable)):
+            return LegalIntent(
+                str(row.get("requested_function") or "out_of_corpus_domain"),
+                _target_reference(store, query),
+                legal_domain=row.get("legal_domain"),
+                answerability="unsupported",
+                rejection_reason=str(row.get("rejection_reason") or "unsupported_scope"),
+                route="unsupported_scope",
+                intent="out_of_corpus",
+            )
+    return LegalIntent()
+
+
+def classify_relation_intent(store, query: str) -> LegalIntent:
+    if store is None:
+        return LegalIntent()
+    intent = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
+    relation_config = intent.get("document_relation", {})
+    for name, row in (relation_config.get("relation_families") or {}).items():
+        if contains_intent_phrase(query, tuple(row.get("terms") or ())):
+            return LegalIntent(
+                "amendment_relation",
+                _target_reference(store, query),
+                relation_type=str(name),
+                legal_domain="constitutional_amendment",
+                answerability="answerable",
+            )
+    return LegalIntent()
+
+
+def _target_reference(store, query: str) -> str | None:
+    ref = parse_legal_reference(getattr(store.config, "corpus_id", ""), query)
+    pasal = ref.get("pasal")
+    ayat = ref.get("ayat")
+    return f"{pasal} ayat {ayat}" if pasal and ayat else pasal

@@ -34,10 +34,15 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
         self.assertIn("relasi", configured["relation_words"])
         self.assertTrue(configured["structured_lookup_enabled"])
         scope_guard = config.setting("scope_guard", {}) or {}
-        criminal_policy = next(row for row in scope_guard["out_of_corpus_intents"] if row["name"] == "general_criminal_law")
+        criminal_policy = next(
+            row for row in scope_guard["legal_intent_policy"]["unsupported_functions"] if row["requested_function"] == "criminal_punishment"
+        )
         self.assertIn("korupsi", criminal_policy["topic_terms"])
-        self.assertIn("pidana", criminal_policy["scope_terms"])
-        self.assertIn("pasal 7a", criminal_policy["valid_context_terms"])
+        self.assertIn("pidana", criminal_policy["ambiguous_function_terms"])
+        self.assertIn("pasal 7a", criminal_policy["answerable_context_terms"])
+        self.assertNotIn("presiden", criminal_policy["answerable_context_terms"])
+        relation_families = configured["document_relation"]["relation_families"]
+        self.assertIn("dicabut", relation_families["DELETE_OR_REMOVE_PROVISION"]["terms"])
         for case in _intent_cases():
             if case["kind"] == "metadata":
                 self.assertEqual(

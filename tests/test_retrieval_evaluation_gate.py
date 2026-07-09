@@ -31,21 +31,27 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
             "expected_evidence_ids",
             "forbidden_legal_unit_ids",
             "forbidden_evidence_ids",
+            "risk_family",
             "notes",
         }
         rows = [json.loads(line) for line in CASES.read_text(encoding="utf-8").splitlines() if line.strip()]
-        self.assertGreaterEqual(len(rows), 29)
+        self.assertGreaterEqual(len(rows), 40)
         self.assertEqual(len({row["id"] for row in rows}), len(rows))
         for row in rows:
             self.assertLessEqual(required, set(row), row["id"])
         ids = {row["id"] for row in rows}
-        self.assertIn("criminal_punishment_hukuman_korupsi", ids)
-        self.assertIn("criminal_law_tindak_pidana_korupsi", ids)
-        self.assertIn("criminal_law_sanksi_tindak_pidana_berat", ids)
-        self.assertIn("pasal_7a_corruption_context", ids)
-        self.assertIn("pasal_7a_tindak_pidana_berat_context", ids)
-        self.assertIn("article_relation_exact_pasal_16_delete_menghapus", ids)
-        self.assertIn("president_three_terms_digit", ids)
+        families = {row["risk_family"] for row in rows}
+        self.assertIn("criminal_law_out_of_corpus", families)
+        self.assertIn("explicit_article_wrong_function", families)
+        self.assertIn("pasal_7a_removal_ground_positive", families)
+        self.assertIn("deletion_relation_synonyms", families)
+        self.assertIn("relation_vs_exact_article_arbitration", families)
+        self.assertIn("metadata_non_final", families)
+        self.assertIn("source_anomaly_non_final", families)
+        self.assertIn("current_fact_unsupported", families)
+        self.assertIn("trace_only_non_citable", families)
+        self.assertIn("criminal_law_sanksi_korupsi_pasal_7a", ids)
+        self.assertIn("article_relation_exact_pasal_16_delete_no_source", ids)
 
     def test_runner_reports_no_known_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -54,7 +60,8 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
                 result = runner.main(["--report", str(report)])
             self.assertEqual(result, 0)
             data = json.loads(report.read_text(encoding="utf-8"))
-        self.assertEqual(data["counts"]["pass"], 29)
+        expected = len([line for line in CASES.read_text(encoding="utf-8").splitlines() if line.strip()])
+        self.assertEqual(data["counts"]["pass"], expected)
         self.assertEqual(data["counts"]["fail"], 0)
         self.assertEqual(data["counts"]["known_gap"], 0)
 

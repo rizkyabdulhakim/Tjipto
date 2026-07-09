@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+from pathlib import Path
+import unittest
+
+from tjipto.runtime.intent import classify_legal_intent, classify_relation_intent
+from tjipto.runtime.service import LegalRuntimeService
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class RuntimeIntentArbitrationContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.service = LegalRuntimeService(ROOT)
+        cls.store = cls.service._store("uud")
+        assert cls.store is not None
+
+    def test_criminal_punishment_function_blocks_article_citation(self) -> None:
+        for query in (
+            "denda korupsi presiden",
+            "apa sanksi korupsi menurut pasal 7A?",
+            "korupsi dalam pasal 7A hukuman apa",
+        ):
+            intent = classify_legal_intent(self.store, query)
+            self.assertEqual(intent.requested_function, "criminal_punishment", query)
+            self.assertEqual(intent.answerability, "unsupported", query)
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "insufficient_evidence", query)
+            self.assertEqual(result["route"], "unsupported_scope", query)
+            self.assertFalse(result["citations"], query)
+            self.assertFalse(result["viewer_refs"], query)
+
+    def test_pasal_7a_removal_ground_context_is_not_blocked(self) -> None:
+        for query in (
+            "korupsi dalam Pasal 7A maksudnya apa?",
+            "tindak pidana berat dalam Pasal 7A maksudnya apa?",
+            "alasan Presiden dapat diberhentikan menurut Pasal 7A",
+        ):
+            self.assertNotEqual(classify_legal_intent(self.store, query).answerability, "unsupported", query)
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "answer_ready", query)
+            self.assertEqual(result["route"], "legal_reference", query)
+
+    def test_delete_relation_family_outranks_exact_article_reference(self) -> None:
+        for query in (
+            "perubahan keempat mencabut pasal 16?",
+            "pasal 16 dicabut perubahan keempat?",
+            "pencabutan pasal 16 oleh perubahan keempat",
+            "penghapusan pasal 16",
+        ):
+            intent = classify_relation_intent(self.store, query)
+            self.assertEqual(intent.requested_function, "amendment_relation", query)
+            self.assertEqual(intent.relation_type, "DELETE_OR_REMOVE_PROVISION", query)
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["route"], "document_relation", query)
+            self.assertNotEqual(result["intent"], "exact_citation", query)
+
+
+if __name__ == "__main__":
+    unittest.main()

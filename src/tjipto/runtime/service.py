@@ -12,6 +12,7 @@ from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters
 from tjipto.retrieval.router import route_retrieval
+from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
 
@@ -782,6 +783,8 @@ def _metadata_grounding_evidence(store, metadata_grounding_id: str | None) -> di
 
 
 def _document_relation_response(store, corpus_id: str, query: str) -> dict | None:
+    if store is None:
+        return None
     target = _document_relation_target(store, query)
     if target["mode"] is None:
         return None
@@ -952,14 +955,21 @@ def _document_relation_target(store, query: str) -> dict:
     normalized = normalize_intent_text(query)
     if not normalized:
         return {"mode": None}
-    relation_signal = contains_intent_phrase(query, relation_config.get("change_terms", ()))
+    relation_intent = classify_relation_intent(store, query)
+    relation_family = (relation_config.get("relation_families") or {}).get(relation_intent.relation_type, {})
+    relation_types = tuple(relation_family.get("relation_types") or ())
+    relation_signal = bool(relation_family) or contains_intent_phrase(query, relation_config.get("change_terms", ()))
     add_signal = contains_intent_phrase(query, relation_config.get("add_terms", ()))
     amendment_role = next((role for role, pattern in intent.get("metadata_roles", ()) if pattern.search(query or "")), None)
     amendment_signal = amendment_role in set(getattr(config, "source_roles", ()) or ()) or contains_intent_phrase(
         query, relation_config.get("source_terms", ())
     )
     target_original = contains_intent_phrase(query, relation_config.get("target_document_terms", ()))
-    if not (relation_signal or add_signal) or not amendment_signal:
+    article_detail = contains_intent_phrase(query, relation_config.get("article_detail_terms", ()))
+    source_less_delete = relation_intent.relation_type == "DELETE_OR_REMOVE_PROVISION" and article_detail
+    if relation_intent.relation_type == "DELETE_OR_REMOVE_PROVISION" and not article_detail:
+        return {"mode": None}
+    if not (relation_signal or add_signal) or (not amendment_signal and not source_less_delete):
         return {"mode": None}
     target_citation = _article_relation_target_citation(getattr(config, "corpus_id", None), query)
     if add_signal:
@@ -971,11 +981,11 @@ def _document_relation_target(store, query: str) -> dict:
         }
     if contains_intent_phrase(query, relation_config.get("unsupported_detail_terms", ())):
         return {"mode": "unsupported"}
-    if contains_intent_phrase(query, relation_config.get("article_detail_terms", ())):
+    if article_detail:
         return {
             "mode": "article",
             "role": amendment_role,
-            "relation_types": ("MODIFIES", "DELETES"),
+            "relation_types": relation_types or ("MODIFIES", "DELETES"),
             "target_citation": target_citation,
         }
     if amendment_role and amendment_role.startswith("amendment_"):
