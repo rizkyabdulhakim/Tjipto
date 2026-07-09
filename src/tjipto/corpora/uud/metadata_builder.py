@@ -36,6 +36,12 @@ GROUNDING_FIELD_ORDER = (
     "source_publication",
 )
 
+# Indonesian legal office labels parsed from source PDFs; these are not credentials.
+CHAIR_TOKEN = "Ketua,"  # nosec B105
+VICE_CHAIR_TOKEN = "Wakil"  # nosec B105
+CHAIR_ROLE = "Ketua"  # nosec B105
+VICE_CHAIR_ROLE = "Wakil Ketua"  # nosec B105
+
 
 def build_document_metadata(source_documents: dict[str, dict], metadata_grounding: list[dict]) -> list[dict]:
     block_by_role = {row["source_role"]: row for row in metadata_grounding}
@@ -228,7 +234,9 @@ def rebuild_metadata_grounding(
         block_row = row | {
             "bbox_ids": exact_bbox_refs,
             "bbox_precision": "exact" if exact_bbox_refs and text_span_ids else "page_grounded_only",
-            "grounding_status": "text_bbox_exact" if exact_bbox_refs and text_span_ids else row.get("grounding_status") or "block_level_grounded",
+            "grounding_status": "text_bbox_exact"
+            if exact_bbox_refs and text_span_ids
+            else row.get("grounding_status") or "block_level_grounded",
             "text_span_ids": text_span_ids,
             "failure_reason": None
             if exact_bbox_refs and text_span_ids
@@ -846,13 +854,17 @@ def _signatories(text: str) -> list[dict]:
     while index < len(parts):
         token = parts[index]
         spaced_chair = parts[index : index + 5] == ["K", "e", "t", "u", "a,"]
-        marker = token == "Ketua," or spaced_chair or (token == "Wakil" and index + 1 < len(parts) and parts[index + 1] == "Ketua,")  # nosec B105
+        marker = (
+            token == CHAIR_TOKEN
+            or spaced_chair
+            or (token == VICE_CHAIR_TOKEN and index + 1 < len(parts) and parts[index + 1] == CHAIR_TOKEN)
+        )
         if marker:
             if role and name_parts:
                 rows.append({"name_text": " ".join(name_parts), "role_text": role})
-            role = "Wakil Ketua" if token == "Wakil" else "Ketua"  # nosec B105
+            role = VICE_CHAIR_ROLE if token == VICE_CHAIR_TOKEN else CHAIR_ROLE
             name_parts = []
-            index += 2 if token == "Wakil" else 5 if spaced_chair else 1  # nosec B105
+            index += 2 if token == VICE_CHAIR_TOKEN else 5 if spaced_chair else 1
             continue
         if role:
             name_parts.append(token)

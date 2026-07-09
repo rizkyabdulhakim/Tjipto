@@ -6,13 +6,25 @@ build-backend = "setuptools.build_meta"
 name = "tjipto-legal-evidence-engine"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+  "PyMuPDF>=1.27.2,<1.28",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [project.optional-dependencies]
-test = ["PyMuPDF"]
+test = [
+  "pytest>=9.1,<10",
+]
+static = [
+  "mypy>=1.19,<2",
+  "ruff>=0.8,<1",
+]
+security = [
+  "bandit>=1.9,<2",
+  "pip-audit>=2.10,<3",
+]
 
 [tool.pytest.ini_options]
 markers = [
@@ -42,11 +54,15 @@ python_version = "3.11"
 files = [
   "src/tjipto/core/manifest.py",
   "src/tjipto/corpora/reproducibility.py",
+  "src/tjipto/evidence/store.py",
+  "src/tjipto/ingestion/pdf/health.py",
+  "src/tjipto/ingestion/pdf/words.py",
   "src/tjipto/ingestion/pdf/source_documents.py",
   "src/tjipto/runtime/api.py",
   "src/tjipto/runtime/scope_guard.py",
   "src/tjipto/runtime/viewer.py",
 ]
+check_untyped_defs = true
 explicit_package_bases = true
 ignore_missing_imports = true
 namespace_packages = true

@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Sidebar, TjiptoLogo } from "./components/tjipto/Sidebar";
 import { EmptyState } from "./components/tjipto/EmptyState";
 import { ChatView } from "./components/tjipto/ChatView";
-import { EvidencePanel } from "./components/tjipto/EvidencePanel";
 import { SearchRoute, LibraryRoute } from "./components/tjipto/SecondaryRoutes";
 import type { Citation, ChatMessage as TMessage } from "./lib/types";
 import { conversation } from "./components/tjipto/data";
@@ -11,6 +10,10 @@ import { answerTextOrFallback, askLegal, mapAskResponseToCitations, mapAskRespon
 import { Menu, SquarePen } from "lucide-react";
 
 type Route = "chat" | "search" | "library";
+
+const EvidencePanel = lazy(() =>
+  import("./components/tjipto/EvidencePanel").then((module) => ({ default: module.EvidencePanel })),
+);
 
 
 export default function App() {
@@ -257,12 +260,14 @@ export default function App() {
           </div>
         </main>
 
-        <EvidencePanel
-          citation={activeCitation}
-          allCitations={panelCitations}
-          onClose={() => setActiveCitation(null)}
-          onSelect={setActiveCitation}
-        />
+        <Suspense fallback={null}>
+          <EvidencePanel
+            citation={activeCitation}
+            allCitations={panelCitations}
+            onClose={() => setActiveCitation(null)}
+            onSelect={setActiveCitation}
+          />
+        </Suspense>
       </div>
     </div>
   );
