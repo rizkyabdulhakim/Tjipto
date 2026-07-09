@@ -101,7 +101,7 @@ def _public_ask(result: dict) -> dict:
 
 
 def _public_citation_response(result: dict) -> dict:
-    return {
+    public = {
         "status": result.get("status"),
         "public_status": result.get("public_status", result.get("status")),
         "answer_type": result.get("answer_type"),
@@ -111,6 +111,10 @@ def _public_citation_response(result: dict) -> dict:
         "viewer_refs": tuple(_public_viewer_ref(row) for row in result.get("viewer_refs", ())),
         "validation_reasons": result.get("validation_reasons", {}),
     }
+    for key in ("requested_function", "target_reference", "legal_domain"):
+        if result.get(key) is not None:
+            public[key] = result[key]
+    return public
 
 
 def _public_viewer(result: dict) -> dict:

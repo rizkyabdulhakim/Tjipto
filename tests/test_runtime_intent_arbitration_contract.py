@@ -20,7 +20,14 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
     def test_criminal_punishment_function_blocks_article_citation(self) -> None:
         for query in (
             "denda korupsi presiden",
+            "apa pidana korupsi menurut Pasal 7A",
+            "pidana korupsi presiden menurut Pasal 7A",
             "apa sanksi korupsi menurut pasal 7A?",
+            "Pasal 7A mengatur sanksi apa",
+            "Pasal 7A pidana korupsi",
+            "Pasal 7A menjatuhkan hukuman apa",
+            "ancaman pidana menurut Pasal 7A",
+            "hukuman korupsi Presiden menurut Pasal 7A",
             "korupsi dalam pasal 7A hukuman apa",
         ):
             intent = classify_legal_intent(self.store, query)
@@ -31,6 +38,9 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
             self.assertEqual(result["route"], "unsupported_scope", query)
             self.assertFalse(result["citations"], query)
             self.assertFalse(result["viewer_refs"], query)
+            citation = self.service.citation("uud", query)
+            self.assertEqual(citation["status"], "citation_not_found", query)
+            self.assertFalse(citation["citation_payloads"], query)
 
     def test_pasal_7a_removal_ground_context_is_not_blocked(self) -> None:
         for query in (

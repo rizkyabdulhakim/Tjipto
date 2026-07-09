@@ -38,9 +38,11 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
             row for row in scope_guard["legal_intent_policy"]["unsupported_functions"] if row["requested_function"] == "criminal_punishment"
         )
         self.assertIn("korupsi", criminal_policy["topic_terms"])
-        self.assertIn("pidana", criminal_policy["ambiguous_function_terms"])
-        self.assertIn("pasal 7a", criminal_policy["answerable_context_terms"])
-        self.assertNotIn("presiden", criminal_policy["answerable_context_terms"])
+        self.assertIn("pidana", criminal_policy["ambiguous_criminal_terms"])
+        self.assertIn("sanksi", criminal_policy["unsupported_function_terms"])
+        self.assertIn("pasal 7a", criminal_policy["target_reference_terms"])
+        self.assertNotIn("pasal 7a", criminal_policy["supported_function_terms"])
+        self.assertNotIn("presiden", criminal_policy["supported_function_terms"])
         relation_families = configured["document_relation"]["relation_families"]
         self.assertIn("dicabut", relation_families["DELETE_OR_REMOVE_PROVISION"]["terms"])
         for case in _intent_cases():

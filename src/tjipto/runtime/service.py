@@ -73,6 +73,20 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return route_retrieval(corpus_id, query, None) | _empty_citation_fields()
+        scope = scope_guard_context(store, query)
+        if scope:
+            return {
+                "status": "citation_not_found",
+                "public_status": "insufficient_evidence",
+                "route": scope["route"],
+                "intent": scope["intent"],
+                "matches": (),
+                "reason": scope["reason"],
+                "requested_function": scope.get("requested_function"),
+                "target_reference": scope.get("target_reference"),
+                "legal_domain": scope.get("legal_domain"),
+                **_empty_citation_fields(),
+            }
         metadata_filters = dict(filters or {})
         if source_role is not None:
             metadata_filters["source_role"] = source_role
@@ -430,7 +444,9 @@ class LegalRuntimeService:
         metadata_support = tuple(_metadata_support(store, row) for row in evidence if row.get("metadata_field"))
         if metadata_support:
             exact_metadata = tuple(
-                row for row in context_pack["citation_payloads"] if row.get("metadata_field") and row.get("viewer_ref", {}).get("can_resolve") is True
+                row
+                for row in context_pack["citation_payloads"]
+                if row.get("metadata_field") and row.get("viewer_ref", {}).get("can_resolve") is True
             )
             citations = tuple(_citation_with_authority(store, row) for row in exact_metadata)
             viewer_refs = tuple(row["viewer_ref"] | _authority_policy(store, row, can_resolve=True) for row in exact_metadata)
@@ -1434,32 +1450,32 @@ def _source_conflict_support(store, conflict: dict) -> dict:
         "viewer_refs": viewer_refs,
         "trace_support": trace_support,
         "answer_scope": answer_scope,
-        "warnings": (
-            ("source_conflict_not_final_legal_authority",)
-            if evidence or synthetic_support is not None or trace_support
-            else ()
-        ),
+        "warnings": (("source_conflict_not_final_legal_authority",) if evidence or synthetic_support is not None or trace_support else ()),
     }
 
 
 def _source_conflict_trace_support(store, conflict: dict, validation_reasons: dict) -> dict:
     first_reason = next(iter(validation_reasons.values()), None)
     authority = _authority_policy(store, conflict, can_resolve=False, conflict=conflict)
-    return {
-        "support_class": authority.get("support_kind") or "source_conflict_trace",
-        "source_conflict_id": conflict.get("source_conflict_id"),
-        "type": conflict.get("type"),
-        "classification": conflict.get("classification"),
-        "source_document_id": conflict.get("source_document_id"),
-        "page_numbers": tuple(conflict.get("page_numbers") or conflict.get("affected_pages") or ()),
-        "text_span_ids": tuple(conflict.get("text_span_ids") or ()),
-        "evidence_ids": tuple(conflict.get("evidence_ids") or ()),
-        "bbox_ids": tuple(conflict.get("bbox_ids") or ()),
-        "citation_available": False,
-        "viewer_highlightable": False,
-        "viewer_ref": None,
-        "failure_reason": conflict.get("failure_reason") or first_reason or "source_conflict_trace_only",
-    } | _source_conflict_contract_fields(conflict) | authority
+    return (
+        {
+            "support_class": authority.get("support_kind") or "source_conflict_trace",
+            "source_conflict_id": conflict.get("source_conflict_id"),
+            "type": conflict.get("type"),
+            "classification": conflict.get("classification"),
+            "source_document_id": conflict.get("source_document_id"),
+            "page_numbers": tuple(conflict.get("page_numbers") or conflict.get("affected_pages") or ()),
+            "text_span_ids": tuple(conflict.get("text_span_ids") or ()),
+            "evidence_ids": tuple(conflict.get("evidence_ids") or ()),
+            "bbox_ids": tuple(conflict.get("bbox_ids") or ()),
+            "citation_available": False,
+            "viewer_highlightable": False,
+            "viewer_ref": None,
+            "failure_reason": conflict.get("failure_reason") or first_reason or "source_conflict_trace_only",
+        }
+        | _source_conflict_contract_fields(conflict)
+        | authority
+    )
 
 
 def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenance: bool, trace_only: bool) -> str:
@@ -1469,7 +1485,8 @@ def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenanc
     classification = conflict.get("classification") or "source_conflict_recorded"
     summary = str(conflict.get("provenance_summary") or classification).strip()
     authority_policy = str(
-        conflict.get("final_authority_policy") or "Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final."
+        conflict.get("final_authority_policy")
+        or "Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final."
     ).strip()
     role_label = _source_conflict_role_label(store, conflict)
     reviewer_suffix = _source_conflict_reviewer_suffix(decision.get("reviewer_decision"))

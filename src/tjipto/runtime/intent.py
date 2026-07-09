@@ -42,10 +42,11 @@ def classify_legal_intent(store, query: str) -> LegalIntent:
         )
     for row in (guard.get("legal_intent_policy", {}) or {}).get("unsupported_functions", ()):
         topic = contains_intent_phrase(query, tuple(row.get("topic_terms") or ()))
-        strict = contains_intent_phrase(query, tuple(row.get("strict_function_terms") or ()))
-        ambiguous = contains_intent_phrase(query, tuple(row.get("ambiguous_function_terms") or ()))
-        answerable = contains_intent_phrase(query, tuple(row.get("answerable_context_terms") or ()))
-        if topic and (strict or (ambiguous and not answerable)):
+        unsupported = contains_intent_phrase(query, tuple(row.get("unsupported_function_terms") or ()))
+        ambiguous = contains_intent_phrase(query, tuple(row.get("ambiguous_criminal_terms") or ()))
+        supported = contains_intent_phrase(query, tuple(row.get("supported_function_terms") or ()))
+        target = contains_intent_phrase(query, tuple(row.get("target_reference_terms") or ()))
+        if unsupported and (topic or target) or (topic and ambiguous and not supported):
             return LegalIntent(
                 str(row.get("requested_function") or "out_of_corpus_domain"),
                 _target_reference(store, query),

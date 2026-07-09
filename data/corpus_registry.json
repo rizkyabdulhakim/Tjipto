@@ -128,31 +128,36 @@
               "gratifikasi",
               "tindak pidana berat"
             ],
-            "strict_function_terms": [
+            "unsupported_function_terms": [
               "hukuman",
               "sanksi",
               "ancaman",
               "ancaman pidana",
+              "pidana untuk",
               "denda",
               "penjara",
+              "menjatuhkan hukuman",
               "pidana mati",
               "pemberantasan"
             ],
-            "ambiguous_function_terms": [
+            "ambiguous_criminal_terms": [
               "pidana",
               "tindak pidana"
             ],
-            "answerable_context_terms": [
-              "pasal 7a",
+            "supported_function_terms": [
               "diberhentikan",
               "pemberhentian",
               "impeachment",
               "pengkhianatan",
               "alasan",
               "maksud",
+              "maksudnya",
               "menyebut",
               "perbuatan tercela",
               "tidak lagi memenuhi syarat"
+            ],
+            "target_reference_terms": [
+              "pasal 7a"
             ]
           }
         ]
