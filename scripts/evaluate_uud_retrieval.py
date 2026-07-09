@@ -63,6 +63,7 @@ def _evaluate(case: dict[str, Any]) -> dict[str, Any]:
             "support_type": _support_type(response),
             "citation_evidence_ids": _ids(response.get("citations", ()), "evidence_id"),
             "citation_legal_unit_ids": _ids(response.get("citations", ()), "legal_unit_id"),
+            "final_citation_count": _final_citation_count(response),
         },
     }
 
@@ -110,6 +111,8 @@ def _validate(case: dict[str, Any], response: dict[str, Any]) -> list[str]:
         citations or response.get("viewer_refs") or metadata or trace or documents
     ):
         errors.append("insufficient_evidence_has_public_support")
+    if "expected_final_citation_count" in case:
+        _expect_equal(errors, "final_citation_count", case["expected_final_citation_count"], _final_citation_count(response))
     return errors
 
 
@@ -134,6 +137,10 @@ def _expect_equal(errors: list[str], field: str, expected: Any, actual: Any) -> 
 
 def _ids(rows: Any, key: str) -> tuple[str, ...]:
     return tuple(str(row[key]) for row in rows if isinstance(row, dict) and row.get(key))
+
+
+def _final_citation_count(response: dict[str, Any]) -> int:
+    return sum(1 for row in response.get("citations", ()) if isinstance(row, dict) and row.get("citation_final") is True)
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

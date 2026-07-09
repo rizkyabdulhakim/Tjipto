@@ -34,11 +34,15 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
             "notes",
         }
         rows = [json.loads(line) for line in CASES.read_text(encoding="utf-8").splitlines() if line.strip()]
-        self.assertGreaterEqual(len(rows), 10)
+        self.assertGreaterEqual(len(rows), 20)
         self.assertEqual(len({row["id"] for row in rows}), len(rows))
         for row in rows:
             self.assertLessEqual(required, set(row), row["id"])
-        self.assertTrue(any(row["id"] == "unsafe_three_period_word" and row["case_status"] == "accepted" for row in rows))
+        ids = {row["id"] for row in rows}
+        self.assertIn("criminal_punishment_hukuman_korupsi", ids)
+        self.assertIn("pasal_7a_corruption_context", ids)
+        self.assertIn("article_relation_exact_pasal_16_delete_menghapus", ids)
+        self.assertIn("president_three_terms_digit", ids)
 
     def test_runner_reports_no_known_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -47,7 +51,7 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
                 result = runner.main(["--report", str(report)])
             self.assertEqual(result, 0)
             data = json.loads(report.read_text(encoding="utf-8"))
-        self.assertEqual(data["counts"]["pass"], 10)
+        self.assertEqual(data["counts"]["pass"], 20)
         self.assertEqual(data["counts"]["fail"], 0)
         self.assertEqual(data["counts"]["known_gap"], 0)
 

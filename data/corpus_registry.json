@@ -21,7 +21,8 @@
         "berhak": "hak",
         "bekerja": "kerja",
         "menjabat": "jabatan",
-        "pekerjaan": "kerja"
+        "pekerjaan": "kerja",
+        "periode": "jabatan"
       }
     },
     "normalization_aliases": [
@@ -111,7 +112,10 @@
       "out_of_corpus_terms": [
         "harga",
         "tanah",
-        "jakarta"
+        "jakarta",
+        "hukuman pidana",
+        "sanksi pidana",
+        "ancaman pidana"
       ]
     },
     "schema": {
@@ -722,6 +726,10 @@
       "document_relation": {
         "change_terms": [
           "mengubah",
+          "menghapus",
+          "penghapusan",
+          "dihapus",
+          "hapus",
           "diubah",
           "dirubah",
           "amends",

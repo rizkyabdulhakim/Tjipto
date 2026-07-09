@@ -571,6 +571,23 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(complete["viewer_refs"])
         self.assertFalse(complete["trace_support"])
         self.assertTrue(all(row["can_resolve"] for row in complete["viewer_refs"]))
+        self.assertFalse(complete["citations"][0]["citation_final"])
+        self.assertEqual(complete["citations"][0]["authority_kind"], "instrument_provenance")
+
+        for query in (
+            "perubahan keempat menghapus pasal 16?",
+            "penghapusan Pasal 16 oleh perubahan keempat",
+            "pasal 16 dihapus oleh amandemen keempat?",
+        ):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "answer_ready", query)
+            self.assertEqual(result["route"], "document_relation", query)
+            self.assertEqual(result["answer_scope"], "exact_article_relation", query)
+            self.assertEqual({row["relation_type"] for row in result["article_amendment_relations"]}, {"DELETES"}, query)
+            self.assertEqual({row["target_citation"] for row in result["article_amendment_relations"]}, {"Pasal 16"}, query)
+            self.assertTrue(result["citations"], query)
+            self.assertEqual(result["citations"][0]["authority_kind"], "instrument_provenance", query)
+            self.assertFalse(result["citations"][0]["citation_final"], query)
 
         for query in ("perubahan keempat menambahkan apa", "perubahan keempat menambahkan lembaga apa"):
             result = self.service.ask("uud", query)
@@ -821,6 +838,43 @@ class RuntimeContractTest(unittest.TestCase):
             reasons = set(result["context_pack"]["validation_reasons"].values())
             if result["route"] == "lexical_fallback":
                 self.assertIn("insufficient_query_support", reasons, case["query"])
+
+    def test_criminal_punishment_queries_are_out_of_scope(self) -> None:
+        for query in (
+            "apa hukuman pidana korupsi?",
+            "sanksi pidana korupsi",
+            "ancaman pidana korupsi menurut UUD",
+        ):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "insufficient_evidence", query)
+            self.assertEqual(result["route"], "unsupported_scope", query)
+            self.assertFalse(result["citations"], query)
+            self.assertFalse(result["viewer_refs"], query)
+
+    def test_pasal_7a_corruption_context_remains_answerable(self) -> None:
+        for query in (
+            "korupsi dalam Pasal 7A maksudnya apa?",
+            "alasan Presiden dapat diberhentikan menurut Pasal 7A",
+            "apakah Pasal 7A menyebut korupsi?",
+        ):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "answer_ready", query)
+            self.assertEqual(result["route"], "legal_reference", query)
+            self.assertTrue(result["citations"], query)
+            self.assertTrue(result["citations"][0]["citation_final"], query)
+            self.assertEqual(result["citations"][0]["evidence_id"], "uud_current_consolidated_final_citation_evidence_00264", query)
+
+    def test_president_three_terms_numeric_word_variants_are_consistent(self) -> None:
+        for query in (
+            "bolehkah presiden menjabat tiga periode",
+            "boleh presiden 3 periode?",
+            "presiden boleh tiga periode?",
+        ):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "limited_answer", query)
+            self.assertEqual(result["route"], "lexical_fallback", query)
+            self.assertTrue(result["citations"], query)
+            self.assertEqual(result["citations"][0]["evidence_id"], "uud_current_consolidated_final_citation_evidence_00263", query)
 
     def test_retrieval_router_envelope_routes(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
