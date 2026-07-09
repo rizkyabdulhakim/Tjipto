@@ -33,6 +33,11 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
         self.assertIn("penetapan", configured["metadata_fields"])
         self.assertIn("relasi", configured["relation_words"])
         self.assertTrue(configured["structured_lookup_enabled"])
+        scope_guard = config.setting("scope_guard", {}) or {}
+        criminal_policy = next(row for row in scope_guard["out_of_corpus_intents"] if row["name"] == "general_criminal_law")
+        self.assertIn("korupsi", criminal_policy["topic_terms"])
+        self.assertIn("pidana", criminal_policy["scope_terms"])
+        self.assertIn("pasal 7a", criminal_policy["valid_context_terms"])
         for case in _intent_cases():
             if case["kind"] == "metadata":
                 self.assertEqual(

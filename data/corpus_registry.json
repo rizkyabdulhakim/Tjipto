@@ -116,6 +116,41 @@
         "hukuman pidana",
         "sanksi pidana",
         "ancaman pidana"
+      ],
+      "out_of_corpus_intents": [
+        {
+          "name": "general_criminal_law",
+          "topic_terms": [
+            "korupsi",
+            "koruptor",
+            "penyuapan",
+            "suap",
+            "gratifikasi",
+            "tindak pidana berat"
+          ],
+          "scope_terms": [
+            "pidana",
+            "tindak pidana",
+            "hukuman",
+            "sanksi",
+            "ancaman",
+            "denda",
+            "penjara",
+            "pidana mati",
+            "pemberantasan"
+          ],
+          "valid_context_terms": [
+            "pasal 7a",
+            "presiden",
+            "wakil presiden",
+            "diberhentikan",
+            "pemberhentian",
+            "impeachment",
+            "pengkhianatan",
+            "perbuatan tercela",
+            "tidak lagi memenuhi syarat"
+          ]
+        }
       ]
     },
     "schema": {

@@ -844,6 +844,14 @@ class RuntimeContractTest(unittest.TestCase):
             "apa hukuman pidana korupsi?",
             "sanksi pidana korupsi",
             "ancaman pidana korupsi menurut UUD",
+            "pidana korupsi",
+            "tindak pidana korupsi",
+            "apa sanksi tindak pidana berat?",
+            "hukuman bagi koruptor",
+            "denda korupsi",
+            "ancaman hukuman korupsi",
+            "pidana mati korupsi",
+            "pemberantasan korupsi",
         ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "insufficient_evidence", query)
@@ -856,6 +864,7 @@ class RuntimeContractTest(unittest.TestCase):
             "korupsi dalam Pasal 7A maksudnya apa?",
             "alasan Presiden dapat diberhentikan menurut Pasal 7A",
             "apakah Pasal 7A menyebut korupsi?",
+            "tindak pidana berat dalam Pasal 7A maksudnya apa?",
         ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "answer_ready", query)

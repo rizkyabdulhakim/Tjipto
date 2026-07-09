@@ -34,13 +34,16 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
             "notes",
         }
         rows = [json.loads(line) for line in CASES.read_text(encoding="utf-8").splitlines() if line.strip()]
-        self.assertGreaterEqual(len(rows), 20)
+        self.assertGreaterEqual(len(rows), 29)
         self.assertEqual(len({row["id"] for row in rows}), len(rows))
         for row in rows:
             self.assertLessEqual(required, set(row), row["id"])
         ids = {row["id"] for row in rows}
         self.assertIn("criminal_punishment_hukuman_korupsi", ids)
+        self.assertIn("criminal_law_tindak_pidana_korupsi", ids)
+        self.assertIn("criminal_law_sanksi_tindak_pidana_berat", ids)
         self.assertIn("pasal_7a_corruption_context", ids)
+        self.assertIn("pasal_7a_tindak_pidana_berat_context", ids)
         self.assertIn("article_relation_exact_pasal_16_delete_menghapus", ids)
         self.assertIn("president_three_terms_digit", ids)
 
@@ -51,7 +54,7 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
                 result = runner.main(["--report", str(report)])
             self.assertEqual(result, 0)
             data = json.loads(report.read_text(encoding="utf-8"))
-        self.assertEqual(data["counts"]["pass"], 20)
+        self.assertEqual(data["counts"]["pass"], 29)
         self.assertEqual(data["counts"]["fail"], 0)
         self.assertEqual(data["counts"]["known_gap"], 0)
 
