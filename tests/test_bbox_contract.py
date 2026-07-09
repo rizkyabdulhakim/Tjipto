@@ -140,6 +140,13 @@ class BBoxContractTest(unittest.TestCase):
         self.assertEqual(report["status"], "complete")
         self.assertEqual(report["architecture"], "bbox_registry_union_word_bboxes")
         self.assertEqual(report["official_viewer_highlight_ref_sources"], ["bbox_registry", "word_bboxes"])
+        self.assertEqual(report["bbox_registry_layer"], "materialized_final_and_provenance_bboxes")
+        self.assertEqual(report["word_bbox_layer"], "word_bbox_exact_highlight")
+        self.assertEqual(report["viewer_highlightable_union"], "bbox_registry_union_word_bboxes")
+        self.assertEqual(report["bbox_key_absent_span_count"], 634)
+        self.assertEqual(report["exact_safe_word_highlight_count"], 178)
+        self.assertEqual(report["non_citable_absent_span_count"], 456)
+        self.assertEqual(report["false_highlight_count"], 0)
 
 
 if __name__ == "__main__":

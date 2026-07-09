@@ -37,6 +37,7 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
                 self.assertIn(text.casefold(), result["answer"].casefold(), query)
             for text in case.get("answer_not_contains", ()):
                 self.assertNotIn(text.casefold(), result["answer"].casefold(), query)
+            self.assertNotIn("catatan konflik sumber", result["answer"].casefold(), query)
             self.assertEqual(bool(result["citations"]), case["has_citations"], query)
             self.assertEqual(bool(result["viewer_refs"]), case["has_viewer_refs"], query)
             self.assertEqual(len(result.get("trace_support", ())), case["trace_support_count"], query)
@@ -50,6 +51,10 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertFalse(result["trace_support"])
         citation = result["citations"][0]
         self.assertEqual(citation["authority_kind"], "source_anomaly")
+        self.assertEqual(citation["support_kind"], "source_anomaly_provenance")
+        self.assertEqual(citation["finality_policy"], "source_anomaly_provenance")
+        self.assertEqual(citation["source_anomaly_kind"], "source_marker_sequence_anomaly")
+        self.assertEqual(citation["provenance_highlight_scope"], "all_relevant_spans")
         self.assertFalse(citation["citation_final"])
         self.assertEqual(citation["evidence_id"], "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict")
         self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "exact_raw_provenance_bbox_available")
@@ -75,6 +80,10 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
             conflict["raw_provenance_bbox_ids"],
         )
         self.assertEqual(result["viewer_refs"][0]["bbox_count"], len(conflict["raw_provenance_bbox_ids"]))
+        self.assertEqual(result["viewer_refs"][0]["authority_kind"], "source_anomaly")
+        self.assertEqual(result["viewer_refs"][0]["support_kind"], "source_anomaly_provenance")
+        self.assertEqual(result["viewer_refs"][0]["source_anomaly_kind"], "source_marker_sequence_anomaly")
+        self.assertEqual(result["viewer_refs"][0]["provenance_highlight_scope"], "all_relevant_spans")
 
     def test_exact_source_conflict_provenance_can_resolve_existing_viewer_policy(self) -> None:
         result = self.service.ask("uud", "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?")
@@ -88,13 +97,23 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["source_conflict"]["source_anomaly_kind"], "renumbering_provenance")
         self.assertEqual(result["source_conflict"]["source_mapping_kind"], "historical_to_canonical_mapping")
         self.assertEqual(result["citations"][0]["authority_kind"], "source_conflict_provenance")
+        self.assertEqual(result["citations"][0]["support_kind"], "source_anomaly_provenance")
+        self.assertEqual(result["citations"][0]["finality_policy"], "source_anomaly_provenance")
+        self.assertEqual(result["citations"][0]["source_anomaly_kind"], "renumbering_provenance")
+        self.assertEqual(result["citations"][0]["source_mapping_kind"], "historical_to_canonical_mapping")
         self.assertFalse(result["citations"][0]["citation_final"])
         self.assertTrue(all(row["can_resolve"] for row in result["viewer_refs"]))
+        self.assertEqual(result["viewer_refs"][0]["source_anomaly_kind"], "renumbering_provenance")
+        self.assertEqual(result["viewer_refs"][0]["source_mapping_kind"], "historical_to_canonical_mapping")
+        self.assertEqual(result["viewer_refs"][0]["provenance_highlight_scope"], "all_relevant_spans")
         viewer = self.service.viewer("uud", result["citations"][0]["evidence_id"])
         self.assertEqual(viewer["authority_kind"], "source_conflict_provenance")
         self.assertFalse(viewer["citation_final"])
         self.assertNotIn("Reviewer decision: .", result["answer"])
         self.assertNotIn("masih berlaku", result["answer"])
+        self.assertNotIn("konflik norma", result["answer"].casefold())
+        self.assertIn("renumbering provenance", result["answer"].casefold())
+        self.assertIn("historical_to_canonical_mapping", result["answer"])
 
     def test_runtime_source_anomaly_presenter_does_not_hardcode_uud_specific_phrases(self) -> None:
         source = (ROOT / "src/tjipto/runtime/service.py").read_text(encoding="utf-8")

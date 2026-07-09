@@ -169,10 +169,11 @@ def build_validation_report(
         source_conflicts,
     )
     validation_report["source_conflict_provenance_health"] = _source_conflict_provenance_health(source_conflicts)
-    validation_report["viewer_provenance_coverage_health"] = _viewer_provenance_coverage_health(
+    viewer_provenance_coverage_health = _viewer_provenance_coverage_health(
         page_text_spans=page_text_spans,
         bbox_rows=bbox_rows,
     )
+    validation_report["viewer_provenance_coverage_health"] = viewer_provenance_coverage_health
     validation_report["all_text_disposition_health"] = _all_text_disposition_health(
         page_text_spans,
         legal_units,
@@ -274,6 +275,13 @@ def build_validation_report(
         "bbox_registry_rows": len(bbox_rows),
         "word_bbox_rows": len(word_bboxes),
         "official_viewer_highlight_ref_sources": ["bbox_registry", "word_bboxes"],
+        "bbox_registry_layer": "materialized_final_and_provenance_bboxes",
+        "word_bbox_layer": "word_bbox_exact_highlight",
+        "viewer_highlightable_union": "bbox_registry_union_word_bboxes",
+        "bbox_key_absent_span_count": viewer_provenance_coverage_health["bbox_key_absent_span_count"],
+        "exact_safe_word_highlight_count": viewer_provenance_coverage_health["exact_word_bbox_available_count"],
+        "non_citable_absent_span_count": viewer_provenance_coverage_health["page_level_only_feasibility_count"],
+        "false_highlight_count": viewer_provenance_coverage_health["false_highlight_exposure_policy_count"],
     }
     validation_report["span_sequence_grounding_health"] = _span_sequence_grounding_health(
         metadata_grounding=metadata_grounding,
@@ -771,7 +779,10 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             "affected_span_refs",
             "provenance_rules",
             "highlight_policy",
+            "provenance_highlight_scope",
             "finality_policy",
+            "public_wording_template",
+            "reviewer_status",
             "corpus_id",
         }
         if required_policy_fields - set(policy):

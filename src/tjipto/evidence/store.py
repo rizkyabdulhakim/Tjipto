@@ -129,11 +129,11 @@ class EvidenceStore:
                 span_matches = [bbox_by_id[bbox_id] for bbox_id in span.get("word_bbox_ids") or () if bbox_id in bbox_by_id]
             for bbox in span_matches:
                 bbox_id = str(bbox.get("bbox_id") or "")
-                bbox = bbox_by_id.get(bbox_id)
-                if not bbox or bbox_id in seen:
+                resolved_bbox = bbox_by_id.get(bbox_id)
+                if not resolved_bbox or bbox_id in seen:
                     continue
                 seen.add(bbox_id)
-                rows.append(bbox)
+                rows.append(resolved_bbox)
         return rows
 
     def _bbox_rows_all(self) -> list[dict]:

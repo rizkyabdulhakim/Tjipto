@@ -428,7 +428,14 @@
     "official_viewer_highlight_ref_sources": [
       "bbox_registry",
       "word_bboxes"
-    ]
+    ],
+    "bbox_registry_layer": "materialized_final_and_provenance_bboxes",
+    "word_bbox_layer": "word_bbox_exact_highlight",
+    "viewer_highlightable_union": "bbox_registry_union_word_bboxes",
+    "bbox_key_absent_span_count": 634,
+    "exact_safe_word_highlight_count": 178,
+    "non_citable_absent_span_count": 456,
+    "false_highlight_count": 0
   },
   "span_sequence_grounding_health": {
     "fixable_page_grounded_metadata_count": 0,

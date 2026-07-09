@@ -432,7 +432,7 @@ class LegalRuntimeService:
                 row for row in context_pack["citation_payloads"] if row.get("metadata_field") and row.get("viewer_ref", {}).get("can_resolve") is True
             )
             citations = tuple(_citation_with_authority(store, row) for row in exact_metadata)
-            viewer_refs = tuple(row["viewer_ref"] for row in exact_metadata)
+            viewer_refs = tuple(row["viewer_ref"] | _authority_policy(store, row, can_resolve=True) for row in exact_metadata)
         else:
             citations = tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"])
             viewer_refs = context_pack["viewer_refs"]
@@ -477,7 +477,7 @@ def _answer_templates(store) -> dict[str, str]:
 
 def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> dict:
     authority_kind = _authority_kind(store, row, can_resolve=can_resolve, conflict=conflict)
-    return {
+    payload = {
         "authority_kind": authority_kind,
         "authority_label": {
             "legal_citation": "Sitasi hukum",
@@ -488,7 +488,40 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
             "instrument_provenance": "Instrument provenance",
         }[authority_kind],
         "citation_final": authority_kind == "legal_citation",
+        "support_kind": _support_kind_for_authority(authority_kind),
     }
+    conflict_row = conflict or _source_conflict_by_evidence(store, row.get("evidence_id"))
+    if conflict_row is not None or row.get("source_conflict_id"):
+        payload |= _source_conflict_taxonomy_fields(conflict_row or row)
+    return payload
+
+
+def _support_kind_for_authority(authority_kind: str) -> str:
+    return {
+        "legal_citation": "legal_citation",
+        "metadata_source": "metadata_source",
+        "metadata_trace": "metadata_trace",
+        "source_conflict_provenance": "source_anomaly_provenance",
+        "source_anomaly": "source_anomaly_provenance",
+        "instrument_provenance": "instrument_provenance",
+    }[authority_kind]
+
+
+def _source_conflict_taxonomy_fields(conflict: dict | None) -> dict:
+    if not conflict:
+        return {}
+    policy = conflict.get("source_anomaly_policy") or {}
+    fields = {
+        "source_anomaly_kind": conflict.get("source_anomaly_kind") or policy.get("anomaly_kind"),
+        "source_mapping_kind": conflict.get("source_mapping_kind") or policy.get("mapping_kind"),
+        "provenance_highlight_scope": conflict.get("provenance_highlight_scope") or policy.get("provenance_highlight_scope"),
+        "finality_policy": policy.get("finality_policy"),
+        "support_type": conflict.get("type"),
+    }
+    fields = {key: value for key, value in fields.items() if value is not None}
+    if fields.get("finality_policy"):
+        fields["support_kind"] = fields["finality_policy"]
+    return fields
 
 
 def _authority_kind(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> str:
@@ -709,6 +742,8 @@ def _metadata_fact(row: dict) -> dict:
 
 def _metadata_support(store, row: dict) -> dict:
     can_resolve = row.get("viewer_ref", {}).get("can_resolve") is True
+    authority = _authority_policy(store, row, can_resolve=can_resolve)
+    viewer_ref = ((row.get("viewer_ref") or {}) | authority) if can_resolve else None
     return {
         "support_class": "exact_metadata_citation" if can_resolve else "metadata_trace",
         "field": row.get("metadata_field"),
@@ -719,8 +754,8 @@ def _metadata_support(store, row: dict) -> dict:
         "page_numbers": tuple(row.get("page_numbers") or ()),
         "citation_available": can_resolve,
         "viewer_highlightable": can_resolve,
-        "viewer_ref": row.get("viewer_ref") if can_resolve else None,
-    } | _authority_policy(store, row, can_resolve=can_resolve)
+        "viewer_ref": viewer_ref,
+    } | authority
 
 
 def _metadata_grounding_evidence(store, metadata_grounding_id: str | None) -> dict | None:
@@ -1358,15 +1393,35 @@ def _source_conflict_support(store, conflict: dict) -> dict:
     else:
         trace_support = (_source_conflict_trace_support(store, conflict, context_pack["validation_reasons"]),)
         answer_scope = "source_conflict_trace" if trace_support else "insufficient_evidence"
-    return {
-        "context_pack": synthetic_support["context_pack"] if synthetic_support is not None else context_pack,
-        "evidence": synthetic_support["evidence"] if synthetic_support is not None else evidence,
-        "citations": tuple(_citation_with_authority(store, row, conflict=conflict) for row in context_pack["citation_payloads"])
+    viewer_refs = (
+        tuple(
+            ref | _authority_policy(store, evidence[0], can_resolve=ref.get("can_resolve") is True, conflict=conflict)
+            for ref in context_pack["viewer_refs"]
+        )
+        if evidence
+        else synthetic_support["viewer_refs"]
+        if synthetic_support is not None
+        else ()
+    )
+    citations = (
+        tuple(_citation_with_authority(store, row, conflict=conflict) for row in context_pack["citation_payloads"])
         if evidence
         else synthetic_support["citations"]
         if synthetic_support is not None
-        else (),
-        "viewer_refs": context_pack["viewer_refs"] if evidence else synthetic_support["viewer_refs"] if synthetic_support is not None else (),
+        else ()
+    )
+    public_context_pack = (
+        context_pack | {"citation_payloads": citations, "viewer_refs": viewer_refs}
+        if evidence
+        else synthetic_support["context_pack"]
+        if synthetic_support is not None
+        else context_pack
+    )
+    return {
+        "context_pack": public_context_pack,
+        "evidence": synthetic_support["evidence"] if synthetic_support is not None else evidence,
+        "citations": citations,
+        "viewer_refs": viewer_refs,
         "trace_support": trace_support,
         "answer_scope": answer_scope,
         "warnings": (
@@ -1379,8 +1434,9 @@ def _source_conflict_support(store, conflict: dict) -> dict:
 
 def _source_conflict_trace_support(store, conflict: dict, validation_reasons: dict) -> dict:
     first_reason = next(iter(validation_reasons.values()), None)
+    authority = _authority_policy(store, conflict, can_resolve=False, conflict=conflict)
     return {
-        "support_class": "source_conflict_trace",
+        "support_class": authority.get("support_kind") or "source_conflict_trace",
         "source_conflict_id": conflict.get("source_conflict_id"),
         "type": conflict.get("type"),
         "classification": conflict.get("classification"),
@@ -1393,7 +1449,7 @@ def _source_conflict_trace_support(store, conflict: dict, validation_reasons: di
         "viewer_highlightable": False,
         "viewer_ref": None,
         "failure_reason": conflict.get("failure_reason") or first_reason or "source_conflict_trace_only",
-    } | _source_conflict_contract_fields(conflict) | _authority_policy(store, conflict, can_resolve=False, conflict=conflict)
+    } | _source_conflict_contract_fields(conflict) | authority
 
 
 def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenance: bool, trace_only: bool) -> str:
@@ -1407,17 +1463,25 @@ def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenanc
     ).strip()
     role_label = _source_conflict_role_label(store, conflict)
     reviewer_suffix = _source_conflict_reviewer_suffix(decision.get("reviewer_decision"))
+    policy = conflict.get("source_anomaly_policy") or {}
     if exact_provenance:
         provenance_note = _source_conflict_provenance_note(conflict)
-        return (
-            f"Catatan konflik sumber pada {role_label} mencatat {summary}. "
-            f"{authority_policy} {provenance_note}{reviewer_suffix}"
+        return _source_anomaly_policy_answer(
+            policy,
+            role_label=role_label,
+            summary=summary,
+            authority_policy=authority_policy,
+            provenance_note=provenance_note,
+            reviewer_suffix=reviewer_suffix,
         )
     if trace_only:
-        return (
-            f"Catatan konflik sumber pada {role_label} mencatat {summary}. "
-            f"{authority_policy} Jejak sumber tersedia, tetapi belum memenuhi syarat sitasi atau highlight exact."
-            f"{reviewer_suffix}"
+        return _source_anomaly_policy_answer(
+            policy,
+            role_label=role_label,
+            summary=summary,
+            authority_policy=authority_policy,
+            provenance_note="Jejak sumber tersedia, tetapi belum memenuhi syarat sitasi atau highlight exact.",
+            reviewer_suffix=reviewer_suffix,
         )
     values = {
         "classification": classification,
@@ -1429,6 +1493,31 @@ def _source_anomaly_answer(store, conflict: dict, query: str, *, exact_provenanc
         if (terms and any(term in folded for term in terms)) or (types and conflict.get("type") in types):
             return str(rule.get("template") or "").format_map(values)
     return str(intent.get("default_answer_template") or "").format_map(values)
+
+
+def _source_anomaly_policy_answer(
+    policy: dict,
+    *,
+    role_label: str,
+    summary: str,
+    authority_policy: str,
+    provenance_note: str,
+    reviewer_suffix: str,
+) -> str:
+    values = {
+        "anomaly_kind": policy.get("anomaly_kind") or "source_anomaly_provenance",
+        "mapping_kind": policy.get("mapping_kind") or "source_anomaly_provenance",
+        "role_label": role_label,
+        "summary": summary,
+        "authority_policy": authority_policy,
+        "provenance_note": provenance_note,
+        "reviewer_suffix": reviewer_suffix,
+    }
+    template = str(
+        policy.get("public_wording_template")
+        or "Catatan provenance sumber ({anomaly_kind}) pada {role_label}: {summary}. {authority_policy} {provenance_note}{reviewer_suffix}"
+    )
+    return template.format_map(values)
 
 
 def _source_conflict_role_label(store, conflict: dict) -> str:
@@ -1494,7 +1583,7 @@ def _synthetic_source_conflict_support(store, conflict: dict) -> dict | None:
         "page_numbers": evidence["page_numbers"],
         "bbox_count": len(bboxes),
         "can_resolve": True,
-    }
+    } | _authority_policy(store, evidence, can_resolve=True, conflict=conflict)
     citation = evidence | {
         "label": conflict.get("classification"),
         "document_title": _document_title(store, _source_document_meta(store, conflict.get("source_document_id"))),

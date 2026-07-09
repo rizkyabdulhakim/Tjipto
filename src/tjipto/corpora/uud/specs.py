@@ -350,7 +350,13 @@ SOURCE_CONFLICT_SPECS = (
             "affected_span_refs": "text_span_ids",
             "provenance_rules": "reviewed_source_marker_sequence_trace_only",
             "highlight_policy": "anchor_span_only_until_exact_all_span_bbox",
+            "provenance_highlight_scope": "all_relevant_spans",
             "finality_policy": "source_anomaly_provenance",
+            "public_wording_template": (
+                "Catatan source marker sequence anomaly pada {role_label}: {summary}. "
+                "{authority_policy} {provenance_note}{reviewer_suffix}"
+            ),
+            "reviewer_status": "reviewed",
             "corpus_id": "uud",
         },
         "source_anomaly_kind": "source_marker_sequence_anomaly",
@@ -385,7 +391,13 @@ SOURCE_CONFLICT_SPECS = (
             "affected_span_refs": "text_span_ids",
             "provenance_rules": "reviewed_historical_to_canonical_mapping_trace",
             "highlight_policy": "all_relevant_spans_when_exact_bbox_available",
+            "provenance_highlight_scope": "all_relevant_spans",
             "finality_policy": "source_anomaly_provenance",
+            "public_wording_template": (
+                "Catatan renumbering provenance ({mapping_kind}) pada {role_label}: {summary}. "
+                "{authority_policy} {provenance_note}{reviewer_suffix}"
+            ),
+            "reviewer_status": "reviewed",
             "corpus_id": "uud",
         },
         "source_anomaly_kind": "renumbering_provenance",

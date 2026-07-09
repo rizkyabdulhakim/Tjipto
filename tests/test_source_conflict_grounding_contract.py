@@ -29,6 +29,13 @@ class SourceConflictGroundingContractTest(unittest.TestCase):
             self.assertTrue(row["query_anchor_terms"])
             self.assertTrue(row["provenance_summary"])
             self.assertTrue(row["final_authority_policy"])
+            policy = row["source_anomaly_policy"]
+            self.assertEqual(policy["corpus_id"], "uud")
+            self.assertEqual(policy["anomaly_kind"], row["source_anomaly_kind"])
+            self.assertEqual(policy["finality_policy"], "source_anomaly_provenance")
+            self.assertEqual(policy["provenance_highlight_scope"], row["provenance_highlight_scope"])
+            self.assertEqual(policy["reviewer_status"], "reviewed")
+            self.assertIn("{summary}", policy["public_wording_template"])
             self.assertEqual(row["grounding_status"], "text_span_exact")
             self.assertEqual(row["validation_status"], "accepted_source_conflict_record")
             self.assertTrue(set(row["text_span_ids"]) <= text_span_ids)
