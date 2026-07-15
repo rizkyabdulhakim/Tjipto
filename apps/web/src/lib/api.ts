@@ -148,6 +148,13 @@ export interface ViewerPayload {
   bbox_rectangles?: (PdfBBox & {
     bbox_precision?: "exact" | "coarse" | "page_grounded_only";
     viewer_highlightable?: boolean;
+    coordinate_space?: string;
+    coordinate_origin?: string;
+    page_width?: number;
+    page_height?: number;
+    page_rotation?: number;
+    page_box_basis?: string;
+    transform_version?: string;
   })[];
   pdf_access_available?: boolean;
   rendering_available?: boolean;

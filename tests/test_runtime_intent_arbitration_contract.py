@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
+from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.intent import classify_legal_intent, classify_relation_intent
 from tjipto.runtime.service import LegalRuntimeService
 
@@ -11,6 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RuntimeIntentArbitrationContractTest(unittest.TestCase):
+    service: LegalRuntimeService
+    store: EvidenceStore
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.service = LegalRuntimeService(ROOT)
@@ -66,6 +70,21 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
             result = self.service.ask("uud", query)
             self.assertEqual(result["route"], "document_relation", query)
             self.assertNotEqual(result["intent"], "exact_citation", query)
+
+    def test_deterministic_routing_precedence_preserves_valid_recall(self) -> None:
+        exact = self.service.ask("uud", "Pasal 33 ayat (3) tentang tanah")
+        self.assertEqual((exact["status"], exact["route"]), ("answer_ready", "legal_reference"))
+        self.assertTrue(exact["citations"])
+
+        metadata = self.service.ask("uud", "Jakarta dan tanggal Perubahan Pertama")
+        self.assertEqual((metadata["status"], metadata["route"]), ("answer_ready", "metadata_fact"))
+        self.assertEqual(metadata["metadata_facts"][0]["answer"], "19 Oktober 1999")
+
+        navigation = self.service.ask("uud", "pasal berikutnya setelah Pasal 7")
+        self.assertEqual(
+            (navigation["status"], navigation["route"], navigation["citations"][0]["citation"]),
+            ("answer_ready", "structural_navigation", "Pasal 7A"),
+        )
 
 
 if __name__ == "__main__":

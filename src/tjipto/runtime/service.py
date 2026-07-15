@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import re
+import threading
 from uuid import uuid4
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
@@ -18,6 +19,7 @@ from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_
 
 
 _BOOKMARKS: dict[str, dict] = {}
+_BOOKMARK_LOCK = threading.RLock()
 
 _ANSWER_TEMPLATES = {
     "insufficient": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
@@ -227,9 +229,12 @@ class LegalRuntimeService:
         }
 
     def bookmarks(self, corpus_id: str) -> dict:
-        if self._store(corpus_id) is None:
+        store = self._store(corpus_id)
+        if store is None:
             return {"status": "unsupported_corpus", "corpus_id": corpus_id, "bookmarks": ()}
-        bookmarks = tuple(self._bookmark_status(row) for row in _BOOKMARKS.values() if row["corpus_id"] == corpus_id)
+        with _BOOKMARK_LOCK:
+            snapshot = tuple(row.copy() for row in _BOOKMARKS.values() if row["corpus_id"] == corpus_id)
+        bookmarks = tuple(sorted((self._bookmark_status(row, store) for row in snapshot), key=lambda row: row["bookmark_id"]))
         return {
             "status": "ok",
             "corpus_id": corpus_id,
@@ -263,11 +268,12 @@ class LegalRuntimeService:
             "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             "status": "active",
         }
-        _BOOKMARKS[bookmark["bookmark_id"]] = bookmark
+        with _BOOKMARK_LOCK:
+            _BOOKMARKS[bookmark["bookmark_id"]] = bookmark
         return {"status": "saved", "bookmark": bookmark}
 
-    def _bookmark_status(self, bookmark: dict) -> dict:
-        store = self._store(bookmark["corpus_id"])
+    def _bookmark_status(self, bookmark: dict, store=None) -> dict:
+        store = store or self._store(bookmark["corpus_id"])
         evidence = store.get(bookmark["evidence_id"]) if store else None
         status = "active" if evidence and evidence.get("status") == "final" else "unavailable"
         return bookmark | {"status": status}
@@ -730,6 +736,7 @@ def _ask_route(route: str) -> str:
     return {
         "exact": "legal_reference",
         "structured": "legal_reference",
+        "structural_navigation": "structural_navigation",
         "metadata": "metadata_fact",
         "metadata_not_found": "metadata_fact",
         "relation": "legal_relation",

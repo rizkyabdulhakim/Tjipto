@@ -28,6 +28,7 @@ def build_graph_artifacts(
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     source_by_id = {row["source_document_id"]: row for row in source_documents}
     metadata_by_key = {(row.get("source_role"), row.get("metadata_field")): row for row in metadata_grounding}
+    evidenced_pages = {(row["source_document_id"], page_number) for row in evidence for page_number in row.get("page_numbers") or ()}
 
     def add_node(node_id: str, **payload) -> None:
         if node_id in seen_nodes:
@@ -81,6 +82,12 @@ def build_graph_artifacts(
             source_pdf_path=source_meta["path"],
             source_role=source_meta["source_role"],
             source_sha256=source_meta["sha256"],
+            runtime_loadable=(row["source_document_id"], row["page_number"]) in evidenced_pages,
+            orphan_policy=(
+                None
+                if (row["source_document_id"], row["page_number"]) in evidenced_pages
+                else "page_without_retrieval_evidence_excluded_from_runtime_graph"
+            ),
         )
 
     for row in legal_units:
@@ -233,7 +240,9 @@ def build_graph_artifacts(
                         source_legal_unit_id=row["legal_unit_id"],
                         target_legal_unit_id=target["legal_unit_id"],
                         target_citation=target.get("unit_label"),
-                        article_relation_ref=_article_relation_ref("MODIFIES", row["evidence_id"], target["legal_unit_id"], target.get("unit_label")),
+                        article_relation_ref=_article_relation_ref(
+                            "MODIFIES", row["evidence_id"], target["legal_unit_id"], target.get("unit_label")
+                        ),
                         runtime_loadable=True,
                         validation_status="accepted_instrument_scope",
                         confidence_policy="explicit_scope_article_reference",
@@ -254,7 +263,9 @@ def build_graph_artifacts(
                     source_legal_unit_id=delete_clause["legal_unit_id"],
                     target_legal_unit_id=target["legal_unit_id"],
                     target_citation=target.get("unit_label"),
-                    article_relation_ref=_article_relation_ref("DELETES", delete_clause["evidence_id"], target["legal_unit_id"], target.get("unit_label")),
+                    article_relation_ref=_article_relation_ref(
+                        "DELETES", delete_clause["evidence_id"], target["legal_unit_id"], target.get("unit_label")
+                    ),
                     runtime_loadable=True,
                     validation_status="accepted_instrument_clause",
                     confidence_policy="explicit_delete_clause_reference",
@@ -345,7 +356,9 @@ def _edge_authority_payload(edge_type: str, payload: dict, evidence_by_id: dict[
             "evidence_requirement": "exact_bbox" if exact else "trace_only",
             "source_role": source_role,
             "relation_support": "exact" if exact else "trace_only",
-            "reason": "exact_article_relation_evidence_bbox" if exact else (evidence or {}).get("failure_reason", "trace_only_relation_not_citable"),
+            "reason": "exact_article_relation_evidence_bbox"
+            if exact
+            else (evidence or {}).get("failure_reason", "trace_only_relation_not_citable"),
             "bbox_refs": list((evidence or {}).get("bbox_refs") or ()),
         }
     if edge_type in {"HAS_EFFECTIVE_RULE"}:

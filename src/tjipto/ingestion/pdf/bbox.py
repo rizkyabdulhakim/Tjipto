@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from tjipto.contracts.coordinates import coordinate_metadata
+
 
 def build_text_bbox_rows(
     *,
@@ -76,6 +78,7 @@ def build_text_bbox_rows(
             "x1": row["x1"],
             "y0": row["y0"],
             "y1": row["y1"],
+            **coordinate_metadata(row, highlightable=True),
         }
         for index, row in enumerate(matched)
     ]
@@ -114,7 +117,7 @@ def pdf_lines(doc) -> dict[int, list[dict]]:
                 y0 = min(span["bbox"][1] for span in line.get("spans", []))
                 x1 = max(span["bbox"][2] for span in line.get("spans", []))
                 y1 = max(span["bbox"][3] for span in line.get("spans", []))
-                entries.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1})
+                entries.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "width": page.rect.width, "height": page.rect.height})
         pages[page_number] = entries
     return pages
 
@@ -171,6 +174,7 @@ def _fallback_bbox_rows(
                 "x1": max(row["x1"] for row in candidates),
                 "y0": min(row["y0"] for row in candidates),
                 "y1": max(row["y1"] for row in candidates),
+                **coordinate_metadata(candidates[0], highlightable=False),
             }
         )
     if not rows:

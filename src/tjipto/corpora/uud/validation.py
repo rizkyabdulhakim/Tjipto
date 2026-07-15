@@ -33,6 +33,7 @@ from tjipto.corpora.uud.provenance_exceptions import (
 )
 from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
+from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
 from tjipto.core.manifest import read_json, read_jsonl
 
 
@@ -348,6 +349,8 @@ def build_validation_report(
 
 
 def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
+    if read_json(final_dir / "manifest.json").get("schema_version") != 2:
+        return ("artifact_schema_version_incompatible",)
     legal_units = read_jsonl(final_dir / "legal_units.jsonl")
     chunks = read_jsonl(final_dir / "chunks.jsonl")
     evidence = read_jsonl(final_dir / "evidence_registry.jsonl")
@@ -379,7 +382,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     graph_node_ids = {row["node_id"] for row in graph_nodes}
     source_conflict_ids = {row["source_conflict_id"] for row in source_conflicts}
     validation_exception_ids = {row["exception_id"] for row in validation_exceptions}
-    source_document_ids = {row["source_document_id"] for row in read_jsonl(final_dir / "source_documents.jsonl")}
+    source_documents = read_jsonl(final_dir / "source_documents.jsonl")
+    source_document_ids = {row["source_document_id"] for row in source_documents}
     page_keys = {(row["source_document_id"], row["page_number"]) for row in pages}
     metadata_grounding_ids = {row["metadata_grounding_id"] for row in metadata_grounding}
     metadata_grounding_ref_ids: set[str] = set()
@@ -410,6 +414,19 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             "viewer_highlightable": True,
             **row,
         }
+    trust_violations = validate_uud_trust_boundary(
+        legal_units=legal_units,
+        chunks=chunks,
+        graph_nodes=graph_nodes,
+        graph_edges=graph_edges,
+        retrieval_units=retrieval_units,
+        evidence=evidence,
+        bbox_rows=bbox_rows,
+        page_text_spans=page_text_spans,
+        source_documents=source_documents,
+        pages=pages,
+    )
+    errors.extend(f"{violation.code}:{violation.artifact}:{violation.row_id}:{violation.field}" for violation in trust_violations)
     for row in validation_exceptions:
         for field in ("chunk_id", "unresolved_chunk_reference"):
             chunk_id = row.get(field)
@@ -2592,7 +2609,8 @@ def _structural_authority_contract_health(
         or row.get("source_id") not in nodes
         or row.get("target_id") not in nodes
         or row.get("citation_final") is not False
-        or row.get("derivation_method") not in {"explicit_source_text", "reviewed_corpus_spec", "deterministic_structural_rule"}
+        or row.get("derivation_method")
+        not in {"explicit_source_text", "reviewed_corpus_spec", "deterministic_structural_rule", "endpoint_metadata"}
     )
     bad_retrieval_trace_count = sum(
         1

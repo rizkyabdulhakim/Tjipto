@@ -7,6 +7,8 @@ import os
 from tjipto.core.config import CorpusConfig
 from tjipto.core.manifest import read_json
 
+SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = {2}
+
 
 class CorpusRegistry:
     def __init__(self, repo_root: Path | None = None):
@@ -37,6 +39,8 @@ class CorpusRegistry:
         if not isinstance(manifest, dict):
             return None
         if manifest.get("corpus_id") != corpus_id:
+            return None
+        if manifest.get("schema_version") not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
             return None
         settings = {key: value for key, value in entry.items() if key != "manifest"} if isinstance(entry, dict) else {}
         return CorpusConfig(corpus_id, manifest_path, manifest, settings, self.repo_root)

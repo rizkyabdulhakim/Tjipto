@@ -600,6 +600,7 @@ function PdfPage({
       {pageSize && pageViewport && rendered && <div className="absolute inset-0 pointer-events-none">
         {pageBoxes.map((box) => {
           const rect = bboxToViewportPercent(box, pageViewport);
+          if (!rect.ok) return null;
           return (
             <span
               key={box.bbox_id}

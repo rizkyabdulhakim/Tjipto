@@ -13,7 +13,8 @@ from tjipto.corpora.uud.specs import (
     UUD_CHUNK_ID_STARTS,
 )
 from tjipto.corpora.uud.structure_builder import page_span_for_text, slice_between, trim_before
-from tjipto.corpora.structure import apply_structural_contract
+from tjipto.corpora.uud.policy.structure import apply_uud_parent_policy
+from tjipto.contracts.structure import apply_structural_contract
 
 
 UUD_STRUCTURAL_ROLE_BY_UNIT_TYPE = {
@@ -38,6 +39,7 @@ def build_legal_units_from_sources(
         _append_source_units(source_id, pages_by_source, source_documents, rows, chunk_by_unit)
     _append_inserted_bab_units(pages_by_source, source_documents, rows)
     _append_instrument_units(pages_by_source, source_documents, rows)
+    apply_uud_parent_policy(rows)
     apply_structural_contract(rows, role_by_unit_type=UUD_STRUCTURAL_ROLE_BY_UNIT_TYPE)
     rows.sort(key=lambda row: row["legal_unit_id"])
     return rows

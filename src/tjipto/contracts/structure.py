@@ -6,7 +6,7 @@ def apply_structural_contract(units: list[dict], *, role_by_unit_type: dict[str,
     by_id = {row["legal_unit_id"]: row for row in units}
     for row in units:
         row["stable_unit_id"] = row["legal_unit_id"]
-        row["structural_role"] = role_by_unit_type.get(row.get("unit_type"), "metadata")
+        row["structural_role"] = role_by_unit_type.get(str(row.get("unit_type")), "metadata")
         row["canonical_label"] = row.get("unit_label")
         row["historical_label"] = row.get("unit_label") if row.get("source_role") != "current_consolidated" else None
     for row in units:
@@ -15,9 +15,9 @@ def apply_structural_contract(units: list[dict], *, role_by_unit_type: dict[str,
         row["parent_legal_unit_ids"] = [parent_id] if parent_id else []
         row["parent_legal_unit_id"] = parent_id
 
-    children: dict[str | None, list[dict]] = {}
+    children: dict[tuple[str, str | None], list[dict]] = {}
     for row in units:
-        children.setdefault(row.get("parent_legal_unit_id"), []).append(row)
+        children.setdefault((row["source_document_id"], row.get("parent_legal_unit_id")), []).append(row)
     for siblings in children.values():
         siblings.sort(key=lambda row: (row["source_document_id"], _unit_number(row["legal_unit_id"])))
         for order, row in enumerate(siblings, start=1):
@@ -59,24 +59,14 @@ def apply_chunk_structural_contract(chunks: list[dict], legal_units: list[dict])
             chunk[field] = unit.get(field)
         chunk["canonical_unit_ref"] = unit["legal_unit_id"]
         chunk["contributing_child_legal_unit_ids"] = _descendant_leaves(unit["legal_unit_id"], children)
-        chunk["authority_kind"] = "structural_context" if chunk.get("status") == "parent_context_only" else "legal_text"
-        chunk["citable_status"] = "context_only" if chunk["authority_kind"] == "structural_context" else "exact_evidence_required"
-        chunk["citation_final"] = False
-        chunk["citation_finality_reason"] = (
-            "parent_context_requires_child_evidence" if chunk["authority_kind"] == "structural_context" else "resolve_exact_evidence"
-        )
     for unit in legal_units:
         unit["source_text_span_ids"] = list(unit.get("text_span_ids") or ())
         unit["source_bbox_refs"] = list(unit.get("bbox_ids") or ())
-        unit["authority_kind"] = "legal_text" if unit.get("runtime_loadable") else "structural_or_trace"
-        unit["citable_status"] = "exact_evidence_required" if unit.get("runtime_loadable") else "not_citable"
-        unit["citation_final"] = False
-        unit["citation_finality_reason"] = "resolve_exact_evidence"
 
 
 def _canonical_parent(row: dict, parents: list[str], by_id: dict[str, dict]) -> str | None:
     preferred = {"subprovision": "provision", "item": "subprovision"}
-    wanted = preferred.get(row.get("structural_role"))
+    wanted = preferred.get(str(row.get("structural_role")))
     matched = next((parent for parent in parents if by_id[parent].get("structural_role") == wanted), None)
     if matched:
         return matched

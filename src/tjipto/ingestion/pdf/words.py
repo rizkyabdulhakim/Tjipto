@@ -110,9 +110,7 @@ def align_text_to_word_bboxes(
         "text_span_id": None,
         "matched_word_bbox_ids": chosen["matched_word_bbox_ids"],
         "match_method": "contiguous_compact_word_sequence",
-        "match_confidence": "exact_compact_sequence"
-        if len(candidates) == 1
-        else "exact_compact_sequence_nearest_reference_bbox",
+        "match_confidence": "exact_compact_sequence" if len(candidates) == 1 else "exact_compact_sequence_nearest_reference_bbox",
         "normalized_text_match": True,
         "union_bbox": chosen["union_bbox"],
         "candidate_count": len(candidates),
@@ -152,8 +150,7 @@ def bbox_center_distance(bbox: dict, reference_bbox: dict | None) -> float:
     ref_x1 = cast(float, x1)
     ref_y1 = cast(float, y1)
     return (
-        ((bbox["x0"] + bbox["x1"]) / 2 - (ref_x0 + ref_x1) / 2) ** 2
-        + ((bbox["y0"] + bbox["y1"]) / 2 - (ref_y0 + ref_y1) / 2) ** 2
+        ((bbox["x0"] + bbox["x1"]) / 2 - (ref_x0 + ref_x1) / 2) ** 2 + ((bbox["y0"] + bbox["y1"]) / 2 - (ref_y0 + ref_y1) / 2) ** 2
     ) ** 0.5
 
 

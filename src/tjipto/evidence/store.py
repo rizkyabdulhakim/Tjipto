@@ -159,9 +159,7 @@ class EvidenceStore:
 
     def _page_text_span(self, text_span_id: str) -> dict | None:
         if self._page_text_span_by_id is None:
-            self._page_text_span_by_id = {
-                row["text_span_id"]: row for row in self.page_text_spans if row.get("text_span_id")
-            }
+            self._page_text_span_by_id = {row["text_span_id"]: row for row in self.page_text_spans if row.get("text_span_id")}
         return self._page_text_span_by_id.get(text_span_id)
 
 

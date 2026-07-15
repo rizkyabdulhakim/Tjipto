@@ -245,10 +245,13 @@ class UudBuilderContractTest(unittest.TestCase):
             if not row["metadata_grounding_id"].startswith("uud_metadata_field_grounding::")
         ]
         self.assertEqual(
-            [_raw_metadata_block_contract(row) for row in build_metadata_block_grounding(
-                pages_by_source=pages_by_source,
-                source_documents=source_documents,
-            )],
+            [
+                _raw_metadata_block_contract(row)
+                for row in build_metadata_block_grounding(
+                    pages_by_source=pages_by_source,
+                    source_documents=source_documents,
+                )
+            ],
             [_raw_metadata_block_contract(row) for row in expected],
         )
 

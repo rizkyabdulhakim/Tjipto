@@ -107,7 +107,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "pdf_health_report": "pdf_health_report.json",
         "promotion_decisions": "promotion_decisions.jsonl",
         "retrieval_units": "retrieval_units.jsonl",
-        "schema_version": 1,
+        "schema_version": 2,
         "source_conflicts": "source_conflicts.jsonl",
         "source_documents": "source_documents.jsonl",
         "source_files": {row["path"]: row["sha256"] for row in sorted(source_documents.values(), key=lambda item: item["path"])},

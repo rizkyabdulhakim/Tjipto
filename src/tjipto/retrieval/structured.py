@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, resolve_instrument_intent
 from tjipto.corpora.parser_dispatch import (
     DEFAULT_CORPUS_ID,
     label_keys,
@@ -19,6 +19,9 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
     instrument = _instrument_rows(store, query, limit, strategy=strategy, config=config)
     if instrument:
         return instrument
+    navigation = _navigation_rows(store, query, limit, intent, _corpus_id(config))
+    if navigation:
+        return navigation
     targets = _targets(query, intent, _corpus_id(config))
     if not targets:
         return ()
@@ -113,6 +116,56 @@ def _targets(query: str, intent: dict, corpus_id: str) -> tuple[str, ...]:
             targets.append(ayat)
         return tuple(targets)
     return ()
+
+
+def _navigation_rows(
+    store: EvidenceStore,
+    query: str,
+    limit: int,
+    intent: dict,
+    corpus_id: str,
+) -> tuple[dict, ...]:
+    direction = next(
+        (name for name, aliases in intent["structural_navigation"].items() if contains_intent_phrase(query, aliases)),
+        None,
+    )
+    label = parse_pasal_reference(corpus_id, query, allow_roman=True)
+    if direction not in {"next", "previous"} or not label:
+        return ()
+    preferred_role = getattr(store.config, "preferred_source_role", None)
+    source = next(
+        (
+            row
+            for row in store.legal_units
+            if row.get("unit_label", "").casefold() == label.casefold()
+            and row.get("structural_role") == "provision"
+            and (preferred_role is None or row.get("source_role") == preferred_role)
+        ),
+        None,
+    )
+    if source is None:
+        return ()
+    offset = 1 if direction == "next" else -1
+    target_order = source.get("sibling_order", -2) + offset
+    target = next(
+        (
+            row
+            for row in store.legal_units
+            if row.get("source_document_id") == source.get("source_document_id")
+            and row.get("parent_legal_unit_id") == source.get("parent_legal_unit_id")
+            and row.get("sibling_order") == target_order
+            and row.get("structural_role") == "provision"
+        ),
+        None,
+    )
+    if target is None:
+        return ()
+    rows = [
+        row | {"candidate_type": "structural_navigation_candidate", "navigation_direction": direction}
+        for row in store.evidence
+        if row.get("legal_unit_id") == target.get("legal_unit_id") and row.get("status") == "final" and store.bboxes_for(row["evidence_id"])
+    ]
+    return tuple(rows[:limit])
 
 
 def _with_pasal(section: str, text: str, corpus_id: str) -> tuple[str, ...]:

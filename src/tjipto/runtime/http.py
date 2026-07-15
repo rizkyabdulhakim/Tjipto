@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,9 @@ DEFAULT_MAX_REQUEST_BYTES = 64 * 1024
 
 
 class PayloadTooLarge(ValueError):
-    pass
+    def __init__(self, size: int):
+        super().__init__("request_body_too_large")
+        self.size = size
 
 
 def make_server(
@@ -70,7 +73,8 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
             action = "bookmark" if route[1] == "bookmarks" else route[1]
             response = handle_request(route[0], action, payload, self.root)
             self._json(200, response)
-        except PayloadTooLarge:
+        except PayloadTooLarge as error:
+            self._discard_oversized_body(error.size)
             self._json(413, {"status": "payload_too_large", "reason": "request_body_too_large"})
         except BadRequest as error:
             self._json(400, {"status": "bad_request", "reason": error.reason})
@@ -80,16 +84,34 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
             self._json(400, {"status": "bad_request", "reason": "invalid_content_length"})
 
     def _read_json(self) -> dict:
-        size = int(self.headers.get("Content-Length", "0") or "0")
+        lengths = self.headers.get_all("Content-Length") or []
+        if self.headers.get("Transfer-Encoding") or len(lengths) > 1:
+            raise ValueError("invalid_content_length")
+        raw_length = lengths[0].strip() if lengths else "0"
+        if not re.fullmatch(r"0|[1-9][0-9]*", raw_length):
+            raise ValueError("invalid_content_length")
+        size = int(raw_length)
         if size > _max_request_bytes():
-            raise PayloadTooLarge
+            raise PayloadTooLarge(size)
         if size == 0:
             return {}
         data = self.rfile.read(size)
+        if len(data) != size:
+            raise ValueError("invalid_content_length")
         payload = json.loads(data.decode("utf-8"))
         if not isinstance(payload, dict):
             raise BadRequest("invalid_json_object")
         return payload
+
+    def _discard_oversized_body(self, declared_size: int) -> None:
+        previous_timeout = self.connection.gettimeout()
+        try:
+            self.connection.settimeout(0.1)
+            self.rfile.read(min(declared_size, _max_request_bytes() + 1))
+        except (OSError, TimeoutError):
+            pass
+        finally:
+            self.connection.settimeout(previous_timeout)
 
     def _route(self) -> list[str] | None:
         parts = [part for part in urlsplit(self.path).path.split("/") if part]

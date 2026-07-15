@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from tjipto.contracts.coordinates import coordinate_metadata
 from tjipto.corpora.uud.bbox_builder import aggregate_bbox_precision, apply_inserted_bab_heading_bbox_policy, build_bbox_rows
 from tjipto.corpora.uud.provenance_exceptions import SEGMENTATION_BOUNDARY_LABELS
 from tjipto.corpora.uud.specs import INSERTED_BAB_SPECS
@@ -240,6 +241,7 @@ def _inserted_bab_row(
         "x1": line["x1"],
         "y0": line["y0"],
         "y1": line["y1"],
+        **coordinate_metadata(line, highlightable=viewer_highlightable),
     }
 
 

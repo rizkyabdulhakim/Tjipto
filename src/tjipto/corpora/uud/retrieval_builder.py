@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from tjipto.contracts.authority import authority_decision
 from tjipto.corpora.uud.provenance_exceptions import (
     ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
     apply_review_category,
@@ -25,6 +26,7 @@ def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict
             "source_pdf_path": row["source_pdf_path"],
             "source_role": row["source_role"],
             "source_sha256": row["source_sha256"],
+            **_retrieval_authority(row),
             "parent_legal_unit_id": chunks_by_unit[row["legal_unit_id"]].get("parent_legal_unit_id"),
             "ancestor_legal_unit_ids": chunks_by_unit[row["legal_unit_id"]].get("ancestor_legal_unit_ids") or [],
             "structural_role": chunks_by_unit[row["legal_unit_id"]].get("structural_role"),
@@ -34,8 +36,14 @@ def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict
                 "parent_unit_id": chunks_by_unit[row["legal_unit_id"]].get("parent_legal_unit_id"),
                 "ancestor_path": chunks_by_unit[row["legal_unit_id"]].get("ancestor_legal_unit_ids") or [],
                 "evidence_ids": [row["evidence_id"]],
-                "authority_kind": row.get("authority_kind"),
-                "citation_final": row.get("citation_final") is True,
+                **authority_decision(
+                    authority_kind="structural_context",
+                    citable=False,
+                    citation_final=False,
+                    exactness="not_applicable",
+                    evidence_available=True,
+                    reason_code="retrieval_trace_not_citation",
+                ),
             },
             **_retrieval_answerability(row, chunks_by_unit[row["legal_unit_id"]]),
             "temporal_context": row["temporal_context"],
@@ -43,6 +51,18 @@ def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict
         }
         for row in sorted(evidence, key=lambda item: item["evidence_id"])
     ]
+
+
+def _retrieval_authority(evidence: dict) -> dict:
+    exact = evidence.get("bbox_precision") == "exact" and evidence.get("viewer_highlightable") is True
+    return authority_decision(
+        authority_kind="structural_context" if exact else "page_only",
+        citable=False,
+        citation_final=False,
+        exactness="exact" if exact else "page_only",
+        evidence_available=bool(evidence.get("evidence_id")),
+        reason_code=("retrieval_candidate_requires_runtime_evidence_selection" if exact else evidence.get("failure_reason", "not_exact")),
+    )
 
 
 def _retrieval_answerability(evidence: dict, chunk: dict) -> dict:

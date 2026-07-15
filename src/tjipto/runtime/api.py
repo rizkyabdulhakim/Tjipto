@@ -161,6 +161,13 @@ def _public_bbox(row: dict) -> dict:
         "y0": row.get("y0"),
         "x1": row.get("x1"),
         "y1": row.get("y1"),
+        "coordinate_space": row.get("coordinate_space"),
+        "coordinate_origin": row.get("coordinate_origin"),
+        "page_width": row.get("page_width"),
+        "page_height": row.get("page_height"),
+        "page_rotation": row.get("page_rotation"),
+        "page_box_basis": row.get("page_box_basis"),
+        "transform_version": row.get("transform_version"),
     }
 
 

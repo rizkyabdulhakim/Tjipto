@@ -32,14 +32,6 @@ def classify_legal_intent(store, query: str) -> LegalIntent:
             route="current_fact_unsupported",
             intent="current_fact_query",
         )
-    if contains_intent_phrase(query, tuple(guard.get("out_of_corpus_terms") or ())):
-        return LegalIntent(
-            "out_of_corpus_domain",
-            answerability="unsupported",
-            rejection_reason="unsupported_scope",
-            route="unsupported_scope",
-            intent="out_of_corpus",
-        )
     for row in (guard.get("legal_intent_policy", {}) or {}).get("unsupported_functions", ()):
         topic = contains_intent_phrase(query, tuple(row.get("topic_terms") or ()))
         unsupported = contains_intent_phrase(query, tuple(row.get("unsupported_function_terms") or ()))
@@ -56,6 +48,15 @@ def classify_legal_intent(store, query: str) -> LegalIntent:
                 route="unsupported_scope",
                 intent="out_of_corpus",
             )
+    out_of_corpus_terms = tuple(guard.get("out_of_corpus_terms") or ())
+    if out_of_corpus_terms and not _target_reference(store, query) and contains_intent_phrase(query, out_of_corpus_terms):
+        return LegalIntent(
+            "out_of_corpus_domain",
+            answerability="unsupported",
+            rejection_reason="unsupported_scope",
+            route="unsupported_scope",
+            intent="out_of_corpus",
+        )
     return LegalIntent()
 
 
@@ -77,7 +78,10 @@ def classify_relation_intent(store, query: str) -> LegalIntent:
 
 
 def _target_reference(store, query: str) -> str | None:
-    ref = parse_legal_reference(getattr(store.config, "corpus_id", ""), query)
+    try:
+        ref = parse_legal_reference(getattr(store.config, "corpus_id", ""), query)
+    except ValueError:
+        return None
     pasal = ref.get("pasal")
     ayat = ref.get("ayat")
     return f"{pasal} ayat {ayat}" if pasal and ayat else pasal

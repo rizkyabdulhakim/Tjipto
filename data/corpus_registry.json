@@ -881,6 +881,16 @@
           "with_pasal": true
         }
       ],
+      "structural_navigation": {
+        "next": [
+          "berikutnya setelah",
+          "sesudah"
+        ],
+        "previous": [
+          "sebelumnya sebelum",
+          "sebelum"
+        ]
+      },
       "structured_lookup_enabled": true
     },
     "source_conflict_intent": {

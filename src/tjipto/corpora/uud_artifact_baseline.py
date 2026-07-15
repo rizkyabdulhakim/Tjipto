@@ -10,7 +10,7 @@ from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.artifacts.writer import write_json, write_jsonl
 from tjipto.corpora.uud.legal_unit_builder import build_legal_units_from_sources
-from tjipto.corpora.structure import apply_chunk_structural_contract
+from tjipto.contracts.structure import apply_chunk_structural_contract
 from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest
 from tjipto.corpora.uud.metadata_builder import (
     build_document_metadata,
@@ -29,10 +29,11 @@ from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_gro
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import build_validation_report, validate_uud_artifact_dir
+from tjipto.corpora.uud.policy.authority import apply_authority_contract
+from tjipto.corpora.uud.policy.relations import apply_graph_relation_policy
 from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.grounding.promotion import build_promotion_decisions
-from tjipto.graph.authority import apply_graph_authority_contract
 from tjipto.ingestion.pdf.health import build_pdf_health_report
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
 
@@ -148,7 +149,16 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
         metadata_grounding=metadata_grounding,
     )
-    apply_graph_authority_contract(graph_edges, graph_nodes, legal_units, evidence)
+    apply_graph_relation_policy(edges=graph_edges, nodes=graph_nodes, evidence=evidence)
+    apply_authority_contract(
+        spans=page_text_spans,
+        evidence=evidence,
+        bboxes=bbox_rows,
+        units=legal_units,
+        chunks=chunks,
+        nodes=graph_nodes,
+        edges=graph_edges,
+    )
     document_relations = build_document_relations(list(source_documents.values()))
     article_amendment_relations = build_article_amendment_relations(
         graph_edges=graph_edges,

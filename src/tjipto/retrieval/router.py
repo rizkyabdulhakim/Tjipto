@@ -96,6 +96,33 @@ def route_retrieval(
             "reason": "relation_not_found",
         }
 
+    structured_all = tuple(
+        structured_lookup(
+            store,
+            normalized["normalized_query"],
+            len(store.evidence),
+            strategy=structured_strategy,
+        )
+    )
+    navigation_all = tuple(row for row in structured_all if row.get("candidate_type") == "structural_navigation_candidate")
+    if navigation_all:
+        navigation = filter_evidence(navigation_all, filters)
+        if navigation:
+            ranked, trace = merge_ranked(store, {"structured": navigation}, filters)
+            return envelope | {
+                "status": "found",
+                "route": "structural_navigation",
+                "intent": "structural_navigation",
+                "matches": ranked[:limit],
+                "expansion_trace": trace,
+            }
+        return envelope | {
+            "status": "no_results",
+            "route": "no_results",
+            "intent": "structural_navigation",
+            "reason": "filters_removed_all",
+        }
+
     if intent["intent"] == "exact_citation":
         matches = tuple(service.citation(normalized["normalized_query"]))
         filtered = filter_evidence(matches, filters)
@@ -146,21 +173,14 @@ def route_retrieval(
             "reason": "metadata_not_found",
         }
 
-    structured_all = tuple(
-        structured_lookup(
-            store,
-            normalized["normalized_query"],
-            len(store.evidence),
-            strategy=structured_strategy,
-        )
-    )
     structured = filter_evidence(structured_all, filters)
     if structured:
         ranked, trace = merge_ranked(store, {"structured": structured}, filters)
+        structural_navigation = any(row.get("candidate_type") == "structural_navigation_candidate" for row in structured)
         return envelope | {
             "status": "found",
-            "route": "structured",
-            "intent": "structured_lookup",
+            "route": "structural_navigation" if structural_navigation else "structured",
+            "intent": "structural_navigation" if structural_navigation else "structured_lookup",
             "matches": ranked[:limit],
             "expansion_trace": trace,
         }

@@ -97,6 +97,37 @@ async function expectNoExactCitationUi(page) {
   assert((await page.locator("[data-evidence-panel]").count()) === 0, "Non-exact support opened evidence panel.");
 }
 
+async function assertHighlightGeometry(page) {
+  const result = await page.locator('[data-bbox-highlight="active"]').first().evaluate((highlight) => {
+    const pageElement = highlight.closest("[data-pdf-page]");
+    const canvas = pageElement?.querySelector('canvas[data-rendered="true"]');
+    if (!(highlight instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) return null;
+    const highlightBox = highlight.getBoundingClientRect();
+    const canvasBox = canvas.getBoundingClientRect();
+    const expectedLeft = canvasBox.left + (Number.parseFloat(highlight.style.left) / 100) * canvasBox.width;
+    const expectedTop = canvasBox.top + (Number.parseFloat(highlight.style.top) / 100) * canvasBox.height;
+    const expectedWidth = (Number.parseFloat(highlight.style.width) / 100) * canvasBox.width;
+    const expectedHeight = (Number.parseFloat(highlight.style.height) / 100) * canvasBox.height;
+    return {
+      page: Number(pageElement?.getAttribute("data-pdf-page")),
+      visible: highlightBox.width > 0 && highlightBox.height > 0,
+      overlapsPage:
+        Math.min(highlightBox.right, canvasBox.right) > Math.max(highlightBox.left, canvasBox.left) &&
+        Math.min(highlightBox.bottom, canvasBox.bottom) > Math.max(highlightBox.top, canvasBox.top),
+      error: Math.max(
+        Math.abs(highlightBox.left - expectedLeft),
+        Math.abs(highlightBox.top - expectedTop),
+        Math.abs(highlightBox.width - expectedWidth),
+        Math.abs(highlightBox.height - expectedHeight),
+      ),
+    };
+  });
+  assert(result?.page > 0, "Highlight did not resolve to its declared PDF page.");
+  assert(result?.visible, "Highlight rectangle is not visible.");
+  assert(result?.overlapsPage, "Highlight rectangle does not overlap its PDF page.");
+  assert((result?.error ?? Number.POSITIVE_INFINITY) <= 1, "Rendered highlight geometry exceeds 1 CSS pixel error.");
+}
+
 async function runEvidenceContractSmoke(browser) {
   const provenancePage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(provenancePage, "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?");
@@ -106,6 +137,7 @@ async function runEvidenceContractSmoke(browser) {
   await provenancePage.locator('[data-citation-footer="true"] button[data-citation-kind="source_conflict_provenance"]').first().click();
   await provenancePage.locator('[data-evidence-panel="normal"]').waitFor();
   await provenancePage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  await assertHighlightGeometry(provenancePage);
   await provenancePage.close();
 
   const metadataPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
@@ -117,6 +149,7 @@ async function runEvidenceContractSmoke(browser) {
   await metadataPage.locator('[data-citation-footer="true"] button[data-citation-kind="metadata_source"]').first().click();
   await metadataPage.locator('[data-evidence-panel="normal"]').waitFor();
   await metadataPage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  await assertHighlightGeometry(metadataPage);
   await metadataPage.close();
 
   const tracePage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
@@ -127,6 +160,7 @@ async function runEvidenceContractSmoke(browser) {
   await tracePage.locator('[data-citation-footer="true"] button[data-citation-kind="source_anomaly"]').first().click();
   await tracePage.locator('[data-evidence-panel="normal"]').waitFor();
   await tracePage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  await assertHighlightGeometry(tracePage);
   await tracePage.close();
 
   const relationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
@@ -171,6 +205,7 @@ async function runSmoke() {
     });
     await page.locator('canvas[aria-label="Halaman sumber 3"][data-rendered="true"]').waitFor();
     await page.locator('[data-bbox-highlight="active"]').first().waitFor();
+    await assertHighlightGeometry(page);
     await page.waitForFunction(() => !document.body.textContent?.includes("1 / 1"));
     await page.waitForFunction(() => !document.body.textContent?.includes("Hal. 3"));
     await page.locator('[data-evidence-detail-area="normal"]').waitFor();
@@ -235,6 +270,7 @@ async function runSmoke() {
       const canvas = window.document.querySelector('canvas[aria-label="Halaman sumber 3"]');
       return canvas instanceof HTMLElement && canvas.getBoundingClientRect().width > Number(width);
     }, beforeZoom?.width ?? 0);
+    await assertHighlightGeometry(page);
     const afterZoomState = await page.evaluate(() => {
       const pdfArea = document.querySelector('[data-evidence-pdf-area="normal"]');
       const page3 = document.querySelector('[data-pdf-page="3"]');
@@ -251,6 +287,7 @@ async function runSmoke() {
     await page.locator('[data-evidence-panel="expanded"]').waitFor();
     await page.locator('[data-evidence-pdf-area="expanded"]').waitFor();
     await page.locator('[data-bbox-highlight]').first().waitFor();
+    await assertHighlightGeometry(page);
     await page.getByRole("button", { name: "Zoom in" }).click();
     await page.waitForFunction((width) => {
       const canvas = window.document.querySelector('canvas[aria-label="Halaman sumber 3"]');

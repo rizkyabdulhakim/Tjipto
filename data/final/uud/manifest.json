@@ -58,16 +58,16 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "bbox_builder",
       "build_stage": "bbox_build",
-      "bytes": 1102773,
-      "sha256": "88062e0e6aa3b45fed822be6ecba796a4ed2a576d51b5dc6883ebdeeac3bc5f3"
+      "bytes": 1864553,
+      "sha256": "03d9c380c232232a734ddfa513333fc9ebaeaafee807dcfc977daa5da30000bf"
     },
     "chunks.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "chunk_builder",
       "build_stage": "chunk_build",
-      "bytes": 1469881,
-      "sha256": "7445d0c312ca30c3ba6295f5cfc4b53900bfa126f2735f57a9b5dc17bb37aa01"
+      "bytes": 1548036,
+      "sha256": "b5ff34e626ef0496d54ac81447053fb47974fd117cea35f2ed6d533a1dd4c77d"
     },
     "document_metadata.jsonl": {
       "origin": "generated",
@@ -90,8 +90,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "evidence_builder",
       "build_stage": "evidence_build",
-      "bytes": 762650,
-      "sha256": "a4cfbc9f62873ef4dbf491e9e5de169b8ed6c40004c1901c936f5b696756f280"
+      "bytes": 877523,
+      "sha256": "ad0742b980fc3fd485d47423fb1628745ad84c21985c07c348aeedf4faee48c6"
     },
     "excluded_records.jsonl": {
       "origin": "generated",
@@ -106,24 +106,24 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "graph_builder",
       "build_stage": "graph_build",
-      "bytes": 5254241,
-      "sha256": "597d3105bb9d0d5042df1fb103b57927fca4256680c2f0dbb80a10e37aadcef5"
+      "bytes": 7539567,
+      "sha256": "b8efe2db34010ea761631449610b38c552036af6527e05ebb217d397ae85060f"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "graph_builder",
       "build_stage": "graph_build",
-      "bytes": 1494118,
-      "sha256": "fc5fe9175de1f70c2f4e63716dfb9c62446d2e706412d70e2e5dca5504aef624"
+      "bytes": 2260461,
+      "sha256": "d132e63210a42fd2ad4f96b0090dde9b167d62803f54e2d24b4aa83c7785a514"
     },
     "legal_units.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "legal_unit_builder",
       "build_stage": "legal_unit_build",
-      "bytes": 1639617,
-      "sha256": "b2c14352441f238d4457c231e393c8257137331e3aab881b9ad7c1bbf6b7723d"
+      "bytes": 1728777,
+      "sha256": "ce3c1dfd0dc64cd1a73f8419b5b504280c22156cc1e62825b9838b8d31f11d72"
     },
     "metadata.jsonl": {
       "origin": "generated",
@@ -186,8 +186,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "retrieval_builder",
       "build_stage": "retrieval_build",
-      "bytes": 668348,
-      "sha256": "37f094e0db24acdbe403f3f087ff8f1de33ea11d2831ec0c174f94fb26c91b0e"
+      "bytes": 924471,
+      "sha256": "3ec72fb49e1319ca7a12b9116863de37e4453138de3b918d0b57f07f156988b9"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -250,8 +250,8 @@
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
       "producer": "text_span_builder",
       "build_stage": "ingestion",
-      "bytes": 2704539,
-      "sha256": "26de66c8ae23f9a1e16c2c4b7e810aabc376b3e7153bd5db3df1c1627441e780"
+      "bytes": 4752399,
+      "sha256": "0bb8fd47aa1b268a173ab6648c9012c6758de2f2d6dd317d38a847987dba804e"
     },
     "word_bboxes.jsonl": {
       "origin": "generated",
@@ -283,7 +283,7 @@
   "pdf_health_report": "pdf_health_report.json",
   "promotion_decisions": "promotion_decisions.jsonl",
   "retrieval_units": "retrieval_units.jsonl",
-  "schema_version": 1,
+  "schema_version": 2,
   "source_conflicts": "source_conflicts.jsonl",
   "source_documents": "source_documents.jsonl",
   "source_files": {
