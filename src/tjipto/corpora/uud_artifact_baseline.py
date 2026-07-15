@@ -10,6 +10,7 @@ from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.artifacts.writer import write_json, write_jsonl
 from tjipto.corpora.uud.legal_unit_builder import build_legal_units_from_sources
+from tjipto.corpora.structure import apply_chunk_structural_contract
 from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest
 from tjipto.corpora.uud.metadata_builder import (
     build_document_metadata,
@@ -31,6 +32,7 @@ from tjipto.corpora.uud.validation import build_validation_report, validate_uud_
 from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.grounding.promotion import build_promotion_decisions
+from tjipto.graph.authority import apply_graph_authority_contract
 from tjipto.ingestion.pdf.health import build_pdf_health_report
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
 
@@ -116,6 +118,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     chunks.sort(key=lambda row: row["chunk_id"])
     evidence.sort(key=lambda row: row["evidence_id"])
     apply_chunk_grounding(chunks, legal_units, evidence, page_text_spans)
+    apply_chunk_structural_contract(chunks, legal_units)
     retrieval_units = build_retrieval_units(evidence, chunks)
     retrieval_units.sort(key=lambda row: row["retrieval_unit_id"])
     apply_page_text_span_dispositions(
@@ -145,6 +148,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
         metadata_grounding=metadata_grounding,
     )
+    apply_graph_authority_contract(graph_edges, graph_nodes, legal_units, evidence)
     document_relations = build_document_relations(list(source_documents.values()))
     article_amendment_relations = build_article_amendment_relations(
         graph_edges=graph_edges,

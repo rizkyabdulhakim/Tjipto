@@ -13,6 +13,18 @@ from tjipto.corpora.uud.specs import (
     UUD_CHUNK_ID_STARTS,
 )
 from tjipto.corpora.uud.structure_builder import page_span_for_text, slice_between, trim_before
+from tjipto.corpora.structure import apply_structural_contract
+
+
+UUD_STRUCTURAL_ROLE_BY_UNIT_TYPE = {
+    "bab_record": "division",
+    "pasal_record": "provision",
+    "ayat_record": "subprovision",
+    "instrument_clause_record": "item",
+    "pembukaan_record": "document",
+    "aturan_peralihan_record": "division",
+    "aturan_tambahan_record": "division",
+}
 
 
 def build_legal_units_from_sources(
@@ -26,6 +38,7 @@ def build_legal_units_from_sources(
         _append_source_units(source_id, pages_by_source, source_documents, rows, chunk_by_unit)
     _append_inserted_bab_units(pages_by_source, source_documents, rows)
     _append_instrument_units(pages_by_source, source_documents, rows)
+    apply_structural_contract(rows, role_by_unit_type=UUD_STRUCTURAL_ROLE_BY_UNIT_TYPE)
     rows.sort(key=lambda row: row["legal_unit_id"])
     return rows
 
@@ -90,7 +103,9 @@ def _append_source_units(
             "parent_legal_unit_ids": _parent_ids(unit_type, current_bab, current_pasal),
             "provenance": {"donor_id": legal_id},
             "source_document_id": source_id,
+            "source_role": source_meta["source_role"],
             "source_sha256": source_meta["sha256"],
+            "temporal_context": source_meta.get("temporal_context", source_meta["source_role"]),
             "status": "finalizable",
             "text": text,
             "unit_label": label,
@@ -131,7 +146,9 @@ def _append_inserted_bab_units(
             "parent_legal_unit_ids": parent_ids,
             "provenance": {"donor_id": legal_id},
             "source_document_id": source_id,
+            "source_role": source_meta["source_role"],
             "source_sha256": source_meta["sha256"],
+            "temporal_context": source_meta.get("temporal_context", source_meta["source_role"]),
             "status": "finalizable",
             "text": text,
             "unit_label": spec["label"],
@@ -188,7 +205,9 @@ def _append_instrument_units(
             "parent_legal_unit_ids": parent_legal_unit_ids or [],
             "provenance": {"donor_id": legal_id},
             "source_document_id": source_id,
+            "source_role": source_documents[source_id]["source_role"],
             "source_sha256": source_documents[source_id]["sha256"],
+            "temporal_context": source_documents[source_id].get("temporal_context", source_documents[source_id]["source_role"]),
             "status": chunk_status if runtime_loadable is False else "finalizable",
             "text": text,
             "unit_label": unit_label,

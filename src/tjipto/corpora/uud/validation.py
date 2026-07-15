@@ -163,6 +163,13 @@ def build_validation_report(
         page_text_spans=page_text_spans,
         graph_nodes=graph_nodes,
     )
+    validation_report["structural_authority_contract_health"] = _structural_authority_contract_health(
+        legal_units,
+        chunks,
+        graph_nodes,
+        graph_edges,
+        retrieval_units,
+    )
     validation_report["provenance_exception_health"] = _provenance_exception_health(
         chunks,
         legal_units,
@@ -256,8 +263,7 @@ def build_validation_report(
     }
     validation_report["metadata_bbox_registry_health"] = _metadata_bbox_registry_health(
         metadata_grounding_registry,
-        {row["bbox_id"]: row for row in bbox_rows}
-        | {row["word_bbox_id"]: {"bbox_id": row["word_bbox_id"], **row} for row in word_bboxes},
+        {row["bbox_id"]: row for row in bbox_rows} | {row["word_bbox_id"]: {"bbox_id": row["word_bbox_id"], **row} for row in word_bboxes},
     )
     validation_report["source_quote_fidelity_health"] = _source_quote_fidelity_health(
         metadata_grounding=metadata_grounding,
@@ -482,6 +488,9 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"legal_unit_chunk_span_closure_{key}:{value}")
     if closure["status"] != "complete":
         errors.append("legal_unit_chunk_span_closure_incomplete")
+    structural_contract = _structural_authority_contract_health(legal_units, chunks, graph_nodes, graph_edges, retrieval_units)
+    if structural_contract["status"] != "complete":
+        errors.append("structural_authority_contract_incomplete")
     for row in bbox_rows:
         bbox_by_evidence[row["evidence_id"]].append(row)
 
@@ -759,7 +768,10 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"source_conflict_missing_query_anchor_terms:{row['source_conflict_id']}")
         if row.get("source_anomaly_kind") not in {"renumbering_provenance", "source_marker_sequence_anomaly"}:
             errors.append(f"source_conflict_invalid_source_anomaly_kind:{row['source_conflict_id']}")
-        if row.get("source_anomaly_kind") == "renumbering_provenance" and row.get("source_mapping_kind") != "historical_to_canonical_mapping":
+        if (
+            row.get("source_anomaly_kind") == "renumbering_provenance"
+            and row.get("source_mapping_kind") != "historical_to_canonical_mapping"
+        ):
             errors.append(f"source_conflict_invalid_source_mapping_kind:{row['source_conflict_id']}")
         if not str(row.get("provenance_summary") or "").strip():
             errors.append(f"source_conflict_missing_provenance_summary:{row['source_conflict_id']}")
@@ -951,7 +963,9 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"graph_edge_non_evidence_evidence_ref:{row['edge_id']}:{evidence_ref}")
         if edge_type in {"MODIFIES", "DELETES"}:
             evidence_row = evidence_by_id.get(row.get("evidence_ref"))
-            exact = bool(evidence_row and evidence_row.get("bbox_precision") == "exact" and evidence_row.get("viewer_highlightable") is True)
+            exact = bool(
+                evidence_row and evidence_row.get("bbox_precision") == "exact" and evidence_row.get("viewer_highlightable") is True
+            )
             if not evidence_row:
                 errors.append(f"graph_relation_edge_invalid_evidence:{row['edge_id']}:{row.get('evidence_ref')}")
             if row.get("relation_support") == "trace_only":
@@ -1166,10 +1180,7 @@ def _span_sequence_grounding_health(
     active_chunks = [row for row in chunks if row.get("status") == "active_canonical_record"]
     units_without_spans = [row for row in active_units if not row.get("text_span_ids")]
     chunks_without_spans = [row for row in active_chunks if not row.get("text_span_ids")]
-    bbox_by_id = {
-        row["bbox_id"]: row
-        for row in bbox_rows
-    } | {
+    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows} | {
         row["word_bbox_id"]: {
             "bbox_id": row["word_bbox_id"],
             "bbox_precision": "exact",
@@ -1256,10 +1267,7 @@ def _promotion_engine_health(
     page_text_spans: list[dict],
     pages: list[dict],
 ) -> dict:
-    bbox_by_id = {
-        row["bbox_id"]: row
-        for row in bbox_rows
-    } | {
+    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows} | {
         row["word_bbox_id"]: {
             "bbox_id": row["word_bbox_id"],
             "bbox_precision": "exact",
@@ -1552,18 +1560,14 @@ def _legal_graph_authority_health(
     authority_without_evidence = [
         row
         for row in graph_edges
-        if row.get("edge_authority_level") == "evidence_backed_relation" and row.get("evidence_ref") and row.get("evidence_ref") not in evidence_by_id
+        if row.get("edge_authority_level") == "evidence_backed_relation"
+        and row.get("evidence_ref")
+        and row.get("evidence_ref") not in evidence_by_id
     ]
     authority_without_bbox = [
-        row
-        for row in exact_edges
-        if not row.get("bbox_refs") or any(bbox_id not in bbox_ids for bbox_id in row.get("bbox_refs") or ())
+        row for row in exact_edges if not row.get("bbox_refs") or any(bbox_id not in bbox_ids for bbox_id in row.get("bbox_refs") or ())
     ]
-    trace_promoted = [
-        row
-        for row in trace_edges
-        if row.get("citation_final") is not False or row.get("viewer_highlightable") is not False
-    ]
+    trace_promoted = [row for row in trace_edges if row.get("citation_final") is not False or row.get("viewer_highlightable") is not False]
     missing_fields = [
         row
         for row in graph_edges
@@ -2480,8 +2484,7 @@ def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
         "invalid_provenance_review_status_count": sum(
             1
             for row in source_conflicts
-            if row.get("source_anomaly_kind") == "source_marker_sequence_anomaly"
-            and row.get("provenance_review_status") != "reviewed"
+            if row.get("source_anomaly_kind") == "source_marker_sequence_anomaly" and row.get("provenance_review_status") != "reviewed"
         ),
         "final_evidence_available_count": sum(1 for row in source_conflicts if row.get("final_evidence_available") is True),
         "raw_provenance_exact_available_count": sum(
@@ -2496,9 +2499,7 @@ def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
         "all_relevant_span_highlight_count": sum(
             1 for row in source_conflicts if row.get("provenance_highlight_scope") == "all_relevant_spans"
         ),
-        "anchor_only_highlight_count": sum(
-            1 for row in source_conflicts if row.get("provenance_highlight_scope") == "anchor_span_only"
-        ),
+        "anchor_only_highlight_count": sum(1 for row in source_conflicts if row.get("provenance_highlight_scope") == "anchor_span_only"),
         "unknown_highlight_scope_count": sum(
             1
             for row in source_conflicts
@@ -2524,6 +2525,92 @@ def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
         "contradictory_failure_reason_count",
     }
     return {**counts, "status": "complete" if not any(counts[key] for key in error_keys) else "incomplete"}
+
+
+def _structural_authority_contract_health(
+    legal_units: list[dict], chunks: list[dict], graph_nodes: list[dict], graph_edges: list[dict], retrieval_units: list[dict]
+) -> dict:
+    units = {row.get("legal_unit_id"): row for row in legal_units}
+    nodes = {row.get("node_id"): row for row in graph_nodes}
+    unit_fields = {
+        "stable_unit_id",
+        "source_document_id",
+        "unit_type",
+        "structural_role",
+        "ancestor_legal_unit_ids",
+        "structural_depth",
+        "sibling_order",
+        "canonical_label",
+        "authority_kind",
+        "citable_status",
+        "citation_final",
+        "citation_finality_reason",
+    }
+    missing_unit_fields = sum(1 for row in legal_units if any(field not in row for field in unit_fields))
+    bad_parent_count = 0
+    bad_ancestor_count = 0
+    for row in legal_units:
+        parent = row.get("parent_legal_unit_id")
+        parents = list(row.get("parent_legal_unit_ids") or ())
+        if len(parents) > 1 or parents != ([parent] if parent else []) or (parent and parent not in units):
+            bad_parent_count += 1
+        expected: list[str] = []
+        current = parent
+        seen = {row.get("legal_unit_id")}
+        while current and current not in seen and current in units:
+            seen.add(current)
+            expected.append(current)
+            current = units[current].get("parent_legal_unit_id")
+        if (
+            current in seen
+            or list(reversed(expected)) != row.get("ancestor_legal_unit_ids")
+            or len(expected) != row.get("structural_depth")
+        ):
+            bad_ancestor_count += 1
+    chunk_fields = {"canonical_unit_ref", "contributing_child_legal_unit_ids", "authority_kind", "citable_status", "citation_final"}
+    missing_chunk_fields = sum(1 for row in chunks if any(field not in row for field in chunk_fields))
+    parent_final_count = sum(
+        1 for row in chunks if row.get("authority_kind") == "structural_context" and row.get("citation_final") is not False
+    )
+    required_edge_fields = {
+        "source_node_type",
+        "target_node_type",
+        "supporting_evidence_ids",
+        "source_document_ids",
+        "page_numbers",
+        "text_span_ids",
+        "bbox_refs",
+        "authority_kind",
+        "citation_final",
+        "citation_finality_reason",
+        "derivation_method",
+    }
+    bad_edge_count = sum(
+        1
+        for row in graph_edges
+        if any(field not in row for field in required_edge_fields)
+        or row.get("source_id") not in nodes
+        or row.get("target_id") not in nodes
+        or row.get("citation_final") is not False
+        or row.get("derivation_method") not in {"explicit_source_text", "reviewed_corpus_spec", "deterministic_structural_rule"}
+    )
+    bad_retrieval_trace_count = sum(
+        1
+        for row in retrieval_units
+        if not isinstance(row.get("retrieval_trace"), dict)
+        or row["retrieval_trace"].get("legal_unit_id") != row.get("legal_unit_id")
+        or row["retrieval_trace"].get("evidence_ids") != [row.get("evidence_id")]
+    )
+    counts = {
+        "missing_unit_fields_count": missing_unit_fields,
+        "bad_parent_count": bad_parent_count,
+        "bad_ancestor_count": bad_ancestor_count,
+        "missing_chunk_fields_count": missing_chunk_fields,
+        "parent_context_final_count": parent_final_count,
+        "bad_graph_edge_count": bad_edge_count,
+        "bad_retrieval_trace_count": bad_retrieval_trace_count,
+    }
+    return counts | {"status": "complete" if not any(counts.values()) else "incomplete"}
 
 
 def _legal_unit_chunk_span_closure_health(
@@ -2765,16 +2852,16 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
         "missing_bucket_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_bucket") not in allowed_buckets),
         "missing_reason_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") not in allowed_reasons),
         "missing_exposure_policy_count": sum(1 for row in absent_rows if row.get("exposure_policy") not in allowed_exposure_policies),
-        "missing_exposure_target_count": sum(1 for row in absent_rows if not row.get("exposure_target_kind") or not row.get("exposure_target_ref")),
+        "missing_exposure_target_count": sum(
+            1 for row in absent_rows if not row.get("exposure_target_kind") or not row.get("exposure_target_ref")
+        ),
         "missing_field_bbox_feasibility_count": sum(
             1 for row in absent_rows if row.get("field_bbox_feasibility") not in allowed_field_bbox_feasibility
         ),
         "clickable_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_clickable") is not False),
         "final_citation_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_citation_final") is not False),
         "false_exact_absent_span_count": sum(
-            1
-            for row in absent_rows
-            if row.get("exposure_exactness_level") == "exact_bbox" and not row.get("word_bbox_ids")
+            1 for row in absent_rows if row.get("exposure_exactness_level") == "exact_bbox" and not row.get("word_bbox_ids")
         ),
         "false_highlight_exposure_policy_count": sum(
             1
@@ -2790,8 +2877,7 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
     return {
         **counts,
         "status": "complete"
-        if counts["bbox_key_absent_span_count"]
-        == sum(counts[f"{bucket}_count"] for bucket in sorted(allowed_buckets))
+        if counts["bbox_key_absent_span_count"] == sum(counts[f"{bucket}_count"] for bucket in sorted(allowed_buckets))
         and not any(
             counts[key]
             for key in (
