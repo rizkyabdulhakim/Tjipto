@@ -9,6 +9,7 @@ import tempfile
 import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
+from tjipto.corpora.uud.validation import validate_uud_artifact_dir
 from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
 
@@ -17,7 +18,44 @@ ROOT = Path(__file__).resolve().parents[1]
 FINAL = ROOT / "data/final/uud"
 
 
-class RuntimeIntegrityStage1Test(unittest.TestCase):
+class VerifiedCorpusContractTest(unittest.TestCase):
+    def test_exact_quote_mutation_fails_offline_and_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "data", root / "data")
+            final = root / "data/final/uud"
+            artifact = final / "evidence_registry.jsonl"
+            rows = [json.loads(line) for line in artifact.read_text(encoding="utf-8").splitlines() if line]
+            rows[0]["quoted_text"] = "fabricated exact legal quote"
+            data = ("\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n").encode("utf-8")
+            artifact.write_bytes(data)
+            manifest = json.loads((final / "manifest.json").read_text(encoding="utf-8"))
+            manifest["files"]["evidence_registry.jsonl"].update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
+            _write_trusted_manifest(root, manifest)
+            self.assertTrue(any(error.startswith("EVIDENCE_QUOTE_SOURCE_MISMATCH") for error in validate_uud_artifact_dir(final)))
+            result = LegalRuntimeService(root).ask("uud", "Pasal 1")
+            self.assertEqual(result["reason_code"], "evidence_quote_source_mismatch")
+            self.assertFalse(result["citations"])
+
+    def test_manifest_contract_cannot_remove_minimum_quote_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "data", root / "data")
+            final = root / "data/final/uud"
+            artifact = final / "evidence_registry.jsonl"
+            rows = [json.loads(line) for line in artifact.read_text(encoding="utf-8").splitlines() if line]
+            rows[0].pop("quoted_text")
+            data = ("\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n").encode("utf-8")
+            artifact.write_bytes(data)
+            manifest = json.loads((final / "manifest.json").read_text(encoding="utf-8"))
+            record = manifest["files"]["evidence_registry.jsonl"]
+            record["required_fields"] = ["evidence_id"]
+            record.update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
+            _write_trusted_manifest(root, manifest)
+            result = LegalRuntimeService(root).ask("uud", "Pasal 1")
+            self.assertEqual(result["reason_code"], "artifact_contract_weakened")
+            self.assertFalse(result["citations"])
+
     def test_trust_anchor_and_semantic_row_failures_are_typed(self) -> None:
         for expected, mutate in (
             ("trusted_manifest_missing", lambda registry, manifest, final: registry["uud"].pop("manifest_sha256")),

@@ -547,6 +547,7 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
         }[authority_kind],
         "citation_final": authority_kind == "legal_citation",
         "support_kind": _support_kind_for_authority(authority_kind),
+        "source_url": row.get("source_url") or _source_url(store, row),
     }
     conflict_row = conflict or _source_conflict_by_evidence(store, row.get("evidence_id"))
     if conflict_row is not None or row.get("source_conflict_id"):
@@ -563,6 +564,18 @@ def _support_kind_for_authority(authority_kind: str) -> str:
         "source_anomaly": "source_anomaly_provenance",
         "instrument_provenance": "instrument_provenance",
     }[authority_kind]
+
+
+def _source_url(store, row: dict) -> str | None:
+    source_id = row.get("source_document_id")
+    return next(
+        (
+            source.get("source_page_url") or source.get("final_download_url") or source.get("download_url")
+            for source in getattr(store, "source_documents", ())
+            if source.get("source_document_id") == source_id
+        ),
+        None,
+    )
 
 
 def _source_conflict_taxonomy_fields(conflict: dict | None) -> dict:
@@ -688,6 +701,7 @@ def _document_result(store, corpus_id: str, source: dict, score: int) -> dict:
         "title": _document_title(store, source),
         "document_title": _document_title(store, source),
         "snippet": f"Dokumen sumber terverifikasi: {source.get('filename')} ({page_count} halaman).",
+        "source_url": source.get("source_page_url") or source.get("final_download_url") or source.get("download_url"),
         "source_role": source.get("source_role"),
         "temporal_context": source.get("temporal_context"),
         "page_numbers": (1,),
@@ -754,6 +768,7 @@ def _search_result(row: dict, routed: dict, context_pack: dict) -> dict:
         "title": row.get("label") or row.get("citation") or row.get("legal_unit_id") or routed["corpus_id"].upper(),
         "snippet": row.get("quoted_text"),
         "document_title": row.get("document_title"),
+        "source_url": row.get("source_url"),
         "citation": row.get("citation"),
         "label": row.get("label"),
         "source_role": row.get("source_role"),

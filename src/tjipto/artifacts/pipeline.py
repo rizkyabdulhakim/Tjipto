@@ -30,14 +30,14 @@ def atomic_promote_artifacts(
             for path in sorted(stage_dir.iterdir()):
                 if path.is_file():
                     target = final_dir / path.name
-                    for attempt in range(3):
+                    for attempt in range(10):
                         try:
                             path.replace(target)
                             break
                         except PermissionError:
-                            if attempt == 2:
+                            if attempt == 9:
                                 raise
-                            time.sleep(0.1)
+                            time.sleep(0.2)
                     promoted.append(path.name)
         except Exception:
             for name in promoted:

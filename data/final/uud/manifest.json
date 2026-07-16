@@ -45,7 +45,7 @@
       "logical_key": "article_amendment_relations",
       "artifact_kind": "article_amendment_relations",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "relation_id",
       "bytes": 228882,
       "sha256": "c977158a6374ae2edeca7227f3da37e0f584cb4e0f17245e22dbc6201edfbc53"
@@ -58,7 +58,7 @@
       "logical_key": "article_versions",
       "artifact_kind": "article_versions",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "article_version_id",
       "bytes": 286261,
       "sha256": "81323b9524ea53ab2a1d5b52c39e9de7ce374dc6bf5b1daee73bcdc0da833b1d"
@@ -71,7 +71,7 @@
       "logical_key": "bbox_registry",
       "artifact_kind": "bbox_registry",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "bbox_id",
       "required_fields": [
         "bbox_id",
@@ -83,8 +83,8 @@
         "x1",
         "y1"
       ],
-      "bytes": 1864553,
-      "sha256": "03d9c380c232232a734ddfa513333fc9ebaeaafee807dcfc977daa5da30000bf"
+      "bytes": 1803795,
+      "sha256": "7546bcff098e3966182a2925a8f4d62cafe2c1d8f0fbfdca8d5a1be1f54cd57c"
     },
     "chunks.jsonl": {
       "origin": "generated",
@@ -94,17 +94,19 @@
       "logical_key": "chunks",
       "artifact_kind": "chunks",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "chunk_id",
       "required_fields": [
         "chunk_id",
         "legal_unit_id",
         "source_document_id",
         "evidence_ids",
-        "text_span_ids"
+        "text_span_ids",
+        "authority_kind",
+        "evidence_exists"
       ],
-      "bytes": 1548036,
-      "sha256": "b5ff34e626ef0496d54ac81447053fb47974fd117cea35f2ed6d533a1dd4c77d"
+      "bytes": 1546083,
+      "sha256": "b433df13054d603b693ed9a5becdd5d3b45452033dc6381f88445e930e8c57ec"
     },
     "document_metadata.jsonl": {
       "origin": "generated",
@@ -114,7 +116,7 @@
       "logical_key": "document_metadata",
       "artifact_kind": "document_metadata",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "document_metadata_id",
       "bytes": 17657,
       "sha256": "f20f5b0e1b7f907f91f22c18df768a613c9c1be4343bfecc9e91e02271e845ba"
@@ -127,7 +129,7 @@
       "logical_key": "document_relations",
       "artifact_kind": "document_relations",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "relation_id",
       "bytes": 5308,
       "sha256": "073e69b79e05fe641ef2d048c5a2fed8dfe3493c8e2312d2bc3b0516612c3e71"
@@ -140,18 +142,31 @@
       "logical_key": "evidence_registry",
       "artifact_kind": "evidence_registry",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "evidence_id",
       "required_fields": [
         "evidence_id",
         "legal_unit_id",
         "source_document_id",
+        "source_url",
         "page_numbers",
         "bbox_refs",
-        "text_span_ids"
+        "text_span_ids",
+        "quoted_text",
+        "source_sha256",
+        "source_role",
+        "status",
+        "authority_kind",
+        "citable_status",
+        "citable",
+        "citation_final",
+        "citation_finality_reason",
+        "exactness",
+        "evidence_exists",
+        "reason_code"
       ],
-      "bytes": 877523,
-      "sha256": "ad0742b980fc3fd485d47423fb1628745ad84c21985c07c348aeedf4faee48c6"
+      "bytes": 908147,
+      "sha256": "cd0e2e26f8983f1ef04bbf43c3ea28b508fba8d02c220a2731ddbd264dc5ec02"
     },
     "excluded_records.jsonl": {
       "origin": "generated",
@@ -161,7 +176,7 @@
       "logical_key": "excluded_records",
       "artifact_kind": "excluded_records",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "excluded_record_id",
       "bytes": 2403,
       "sha256": "4b613a32dc062ef86838da5e39078da41211e40d08e74e809218a757a7709400"
@@ -174,17 +189,26 @@
       "logical_key": "graph_edges",
       "artifact_kind": "graph_edges",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "edge_id",
       "required_fields": [
         "edge_id",
         "source_id",
         "target_id",
         "relation_type",
-        "support_kind"
+        "support_kind",
+        "supporting_evidence_ids",
+        "source_document_ids",
+        "page_numbers",
+        "text_span_ids",
+        "bbox_refs",
+        "derivation_method",
+        "derivation_reason",
+        "authority_kind",
+        "citation_final"
       ],
-      "bytes": 6427696,
-      "sha256": "148980f9eab153fe10f293ca3afabf2f9f04e9923ed8ef10ab60f953f6d8da1a"
+      "bytes": 6413887,
+      "sha256": "a879abf35957ee0dc6a412c1e36ddea773798d9eb22950edbd069101ffbc3a2a"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -194,14 +218,19 @@
       "logical_key": "graph_nodes",
       "artifact_kind": "graph_nodes",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "node_id",
       "required_fields": [
         "node_id",
-        "node_type"
+        "node_type",
+        "authority_kind",
+        "citable_status",
+        "citable",
+        "citation_final",
+        "citation_finality_reason"
       ],
-      "bytes": 2260461,
-      "sha256": "d132e63210a42fd2ad4f96b0090dde9b167d62803f54e2d24b4aa83c7785a514"
+      "bytes": 2252115,
+      "sha256": "1885b5937297a05a2a7f810770742aff2988f8376fa3b53053a760a820843cb7"
     },
     "legal_units.jsonl": {
       "origin": "generated",
@@ -211,15 +240,21 @@
       "logical_key": "legal_units",
       "artifact_kind": "legal_units",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "legal_unit_id",
       "required_fields": [
         "legal_unit_id",
         "source_document_id",
-        "text_span_ids"
+        "text_span_ids",
+        "authority_kind",
+        "citable_status",
+        "citable",
+        "citation_final",
+        "citation_finality_reason",
+        "evidence_exists"
       ],
-      "bytes": 1728777,
-      "sha256": "ce3c1dfd0dc64cd1a73f8419b5b504280c22156cc1e62825b9838b8d31f11d72"
+      "bytes": 1726824,
+      "sha256": "ff56cbe4a59d506a62fea08c0b08a15d4460fce51e93dcbccc47791ea6493910"
     },
     "metadata.jsonl": {
       "origin": "generated",
@@ -229,7 +264,7 @@
       "logical_key": "metadata",
       "artifact_kind": "metadata",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "metadata_id",
       "bytes": 1051703,
       "sha256": "bb6477f45e1093e9f99547405504195adad93a0f1662e84822b7c49d168231ce"
@@ -242,7 +277,7 @@
       "logical_key": "metadata_graph_edges",
       "artifact_kind": "metadata_graph_edges",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "edge_id",
       "bytes": 421956,
       "sha256": "6ffb65008700f38b471b5ae00bf896c12e09b9f6b4137671906247b800d7a30e"
@@ -255,7 +290,7 @@
       "logical_key": "metadata_grounding",
       "artifact_kind": "metadata_grounding",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "metadata_grounding_id",
       "bytes": 125131,
       "sha256": "56b9982142b0d2ed67be1c7e95d35cb93f128e86ee8191d8f22863445f78d898"
@@ -268,7 +303,7 @@
       "logical_key": "metadata_grounding_registry",
       "artifact_kind": "metadata_grounding_registry",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "metadata_grounding_ref_id",
       "bytes": 682179,
       "sha256": "c5a08fb320d787ec7c3daf7c679872c391dae6b5f86638db5c4ab06132cd300e"
@@ -281,12 +316,13 @@
       "logical_key": "pages",
       "artifact_kind": "pages",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "page_id",
       "required_fields": [
         "page_id",
         "source_document_id",
-        "page_number"
+        "page_number",
+        "text"
       ],
       "bytes": 116591,
       "sha256": "afcd4b89997579bbe3a08f5f762d3afb2129b389bc768d064d97d9b061083e33"
@@ -299,7 +335,7 @@
       "logical_key": "pdf_health_report",
       "artifact_kind": "pdf_health_report",
       "format": "json",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "bytes": 21421,
       "sha256": "bee505990f8247e225194f132e393e5d78b3a6ceb3c067fd3ca4d6cab4fad0fb"
     },
@@ -311,7 +347,7 @@
       "logical_key": "promotion_decisions",
       "artifact_kind": "promotion_decisions",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "decision_id",
       "bytes": 100886,
       "sha256": "fa41d0d3a47e09633685ec2be9572e04f6911b4574ab14224323cf33177d1d2c"
@@ -324,16 +360,23 @@
       "logical_key": "retrieval_units",
       "artifact_kind": "retrieval_units",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "retrieval_unit_id",
       "required_fields": [
         "retrieval_unit_id",
         "evidence_id",
         "legal_unit_id",
-        "chunk_id"
+        "chunk_id",
+        "authority_kind",
+        "citable_status",
+        "citable",
+        "citation_final",
+        "citation_finality_reason",
+        "evidence_exists",
+        "retrieval_trace"
       ],
-      "bytes": 924471,
-      "sha256": "3ec72fb49e1319ca7a12b9116863de37e4453138de3b918d0b57f07f156988b9"
+      "bytes": 921687,
+      "sha256": "162feced25125fd6dfe1885557d7466d1365499371f19546181a23804b023cff"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -343,7 +386,7 @@
       "logical_key": "source_conflicts",
       "artifact_kind": "source_conflicts",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "source_conflict_id",
       "bytes": 7088,
       "sha256": "69278c626ad51e56332720dff3223308a9f4de3fb34d0db02232285f39a1a6d0"
@@ -356,12 +399,14 @@
       "logical_key": "source_documents",
       "artifact_kind": "source_documents",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "source_document_id",
       "required_fields": [
         "source_document_id",
         "sha256",
-        "path"
+        "path",
+        "source_page_url",
+        "download_url"
       ],
       "bytes": 8555,
       "sha256": "44436549821a3abe20497e28bfeec6e6b6d259121d0cb818fbcef3868c2977bc"
@@ -374,7 +419,7 @@
       "logical_key": "source_integrity",
       "artifact_kind": "source_integrity",
       "format": "json",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "bytes": 9739,
       "sha256": "0d84e8cbc8ba64ee1d052bcfc92c6dbf96c088f8a873d301d69e97081e83f319"
     },
@@ -386,7 +431,7 @@
       "logical_key": "validation_alignment_results",
       "artifact_kind": "validation_alignment_results",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "alignment_result_id",
       "bytes": 361336,
       "sha256": "00235a4dd3ae35b42305c462fe7aac7753d697b5016cfae0f6154c75c19ac1bc"
@@ -399,7 +444,7 @@
       "logical_key": "validation_exception_review_labels",
       "artifact_kind": "validation_exception_review_labels",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "exception_review_id",
       "bytes": 5112,
       "sha256": "1291c7f22e727868541eae52d0b447076d8126c9b50498236cf8d32fcaaa2515"
@@ -412,7 +457,7 @@
       "logical_key": "validation_exceptions",
       "artifact_kind": "validation_exceptions",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "exception_id",
       "bytes": 18794,
       "sha256": "2827646c06181795e390015aeeb6b41ee73d0c95a852ef8fb8884a39cf7aef43"
@@ -425,7 +470,7 @@
       "logical_key": "validation_report",
       "artifact_kind": "validation_report",
       "format": "json",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "bytes": 22079,
       "sha256": "7cf3e2c441a9ef378cc71020328bf2f27248a6626fb7044b419af5200b2ce861"
     },
@@ -437,16 +482,30 @@
       "logical_key": "page_text_spans",
       "artifact_kind": "page_text_spans",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "text_span_id",
       "required_fields": [
         "text_span_id",
         "source_document_id",
         "page_number",
-        "text"
+        "text",
+        "classification",
+        "legal_force",
+        "authority_kind",
+        "citable_status",
+        "citable",
+        "citation_final",
+        "highlightable",
+        "exactness",
+        "evidence_ids",
+        "span_bbox_ids",
+        "evidence_bbox_ids",
+        "context_bbox_ids",
+        "reason_code",
+        "reason"
       ],
-      "bytes": 5552570,
-      "sha256": "18c15a16dc80c923b253b8f743bb503560c2cb1480977b063e0728e86049492d"
+      "bytes": 5468499,
+      "sha256": "d340ca3fd915e4f78e561b67886c81c903c12611cb3ad759d39effe8e4f764d4"
     },
     "word_bboxes.jsonl": {
       "origin": "generated",
@@ -456,7 +515,7 @@
       "logical_key": "word_bboxes",
       "artifact_kind": "word_bboxes",
       "format": "jsonl",
-      "artifact_schema": 3,
+      "artifact_schema": 4,
       "primary_id": "word_bbox_id",
       "required_fields": [
         "word_bbox_id",
@@ -465,10 +524,17 @@
         "x0",
         "y0",
         "x1",
-        "y1"
+        "y1",
+        "coordinate_space",
+        "coordinate_origin",
+        "page_width",
+        "page_height",
+        "page_rotation",
+        "page_box_basis",
+        "transform_version"
       ],
-      "bytes": 9917033,
-      "sha256": "b9f350d5022619a3a9b6088b8b39cfb138820c0f37db547839aa8e9ad0d68418"
+      "bytes": 9522482,
+      "sha256": "8a1c646871024c7ab52a25b65f7b5611a8596c266a3f106711901a3400921997"
     }
   },
   "fixtures": {
@@ -492,7 +558,7 @@
   "pdf_health_report": "pdf_health_report.json",
   "promotion_decisions": "promotion_decisions.jsonl",
   "retrieval_units": "retrieval_units.jsonl",
-  "schema_version": 3,
+  "schema_version": 4,
   "source_conflicts": "source_conflicts.jsonl",
   "source_documents": "source_documents.jsonl",
   "source_files": {

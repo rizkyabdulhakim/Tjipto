@@ -153,7 +153,7 @@ class TrustBoundaryMutationTest(unittest.TestCase):
                 citable=False,
                 citation_final=False,
                 exactness="not_applicable",
-                evidence_available=False,
+                evidence_exists=False,
                 reason_code="mutation_fixture",
             )
         )
@@ -198,7 +198,7 @@ class TrustBoundaryMutationTest(unittest.TestCase):
                 citable=False,
                 citation_final=False,
                 exactness="rejected",
-                evidence_available=False,
+                evidence_exists=False,
                 reason_code="mutation_fixture",
             )
         )

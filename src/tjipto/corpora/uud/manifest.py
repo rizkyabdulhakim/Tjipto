@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tjipto.artifacts.manifest import refresh_manifest as refresh_artifact_manifest
+from tjipto.contracts.artifacts import MINIMUM_ARTIFACT_FIELDS
 from tjipto.corpora.uud.artifact_policy import UUD_ARTIFACT_ORIGIN_POLICY
 
 
@@ -109,19 +110,7 @@ PRIMARY_IDS = {
     "word_bboxes": "word_bbox_id",
 }
 
-REQUIRED_FIELDS = {
-    "bbox_registry": ("bbox_id", "evidence_id", "source_document_id", "page_number", "x0", "y0", "x1", "y1"),
-    "chunks": ("chunk_id", "legal_unit_id", "source_document_id", "evidence_ids", "text_span_ids"),
-    "evidence_registry": ("evidence_id", "legal_unit_id", "source_document_id", "page_numbers", "bbox_refs", "text_span_ids"),
-    "graph_edges": ("edge_id", "source_id", "target_id", "relation_type", "support_kind"),
-    "graph_nodes": ("node_id", "node_type"),
-    "legal_units": ("legal_unit_id", "source_document_id", "text_span_ids"),
-    "pages": ("page_id", "source_document_id", "page_number"),
-    "page_text_spans": ("text_span_id", "source_document_id", "page_number", "text"),
-    "retrieval_units": ("retrieval_unit_id", "evidence_id", "legal_unit_id", "chunk_id"),
-    "source_documents": ("source_document_id", "sha256", "path"),
-    "word_bboxes": ("word_bbox_id", "source_document_id", "page_number", "x0", "y0", "x1", "y1"),
-}
+REQUIRED_FIELDS = MINIMUM_ARTIFACT_FIELDS
 
 
 def build_manifest(source_documents: dict[str, dict]) -> dict:
@@ -142,7 +131,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
                 "logical_key": logical_key,
                 "artifact_kind": logical_key,
                 "format": "json" if filename.endswith(".json") else "jsonl",
-                "artifact_schema": 3,
+                "artifact_schema": 4,
                 **({"primary_id": PRIMARY_IDS[logical_key]} if logical_key in PRIMARY_IDS else {}),
                 **({"required_fields": REQUIRED_FIELDS[logical_key]} if logical_key in REQUIRED_FIELDS else {}),
             }
@@ -160,7 +149,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "pdf_health_report": "pdf_health_report.json",
         "promotion_decisions": "promotion_decisions.jsonl",
         "retrieval_units": "retrieval_units.jsonl",
-        "schema_version": 3,
+        "schema_version": 4,
         "source_conflicts": "source_conflicts.jsonl",
         "source_documents": "source_documents.jsonl",
         "source_files": {row["path"]: row["sha256"] for row in sorted(source_documents.values(), key=lambda item: item["path"])},

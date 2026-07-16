@@ -9,6 +9,7 @@ test("document search result opens document viewer mode", () => {
     source_document_id: "uud::current_consolidated",
     document_id: "uud::current_consolidated",
     document_title: "UUD 1945",
+    source_url: "https://peraturan.bpk.go.id/Details/101646/uud-no--",
     page_numbers: [1],
     snippet: "Dokumen sumber terverifikasi",
     status: "document",
@@ -18,6 +19,7 @@ test("document search result opens document viewer mode", () => {
   assert.equal(citation?.documentId, "uud::current_consolidated");
   assert.equal(citation?.sourceDocumentId, "uud::current_consolidated");
   assert.equal(citation?.pageNumber, 1);
+  assert.equal(citation?.sourceUrl, "https://peraturan.bpk.go.id/Details/101646/uud-no--");
 });
 
 test("evidence search result keeps evidence viewer mode", () => {
@@ -55,6 +57,7 @@ test("exact metadata provenance is mapped as non-final metadata source", () => {
       {
         evidence_id: "meta_1",
         source_document_id: "uud::amendment_1_historical",
+        source_url: "https://peraturan.bpk.go.id/Details/101646/uud-no--",
         quoted_text: "Pada tanggal 19 Oktober 1999",
         label: "Metadata amendment_1_historical: date",
         authority_kind: "metadata_source",
@@ -76,6 +79,7 @@ test("exact metadata provenance is mapped as non-final metadata source", () => {
   assert.equal(citations[0].authorityKind, "metadata_source");
   assert.equal(citations[0].authorityLabel, "Metadata sumber");
   assert.equal(citations[0].citationFinal, false);
+  assert.equal(citations[0].sourceUrl, "https://peraturan.bpk.go.id/Details/101646/uud-no--");
 });
 
 test("limited answer keeps backend answer text instead of fallback", () => {

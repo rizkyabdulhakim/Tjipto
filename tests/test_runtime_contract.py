@@ -1892,7 +1892,7 @@ class RuntimeContractTest(unittest.TestCase):
                 json.dumps(
                     {
                         "corpus_id": "demo",
-                        "schema_version": 3,
+                        "schema_version": 4,
                         "evidence_registry": "proof.rows",
                         "bbox_registry": "boxes.rows",
                         "graph_nodes": "nodes.rows",
@@ -1931,7 +1931,7 @@ class RuntimeContractTest(unittest.TestCase):
             (root / "data").mkdir()
             (root / "corpus").mkdir()
             (root / "corpus/manifest.json").write_text(
-                json.dumps({"corpus_id": "demo", "schema_version": 3}),
+                json.dumps({"corpus_id": "demo", "schema_version": 4}),
                 encoding="utf-8",
             )
             (root / "data/corpus_registry.json").write_text(
@@ -1973,7 +1973,7 @@ class RuntimeContractTest(unittest.TestCase):
             (root / "data/final/demo").mkdir(parents=True)
             (root / "data/corpus_registry.json").write_text(json.dumps({"demo": "data/final/demo/manifest.json"}), encoding="utf-8")
             (root / "data/final/demo/manifest.json").write_text(
-                json.dumps({"corpus_id": "demo", "schema_version": 3}),
+                json.dumps({"corpus_id": "demo", "schema_version": 4}),
                 encoding="utf-8",
             )
             old = os.environ.get("TJIPTO_REPO_ROOT")
@@ -2021,7 +2021,7 @@ class RuntimeContractTest(unittest.TestCase):
                     json.dumps(
                         {
                             "corpus_id": "demo",
-                            "schema_version": 3,
+                            "schema_version": 4,
                             "evidence_registry": artifact_path,
                         }
                     ),

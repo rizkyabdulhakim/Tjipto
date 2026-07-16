@@ -348,7 +348,7 @@ def build_validation_report(
 
 
 def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
-    if read_json(final_dir / "manifest.json").get("schema_version") != 3:
+    if read_json(final_dir / "manifest.json").get("schema_version") != 4:
         return ("artifact_schema_version_incompatible",)
     legal_units = read_jsonl(final_dir / "legal_units.jsonl")
     chunks = read_jsonl(final_dir / "chunks.jsonl")

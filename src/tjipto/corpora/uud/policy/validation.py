@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from tjipto.contracts.authority import authority_state_error
 from tjipto.contracts.coordinates import COORDINATE_SPACE, TRANSFORM_VERSION
+from tjipto.contracts.evidence import exact_quote_support_reason
 from tjipto.contracts.violations import Violation
 
 
@@ -13,7 +14,7 @@ AUTHORITY_FIELDS = (
     "citable",
     "citation_final",
     "exactness",
-    "evidence_available",
+    "evidence_exists",
     "reason_code",
     "citation_finality_reason",
 )
@@ -98,7 +99,7 @@ def validate_uud_trust_boundary(
                 citable=row["citable"],
                 citation_final=row["citation_final"],
                 exactness=row["exactness"],
-                evidence_available=row["evidence_available"],
+                evidence_exists=row["evidence_exists"],
                 reason_code=row["reason_code"],
             )
             if error:
@@ -156,7 +157,7 @@ def _validate_runtime_evidence_links(
                 row.get("authority_kind") != "normative_legal_text"
                 or row.get("citable") is not True
                 or row.get("citation_final") is not True
-                or row.get("evidence_available") is not True
+                or row.get("evidence_exists") is not True
             )
         ):
             violations.append(
@@ -534,6 +535,33 @@ def _validate_evidence_closure(
                         "existing page",
                         page,
                         "evidence page missing",
+                    )
+                )
+        if (
+            row.get("exactness") == "exact"
+            or row.get("citable") is True
+            or row.get("citation_final") is True
+            or row.get("viewer_highlightable") is True
+        ):
+            quote_error = exact_quote_support_reason(
+                quoted_text=row.get("quoted_text"),
+                source_document_id=row.get("source_document_id"),
+                page_numbers=row.get("page_numbers") or (),
+                text_span_ids=row.get("text_span_ids") or (),
+                bbox_refs=row.get("bbox_refs") or (),
+                spans_by_id={item["text_span_id"]: item for item in spans},
+                bboxes_by_id=bbox_by_id,
+            )
+            if quote_error:
+                violations.append(
+                    _violation(
+                        "EVIDENCE_QUOTE_SOURCE_MISMATCH",
+                        "evidence_registry",
+                        row_id,
+                        "quoted_text",
+                        "accepted source span and exact BBox text",
+                        quote_error,
+                        "exact evidence quote is not source-faithful",
                     )
                 )
     for span in spans:

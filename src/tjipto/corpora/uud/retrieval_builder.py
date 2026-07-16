@@ -41,7 +41,7 @@ def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict
                     citable=False,
                     citation_final=False,
                     exactness="not_applicable",
-                    evidence_available=True,
+                    evidence_exists=True,
                     reason_code="retrieval_trace_not_citation",
                 ),
             },
@@ -60,7 +60,7 @@ def _retrieval_authority(evidence: dict) -> dict:
         citable=False,
         citation_final=False,
         exactness="exact" if exact else "page_only",
-        evidence_available=bool(evidence.get("evidence_id")),
+        evidence_exists=bool(evidence.get("evidence_id")),
         reason_code=("retrieval_candidate_requires_runtime_evidence_selection" if exact else evidence.get("failure_reason", "not_exact")),
     )
 

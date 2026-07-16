@@ -83,6 +83,7 @@ export interface SearchResult {
   citation_id?: string;
   viewer_ref_id?: string;
   source_document_id?: string;
+  source_url?: string;
   title?: string;
   document_title?: string;
   citation?: string;
@@ -111,6 +112,7 @@ export interface CitationPayload {
   evidence_id: string;
   legal_unit_id?: string;
   source_document_id?: string;
+  source_url?: string;
   citation?: string;
   label?: string;
   hierarchy?: string[];
@@ -135,6 +137,7 @@ export interface ViewerPayload {
   evidence_id?: string;
   legal_unit_id?: string;
   source_document_id?: string;
+  source_url?: string;
   citation?: string;
   quoted_text?: string;
   source_role?: string;
@@ -299,7 +302,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       article: String(item.label ?? item.citation ?? "UUD"),
       pageNumber: Number.isFinite(pageNumber) ? pageNumber : 1,
       excerpt: String(item.quoted_text),
-      sourceUrl: "",
+      sourceUrl: item.source_url ?? "",
       sourceDomain: item.source_role ?? item.corpus_id ?? "runtime",
       sourceRole: item.source_role,
       temporalContext: item.temporal_context,
@@ -365,7 +368,7 @@ export function mapSearchResultToCitation(item: SearchResult, index: number): Ci
     article: String(item.label ?? item.citation ?? item.title ?? "UUD"),
     pageNumber: Number.isFinite(pageNumber) ? pageNumber : 1,
     excerpt: String(item.snippet),
-    sourceUrl: "",
+    sourceUrl: item.source_url ?? "",
     sourceDomain: item.source_role ?? item.corpus_id ?? "runtime",
     sourceRole: item.source_role,
     temporalContext: item.temporal_context,

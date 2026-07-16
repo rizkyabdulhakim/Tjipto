@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+import hashlib
 from pathlib import Path
+import shutil
+import tempfile
 import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
@@ -26,6 +29,7 @@ from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.validation import build_validation_report
+from tjipto.corpora.uud_artifact_baseline import rebuild_uud_artifact_baseline
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
 
 
@@ -34,6 +38,15 @@ FINAL = ROOT / "data/final/uud"
 
 
 class UudBuilderContractTest(unittest.TestCase):
+    def test_rebuild_executes_and_is_byte_identical(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "data", root / "data")
+            rebuild_uud_artifact_baseline(root)
+            first = _artifact_hashes(root / "data/final/uud")
+            rebuild_uud_artifact_baseline(root)
+            self.assertEqual(first, _artifact_hashes(root / "data/final/uud"))
+
     def _word_bboxes(self) -> list[dict]:
         import fitz
 
@@ -359,7 +372,12 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertEqual(source_conflicts, read_jsonl(FINAL / "source_conflicts.jsonl"))
 
     def test_word_bbox_registry_exists_and_is_deterministic(self) -> None:
-        self.assertEqual(self._word_bboxes(), read_jsonl(FINAL / "word_bboxes.jsonl"))
+        # The artifact writer uses the release-wide six-decimal float contract;
+        # compare the builder's in-memory values under that same representation.
+        self.assertEqual(
+            _canonicalize_numeric_rows(self._word_bboxes()),
+            _canonicalize_numeric_rows(read_jsonl(FINAL / "word_bboxes.jsonl")),
+        )
 
     def test_absent_span_keys_are_fully_classified_with_specific_reasons(self) -> None:
         spans = read_jsonl(FINAL / "page_text_spans.jsonl")
@@ -436,6 +454,14 @@ def _raw_metadata_block_contract(row: dict) -> dict:
         "status": row["status"],
         "temporal_context": row["temporal_context"],
     }
+
+
+def _artifact_hashes(final: Path) -> dict[str, str]:
+    return {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(final.iterdir()) if path.is_file()}
+
+
+def _canonicalize_numeric_rows(rows: list[dict]) -> list[dict]:
+    return [{key: round(value, 6) if isinstance(value, float) else value for key, value in row.items()} for row in rows]
 
 
 if __name__ == "__main__":

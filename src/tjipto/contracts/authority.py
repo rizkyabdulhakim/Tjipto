@@ -27,7 +27,7 @@ def authority_decision(
     citable: bool,
     citation_final: bool,
     exactness: str,
-    evidence_available: bool,
+    evidence_exists: bool,
     reason_code: str,
 ) -> dict:
     error = authority_state_error(
@@ -35,7 +35,7 @@ def authority_decision(
         citable=citable,
         citation_final=citation_final,
         exactness=exactness,
-        evidence_available=evidence_available,
+        evidence_exists=evidence_exists,
         reason_code=reason_code,
     )
     if error:
@@ -47,7 +47,7 @@ def authority_decision(
         "citation_final": citation_final,
         "citation_finality_reason": reason_code,
         "exactness": exactness,
-        "evidence_available": evidence_available,
+        "evidence_exists": evidence_exists,
         "reason_code": reason_code,
     }
 
@@ -58,12 +58,12 @@ def authority_state_error(
     citable: object,
     citation_final: object,
     exactness: object,
-    evidence_available: object,
+    evidence_exists: object,
     reason_code: object,
 ) -> str | None:
     if authority_kind not in AUTHORITY_KINDS:
         return "authority_kind_unknown"
-    if not isinstance(citable, bool) or not isinstance(citation_final, bool) or not isinstance(evidence_available, bool):
+    if not isinstance(citable, bool) or not isinstance(citation_final, bool) or not isinstance(evidence_exists, bool):
         return "authority_boolean_invalid"
     if exactness not in EXACTNESS_VALUES:
         return "authority_exactness_unknown"
@@ -71,9 +71,9 @@ def authority_state_error(
         return "authority_reason_missing"
     if citation_final and authority_kind not in FINAL_AUTHORITY_KINDS:
         return "authority_nonlegal_final"
-    if citation_final and (not citable or exactness != "exact" or not evidence_available):
+    if citation_final and (not citable or exactness != "exact" or not evidence_exists):
         return "authority_final_without_exact_evidence"
-    if citable and (authority_kind not in FINAL_AUTHORITY_KINDS or exactness != "exact" or not evidence_available):
+    if citable and (authority_kind not in FINAL_AUTHORITY_KINDS or exactness != "exact" or not evidence_exists):
         return "authority_citable_without_exact_evidence"
     if authority_kind in NONFINAL_AUTHORITY_KINDS and (citable or citation_final):
         return "authority_nonfinal_promoted"

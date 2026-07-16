@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from threading import RLock
 
+from tjipto.contracts.artifacts import MINIMUM_ARTIFACT_FIELDS
+from tjipto.contracts.evidence import exact_quote_support_reason
 from tjipto.core.manifest import ALLOWED_ARTIFACT_ORIGINS, verified_file_bytes
 
 
@@ -71,10 +73,13 @@ def _load_snapshot(config) -> VerifiedCorpusSnapshot:
         raise CorpusIntegrityError("malformed_manifest") from error
     if not isinstance(manifest, dict) or manifest.get("corpus_id") != config.corpus_id:
         raise CorpusIntegrityError("manifest_identity_mismatch")
-    if manifest.get("schema_version") != 3:
+    if manifest.get("schema_version") != 4:
         raise CorpusIntegrityError("unsupported_schema")
     artifacts = _verify_artifacts(config.manifest_path.parent.resolve(), manifest, config.setting("runtime_required_artifacts"))
-    _validate_cross_artifact_references(manifest, artifacts)
+    try:
+        _validate_cross_artifact_references(manifest, artifacts)
+    except (KeyError, TypeError) as error:
+        raise CorpusIntegrityError("artifact_semantic_invalid") from error
     frozen_artifacts = _freeze(artifacts)
     frozen_manifest = _freeze(manifest)
     verified = replace(
@@ -111,8 +116,10 @@ def _verify_artifacts(final_dir: Path, manifest: dict, required_value: object) -
         data, integrity_error = verified_file_bytes(path, record)
         if integrity_error:
             raise CorpusIntegrityError(integrity_error)
-        assert data is not None
-        loaded[rel] = _parse_and_validate(data, record)
+        if data is None:
+            raise CorpusIntegrityError("artifact_missing")
+        loaded[rel] = _parse_and_validate(data, record, logical_key)
+    _validate_exact_evidence(manifest, loaded)
     return loaded
 
 
@@ -121,7 +128,7 @@ def _validate_record_identity(logical_key: str, rel: str, record: dict) -> None:
     if (
         record.get("logical_key") != logical_key
         or record.get("artifact_kind") != logical_key
-        or record.get("artifact_schema") != 3
+        or record.get("artifact_schema") != 4
         or record.get("format") != expected_format
     ):
         raise CorpusIntegrityError("semantic_artifact_identity_mismatch")
@@ -159,7 +166,7 @@ def _validate_cross_artifact_references(manifest: dict, artifacts: dict[str, obj
             raise CorpusIntegrityError("semantic_cross_reference_unresolved")
 
 
-def _parse_and_validate(data: bytes, record: dict) -> object:
+def _parse_and_validate(data: bytes, record: dict, logical_key: str) -> object:
     try:
         text = data.decode("utf-8")
         value = json.loads(text) if record["format"] == "json" else [json.loads(line) for line in text.splitlines() if line]
@@ -176,14 +183,66 @@ def _parse_and_validate(data: bytes, record: dict) -> object:
             raise CorpusIntegrityError("artifact_primary_id_missing")
         if len(ids) != len(set(ids)):
             raise CorpusIntegrityError("artifact_primary_id_duplicate")
-        required_fields = record.get("required_fields") or ()
-        if any(not isinstance(field, str) for field in required_fields) or any(
-            field not in row for row in value for field in required_fields
+        declared_fields = record.get("required_fields")
+        if declared_fields is not None and (
+            not isinstance(declared_fields, list) or any(not isinstance(field, str) for field in declared_fields)
         ):
+            raise CorpusIntegrityError("artifact_contract_malformed")
+        minimum_fields = MINIMUM_ARTIFACT_FIELDS.get(logical_key, ())
+        if declared_fields is not None and not set(minimum_fields).issubset(declared_fields):
+            raise CorpusIntegrityError("artifact_contract_weakened")
+        required_fields = tuple(minimum_fields) + tuple(declared_fields or ())
+        if any(field not in row for row in value for field in required_fields):
             raise CorpusIntegrityError("artifact_required_field_missing")
     elif not isinstance(value, dict):
         raise CorpusIntegrityError("artifact_shape_invalid")
     return value
+
+
+def _validate_exact_evidence(manifest: dict, artifacts: dict[str, object]) -> None:
+    evidence = _rows_for(manifest, artifacts, "evidence_registry")
+    spans = {row["text_span_id"]: row for row in _rows_for(manifest, artifacts, "page_text_spans")}
+    bboxes = {row["bbox_id"]: row for row in _rows_for(manifest, artifacts, "bbox_registry")}
+    for bbox in bboxes.values():
+        if bbox.get("viewer_highlightable") is not True:
+            continue
+        fields = (
+            "coordinate_space",
+            "coordinate_origin",
+            "page_width",
+            "page_height",
+            "page_rotation",
+            "page_box_basis",
+            "transform_version",
+        )
+        if any(bbox.get(field) is None for field in fields):
+            raise CorpusIntegrityError("coordinate_metadata_missing")
+        if bbox.get("page_rotation") != 0 or bbox.get("coordinate_origin") != "top_left" or bbox.get("page_box_basis") != "media_box":
+            raise CorpusIntegrityError("coordinate_metadata_invalid")
+    for row in evidence:
+        if (
+            row.get("exactness") != "exact"
+            and row.get("citable") is not True
+            and row.get("citation_final") is not True
+            and row.get("viewer_highlightable") is not True
+        ):
+            continue
+        reason = exact_quote_support_reason(
+            quoted_text=row.get("quoted_text"),
+            source_document_id=row.get("source_document_id"),
+            page_numbers=row.get("page_numbers") or (),
+            text_span_ids=row.get("text_span_ids") or (),
+            bbox_refs=row.get("bbox_refs") or (),
+            spans_by_id=spans,
+            bboxes_by_id=bboxes,
+        )
+        if reason:
+            raise CorpusIntegrityError("evidence_quote_source_mismatch")
+
+
+def _rows_for(manifest: dict, artifacts: dict[str, object], logical_key: str) -> list[dict]:
+    value = artifacts.get(manifest.get(logical_key, ""), ())
+    return value if isinstance(value, list) else []
 
 
 def _freeze(value):

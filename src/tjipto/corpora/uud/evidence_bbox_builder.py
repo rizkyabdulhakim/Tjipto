@@ -61,6 +61,7 @@ def build_evidence_and_bboxes(
                 "page_numbers": sorted({row["page_number"] for row in bbox_records}),
                 "quoted_text": quoted_text,
                 "source_document_id": source_id,
+                "source_url": source_meta["source_page_url"],
                 "source_pdf": source_meta["filename"],
                 "source_pdf_path": source_meta["path"],
                 "source_role": source_role,

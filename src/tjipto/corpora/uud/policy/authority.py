@@ -109,7 +109,7 @@ def _decision(kind: str, citable: bool, final: bool, reason: str) -> dict:
         citable=citable,
         citation_final=final,
         exactness="exact" if citable else "not_applicable",
-        evidence_available=citable,
+        evidence_exists=citable,
         reason_code=reason,
     )
 

@@ -26,7 +26,7 @@ class AuthorityStateContractTest(unittest.TestCase):
                         citable=citable,
                         citation_final=final,
                         exactness=exactness,
-                        evidence_available=evidence,
+                        evidence_exists=evidence,
                         reason_code="test",
                     )
                 )
@@ -36,7 +36,7 @@ class AuthorityStateContractTest(unittest.TestCase):
                         citable=citable,
                         citation_final=final,
                         exactness=exactness,
-                        evidence_available=evidence,
+                        evidence_exists=evidence,
                         reason_code="test",
                     )["citation_final"],
                     final,
@@ -61,7 +61,7 @@ class AuthorityStateContractTest(unittest.TestCase):
                         citable=citable,
                         citation_final=final,
                         exactness=exactness,
-                        evidence_available=evidence,
+                        evidence_exists=evidence,
                         reason_code="test",
                     ),
                     expected,

@@ -191,12 +191,17 @@ def resolve_document_pdf_access(
 
 
 def _base_payload(store, corpus_id: str, evidence: dict, bboxes: list[dict]) -> dict:
+    source = _source_document(store, evidence) or {}
     return {
         "status": "viewer_payload_ready",
         "corpus_id": corpus_id,
         "evidence_id": evidence["evidence_id"],
         "legal_unit_id": evidence.get("legal_unit_id"),
         "source_document_id": evidence.get("source_document_id"),
+        "source_url": evidence.get("source_url")
+        or source.get("source_page_url")
+        or source.get("final_download_url")
+        or source.get("download_url"),
         "citation": evidence["citation"],
         "quoted_text": evidence["quoted_text"],
         "source_role": evidence.get("source_role"),
