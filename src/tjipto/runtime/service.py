@@ -14,7 +14,6 @@ from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters, source_role_for_query
 from tjipto.retrieval.router import route_retrieval
-from tjipto.retrieval.structured import has_structured_target
 from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
@@ -329,31 +328,6 @@ class LegalRuntimeService:
         anomaly = _source_anomaly_response(store, corpus_id, query)
         if anomaly:
             return anomaly
-        fail_closed = _exact_fail_closed_instrument_context(store, query)
-        if fail_closed:
-            templates = _answer_templates(store)
-            context_pack = assemble_context_pack(store, (fail_closed,))
-            return {
-                "status": "insufficient_evidence",
-                "route": "exact_instrument_fail_closed",
-                "intent": "exact_instrument_unit",
-                "corpus_id": corpus_id,
-                "original_query": query,
-                "normalized_query": query.strip(),
-                "matches": (fail_closed,),
-                "reason": "exact_instrument_unit_fail_closed",
-                "answer_type": "none",
-                "answer": templates["insufficient"],
-                "context_pack": context_pack,
-                "evidence": (),
-                "citations": (),
-                "viewer_refs": (),
-                "metadata_facts": (),
-                "legal_relations": (),
-                "answer_scope": "insufficient_evidence",
-                "warnings": (),
-                "insufficient_reasons": ("exact_instrument_unit_fail_closed",),
-            }
         document_relation = _document_relation_response(store, corpus_id, query)
         if document_relation:
             return document_relation
@@ -1142,13 +1116,18 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
     row = store.get(relation["evidence_id"])
     if row is None:
         return None
-    bboxes = store.bboxes_for(row["evidence_id"])
+    if store.lineage_error(row):
+        return None
+    bboxes = [bbox for bbox in store.bboxes_for(row["evidence_id"]) if bbox.get("bbox_id") in set(relation.get("bbox_refs") or ())]
     if not bboxes or not set(relation.get("bbox_refs") or ()) <= {bbox["bbox_id"] for bbox in bboxes}:
         return None
     if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True:
         return None
     return {
         **row,
+        "bbox_refs": tuple(relation.get("bbox_refs") or ()),
+        "text_span_ids": tuple(relation.get("text_span_ids") or row.get("text_span_ids") or ()),
+        "quoted_text": relation.get("quoted_text") or row.get("quoted_text"),
         "bbox_count": len(bboxes),
         "route_sources": ("article_amendment_relation",),
         "article_amendment_relation": relation,
@@ -1156,7 +1135,9 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
             "action": "viewer",
             "evidence_id": row["evidence_id"],
             "page_numbers": tuple(row.get("page_numbers") or ()),
+            "text_span_ids": tuple(relation.get("text_span_ids") or row.get("text_span_ids") or ()),
             "bbox_count": len(bboxes),
+            "bbox_refs": tuple(relation.get("bbox_refs") or ()),
             "can_resolve": True,
         },
     }
@@ -1195,6 +1176,7 @@ def _public_article_relation(row: dict) -> dict:
         "target_citation": row.get("target_citation"),
         "evidence_id": row.get("evidence_id"),
         "bbox_refs": tuple(row.get("bbox_refs") or ()),
+        "text_span_ids": tuple(row.get("text_span_ids") or ()),
         "support_class": row.get("support_class"),
         "grounding_level": row.get("grounding_level"),
         "trace_only_reason": row.get("trace_only_reason"),
@@ -1271,8 +1253,6 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
     if decision.target_status == "not_instrument":
         return None
     if decision.target_status == "instrument_unresolved":
-        if has_structured_target(query, strategy=getattr(config, "structured_strategy", "generic"), config=config):
-            return None
         return None, "instrument_unresolved", decision.reason
     row = next(
         (
@@ -1296,29 +1276,6 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
         "instrument_resolved_fail_closed",
         "instrument_resolved_fail_closed",
     )
-
-
-def _exact_fail_closed_instrument_context(store, query: str) -> dict | None:
-    if store is None:
-        return None
-    folded = " ".join((query or "").split()).casefold()
-    if not folded:
-        return None
-    try:
-        units = {row["legal_unit_id"]: row for row in getattr(store, "legal_units", ())}
-    except (KeyError, OSError, ValueError):
-        return None
-    for row in store.evidence:
-        if " ".join(str(row.get("citation") or "").split()).casefold() != folded:
-            continue
-        unit = units.get(row.get("legal_unit_id"), {})
-        if not _is_instrument_unit(store, unit):
-            continue
-        row_with_route = row | {"route_sources": ("exact",)}
-        accepted, _ = validate_answer_candidate(store, row_with_route)
-        if not accepted:
-            return row_with_route | {"forced_rejection_reason": "exact_instrument_unit_fail_closed"}
-    return None
 
 
 def _is_instrument_unit(store, unit: dict) -> bool:

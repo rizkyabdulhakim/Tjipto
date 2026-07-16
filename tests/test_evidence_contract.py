@@ -14,7 +14,7 @@ FINAL = ROOT / "data/final/uud"
 class EvidenceContractTest(unittest.TestCase):
     def test_final_evidence_rows_are_grounded(self) -> None:
         rows = read_jsonl(FINAL / "evidence_registry.jsonl")
-        self.assertEqual(len(rows), 471)
+        self.assertEqual(len(rows), 472)
         for row in rows:
             self.assertEqual(row["corpus_id"], "uud")
             self.assertEqual(row["status"], "final")

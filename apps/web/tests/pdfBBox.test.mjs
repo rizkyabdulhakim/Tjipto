@@ -18,7 +18,7 @@ function viewport(box, scale = 1) {
 
 test("all exact corpus bboxes pass the frontend transform at zoom", () => {
   const exact = rows.filter((row) => row.bbox_precision === "exact" && row.viewer_highlightable === true);
-  assert.equal(exact.length, 1566);
+  assert.equal(exact.length, 1616);
   for (const box of exact) {
     for (const scale of [0.75, 1, 2]) {
       const result = bboxToViewportPercent(box, viewport(box, scale));

@@ -93,6 +93,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         chunks=chunks,
         source_documents=source_documents,
         pdf_lines_by_source=pdf_lines_by_source,
+        word_bboxes=word_bboxes,
     )
     metadata_grounding = build_metadata_block_grounding(
         pages_by_source=pages_by_source,
@@ -153,6 +154,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         legal_units=legal_units,
         evidence=evidence,
         bbox_rows=bbox_rows,
+        page_text_spans=page_text_spans,
     )
     apply_graph_relation_policy(
         edges=graph_edges,

@@ -105,8 +105,6 @@ class TextSpanDispositionContractTest(unittest.TestCase):
 
     def test_known_instrument_text_gaps_remain_nonruntime(self) -> None:
         for chunk_id in (
-            "uud_chunk_00632",
-            "uud_chunk_00639",
             "uud_chunk_00623",
             "uud_chunk_00624",
             "uud_chunk_00634",

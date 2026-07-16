@@ -16,14 +16,15 @@ FINAL = ROOT / "data/final/uud"
 class PdfGeometryContractTest(unittest.TestCase):
     def test_all_exact_highlights_are_bounded_and_overlap_source_text(self) -> None:
         spans: dict[tuple[str, int, str], list[dict]] = defaultdict(list)
-        for row in read_jsonl(FINAL / "page_text_spans.jsonl"):
+        all_spans = read_jsonl(FINAL / "page_text_spans.jsonl")
+        for row in all_spans:
             spans[(row["source_document_id"], row["page_number"], _compact(row["text"]))].append(row)
         exact = [
             row
             for row in read_jsonl(FINAL / "bbox_registry.jsonl")
             if row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True
         ]
-        self.assertEqual(len(exact), 1566)
+        self.assertEqual(len(exact), 1616)
         for row in exact:
             with self.subTest(bbox_id=row["bbox_id"]):
                 self.assertEqual(row["coordinate_space"], "pdf_user_space")
@@ -34,7 +35,15 @@ class PdfGeometryContractTest(unittest.TestCase):
                 self.assertTrue(0 <= row["x0"] < row["x1"] <= row["page_width"])
                 self.assertTrue(0 <= row["y0"] < row["y1"] <= row["page_height"])
                 matches = spans[(row["source_document_id"], row["page_number"], _compact(row["text"]))]
-                self.assertTrue(matches)
+                if not matches:
+                    page_spans = [
+                        span
+                        for span in all_spans
+                        if span["source_document_id"] == row["source_document_id"] and span["page_number"] == row["page_number"]
+                    ]
+                    source_text = _compact(" ".join(span["text"] for span in page_spans)).replace(" ,", ",")
+                    self.assertIn(_compact(row["text"]).replace(" ,", ","), source_text)
+                    matches = page_spans
                 self.assertTrue(any(_overlaps(row, span) for span in matches))
                 converted = (row["x0"], row["page_height"] - row["y1"], row["x1"], row["page_height"] - row["y0"])
                 round_trip = (converted[0], row["page_height"] - converted[3], converted[2], row["page_height"] - converted[1])

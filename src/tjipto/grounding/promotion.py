@@ -103,13 +103,13 @@ def _record_decision(
         can_be_exact=can_be_exact,
     )
     if can_be_exact:
-        decision = "already_exact" if record.get("bbox_precision") == "exact" and highlightable else "recover_exact"
-        candidate_status = "already_exact" if decision == "already_exact" else "recovered_exact"
+        decision = "recovered_exact" if record.get("promotion_candidate") is True else "already_exact"
+        candidate_status = decision
         promotion_result = decision
     else:
         decision = "keep_non_exact"
         candidate_status = "blocked"
-        promotion_result = "blocked_after_recovery_attempt"
+        promotion_result = "blocked_after_actual_attempt"
     return {
         "bbox_union_status": bbox_union_status,
         "blocker_evidence": _blocker_evidence(

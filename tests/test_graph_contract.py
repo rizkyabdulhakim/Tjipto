@@ -299,24 +299,25 @@ class GraphContractTest(unittest.TestCase):
         self.assertFalse([row for row in rows if row["relation_type"] in {"ADDS", "RENAMES", "SUPPLEMENTS"}])
         exact_rows = [row for row in rows if row["support_class"] == "exact_article_relation"]
         trace_rows = [row for row in rows if row["support_class"] == "trace_article_relation"]
-        self.assertEqual(len(exact_rows), 2)
-        self.assertEqual(len(trace_rows), 61)
+        self.assertEqual(len(exact_rows), 63)
+        self.assertEqual(len(trace_rows), 0)
         self.assertEqual(health["article_relation_total_count"], len(rows))
         self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
         self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
         self.assertEqual(health["article_relation_trace_missing_reason_count"], 0)
         self.assertEqual(
             health["article_relation_trace_reason_counts"],
-            {"blocked_by_missing_exact_bbox": 61},
+            {},
         )
         self.assertEqual(health["article_relation_invalid_bbox_refs"], 0)
         self.assertEqual(health["article_relation_invalid_coordinates"], 0)
-        self.assertEqual(health["article_relation_partial_answer_risk_count"], 1)
+        self.assertEqual(health["article_relation_partial_answer_risk_count"], 0)
         self.assertEqual(health["relation_runtime_policy_slow_gate_status"], "covered_by_runtime_policy_test")
         for row in rows:
             source = evidence[row["evidence_id"]]
             self.assertIn(row["target_legal_unit_id"], units)
-            self.assertEqual(row["quoted_text"], source["quoted_text"])
+            self.assertIn(row["target_citation"].casefold(), row["quoted_text"].casefold())
+            self.assertTrue(row["text_span_ids"])
             self.assertTrue(row["runtime_loadable"])
             self.assertTrue(row["bbox_refs"])
             for bbox_id in row["bbox_refs"]:
@@ -329,10 +330,7 @@ class GraphContractTest(unittest.TestCase):
                 self.assertEqual(source["bbox_precision"], "exact")
                 self.assertTrue(source["viewer_highlightable"])
             else:
-                self.assertEqual(row["grounding_level"], "page_grounded_trace")
-                self.assertEqual(row["trace_only_reason"], "blocked_by_missing_exact_bbox")
-                self.assertFalse(row["viewer_highlightable"])
-                self.assertFalse(row["citation_available"])
+                self.fail("all current article relations must have target-local exact support")
 
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
@@ -354,8 +352,8 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["graph_edge_count"], len(edges))
         self.assertEqual(authority["article_relation_count"], 63)
         self.assertEqual(authority["article_relation_graph_ref_count"], 63)
-        self.assertEqual(authority["evidence_backed_relation_edge_count"], 2)
-        self.assertEqual(authority["trace_only_relation_edge_count"], 62)
+        self.assertEqual(authority["evidence_backed_relation_edge_count"], 63)
+        self.assertEqual(authority["trace_only_relation_edge_count"], 1)
         self.assertEqual(authority["trace_promoted_count"], 0)
         self.assertEqual(authority["authority_without_evidence_count"], 0)
         self.assertEqual(authority["authority_without_bbox_count"], 0)
@@ -363,7 +361,7 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["graph_final_citation_edge_count"], 0)
         self.assertEqual(authority["invalid_finality_policy_count"], 0)
         self.assertEqual(authority["support_kind_counts"]["source_anomaly_trace"], 2)
-        self.assertEqual(authority["support_kind_counts"]["instrument_provenance"], 72)
+        self.assertEqual(authority["support_kind_counts"]["instrument_provenance"], 11)
         self.assertFalse([row for row in edges if "evidence_ref" in row])
         self.assertFalse([row for row in edges for evidence_id in row["supporting_evidence_ids"] if evidence_id not in evidence])
         self.assertNotIn("legal_edge_types", report)

@@ -14,7 +14,7 @@ FINAL = ROOT / "data/final/uud"
 class BBoxContractTest(unittest.TestCase):
     def test_bbox_rows_are_accepted_and_page_grounded(self) -> None:
         rows = read_jsonl(FINAL / "bbox_registry.jsonl")
-        self.assertEqual(len(rows), 1618)
+        self.assertEqual(len(rows), 1621)
         for row in rows:
             self.assertTrue(bbox_is_accepted(row))
             self.assertIn(row["bbox_precision"], {"exact", "coarse", "page_grounded_only"})
@@ -96,7 +96,7 @@ class BBoxContractTest(unittest.TestCase):
 
     def test_span_disposition_and_local_bbox_contract_complete(self) -> None:
         report = read_json(FINAL / "validation_report.json")["viewer_provenance_coverage_health"]
-        self.assertEqual(report["bbox_key_absent_span_count"], 600)
+        self.assertEqual(report["bbox_key_absent_span_count"], 597)
         self.assertEqual(report["incomplete_disposition_count"], 0)
         self.assertEqual(report["highlight_without_span_bbox_count"], 0)
         self.assertEqual(report["final_without_exact_span_bbox_count"], 0)
@@ -120,7 +120,7 @@ class BBoxContractTest(unittest.TestCase):
         self.assertEqual(report["bbox_registry_layer"], "materialized_final_and_provenance_bboxes")
         self.assertEqual(report["word_bbox_layer"], "word_bbox_exact_highlight")
         self.assertEqual(report["viewer_highlightable_union"], "bbox_registry_union_word_bboxes")
-        self.assertEqual(report["bbox_key_absent_span_count"], 600)
+        self.assertEqual(report["bbox_key_absent_span_count"], 597)
         self.assertEqual(report["exact_safe_word_highlight_count"], 1412)
         self.assertEqual(report["non_citable_absent_span_count"], 633)
         self.assertEqual(report["false_highlight_count"], 0)

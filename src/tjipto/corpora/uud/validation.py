@@ -6,6 +6,7 @@ import re
 from typing import cast
 import unicodedata
 
+from tjipto.contracts.evidence import normalize_source_text
 from tjipto.corpora.disposition import (
     EXCLUDED_STATUSES,
     LEGAL_FORCES,
@@ -423,6 +424,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     metadata_grounding_ids = {row["metadata_grounding_id"] for row in metadata_grounding}
     metadata_grounding_ref_ids: set[str] = set()
     text_span_ids = {row["text_span_id"] for row in page_text_spans}
+    span_by_id = {row["text_span_id"]: row for row in page_text_spans}
     bbox_by_evidence: dict[str, list[dict]] = defaultdict(list)
     word_bbox_ids: set[str] = set()
     for row in word_bboxes:
@@ -1071,19 +1073,30 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"article_relation_unknown_target:{row['relation_id']}:{row.get('target_legal_unit_id')}")
         if not str(row.get("target_citation") or "").startswith(("Pasal ", "Ayat ")):
             errors.append(f"article_relation_non_pasal_ayat_target:{row['relation_id']}:{row.get('target_citation')}")
-        if row.get("quoted_text") != evidence_row.get("quoted_text"):
-            errors.append(f"article_relation_quote_mismatch:{row['relation_id']}")
+        if row.get("support_class") == "trace_article_relation":
+            if row.get("quoted_text") != evidence_row.get("quoted_text"):
+                errors.append(f"article_relation_quote_mismatch:{row['relation_id']}")
+        elif normalize_source_text(row.get("target_citation")) not in normalize_source_text(row.get("quoted_text")):
+            errors.append(f"article_relation_target_quote_mismatch:{row['relation_id']}")
         for bbox_id in row.get("bbox_refs") or ():
             if bbox_id not in bbox_by_id:
                 errors.append(f"article_relation_unknown_bbox:{row['relation_id']}:{bbox_id}")
         if not row.get("bbox_refs"):
             errors.append(f"article_relation_missing_bbox:{row['relation_id']}")
         refs_resolve = bool(row.get("bbox_refs")) and all(bbox_id in bbox_by_id for bbox_id in row.get("bbox_refs") or ())
+        target_spans = [span_by_id.get(span_id) for span_id in row.get("text_span_ids") or ()]
+        target_phrase = normalize_source_text(row.get("target_citation"))
+        target_text = normalize_source_text(" ".join(str(span.get("text") or "") for span in target_spans if span))
+        local_bbox_text = normalize_source_text(
+            " ".join(str(bbox_by_id[bbox_id].get("text") or "") for bbox_id in row.get("bbox_refs") or () if bbox_id in bbox_by_id)
+        )
         exact_support = (
             evidence_row.get("bbox_precision") == "exact"
             and evidence_row.get("viewer_highlightable") is True
-            and (evidence_row.get("authority_kind") != "instrument_provenance" or row.get("target_citation") == "Pasal 16")
             and refs_resolve
+            and bool(target_spans)
+            and target_phrase in target_text
+            and target_phrase in local_bbox_text
         )
         support_class = row.get("support_class")
         if support_class not in {"exact_article_relation", "trace_article_relation"}:
@@ -1095,6 +1108,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"article_relation_exact_wrong_grounding:{row['relation_id']}")
             if row.get("viewer_highlightable") is not True or row.get("citation_available") is not True:
                 errors.append(f"article_relation_exact_not_public_resolvable:{row['relation_id']}")
+            if not row.get("text_span_ids"):
+                errors.append(f"article_relation_missing_target_span:{row['relation_id']}")
         if support_class == "trace_article_relation":
             if exact_support:
                 errors.append(f"article_relation_trace_should_be_exact:{row['relation_id']}")

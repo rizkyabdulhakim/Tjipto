@@ -49,7 +49,6 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
         self.assertIn("metadata_non_final", families)
         self.assertIn("source_anomaly_non_final", families)
         self.assertIn("current_fact_unsupported", families)
-        self.assertIn("trace_only_non_citable", families)
         self.assertIn("criminal_law_sanksi_korupsi_pasal_7a", ids)
         self.assertIn("article_relation_exact_pasal_16_delete_no_source", ids)
 

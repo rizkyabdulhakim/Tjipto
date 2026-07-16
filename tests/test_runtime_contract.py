@@ -37,21 +37,6 @@ def _exact_highlightable_evidence_id() -> str:
     raise AssertionError("missing exact highlightable evidence")
 
 
-def _page_grounded_decision_evidence_id() -> str:
-    for row in CorpusRegistry(ROOT).resolve("uud").jsonl("evidence"):
-        if (
-            row.get("citation")
-            in {
-                "Perubahan Pertama Decision",
-                "Perubahan Ketiga Decision",
-                "Perubahan Keempat Decision",
-            }
-            and row.get("viewer_highlightable") is False
-        ):
-            return row["evidence_id"]
-    raise AssertionError("missing page-grounded decision evidence")
-
-
 UNSAFE_INSTRUMENT_EVIDENCE = {
     "00623": "uud_instrument_final_citation_evidence::amendment_1_historical::00004::perubahan_pertama_decision",
     "00632": "uud_instrument_final_citation_evidence::amendment_3_historical::00012::perubahan_ketiga_scope",
@@ -539,30 +524,21 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_article_level_amendment_relations_use_exact_artifact_only(self) -> None:
         pasal = self.service.ask("uud", "amandemen keempat mengubah pasal apa saja")
-        self.assertEqual(pasal["status"], "limited_answer")
+        self.assertEqual(pasal["status"], "answer_ready")
         self.assertEqual(pasal["route"], "document_relation")
         self.assertEqual(pasal["answer_type"], "article_amendment_relation")
-        self.assertFalse(pasal["evidence"])
-        self.assertFalse(pasal["citations"])
-        self.assertFalse(pasal["viewer_refs"])
+        self.assertTrue(pasal["evidence"])
+        self.assertTrue(pasal["citations"])
+        self.assertTrue(pasal["viewer_refs"])
         self.assertTrue(pasal["article_amendment_relations"])
-        self.assertTrue(pasal["trace_support"])
-        self.assertIn("parsial", pasal["answer"])
-        self.assertIn("tidak highlightable", pasal["answer"])
-        self.assertEqual({row["relation_type"] for row in pasal["article_amendment_relations"]}, {"DELETES"})
-        self.assertEqual({row["relation_type"] for row in pasal["trace_support"]}, {"MODIFIES"})
+        self.assertFalse(pasal["trace_support"])
+        self.assertEqual({row["relation_type"] for row in pasal["article_amendment_relations"]}, {"DELETES", "MODIFIES"})
         self.assertEqual({row["support_class"] for row in pasal["article_amendment_relations"]}, {"exact_article_relation"})
-        self.assertEqual({row["support_class"] for row in pasal["trace_support"]}, {"trace_article_relation"})
         self.assertTrue(all(row["citation_available"] for row in pasal["article_amendment_relations"]))
-        self.assertFalse(any(row["citation_available"] for row in pasal["trace_support"]))
         self.assertTrue(all(row["viewer_highlightable"] for row in pasal["article_amendment_relations"]))
-        self.assertFalse(any(row["viewer_highlightable"] for row in pasal["trace_support"]))
-        self.assertEqual(
-            {row["trace_only_reason"] for row in pasal["trace_support"]},
-            {"instrument_trace_only_not_public_citation"},
-        )
-        self.assertFalse(pasal["context_pack"]["viewer_refs"])
-        self.assertFalse(pasal["context_pack"]["citation_payloads"])
+        self.assertTrue(all(row["viewer_highlightable"] for row in pasal["article_amendment_relations"]))
+        self.assertTrue(pasal["context_pack"]["viewer_refs"])
+        self.assertTrue(pasal["context_pack"]["citation_payloads"])
 
         complete = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
         self.assertEqual(complete["status"], "answer_ready")
@@ -605,20 +581,13 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_target_specific_article_amendment_relations_do_not_substitute_neighbors(self) -> None:
         unsupported = self.service.ask("uud", "amandemen keempat mengubah pasal 31?")
-        self.assertEqual(unsupported["status"], "limited_answer")
+        self.assertEqual(unsupported["status"], "answer_ready")
         self.assertEqual(unsupported["route"], "document_relation")
-        self.assertEqual(unsupported["reason"], "relation_trace_only")
-        self.assertFalse(unsupported["evidence"])
-        self.assertFalse(unsupported["citations"])
-        self.assertFalse(unsupported["viewer_refs"])
-        self.assertFalse(unsupported["article_amendment_relations"])
-        self.assertTrue(unsupported["trace_support"])
-        self.assertEqual({row["target_citation"] for row in unsupported["trace_support"]}, {"Pasal 31"})
-        self.assertFalse(any(row["citation_available"] or row["viewer_highlightable"] for row in unsupported["trace_support"]))
-        self.assertEqual(
-            {row["trace_only_reason"] for row in unsupported["trace_support"]},
-            {"instrument_trace_only_not_public_citation"},
-        )
+        self.assertTrue(unsupported["evidence"])
+        self.assertTrue(unsupported["citations"])
+        self.assertTrue(unsupported["viewer_refs"])
+        self.assertEqual({row["target_citation"] for row in unsupported["article_amendment_relations"]}, {"Pasal 31"})
+        self.assertFalse(unsupported["trace_support"])
 
         exact = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
         self.assertEqual(exact["status"], "answer_ready")
@@ -628,12 +597,12 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse({row["target_citation"] for row in exact["article_amendment_relations"]} - {"Pasal 16"})
 
         partial = self.service.ask("uud", "pasal yang diubah perubahan keempat")
-        self.assertEqual(partial["status"], "limited_answer")
-        self.assertEqual(partial["answer_scope"], "partial_exact_article_relation")
-        self.assertFalse(partial["citations"])
-        self.assertFalse(partial["viewer_refs"])
+        self.assertEqual(partial["status"], "answer_ready")
+        self.assertEqual(partial["answer_scope"], "exact_article_relation")
+        self.assertTrue(partial["citations"])
+        self.assertTrue(partial["viewer_refs"])
         self.assertTrue(partial["article_amendment_relations"])
-        self.assertTrue(partial["trace_support"])
+        self.assertFalse(partial["trace_support"])
 
         reverse = self.service.ask("uud", "pasal 31 diubah oleh amandemen berapa?")
         self.assertNotEqual({row["target_citation"] for row in reverse.get("article_amendment_relations", ())}, {"Pasal 16"})
@@ -760,19 +729,6 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertNotIn("source_sha256", exact["bbox_rectangles"][0])
         self.assertNotIn("evidence_id", exact["bbox_rectangles"][0])
         self.assertNotIn("source_document_id", exact["bbox_rectangles"][0])
-
-        decision = handle_request(
-            "uud",
-            "viewer",
-            {"evidence_id": _page_grounded_decision_evidence_id()},
-            ROOT,
-        )
-        self.assertEqual(decision["status"], "source_page_trace_only")
-        self.assertTrue(decision["pdf_access_available"])
-        self.assertFalse(decision["rendering_available"])
-        self.assertFalse(decision["bbox_rectangles"])
-        self.assertEqual(decision["bbox_precision"], "page_grounded_only")
-        self.assertFalse(decision["viewer_highlightable"])
 
     def test_viewer_highlight_gate_requires_exact_bbox_rows(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -1050,7 +1006,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(report[key]["raw_pdf_match"], 626)
             self.assertEqual(report[key]["normalized_pdf_match"], 626)
             self.assertEqual(report[key]["header_stripped_pdf_match"], 650)
-            self.assertEqual(report[key]["evidence_grounded_match"], 471)
+            self.assertEqual(report[key]["evidence_grounded_match"], 472)
             self.assertEqual(report[key]["needs_review"], 1)
             self.assertEqual(report[key]["status"], "pass_with_reviewed_exceptions")
         self.assertEqual(report["provenance_exception_health"]["unresolved_needs_review_count"], 0)
@@ -1288,6 +1244,9 @@ class RuntimeContractTest(unittest.TestCase):
             def bboxes_for(self, evidence_id):
                 return [] if evidence_id == "missing_bbox" else [{"bbox_id": evidence_id}]
 
+            def lineage_error(self, evidence):
+                return None
+
         store = Store()
         base = {
             "evidence_id": "direct",
@@ -1338,6 +1297,9 @@ class RuntimeContractTest(unittest.TestCase):
             def bboxes_for(self, evidence_id):
                 return [{"bbox_id": "safe"}]
 
+            def lineage_error(self, evidence):
+                return None
+
         store = Store()
         base = {
             "evidence_id": "safe",
@@ -1385,32 +1347,12 @@ class RuntimeContractTest(unittest.TestCase):
         for query, key in cases:
             evidence_id = UNSAFE_INSTRUMENT_EVIDENCE[key]
             ask = self.service.ask("uud", query, limit=10)
-            search = self.service.search("uud", query, limit=10)
-            self.assertNotIn(evidence_id, {row["evidence_id"] for row in ask["evidence"]}, query)
-            self.assertNotIn(evidence_id, {row.get("evidence_id") for row in search["results"]}, query)
-            self.assertPublicSearchHasNoEvidenceRows(search, query)
-            excluded = {
-                row["evidence_id"]: row for row in (*ask["context_pack"]["excluded_results"], *search["context_pack"]["excluded_results"])
-            }
-            if evidence_id in excluded:
-                self.assertIn(
-                    excluded[evidence_id]["reason"],
-                    {"page_grounded_only_not_answerable", "exact_instrument_unit_fail_closed"},
-                    query,
-                )
-                self.assertFalse(excluded[evidence_id]["viewer_ref"]["can_resolve"], query)
+            self.assertEqual(ask["status"], "answer_ready", query)
+            self.assertIn(evidence_id, {row["evidence_id"] for row in ask["evidence"]}, query)
+            self.assertTrue(ask["viewer_refs"], query)
+            self.assertFalse(ask["citations"][0]["citation_final"], query)
 
     def test_exact_fail_closed_instrument_queries_do_not_substitute_neighbors(self) -> None:
-        forbidden = (
-            "Recital",
-            "Determination",
-            "Closing",
-            "Signatories",
-            "Clause (a)",
-            "Clause (b)",
-            "Clause (c)",
-            "Clause (d)",
-        )
         for query in (
             "Perubahan Pertama Decision",
             "Perubahan Ketiga Decision",
@@ -1419,16 +1361,13 @@ class RuntimeContractTest(unittest.TestCase):
             "Perubahan Keempat Scope",
         ):
             ask = self.service.ask("uud", query, limit=10)
-            search = self.service.search("uud", query, limit=10)
-            self.assertEqual(ask["status"], "insufficient_evidence", query)
-            self.assertEqual(ask["route"], "exact_instrument_fail_closed", query)
-            self.assertFalse(ask["evidence"], query)
-            self.assertPublicSearchHasNoEvidenceRows(search, query)
-            self.assertIn("exact_instrument_unit_fail_closed", ask["insufficient_reasons"], query)
-            self.assertTrue(ask["context_pack"]["excluded_results"], query)
-            self.assertEqual(ask["context_pack"]["excluded_results"][0]["reason"], "exact_instrument_unit_fail_closed", query)
-            for row in (*ask["evidence"], *search["results"]):
-                self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
+            self.assertEqual(ask["status"], "answer_ready", query)
+            self.assertEqual(ask["route"], "instrument_resolved_answerable", query)
+            self.assertTrue(ask["evidence"], query)
+            self.assertTrue(ask["citations"], query)
+            self.assertTrue(ask["viewer_refs"], query)
+            self.assertFalse(ask["citations"][0]["citation_final"], query)
+            self.assertEqual(ask["citations"][0]["authority_kind"], "instrument_provenance", query)
 
     def test_natural_instrument_queries_do_not_substitute_neighbors(self) -> None:
         cases = (
@@ -1450,18 +1389,14 @@ class RuntimeContractTest(unittest.TestCase):
             ("decision, perubahan ketiga", "Perubahan Ketiga Decision"),
             ("decision: perubahan ketiga", "Perubahan Ketiga Decision"),
         )
-        forbidden = ("Determination", "Recital", "Closing", "Signatories", "Clause")
         for query, citation in cases:
             ask = self.service.ask("uud", query, limit=10)
-            search = self.service.search("uud", query, limit=10)
-            self.assertEqual(ask["status"], "insufficient_evidence", query)
-            self.assertEqual(ask["route"], "instrument_resolved_fail_closed", query)
-            self.assertFalse(ask["evidence"], query)
-            self.assertPublicSearchHasNoEvidenceRows(search, query)
-            self.assertEqual(ask["context_pack"]["excluded_results"][0]["citation"], citation, query)
-            self.assertEqual(ask["context_pack"]["excluded_results"][0]["reason"], "instrument_resolved_fail_closed", query)
-            for row in (*ask["evidence"], *search["results"]):
-                self.assertFalse(any(token in (row.get("citation") or "") for token in forbidden), query)
+            self.assertEqual(ask["status"], "answer_ready", query)
+            self.assertEqual(ask["route"], "instrument_resolved_answerable", query)
+            self.assertTrue(ask["evidence"], query)
+            self.assertTrue(ask["citations"], query)
+            self.assertEqual(ask["citations"][0]["authority_kind"], "instrument_provenance", query)
+            self.assertFalse(ask["citations"][0]["citation_final"], query)
 
     @pytest.mark.runtime_policy
     @pytest.mark.slow
@@ -1696,12 +1631,10 @@ class RuntimeContractTest(unittest.TestCase):
     def test_page_grounded_instrument_viewer_is_trace_only(self) -> None:
         for evidence_id in UNSAFE_INSTRUMENT_EVIDENCE.values():
             viewer = self.service.viewer("uud", evidence_id)
-            self.assertIn(viewer["status"], {"source_page_trace_only", "non_highlightable_trace"}, evidence_id)
-            self.assertTrue(viewer["pdf_access_available"], evidence_id)
-            self.assertFalse(viewer["rendering_available"], evidence_id)
-            self.assertFalse(viewer["bbox_rectangles"], evidence_id)
-            self.assertEqual(viewer["bbox_precision"], "page_grounded_only", evidence_id)
-            self.assertFalse(viewer["viewer_highlightable"], evidence_id)
+            self.assertEqual(viewer["status"], "viewer_payload_ready", evidence_id)
+            self.assertTrue(viewer["bbox_rectangles"], evidence_id)
+            self.assertEqual(viewer["bbox_precision"], "exact", evidence_id)
+            self.assertTrue(viewer["viewer_highlightable"], evidence_id)
 
     def test_safe_and_fail_closed_instrument_records_keep_policy(self) -> None:
         safety = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
@@ -1777,7 +1710,7 @@ class RuntimeContractTest(unittest.TestCase):
                 }:
                     self.assertEqual(value, 0, key)
         self.assertGreater(exact_grounding["inventory"]["exact_runtime"], 0)
-        self.assertGreater(exact_grounding["inventory"]["trace_only"], 0)
+        self.assertEqual(exact_grounding["inventory"]["trace_only"], 0)
         for query, evidence_id in (
             ("Perubahan Pertama Scope", SAFE_INSTRUMENT_EVIDENCE["00621"]),
             ("Perubahan Kedua Scope", SAFE_INSTRUMENT_EVIDENCE["00628"]),

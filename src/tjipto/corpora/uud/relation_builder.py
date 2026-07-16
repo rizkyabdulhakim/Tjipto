@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 
 def build_document_relations(source_documents: list[dict]) -> list[dict]:
     source_by_role = {row["source_role"]: row for row in source_documents}
@@ -18,10 +20,13 @@ def build_article_amendment_relations(
     legal_units: list[dict],
     evidence: list[dict],
     bbox_rows: list[dict],
+    page_text_spans: list[dict],
 ) -> list[dict]:
     units = {row["legal_unit_id"]: row for row in legal_units}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_ids = {row["bbox_id"] for row in bbox_rows}
+    spans_by_id = {row["text_span_id"]: row for row in page_text_spans}
+    bboxes_by_id = {row["bbox_id"]: row for row in bbox_rows}
     rows = []
     for edge in graph_edges:
         relation_type = edge.get("edge_type")
@@ -37,24 +42,18 @@ def build_article_amendment_relations(
             continue
         if not evidence_row or not target or not all(ref in bbox_ids for ref in evidence_row.get("bbox_refs") or ()):
             continue
-        bbox_refs = list(evidence_row.get("bbox_refs") or ())
-        instrument_unit = units.get(evidence_row.get("legal_unit_id"), {}).get("unit_type") in {
-            "amendment_recital_record",
-            "amendment_scope_record",
-            "instrument_clause_record",
-            "instrument_closing_record",
-            "decision_clause_record",
-            "determination_clause_record",
-            "signatory_block_record",
-        }
+        target_phrase = str(target_citation or "")
+        target_span_ids = _target_span_ids(evidence_row, target_phrase, spans_by_id)
+        bbox_refs = _target_bbox_refs(evidence_row, target_phrase, bboxes_by_id)
         exact_support = (
             evidence_row.get("bbox_precision") == "exact"
             and evidence_row.get("viewer_highlightable") is True
-            and (not instrument_unit or target_citation == "Pasal 16")
+            and bool(target_span_ids)
+            and bool(bbox_refs)
             and all(ref in bbox_ids for ref in bbox_refs)
         )
         support_class = "exact_article_relation" if exact_support else "trace_article_relation"
-        trace_only_reason = None if exact_support else evidence_row.get("failure_reason") or "blocked_by_missing_exact_bbox"
+        trace_only_reason = None if exact_support else _trace_reason(evidence_row, target_span_ids, bbox_refs)
         rows.append(
             {
                 "relation_id": f"uud_article_amendment_relation::{relation_type.lower()}::{evidence_row['evidence_id']}::{target_unit_id}",
@@ -67,8 +66,9 @@ def build_article_amendment_relations(
                 "source_legal_unit_id": source_unit_id,
                 "evidence_id": evidence_row["evidence_id"],
                 "bbox_refs": bbox_refs,
+                "text_span_ids": target_span_ids,
                 "page_number": (evidence_row.get("page_numbers") or [None])[0],
-                "quoted_text": evidence_row.get("quoted_text"),
+                "quoted_text": _target_quote(target_span_ids, spans_by_id) if exact_support else evidence_row.get("quoted_text"),
                 "source_pdf_sha256": evidence_row.get("source_sha256"),
                 "grounding_level": "exact_source_text" if exact_support else "page_grounded_trace",
                 "support_class": support_class,
@@ -81,6 +81,36 @@ def build_article_amendment_relations(
             }
         )
     return sorted(rows, key=lambda row: row["relation_id"])
+
+
+def _target_span_ids(evidence: dict, citation: str, spans_by_id: dict[str, dict]) -> list[str]:
+    pattern = re.compile(rf"(?i)(?<!\w){re.escape(citation.strip())}(?!\w)")
+    return [
+        span_id for span_id in evidence.get("text_span_ids") or () if pattern.search(str(spans_by_id.get(span_id, {}).get("text") or ""))
+    ]
+
+
+def _target_bbox_refs(evidence: dict, citation: str, bboxes_by_id: dict[str, dict]) -> list[str]:
+    pattern = re.compile(rf"(?i)(?<!\w){re.escape(citation.strip())}(?!\w)")
+    return [
+        bbox_id
+        for bbox_id in evidence.get("bbox_refs") or ()
+        if pattern.search(str(bboxes_by_id.get(bbox_id, {}).get("text") or ""))
+        and bboxes_by_id.get(bbox_id, {}).get("bbox_precision") == "exact"
+        and bboxes_by_id.get(bbox_id, {}).get("viewer_highlightable") is True
+    ]
+
+
+def _target_quote(span_ids: list[str], spans_by_id: dict[str, dict]) -> str:
+    return " ".join(str(spans_by_id[span_id].get("text") or "").strip() for span_id in span_ids).strip()
+
+
+def _trace_reason(evidence: dict, span_ids: list[str], bbox_refs: list[str]) -> str:
+    if not span_ids:
+        return "unresolved_target_mention"
+    if not bbox_refs:
+        return "missing_relation_local_bbox"
+    return evidence.get("failure_reason") or "relation_target_proof_incomplete"
 
 
 def _document_relation(relation_type: str, source: dict, target: dict, *, support_role: str | None = None) -> dict:

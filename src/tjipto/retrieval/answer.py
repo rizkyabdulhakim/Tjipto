@@ -72,6 +72,7 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
     legal_unit = _legal_unit(store, row.get("legal_unit_id"))
     chunk = _chunk_for_unit(store, row.get("legal_unit_id"))
     retrieval_unit = _retrieval_unit(store, row.get("evidence_id"))
+    historical_instrument = row.get("authority_kind") == "instrument_provenance"
     if not row.get("metadata_grounding"):
         if row.get("bbox_precision") == "page_grounded_only":
             return False, "page_grounded_only_not_answerable"
@@ -87,13 +88,13 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
             return False, "missing_bbox"
         if not bbox_ids <= actual_bbox_ids:
             return False, "invalid_bbox"
-        if legal_unit and legal_unit.get("runtime_loadable") is False:
+        if legal_unit and legal_unit.get("runtime_loadable") is False and not historical_instrument:
             return False, "linked_legal_unit_not_runtime_loadable"
-        if chunk and chunk.get("runtime_loadable") is False:
+        if chunk and chunk.get("runtime_loadable") is False and not historical_instrument:
             return False, "linked_chunk_not_runtime_loadable"
         if (legal_unit or chunk) and not ((legal_unit and legal_unit.get("text_span_ids")) or (chunk and chunk.get("text_span_ids"))):
             return False, "missing_exact_text_span_support"
-        if retrieval_unit and retrieval_unit.get("status") != "accepted":
+        if retrieval_unit and retrieval_unit.get("status") != "accepted" and not historical_instrument:
             return False, "retrieval_unit_backing_record_not_answerable"
         if _noncanonical_trace(legal_unit, chunk, row):
             return False, "noncanonical_trace_not_answerable"

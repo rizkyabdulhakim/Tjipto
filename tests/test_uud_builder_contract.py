@@ -224,6 +224,7 @@ class UudBuilderContractTest(unittest.TestCase):
             source_documents=source_documents,
         )
         chunks = build_chunks_from_legal_units(legal_units)
+        word_bboxes = self._word_bboxes()
         docs = {source_id: fitz.open(ROOT / meta["path"]) for source_id, meta in source_documents.items()}
         try:
             evidence, bbox_rows = build_evidence_and_bboxes(
@@ -231,6 +232,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 chunks=chunks,
                 source_documents=source_documents,
                 pdf_lines_by_source={source_id: pdf_lines(doc) for source_id, doc in docs.items()},
+                word_bboxes=word_bboxes,
             )
         finally:
             for doc in docs.values():
@@ -383,7 +385,7 @@ class UudBuilderContractTest(unittest.TestCase):
         bbox_rows = read_jsonl(FINAL / "bbox_registry.jsonl")
         bbox_keys = {_span_bbox_key(row) for row in bbox_rows}
         missing = [row for row in spans if _span_bbox_key(row) not in bbox_keys]
-        self.assertEqual(len(missing), 600)
+        self.assertEqual(len(missing), 597)
         bucket_counts = Counter(row["bbox_registry_coverage_bucket"] for row in missing)
         self.assertEqual(
             bucket_counts,
@@ -393,7 +395,7 @@ class UudBuilderContractTest(unittest.TestCase):
                     "metadata_provenance_candidate": 8,
                     "nonlegal_excluded_provenance": 359,
                     "source_anomaly_provenance_candidate": 17,
-                    "structural_provenance_only": 94,
+                    "structural_provenance_only": 91,
                 }
             ),
         )

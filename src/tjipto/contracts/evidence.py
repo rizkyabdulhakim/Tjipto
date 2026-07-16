@@ -73,6 +73,10 @@ def source_lineage_reason(
         return "source_sha256_mismatch"
     if evidence.get("source_pdf_path") != source.get("path"):
         return "source_pdf_path_mismatch"
+    if evidence.get("source_role") != source.get("source_role"):
+        return "source_role_mismatch"
+    if evidence.get("temporal_context") != source.get("temporal_context"):
+        return "temporal_context_mismatch"
     reason = exact_quote_support_reason(
         quoted_text=evidence.get("quoted_text"),
         source_document_id=source_id,

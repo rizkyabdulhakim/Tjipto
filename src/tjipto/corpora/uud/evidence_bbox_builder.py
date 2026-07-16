@@ -7,6 +7,7 @@ from tjipto.corpora.uud.bbox_builder import aggregate_bbox_precision, apply_inse
 from tjipto.corpora.uud.provenance_exceptions import RECOVERABLE_GROUNDING_LABELS, SEGMENTATION_BOUNDARY_LABELS
 from tjipto.corpora.uud.specs import INSERTED_BAB_SPECS
 from tjipto.corpora.uud.structure_builder import compact, slug
+from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, word_rows_by_page
 
 
 def _admit_evidence(unit: dict, chunk: dict) -> bool:
@@ -27,6 +28,7 @@ def build_evidence_and_bboxes(
     chunks: list[dict],
     source_documents: dict[str, dict],
     pdf_lines_by_source: dict[str, dict[int, list[dict]]],
+    word_bboxes: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     evidence: list[dict] = []
@@ -49,8 +51,19 @@ def build_evidence_and_bboxes(
             page_end=chunk["page_range"]["end_page_number"],
             line_entries=pdf_lines_by_source[source_id],
         )
-        trace_only = unit["unit_label"] in SEGMENTATION_BOUNDARY_LABELS
         recoverable = unit["unit_label"] in RECOVERABLE_GROUNDING_LABELS
+        if recoverable and aggregate_bbox_precision(bbox_records) != "exact" and word_bboxes:
+            recovered = _recover_word_bbox(
+                evidence_id=evidence_id,
+                text=chunk["text"],
+                source_meta=source_meta,
+                source_id=source_id,
+                page_numbers=sorted({row["page_number"] for row in bbox_records}),
+                word_bboxes=word_bboxes,
+            )
+            if recovered:
+                bbox_records = recovered
+        trace_only = unit["unit_label"] in SEGMENTATION_BOUNDARY_LABELS
         quoted_text = "\n".join(row["text"] for row in bbox_records)
         evidence.append(
             {
@@ -94,6 +107,54 @@ def build_evidence_and_bboxes(
     evidence.sort(key=lambda row: row["evidence_id"])
     bbox_rows.sort(key=lambda row: (row["source_document_id"], row["page_number"], row["bbox_id"]))
     return evidence, bbox_rows
+
+
+def _recover_word_bbox(
+    *,
+    evidence_id: str,
+    text: str,
+    source_meta: dict,
+    source_id: str,
+    page_numbers: list[int],
+    word_bboxes: list[dict],
+) -> list[dict]:
+    words_by_page = word_rows_by_page(word_bboxes)
+    match = align_text_to_word_bboxes(
+        text=text,
+        source_document_id=source_id,
+        page_numbers=page_numbers,
+        words_by_page=words_by_page,
+    )
+    if not match:
+        return []
+    union = match["union_bbox"]
+    return [
+        {
+            "bbox_id": f"uud_unified_bbox::{evidence_id}::recovered",
+            "bbox_precision": "exact",
+            "corpus_id": "uud",
+            "evidence_id": evidence_id,
+            "page_number": union["page_number"],
+            "source_document_id": source_id,
+            "source_pdf": source_meta["filename"],
+            "source_pdf_path": source_meta["path"],
+            "source_sha256": source_meta["sha256"],
+            "status": "accepted",
+            "text": text,
+            "viewer_highlightable": True,
+            "x0": union["x0"],
+            "x1": union["x1"],
+            "y0": union["y0"],
+            "y1": union["y1"],
+            **coordinate_metadata(
+                {
+                    "width": union["page_width"],
+                    "height": union["page_height"],
+                },
+                highlightable=True,
+            ),
+        }
+    ]
 
 
 def _evidence_id(chunk: dict, unit: dict, source_role: str, next_instrument_id: int) -> tuple[str, int]:

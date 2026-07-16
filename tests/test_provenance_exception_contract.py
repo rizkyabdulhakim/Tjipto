@@ -98,7 +98,7 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
 
     def test_validation_report_has_provenance_exception_health(self) -> None:
         health = self.report["provenance_exception_health"]
-        self.assertEqual(health["accepted_false_positive_segmentation_punctuation_count"], 16)
+        self.assertEqual(health["accepted_false_positive_segmentation_punctuation_count"], 12)
         self.assertEqual(health["accepted_noncanonical_source_conflict_trace_only_count"], 3)
         self.assertEqual(health["builder_slicing_label_issue_confirmed_count"], 2)
         self.assertEqual(health["duplicated_heading_artifact_issue_confirmed_count"], 2)

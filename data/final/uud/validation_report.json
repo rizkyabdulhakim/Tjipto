@@ -49,13 +49,13 @@
     "word_bboxes": 11336
   },
   "bbox_precision_counts": {
-    "exact": 1620,
+    "exact": 1621,
     "coarse": 0,
-    "page_grounded_only": 1
+    "page_grounded_only": 0
   },
   "bbox_highlightability_counts": {
-    "viewer_highlightable": 1615,
-    "non_highlightable": 6
+    "viewer_highlightable": 1616,
+    "non_highlightable": 5
   },
   "chunk_self_contained_health": {
     "chunk_rows": 651,
@@ -1667,7 +1667,7 @@
     "needs_review_count": 0,
     "inventory": {
       "exact_runtime": 469,
-      "trace_only": 1,
+      "trace_only": 0,
       "excluded_with_reason": 3,
       "needs_review": 0
     },
@@ -1794,20 +1794,20 @@
     "note": "exact metadata rows may be viewer-highlightable only with exact bbox and text-span support; page-grounded rows remain trace-only"
   },
   "metadata_bbox_registry_health": {
-    "metadata_grounding_registry_rows": 314,
-    "metadata_grounding_ref_id_count": 314,
-    "metadata_grounding_ref_id_unique_count": 314,
-    "duplicate_bbox_id_reference_count": 171,
+    "metadata_grounding_registry_rows": 256,
+    "metadata_grounding_ref_id_count": 256,
+    "metadata_grounding_ref_id_unique_count": 256,
+    "duplicate_bbox_id_reference_count": 136,
     "unresolved_bbox_id_count": 0,
-    "exact_metadata_bbox_rows": 314,
-    "exact_metadata_viewer_highlightable_rows": 314,
+    "exact_metadata_bbox_rows": 256,
+    "exact_metadata_viewer_highlightable_rows": 256,
     "unresolved_exact_metadata_bbox_rows": 0,
     "page_grounded_only_metadata_rows": 0,
     "metadata_bbox_false_exact_claims": 0
   },
   "source_quote_fidelity_health": {
     "metadata_grounding_checked_count": 37,
-    "page_grounded_evidence_checked_count": 1,
+    "page_grounded_evidence_checked_count": 0,
     "metadata_source_quote_mismatch_count": 0,
     "page_grounded_evidence_source_quote_mismatch_count": 0,
     "tracked_exception_count": 0,
@@ -1866,16 +1866,16 @@
     "untracked_grounding_exception_count": 0
   },
   "promotion_engine_health": {
-    "evidence_exact_count": 471,
-    "evidence_page_grounded_only_count": 1,
+    "evidence_exact_count": 472,
+    "evidence_page_grounded_only_count": 0,
     "evidence_trace_only_count": 3,
-    "bbox_exact_count": 1620,
-    "bbox_page_grounded_only_count": 1,
-    "bbox_non_highlightable_count": 6,
+    "bbox_exact_count": 1621,
+    "bbox_page_grounded_only_count": 0,
+    "bbox_non_highlightable_count": 5,
     "metadata_grounding_exact_count": 37,
     "metadata_grounding_page_grounded_only_count": 0,
     "promotable_exact_count": 0,
-    "promotion_blocked_count": 7,
+    "promotion_blocked_count": 5,
     "missing_promotion_reason_count": 0,
     "false_exact_claim_count": 0,
     "invalid_bbox_ref_count": 0,
@@ -1886,17 +1886,17 @@
   "promotion_decision_audit_health": {
     "promotion_decision_count": 57,
     "expected_promotion_decision_count": 57,
-    "blocked_decision_count": 7,
-    "promotion_blocked_count": 7,
+    "blocked_decision_count": 5,
+    "promotion_blocked_count": 5,
     "promotion_attempted_count": 57,
     "promotion_attempt_missing_count": 0,
     "exact_quote_match_count": 57,
     "span_sequence_candidate_count": 57,
     "subspan_match_candidate_count": 0,
-    "bbox_union_candidate_count": 2,
+    "bbox_union_candidate_count": 0,
     "bbox_union_not_supported_count": 0,
     "new_exact_promotion_count": 0,
-    "kept_non_exact_after_attempt_count": 7,
+    "kept_non_exact_after_attempt_count": 5,
     "generic_blocker_reason_count": 0,
     "false_highlightable_claim_count": 0,
     "missing_feasibility_field_count": 0,
@@ -1926,18 +1926,16 @@
   },
   "article_relation_runtime_policy_health": {
     "article_relation_total_count": 63,
-    "article_relation_exact_support_count": 2,
-    "article_relation_trace_only_count": 61,
+    "article_relation_exact_support_count": 63,
+    "article_relation_trace_only_count": 0,
     "article_relation_trace_missing_reason_count": 0,
-    "article_relation_trace_reason_counts": {
-      "blocked_by_missing_exact_bbox": 61
-    },
-    "article_relation_promoted_from_scope_count": 1,
-    "article_relation_unpromoted_trace_count": 61,
+    "article_relation_trace_reason_counts": {},
+    "article_relation_promoted_from_scope_count": 62,
+    "article_relation_unpromoted_trace_count": 0,
     "article_relation_invalid_bbox_refs": 0,
     "article_relation_invalid_coordinates": 0,
-    "article_relation_partial_answer_risk_count": 1,
-    "document_relation_exact_support_partial_trace_omitted_count": 1,
+    "article_relation_partial_answer_risk_count": 0,
+    "document_relation_exact_support_partial_trace_omitted_count": 0,
     "relation_runtime_policy_slow_gate_status": "covered_by_runtime_policy_test",
     "document_relation_count": 8
   },
@@ -2014,8 +2012,8 @@
     "graph_edge_count": 4667,
     "article_relation_count": 63,
     "article_relation_graph_ref_count": 63,
-    "evidence_backed_relation_edge_count": 2,
-    "trace_only_relation_edge_count": 62,
+    "evidence_backed_relation_edge_count": 63,
+    "trace_only_relation_edge_count": 1,
     "non_citable_edge_count": 4667,
     "authority_without_evidence_count": 0,
     "authority_without_bbox_count": 0,
@@ -2026,15 +2024,15 @@
     "authority_kind_counts": {
       "deterministic_structure": 1077,
       "endpoint_provenance": 3514,
-      "exact_relation_support": 2,
-      "instrument_provenance": 72,
+      "exact_relation_support": 63,
+      "instrument_provenance": 11,
       "source_anomaly_trace": 2
     },
     "support_kind_counts": {
       "deterministic_structure": 1077,
       "endpoint_provenance": 3514,
-      "exact_source_relation": 2,
-      "instrument_provenance": 72,
+      "exact_source_relation": 63,
+      "instrument_provenance": 11,
       "source_anomaly_trace": 2
     }
   }

@@ -9,26 +9,10 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from tjipto.corpora.registry import CorpusRegistry
 from tjipto.runtime.http import make_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def _page_grounded_decision_evidence_id() -> str:
-    for row in CorpusRegistry(ROOT).resolve("uud").jsonl("evidence"):
-        if (
-            row.get("citation")
-            in {
-                "Perubahan Pertama Decision",
-                "Perubahan Ketiga Decision",
-                "Perubahan Keempat Decision",
-            }
-            and row.get("viewer_highlightable") is False
-        ):
-            return row["evidence_id"]
-    raise AssertionError("missing page-grounded decision evidence")
 
 
 def _http_ask_cases() -> tuple[dict, ...]:
@@ -118,17 +102,6 @@ class RuntimeHttpContractTest(unittest.TestCase):
         pdf_body, pdf_headers = self._get_bytes(viewer["pdf"]["access_url"])
         self.assertEqual(pdf_headers["Content-Type"], "application/pdf")
         self.assertTrue(pdf_body.startswith(b"%PDF"))
-
-        decision = self._post(
-            "/legal/uud/viewer",
-            {"evidence_id": _page_grounded_decision_evidence_id()},
-        )
-        self.assertEqual(decision["status"], "source_page_trace_only")
-        self.assertTrue(decision["pdf_access_available"])
-        self.assertFalse(decision["rendering_available"])
-        self.assertFalse(decision["bbox_rectangles"])
-        self.assertEqual(decision["bbox_precision"], "page_grounded_only")
-        self.assertFalse(decision["viewer_highlightable"])
 
         document_viewer = self._post("/legal/uud/viewer", {"source_document_id": first["source_document_id"]})
         self.assertEqual(document_viewer["status"], "viewer_payload_ready")

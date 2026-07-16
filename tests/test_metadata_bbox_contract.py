@@ -107,10 +107,10 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(audit["exact_quote_match_count"], 57)
         self.assertEqual(audit["span_sequence_candidate_count"], 57)
         self.assertEqual(audit["subspan_match_candidate_count"], 0)
-        self.assertEqual(audit["bbox_union_candidate_count"], 2)
+        self.assertEqual(audit["bbox_union_candidate_count"], 0)
         self.assertEqual(audit["bbox_union_not_supported_count"], 0)
         self.assertEqual(audit["new_exact_promotion_count"], 0)
-        self.assertEqual(audit["kept_non_exact_after_attempt_count"], 7)
+        self.assertEqual(audit["kept_non_exact_after_attempt_count"], 5)
         self.assertEqual(audit["generic_blocker_reason_count"], 0)
         self.assertEqual(audit["false_highlightable_claim_count"], 0)
         self.assertEqual(audit["missing_feasibility_field_count"], 0)
@@ -148,7 +148,7 @@ class MetadataBBoxContractTest(unittest.TestCase):
         report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
         self.assertEqual(len(decisions), report["promotion_decision_audit_health"]["promotion_decision_count"])
         self.assertEqual(len({row["decision_id"] for row in decisions}), len(decisions))
-        self.assertEqual({row["decision"] for row in decisions}, {"keep_non_exact", "already_exact"})
+        self.assertEqual({row["decision"] for row in decisions}, {"keep_non_exact", "recovered_exact"})
         self.assertEqual(
             {row["record_type"] for row in decisions},
             {"bbox", "evidence"},
@@ -181,13 +181,13 @@ class MetadataBBoxContractTest(unittest.TestCase):
                 self.assertIn(field, row, row["decision_id"])
             self.assertTrue(row["failure_reason"], row["decision_id"])
             self.assertTrue(row["promotion_attempted"], row["decision_id"])
-            if row["decision"] == "already_exact":
-                self.assertEqual(row["promotion_attempt_result"], "already_exact", row["decision_id"])
+            if row["decision"] == "recovered_exact":
+                self.assertEqual(row["promotion_attempt_result"], "recovered_exact", row["decision_id"])
                 self.assertTrue(row["highlightable"], row["decision_id"])
                 self.assertTrue(row["can_be_exact_citation"], row["decision_id"])
                 self.assertTrue(row["can_be_exact_highlight"], row["decision_id"])
             else:
-                self.assertEqual(row["promotion_attempt_result"], "blocked_after_recovery_attempt", row["decision_id"])
+                self.assertEqual(row["promotion_attempt_result"], "blocked_after_actual_attempt", row["decision_id"])
                 self.assertFalse(row["highlightable"], row["decision_id"])
                 self.assertFalse(row["can_be_exact_citation"], row["decision_id"])
                 self.assertFalse(row["can_be_exact_highlight"], row["decision_id"])
