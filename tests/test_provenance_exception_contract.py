@@ -9,7 +9,6 @@ from tjipto.corpora.uud.provenance_exceptions import (
     ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
     BUILDER_SLICING_LABEL_ISSUE_CONFIRMED,
     DUPLICATED_HEADING_ARTIFACT_ISSUE_CONFIRMED,
-    SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
 )
 
 
@@ -86,16 +85,16 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         )
         self.assertEqual([line.strip() for line in text.splitlines()].count("Pasal III"), 1)
 
-    def test_legacy_review_records_are_source_text_accepted_nonruntime_no_evidence_bbox(self) -> None:
-        for chunk_id in ("uud_chunk_00005", "uud_chunk_00022", "uud_chunk_00101", "uud_chunk_00188"):
-            chunk = self.chunks[chunk_id]
-            self.assertEqual(chunk["status"], SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX)
-            self.assertEqual(chunk["provenance_exception_category"], SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX)
-            self.assertFalse(chunk["runtime_loadable"])
-            self.assertFalse(chunk["canonical_use_allowed"])
-            self.assertTrue(chunk["text_span_ids"])
-            self.assertFalse(chunk["evidence_ids"])
-            self.assertFalse(chunk["bbox_ids"])
+    def test_previously_excluded_records_are_admitted_from_exact_grounding(self) -> None:
+        evidence = read_jsonl(FINAL / "evidence_registry.jsonl")
+        by_unit = {row["legal_unit_id"]: row for row in evidence}
+        for row_id in ("00383", "00400", "00475", "00479", "00521", "00566"):
+            unit = self.units[f"uud_legal_unit_{row_id}"]
+            admitted = by_unit[unit["legal_unit_id"]]
+            self.assertTrue(unit["runtime_loadable"])
+            self.assertEqual(admitted["source_role"], unit["source_role"])
+            self.assertEqual(admitted["bbox_precision"], "exact")
+            self.assertTrue(admitted["viewer_highlightable"])
 
     def test_validation_report_has_provenance_exception_health(self) -> None:
         health = self.report["provenance_exception_health"]
@@ -103,7 +102,6 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         self.assertEqual(health["accepted_noncanonical_source_conflict_trace_only_count"], 3)
         self.assertEqual(health["builder_slicing_label_issue_confirmed_count"], 2)
         self.assertEqual(health["duplicated_heading_artifact_issue_confirmed_count"], 2)
-        self.assertEqual(health["source_text_accepted_nonruntime_no_evidence_bbox_count"], 8)
 
     def test_source_conflict_provenance_health_distinguishes_final_and_raw_bbox_status(self) -> None:
         health = self.report["source_conflict_provenance_health"]

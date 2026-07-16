@@ -254,7 +254,7 @@ class GraphContractTest(unittest.TestCase):
 
     def test_metadata_graph_edges_exclude_source_role_level_amends(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/metadata_graph_edges.jsonl")
-        self.assertEqual(len(edges), 449)
+        self.assertEqual(len(edges), 456)
         self.assertFalse([edge for edge in edges if edge["edge_type"] in {"AMENDS", "AMENDED_BY"}])
         self.assertTrue(all(edge["status"] == "accepted" for edge in edges))
         self.assertTrue(all(edge["runtime_loadable"] is False for edge in edges))
@@ -547,8 +547,8 @@ class GraphContractTest(unittest.TestCase):
     def test_uud_ingestion_reproducibility_runner_passes(self) -> None:
         result = validate_corpus_ingestion_artifacts("uud", ROOT)
         self.assertEqual(result["status"], "valid", result["errors"][:5])
-        self.assertEqual(result["counts"]["evidence_records"], 464)
-        self.assertEqual(result["counts"]["bbox_records"], 1584)
+        self.assertEqual(result["counts"]["evidence_records"], 471)
+        self.assertEqual(result["counts"]["bbox_records"], 1618)
         self.assertEqual(validate_uud_ingestion_artifacts(ROOT), result)
 
     def _compact_text(self, text: str) -> str:

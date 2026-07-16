@@ -61,6 +61,14 @@ def specificity_for_legal_unit(unit: dict) -> int:
     return UNIT_SPECIFICITY.get(str(unit.get("unit_type") or ""), 0)
 
 
+def substantive_structural_unit(unit: dict) -> bool:
+    return (
+        unit.get("unit_type") == "bab_record"
+        and unit.get("source_role") == "current_consolidated"
+        and "dihapus" in re.sub(r"\s+", " ", str(unit.get("text") or "")).casefold()
+    )
+
+
 def classification_for_role(role: str) -> str:
     if role == "normative_text":
         return "normative_constitutional_text"

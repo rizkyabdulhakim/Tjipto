@@ -25,7 +25,6 @@ from tjipto.corpora.uud.metadata_builder import (
 )
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.retrieval_builder import build_retrieval_units
-from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.validation import build_validation_report
@@ -384,17 +383,17 @@ class UudBuilderContractTest(unittest.TestCase):
         bbox_rows = read_jsonl(FINAL / "bbox_registry.jsonl")
         bbox_keys = {_span_bbox_key(row) for row in bbox_rows}
         missing = [row for row in spans if _span_bbox_key(row) not in bbox_keys]
-        self.assertEqual(len(missing), 634)
+        self.assertEqual(len(missing), 600)
         bucket_counts = Counter(row["bbox_registry_coverage_bucket"] for row in missing)
         self.assertEqual(
             bucket_counts,
             Counter(
                 {
-                    "legal_citation_candidate": 153,
+                    "legal_citation_candidate": 122,
                     "metadata_provenance_candidate": 8,
                     "nonlegal_excluded_provenance": 359,
                     "source_anomaly_provenance_candidate": 17,
-                    "structural_provenance_only": 97,
+                    "structural_provenance_only": 94,
                 }
             ),
         )
@@ -423,8 +422,8 @@ class UudBuilderContractTest(unittest.TestCase):
         self.assertTrue(consolidated["viewer_highlightable"])
         self.assertTrue(consolidated["bbox_ids"])
 
-    def test_excluded_records_rebuild_from_specs(self) -> None:
-        self.assertEqual(list(EXCLUDED_RECORD_SPECS), read_jsonl(FINAL / "excluded_records.jsonl"))
+    def test_ordinal_exclusion_artifact_is_empty_after_grounding_admission(self) -> None:
+        self.assertEqual(read_jsonl(FINAL / "excluded_records.jsonl"), [])
 
 
 def _span_bbox_key(row: dict) -> tuple[object, ...]:

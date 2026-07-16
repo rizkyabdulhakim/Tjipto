@@ -4,7 +4,6 @@ from pathlib import Path
 
 from tjipto.corpora.uud.provenance_exceptions import (
     ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
-    SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
 )
 
 
@@ -405,76 +404,6 @@ SOURCE_CONFLICT_SPECS = (
         "source_document_id": "uud::amendment_2_historical",
         "status": "source_discrepancy_recorded",
         "type": "article_renumbering_provenance",
-    },
-)
-
-
-EXCLUDED_RECORD_SPECS = (
-    {
-        "corpus_id": "uud",
-        "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00005",
-        "legacy_chunk_id": "uud_chunk_00005",
-        "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00005",
-        "reason": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
-        "runtime_loadable": False,
-        "source_role": "amendment_1_historical",
-        "status": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
-        "unit_label": "(1)",
-    },
-    {
-        "corpus_id": "uud",
-        "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00022",
-        "legacy_chunk_id": "uud_chunk_00022",
-        "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00022",
-        "reason": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
-        "runtime_loadable": False,
-        "source_role": "amendment_1_historical",
-        "status": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
-        "unit_label": "Pasal 21",
-    },
-    {
-        "corpus_id": "uud",
-        "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00097",
-        "legacy_chunk_id": "uud_chunk_00097",
-        "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00097",
-        "reason": "prior_rejected_text_layer_mismatch_confirmed",
-        "runtime_loadable": False,
-        "source_role": "amendment_2_historical",
-        "status": "rejected_confirmed",
-        "unit_label": "(5)",
-    },
-    {
-        "corpus_id": "uud",
-        "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00101",
-        "legacy_chunk_id": "uud_chunk_00101",
-        "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00101",
-        "reason": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
-        "runtime_loadable": False,
-        "source_role": "amendment_2_historical",
-        "status": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
-        "unit_label": "Pasal 36C",
-    },
-    {
-        "corpus_id": "uud",
-        "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00143",
-        "legacy_chunk_id": "uud_chunk_00143",
-        "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00143",
-        "reason": "prior_rejected_text_layer_mismatch_confirmed",
-        "runtime_loadable": False,
-        "source_role": "amendment_3_historical",
-        "status": "rejected_confirmed",
-        "unit_label": "(3)",
-    },
-    {
-        "corpus_id": "uud",
-        "excluded_record_id": "uud_unified_excluded_policy::uud_chunk_00188",
-        "legacy_chunk_id": "uud_chunk_00188",
-        "legacy_record_id": "uud_unified_excluded_policy::uud_chunk_00188",
-        "reason": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
-        "runtime_loadable": False,
-        "source_role": "amendment_3_historical",
-        "status": SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
-        "unit_label": "(6)",
     },
 )
 

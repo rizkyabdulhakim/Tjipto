@@ -988,38 +988,43 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(temporal["status"], "found")
         self.assertEqual(temporal["applied_filters"]["temporal_context"], "amendment_1_historical")
         self.assertEqual(len(temporal["results"]), 1)
-        self.assertEqual(temporal["results"][0]["temporal_context"], "amendment_1_historical")
 
+    def test_temporal_target_prefers_current_or_requested_historical_source(self) -> None:
+        current = self.service.ask("uud", "Apa isi BAB IV UUD 1945 saat ini?")
+        self.assertEqual(current["status"], "answer_ready")
+        self.assertEqual([row["citation"] for row in current["citations"]], ["BAB IV"])
+        self.assertEqual(current["citations"][0]["source_role"], "current_consolidated")
+        for query, role, citation in (
+            ("Apa isi Pasal 21 pada Perubahan Pertama?", "amendment_1_historical", "Pasal 21"),
+            ("Apa isi ayat (5) Pasal 30 pada Perubahan Kedua?", "amendment_2_historical", "(5)"),
+            ("Apa isi Pasal 36C pada Perubahan Kedua?", "amendment_2_historical", "Pasal 36C"),
+        ):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "answer_ready", query)
+            self.assertTrue(result["citations"], query)
+            self.assertEqual(result["citations"][0]["citation"], citation, query)
+            self.assertTrue(all(row["source_role"] == role for row in result["citations"]), query)
+
+    def test_filter_conflicts_and_api_temporal_context(self) -> None:
+        temporal = self.service.search("uud", "UUD 1945", limit=1, filters={"temporal_context": "amendment_1_historical"})
+        self.assertEqual(temporal["status"], "found")
+        self.assertEqual(temporal["results"][0]["temporal_context"], "amendment_1_historical")
         conflicting = self.service.search(
-            "uud",
-            "UUD 1945",
-            filters={
-                "source_role": "current_consolidated",
-                "temporal_context": "amendment_1_historical",
-            },
+            "uud", "UUD 1945", filters={"source_role": "current_consolidated", "temporal_context": "amendment_1_historical"}
         )
         self.assertEqual(conflicting["status"], "invalid_filter")
         self.assertEqual(conflicting["reason"], "conflicting_filters")
         self.assertFalse(conflicting["matches"])
-
-        invalid = self.service.search(
-            "uud",
-            "UUD 1945",
-            filters={"source_role": "not_a_source_role"},
-        )
+        invalid = self.service.search("uud", "UUD 1945", filters={"source_role": "not_a_source_role"})
         self.assertEqual(invalid["status"], "invalid_filter")
         self.assertEqual(invalid["reason"], "invalid_filter")
         self.assertEqual(invalid["invalid_filters"], ("source_role",))
-
         api_result = handle_request(
             "uud",
             "ask",
             {
                 "query": "Pasal 5 ayat (1)",
-                "filters": {
-                    "source_role": "amendment_1_historical",
-                    "temporal_context": "amendment_1_historical",
-                },
+                "filters": {"source_role": "amendment_1_historical", "temporal_context": "amendment_1_historical"},
             },
             ROOT,
         )
@@ -1045,7 +1050,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(report[key]["raw_pdf_match"], 626)
             self.assertEqual(report[key]["normalized_pdf_match"], 626)
             self.assertEqual(report[key]["header_stripped_pdf_match"], 650)
-            self.assertEqual(report[key]["evidence_grounded_match"], 464)
+            self.assertEqual(report[key]["evidence_grounded_match"], 471)
             self.assertEqual(report[key]["needs_review"], 1)
             self.assertEqual(report[key]["status"], "pass_with_reviewed_exceptions")
         self.assertEqual(report["provenance_exception_health"]["unresolved_needs_review_count"], 0)

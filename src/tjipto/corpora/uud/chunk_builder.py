@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import re
 
-from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, UUD_CHUNK_ID_STARTS, UUD_LEGAL_UNIT_SOURCE_ORDER
+from tjipto.corpora.uud.specs import UUD_CHUNK_ID_STARTS, UUD_LEGAL_UNIT_SOURCE_ORDER
+from tjipto.corpora.uud.span_disposition_policy import substantive_structural_unit
 
 
 def build_chunks_from_legal_units(legal_units: list[dict]) -> list[dict]:
     by_source = {source_id: 0 for source_id in UUD_LEGAL_UNIT_SOURCE_ORDER}
-    excluded = {row["legacy_chunk_id"]: row for row in EXCLUDED_RECORD_SPECS}
     rows = []
     for unit in _chunk_ordered_units(legal_units):
         source_id = unit["source_document_id"]
@@ -27,11 +27,6 @@ def build_chunks_from_legal_units(legal_units: list[dict]) -> list[dict]:
             "status": _chunk_status(unit),
             "text": unit["text"],
         }
-        if chunk_id in excluded:
-            row["canonical_use_allowed"] = False
-            row["status"] = excluded[chunk_id]["status"]
-            row["runtime_loadable"] = False
-            row["exclusion_ref"] = excluded[chunk_id]["excluded_record_id"]
         if unit.get("runtime_loadable") is False:
             row["runtime_loadable"] = False
         if unit.get("exclusion_ref"):
@@ -77,6 +72,8 @@ def _chunk_type(unit: dict) -> str:
 def _chunk_status(unit: dict) -> str:
     if unit.get("runtime_loadable") is False:
         return unit["status"]
+    if substantive_structural_unit(unit):
+        return "active_canonical_record"
     if _chunk_type(unit) in {"bab_structural_context_record", "aturan_section_context_record", "pasal_parent_context_record"}:
         return "parent_context_only"
     return "active_canonical_record"

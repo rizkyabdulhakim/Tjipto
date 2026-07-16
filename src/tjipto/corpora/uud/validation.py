@@ -24,13 +24,12 @@ from tjipto.corpora.uud.provenance_exceptions import (
     ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
     BUILDER_SLICING_LABEL_ISSUE_CONFIRMED,
     DUPLICATED_HEADING_ARTIFACT_ISSUE_CONFIRMED,
-    SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
     UNRESOLVED_NEEDS_REVIEW,
     UNRESOLVED_MANUAL_REVIEW_REQUIRED,
     needs_review,
     review_category,
 )
-from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit
+from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit, substantive_structural_unit
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
 from tjipto.core.manifest import read_json, read_jsonl
@@ -103,8 +102,8 @@ def build_validation_report(
                 "source": "source_pdf_and_corpus_specs",
                 "seeded_artifacts": [],
             },
-            "excluded_chunk_policy": "records listed in excluded_records.jsonl are not runtime-loadable, not active canonical, and not canonical-use allowed",
-            "audited_excluded_chunks": [row["legacy_chunk_id"] for row in excluded_records],
+            "excluded_chunk_policy": "legacy ordinal exclusion policy removed; admission follows verified grounding and source/temporal authority",
+            "audited_excluded_chunks": [],
             "reviewed_exceptions_preserved": [
                 "Pasal 22D ayat (3) bbox/text exception remains tracked in structure_fidelity.reviewed_exception_unit"
             ],
@@ -157,6 +156,7 @@ def build_validation_report(
         chunks,
         {row["legal_unit_id"]: row for row in legal_units},
     )
+    validation_report["evidence_admission_audit"] = _evidence_admission_audit(legal_units, evidence)
     validation_report["legal_unit_chunk_span_closure_health"] = _legal_unit_chunk_span_closure_health(
         legal_units=legal_units,
         chunks=chunks,
@@ -345,6 +345,42 @@ def build_validation_report(
         bbox_rows=bbox_rows,
     )
     return validation_report
+
+
+def _evidence_admission_audit(legal_units: list[dict], evidence: list[dict]) -> dict:
+    """Record a deterministic decision for every unit lacking direct evidence."""
+    evidence_units = {row.get("legal_unit_id") for row in evidence}
+    decisions = []
+    for unit in sorted(legal_units, key=lambda row: row.get("legal_unit_id", "")):
+        unit_id = unit.get("legal_unit_id")
+        if unit_id in evidence_units:
+            continue
+        descendants = any(unit_id in (candidate.get("ancestor_legal_unit_ids") or ()) for candidate in legal_units if candidate is not unit)
+        if descendants:
+            reason = "descendant_evidence_context"
+        elif unit.get("unit_type") in {"bab_record", "aturan_peralihan_record", "aturan_tambahan_record"}:
+            reason = "structural_context_without_direct_evidence"
+        elif unit.get("runtime_loadable") is False:
+            reason = "non_runtime_without_exact_evidence"
+        else:
+            reason = "exact_evidence_unavailable"
+        decisions.append(
+            {
+                "legal_unit_id": unit_id,
+                "source_role": unit.get("source_role"),
+                "unit_type": unit.get("unit_type"),
+                "runtime_loadable": unit.get("runtime_loadable") is True,
+                "has_descendant_evidence": descendants,
+                "decision": reason,
+            }
+        )
+    return {
+        "status": "complete",
+        "unit_count": len(legal_units),
+        "direct_evidence_unit_count": len(evidence_units),
+        "no_direct_evidence_unit_count": len(decisions),
+        "decisions": decisions,
+    }
 
 
 def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
@@ -2355,7 +2391,6 @@ def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], so
             ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
             BUILDER_SLICING_LABEL_ISSUE_CONFIRMED,
             DUPLICATED_HEADING_ARTIFACT_ISSUE_CONFIRMED,
-            SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX,
             UNRESOLVED_NEEDS_REVIEW,
         )
     }
@@ -2378,7 +2413,6 @@ def _provenance_exception_health(chunks: list[dict], legal_units: list[dict], so
         + len(noncanonical_conflicts),
         "builder_slicing_label_issue_confirmed_count": category_counts[BUILDER_SLICING_LABEL_ISSUE_CONFIRMED],
         "duplicated_heading_artifact_issue_confirmed_count": category_counts[DUPLICATED_HEADING_ARTIFACT_ISSUE_CONFIRMED],
-        "source_text_accepted_nonruntime_no_evidence_bbox_count": category_counts[SOURCE_TEXT_ACCEPTED_NONRUNTIME_NO_EVIDENCE_BBOX],
         "unresolved_needs_review_count": category_counts[UNRESOLVED_NEEDS_REVIEW],
         "runtime_loadable_needs_review_count": sum(1 for row in needs_review_rows if row.get("runtime_loadable") is True),
         "noncanonical_conflict_trace_runtime_loadable_count": sum(
@@ -2611,6 +2645,7 @@ def _legal_unit_chunk_span_closure_health(
         for unit in legal_units
         if unit.get("unit_type") in {"bab_record", "aturan_peralihan_record", "aturan_tambahan_record"}
         and unit.get("runtime_loadable") is True
+        and not substantive_structural_unit(unit)
         and not any(unit["legal_unit_id"] in (candidate.get("parent_legal_unit_ids") or ()) for candidate in legal_units)
     ]
     counts = {

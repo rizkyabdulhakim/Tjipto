@@ -6,7 +6,6 @@ import unicodedata
 from tjipto.corpora.uud.anomaly_builder import append_amendment_instrument_units
 from tjipto.corpora.uud.parser import UUD_LEGAL_TOKEN_RE
 from tjipto.corpora.uud.specs import (
-    EXCLUDED_RECORD_SPECS,
     INSERTED_BAB_SPECS,
     UUD_LEGAL_UNIT_ID_STARTS,
     UUD_LEGAL_UNIT_SOURCE_ORDER,
@@ -60,7 +59,6 @@ def _append_source_units(
     current_bab: dict | None = None
     current_pasal: dict | None = None
     source_count = 0
-    excluded = {row["legacy_chunk_id"]: row for row in EXCLUDED_RECORD_SPECS}
     for index, token in enumerate(tokens):
         label = token.group(1)
         if _token_kind(label) == "Stop":
@@ -113,10 +111,6 @@ def _append_source_units(
             "unit_label": label,
             "unit_type": unit_type,
         }
-        if chunk_id in excluded:
-            row["status"] = excluded[chunk_id]["status"]
-            row["runtime_loadable"] = False
-            row["exclusion_ref"] = excluded[chunk_id]["excluded_record_id"]
         rows.append(row)
         chunk_by_unit[legal_id] = chunk_id
         if source_id == "uud::amendment_4_historical" and unit_type == "bab_record" and label == "BAB IV":

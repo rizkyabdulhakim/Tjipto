@@ -9,6 +9,14 @@ from tjipto.corpora.uud.specs import INSERTED_BAB_SPECS
 from tjipto.corpora.uud.structure_builder import compact, slug
 
 
+def _admit_evidence(unit: dict, chunk: dict) -> bool:
+    if unit.get("unit_type") == "effective_clause_record":
+        return False
+    if unit.get("unit_type") == "bab_record":
+        return unit.get("source_role") == "current_consolidated" and "dihapus" in compact(unit.get("text"))
+    return chunk.get("status") == "active_canonical_record"
+
+
 def build_evidence_and_bboxes(
     *,
     legal_units: list[dict],
@@ -21,10 +29,8 @@ def build_evidence_and_bboxes(
     bbox_rows: list[dict] = []
     next_instrument_id = 1
     for chunk in sorted(chunks, key=lambda row: row["chunk_id"]):
-        if chunk["status"] != "active_canonical_record":
-            continue
         unit = units_by_id[chunk["legal_unit_id"]]
-        if unit["unit_type"] == "effective_clause_record":
+        if not _admit_evidence(unit, chunk):
             continue
         source_id = unit["source_document_id"]
         source_meta = source_documents[source_id]

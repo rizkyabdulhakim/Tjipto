@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from pathlib import Path
 import sys
 
@@ -23,7 +22,7 @@ from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.relation_builder import build_article_amendment_relations, build_document_relations
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, build_retrieval_units
-from tjipto.corpora.uud.specs import EXCLUDED_RECORD_SPECS, FINAL_DIR
+from tjipto.corpora.uud.specs import FINAL_DIR
 from tjipto.corpora.uud.span_disposition_builder import apply_page_text_span_dispositions
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
@@ -60,7 +59,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     except ImportError as error:  # pragma: no cover
         raise RuntimeError("PyMuPDF is required to rebuild UUD artifacts") from error
 
-    excluded_records = deepcopy(list(EXCLUDED_RECORD_SPECS))
+    excluded_records: list[dict] = []
     source_documents = {row["source_document_id"]: row for row in build_source_documents(repo_root)}
     manifest = build_manifest(source_documents)
     source_conflicts = build_source_conflicts()

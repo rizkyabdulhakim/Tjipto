@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "b9e4c3a7f7e0e545864037c12a6e2b4a7dd5880a2159dc6598730630b7fbb7a2",
+    "manifest_sha256": "0c080b7f28a2687731104ea05c7de59ef17cd327fc5bc64c8c91539672e4fc27",
     "runtime_required_artifacts": [
       "evidence_registry",
       "bbox_registry",
@@ -412,7 +412,7 @@
         },
         {
           "role": "current_consolidated",
-          "pattern": "\\b(satu\\s+naskah|konsolidasi|current|berlaku)\\b"
+          "pattern": "\\b(satu\\s+naskah|konsolidasi|current|berlaku|saat\\s+ini|sekarang|terkini)\\b"
         },
         {
           "role": "original_historical",

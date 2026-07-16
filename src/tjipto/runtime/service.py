@@ -12,7 +12,7 @@ from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
-from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters
+from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters, source_role_for_query
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.scope_guard import scope_guard_context
@@ -52,6 +52,11 @@ def _integrity_failure(corpus_id: str, query: str, error_code: str | None) -> di
         "answer_type": "none",
         "answer": _ANSWER_TEMPLATES["insufficient"],
     }
+
+
+def _has_resolved_legal_target(corpus_id: str, query: str) -> bool:
+    parsed = parse_legal_reference(corpus_id, query, allow_roman_pasal=True)
+    return any(parsed.values())
 
 
 class LegalRuntimeService:
@@ -119,8 +124,13 @@ class LegalRuntimeService:
                 **_empty_citation_fields(),
             }
         metadata_filters = dict(filters or {})
-        if source_role is not None:
-            metadata_filters["source_role"] = source_role
+        requested_role = source_role or source_role_for_query(
+            query,
+            strategy=getattr(store.config, "query_strategy", "generic"),
+            config=store.config,
+        )
+        if requested_role is not None:
+            metadata_filters["source_role"] = requested_role
         routed = route_retrieval(corpus_id, query, store, metadata_filters=metadata_filters)
         if routed["intent"] != "exact_citation":
             return routed | {
@@ -346,7 +356,9 @@ class LegalRuntimeService:
         document_relation = _document_relation_response(store, corpus_id, query)
         if document_relation:
             return document_relation
-        instrument = _instrument_intent_context(store, query)
+        # A resolved legal target has precedence over the instrument classifier.
+        # Amendment wording then scopes the structured lookup to that source role.
+        instrument = None if _has_resolved_legal_target(corpus_id, query) else _instrument_intent_context(store, query)
         if instrument:
             row, route, reason = instrument
             templates = _answer_templates(store)

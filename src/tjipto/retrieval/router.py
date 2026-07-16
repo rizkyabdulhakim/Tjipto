@@ -9,6 +9,7 @@ from tjipto.retrieval.metadata import (
     metadata_lookup,
     normalize_filters,
     public_filters,
+    source_role_for_query,
 )
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.relations import has_relation_target, relation_lookup
@@ -31,6 +32,10 @@ def route_retrieval(
     structured_strategy = getattr(config, "structured_strategy", "generic")
     normalized = normalize_query(query, strategy=query_strategy, config=config)
     filters = normalize_filters(metadata_filters, config=config)
+    if "source_role" not in filters:
+        role = source_role_for_query(normalized["normalized_query"], strategy=query_strategy, config=config)
+        if role:
+            filters = dict(filters) | {"source_role": role}
     applied_filters = public_filters(filters)
     corpus_supported = store is not None
     intent = classify_intent(

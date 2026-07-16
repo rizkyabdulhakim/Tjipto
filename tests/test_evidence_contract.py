@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 
 from tjipto.core.manifest import read_jsonl
+from tjipto.corpora.uud.evidence_bbox_builder import _admit_evidence
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +14,7 @@ FINAL = ROOT / "data/final/uud"
 class EvidenceContractTest(unittest.TestCase):
     def test_final_evidence_rows_are_grounded(self) -> None:
         rows = read_jsonl(FINAL / "evidence_registry.jsonl")
-        self.assertEqual(len(rows), 464)
+        self.assertEqual(len(rows), 471)
         for row in rows:
             self.assertEqual(row["corpus_id"], "uud")
             self.assertEqual(row["status"], "final")
@@ -43,23 +44,34 @@ class EvidenceContractTest(unittest.TestCase):
             for parent_id in row["parent_legal_unit_ids"]:
                 self.assertIn(parent_id, unit_ids)
 
-    def test_excluded_chunks_are_not_active_canonical(self) -> None:
-        chunks = {row["chunk_id"]: row for row in read_jsonl(FINAL / "chunks.jsonl")}
-        units = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "legal_units.jsonl")}
+    def test_ordinal_exclusion_records_are_not_used_for_admission(self) -> None:
         excluded = read_jsonl(FINAL / "excluded_records.jsonl")
-        self.assertEqual(len(excluded), 6)
-        for row in excluded:
-            chunk = chunks[row["legacy_chunk_id"]]
-            unit = units[chunk["legal_unit_id"]]
-            self.assertFalse(chunk["canonical_use_allowed"])
-            self.assertNotEqual(chunk["status"], "active_canonical_record")
-            self.assertEqual(chunk["status"], row["status"])
-            self.assertFalse(chunk["runtime_loadable"])
-            self.assertEqual(chunk["exclusion_ref"], row["excluded_record_id"])
-            self.assertNotEqual(unit["status"], "finalizable")
-            self.assertEqual(unit["status"], row["status"])
-            self.assertFalse(unit["runtime_loadable"])
-            self.assertEqual(unit["exclusion_ref"], row["excluded_record_id"])
+        self.assertEqual(excluded, [])
+        evidence = {row["legal_unit_id"] for row in read_jsonl(FINAL / "evidence_registry.jsonl")}
+        for unit_id in (
+            "uud_legal_unit_00383",
+            "uud_legal_unit_00400",
+            "uud_legal_unit_00475",
+            "uud_legal_unit_00479",
+            "uud_legal_unit_00521",
+            "uud_legal_unit_00566",
+        ):
+            self.assertIn(unit_id, evidence)
+
+    def test_evidence_admission_is_stable_when_chunk_ordinals_change(self) -> None:
+        units = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "legal_units.jsonl")}
+        chunks = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "chunks.jsonl")}
+        for unit_id in (
+            "uud_legal_unit_00383",
+            "uud_legal_unit_00400",
+            "uud_legal_unit_00475",
+            "uud_legal_unit_00479",
+            "uud_legal_unit_00521",
+            "uud_legal_unit_00566",
+        ):
+            unit = units[unit_id]
+            chunk = chunks[unit_id] | {"chunk_id": "uud_chunk_reordered"}
+            self.assertTrue(_admit_evidence(unit, chunk), unit_id)
 
     def test_bab_records_do_not_point_to_child_bab(self) -> None:
         for row in read_jsonl(FINAL / "legal_units.jsonl"):

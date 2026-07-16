@@ -10,6 +10,7 @@ from tjipto.corpora.parser_dispatch import (
     resolve_navigation,
 )
 from tjipto.evidence.store import EvidenceStore
+from tjipto.retrieval.metadata import source_role_for_query
 
 
 def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, strategy: str = "uud_1945") -> tuple[dict, ...]:
@@ -31,11 +32,13 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
         for row in (*getattr(store, "legal_units", ()), *getattr(store, "chunks", ()))
         if row.get("legal_unit_id") and _matches_unit(row, targets)
     }
+    requested_role = source_role_for_query(query, strategy=strategy, config=config)
     rows = [
         row
         for row in store.evidence
         if row.get("status") == "final"
         and store.bboxes_for(row["evidence_id"])
+        and (requested_role is None or row.get("source_role") == requested_role)
         and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets))
     ]
     return tuple(rows[:limit])

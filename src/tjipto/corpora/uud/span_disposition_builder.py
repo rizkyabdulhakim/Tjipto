@@ -7,6 +7,7 @@ from tjipto.corpora.uud.span_disposition_policy import (
     classification_for_role,
     role_for_legal_unit,
     specificity_for_legal_unit,
+    substantive_structural_unit,
     unreferenced_role,
 )
 
@@ -50,9 +51,9 @@ def _legal_span_refs(legal_units: list[dict], chunks_by_unit: dict[str, dict]) -
     refs: dict[str, dict] = {}
     for unit in legal_units:
         chunk = chunks_by_unit.get(unit["legal_unit_id"], {})
-        role = role_for_legal_unit(unit)
+        role = "normative_text" if substantive_structural_unit(unit) else role_for_legal_unit(unit)
         for span_id in unit.get("text_span_ids") or chunk.get("text_span_ids") or ():
-            candidate = _legal_disposition(unit, chunk, role)
+            candidate = _legal_disposition(unit, chunk, role, span_id)
             if span_id not in refs or specificity_for_legal_unit(unit) > refs[span_id]["specificity"]:
                 refs[span_id] = {"specificity": specificity_for_legal_unit(unit), **candidate}
     for ref in refs.values():
@@ -60,7 +61,7 @@ def _legal_span_refs(legal_units: list[dict], chunks_by_unit: dict[str, dict]) -
     return refs
 
 
-def _legal_disposition(unit: dict, chunk: dict, role: str) -> dict:
+def _legal_disposition(unit: dict, chunk: dict, role: str, span_id: str | None = None) -> dict:
     if role == "source_conflict_trace":
         return {
             "span_role": role,
@@ -73,7 +74,7 @@ def _legal_disposition(unit: dict, chunk: dict, role: str) -> dict:
             "validation_basis": "source_conflict_trace_text_span",
             "review_status": "reviewed",
         }
-    if role == "structural_heading":
+    if role == "structural_heading" and not substantive_structural_unit(unit):
         return {
             "span_role": role,
             "semantic_classification": classification_for_role(role),

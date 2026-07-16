@@ -23,7 +23,7 @@ class PdfGeometryContractTest(unittest.TestCase):
             for row in read_jsonl(FINAL / "bbox_registry.jsonl")
             if row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True
         ]
-        self.assertEqual(len(exact), 1532)
+        self.assertEqual(len(exact), 1566)
         for row in exact:
             with self.subTest(bbox_id=row["bbox_id"]):
                 self.assertEqual(row["coordinate_space"], "pdf_user_space")

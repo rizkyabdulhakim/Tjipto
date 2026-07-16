@@ -55,6 +55,10 @@ def filter_evidence(rows: tuple[dict, ...], filters: dict) -> tuple[dict, ...]:
     )
 
 
+def source_role_for_query(query: str, *, strategy: str = "generic", config=None) -> str | None:
+    return _source_role(query, strategy=strategy, config=config)
+
+
 def public_filters(filters: dict) -> dict:
     return {key: value for key, value in filters.items() if not key.startswith("_")}
 
