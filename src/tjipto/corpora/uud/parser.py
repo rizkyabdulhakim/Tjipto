@@ -8,8 +8,8 @@ UUD_LEGAL_TOKEN_RE = re.compile(
 )
 
 UUD_BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s*([a-z]?)\b", re.IGNORECASE)
-UUD_PASAL_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\b", re.IGNORECASE)
-UUD_PASAL_OR_ROMAN_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?|[ivxlcdm]+)\b", re.IGNORECASE)
+UUD_PASAL_RE = re.compile(r"\bpasal[ \t\r\n]*([0-9]+)(?:[ \t\r\n]*([a-z]))?\b", re.IGNORECASE)
+UUD_PASAL_OR_ROMAN_RE = re.compile(r"\bpasal[ \t\r\n]*(?:(\d+)(?:[ \t\r\n]*([a-z]))?|([ivxlcdm]+))\b", re.IGNORECASE)
 UUD_PASAL_LETTER_RE = re.compile(r"\bpasal\s+([0-9]+)\s+([a-z])\b", re.IGNORECASE)
 UUD_PASAL_SHORTHAND_AYAT_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\s*\(\s*([0-9]+)\s*\)", re.IGNORECASE)
 UUD_AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
@@ -25,7 +25,7 @@ def normalize_uud_query_reference(text: str) -> str:
         lambda match: f"Pasal {match.group(1).upper()} ayat ({match.group(2)})",
         normalized,
     )
-    normalized = UUD_PASAL_RE.sub(lambda match: f"Pasal {match.group(1).upper()}", normalized)
+    normalized = UUD_PASAL_RE.sub(lambda match: f"Pasal {match.group(1)}{(match.group(2) or '').upper()}", normalized)
     normalized = UUD_AYAT_RE.sub(lambda match: f"ayat ({match.group(1)})", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
 
@@ -38,7 +38,27 @@ def parse_uud_bab_reference(text: str) -> str | None:
 def parse_uud_pasal_reference(text: str, *, allow_roman: bool = False) -> str | None:
     pattern = UUD_PASAL_OR_ROMAN_RE if allow_roman else UUD_PASAL_RE
     match = pattern.search(text or "")
-    return f"Pasal {match.group(1).upper()}" if match else None
+    if not match:
+        return None
+    number = match.group(1) or match.group(3)
+    suffix = match.group(2) or ""
+    return f"Pasal {number}{suffix.upper()}"
+
+
+def parse_uud_legal_references(text: str) -> list[dict[str, object]]:
+    """Parse all Pasal references and retain their source character ranges."""
+    rows: list[dict[str, object]] = []
+    for match in UUD_PASAL_RE.finditer(text or ""):
+        reference = f"Pasal {match.group(1)}{(match.group(2) or '').upper()}"
+        rows.append(
+            {
+                "reference": reference,
+                "raw": match.group(0),
+                "start": match.start(),
+                "end": match.end(),
+            }
+        )
+    return rows
 
 
 def parse_uud_ayat_reference(text: str) -> str | None:
@@ -85,6 +105,7 @@ def parser_adapter():
     return CorpusParser(
         normalize_query_reference=normalize_uud_query_reference,
         parse_legal_reference=parse_uud_legal_reference,
+        parse_legal_references=parse_uud_legal_references,
         parse_bab_reference=parse_uud_bab_reference,
         parse_pasal_reference=parse_uud_pasal_reference,
         parse_ayat_reference=parse_uud_ayat_reference,

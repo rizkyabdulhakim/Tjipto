@@ -4,6 +4,7 @@ import hashlib
 import re
 
 from tjipto.corpora.uud.specs import UUD_INSERTED_BAB_PREDECESSORS, UUD_LEGAL_GRAPH_EDGE_SCHEMA
+from tjipto.corpora.parser_dispatch import parse_legal_references
 
 
 def build_graph_artifacts(
@@ -269,6 +270,40 @@ def build_graph_artifacts(
                     confidence_policy="explicit_delete_clause_reference",
                 )
 
+    renumber_clause = next((row for row in evidence if row.get("citation") == "Perubahan Keempat Clause (c)"), None)
+    if renumber_clause:
+        renumberings = (
+            ("amendment_3_historical", "Pasal 3", "current_consolidated", "Pasal 3"),
+            ("amendment_2_historical", "Pasal 25E", "current_consolidated", "Pasal 25A"),
+        )
+        source_node = unit_node_ids.get(renumber_clause["legal_unit_id"])
+        for source_role, source_label, target_role, target_label in renumberings:
+            source_unit = next(
+                (row for row in legal_units if row.get("source_role") == source_role and row.get("unit_label") == source_label),
+                None,
+            )
+            target_unit = next(
+                (row for row in legal_units if row.get("source_role") == target_role and row.get("unit_label") == target_label),
+                None,
+            )
+            if source_node and source_unit and target_unit:
+                add_edge(
+                    unit_node_ids[source_unit["legal_unit_id"]],
+                    unit_node_ids[target_unit["legal_unit_id"]],
+                    "RENAMES",
+                    source_document_id=renumber_clause["source_document_id"],
+                    supporting_evidence_ids=[renumber_clause["evidence_id"]],
+                    source_legal_unit_id=source_unit["legal_unit_id"],
+                    target_legal_unit_id=target_unit["legal_unit_id"],
+                    target_citation=target_unit.get("unit_label"),
+                    article_relation_ref=_article_relation_ref(
+                        "RENAMES", renumber_clause["evidence_id"], target_unit["legal_unit_id"], target_unit.get("unit_label")
+                    ),
+                    runtime_loadable=True,
+                    validation_status="accepted_renumbering_clause",
+                    confidence_policy="explicit_renumbering_clause_reference",
+                )
+
     for ordinal in ("Pertama", "Kedua", "Ketiga", "Keempat"):
         role = _source_role_for_ordinal(ordinal)
         signatory = next((row for row in evidence if row.get("citation") == f"Perubahan {ordinal} Signatories"), None)
@@ -373,10 +408,10 @@ def _numeric_suffix(value: str) -> int:
 
 
 def _scope_target_labels(text: str | None) -> list[str]:
-    labels = []
-    seen = set()
-    for match in re.finditer(r"\bPasal\s+\d+[A-Z]?\b", text or ""):
-        label = match.group(0)
+    labels: list[str] = []
+    seen: set[str] = set()
+    for row in parse_legal_references("uud", text or ""):
+        label = str(row["reference"])
         if label not in seen:
             seen.add(label)
             labels.append(label)

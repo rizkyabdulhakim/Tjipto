@@ -8,7 +8,7 @@ ENDPOINT_EDGES = {
     "BELONGS_TO_SOURCE_ROLE",
     "HAS_FINAL_EVIDENCE",
 }
-INSTRUMENT_EDGES = {"MODIFIES", "DELETES", "HAS_SIGNATORY", "HAS_DECISION_SESSION", "HAS_EFFECTIVE_RULE"}
+INSTRUMENT_EDGES = {"MODIFIES", "DELETES", "RENAMES", "HAS_SIGNATORY", "HAS_DECISION_SESSION", "HAS_EFFECTIVE_RULE"}
 
 
 def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidence: list[dict], article_relations: list[dict]) -> None:
@@ -38,7 +38,7 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
         elif edge_type in ENDPOINT_EDGES:
             support_kind = "endpoint_provenance"
             derivation_method = "endpoint_metadata"
-        elif edge_type in {"MODIFIES", "DELETES"}:
+        elif edge_type in {"MODIFIES", "DELETES", "RENAMES"}:
             relation = relations_by_id.get(str(edge.get("article_relation_ref") or ""), {})
             exact_relation = relation.get("support_class") == "exact_article_relation"
             support_kind = "exact_source_relation" if exact_relation else "instrument_provenance"

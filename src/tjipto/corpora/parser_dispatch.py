@@ -13,6 +13,7 @@ DEFAULT_CORPUS_ID = "uud"
 class CorpusParser:
     normalize_query_reference: Callable[[str], str]
     parse_legal_reference: Callable[..., dict[str, str | None]]
+    parse_legal_references: Callable[[str], list[dict[str, object]]]
     parse_bab_reference: Callable[[str], str | None]
     parse_pasal_reference: Callable[..., str | None]
     parse_ayat_reference: Callable[[str], str | None]
@@ -38,6 +39,10 @@ def normalize_query_reference(corpus_id: str, text: str) -> str:
 
 def parse_legal_reference(corpus_id: str, text: str, *, allow_roman_pasal: bool = False) -> dict[str, str | None]:
     return get_parser(corpus_id).parse_legal_reference(text, allow_roman_pasal=allow_roman_pasal)
+
+
+def parse_legal_references(corpus_id: str, text: str) -> list[dict[str, object]]:
+    return get_parser(corpus_id).parse_legal_references(text)
 
 
 def parse_bab_reference(corpus_id: str, text: str) -> str | None:

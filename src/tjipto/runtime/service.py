@@ -914,6 +914,7 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
     trace_support = tuple(
         row for row in support if not _is_exact_article_relation(row) and row.get("target_legal_unit_id") not in exact_targets
     )
+    public_relations = tuple(_public_article_relation(row) for row in (*exact_support, *trace_support))
     answer_evidence = tuple(row for row in (_article_relation_evidence(store, row) for row in exact_support) if row)
     if not answer_evidence:
         if not trace_support:
@@ -936,18 +937,18 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
             "metadata_facts": (),
             "legal_relations": (),
             "document_relations": (),
-            "article_amendment_relations": (),
+            "article_amendment_relations": public_relations,
             "trace_support": tuple(_public_article_relation(row) for row in trace_support),
             "answer_scope": "trace_article_relation",
             "warnings": ("article_relation_trace_only_not_citable",),
             "insufficient_reasons": (),
         }
-    citations = tuple(_citation_with_authority(store, _article_relation_citation(row)) for row in answer_evidence)
+    citations = _deduplicated_article_relation_citations(store, answer_evidence)
     viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence)
     partial = bool(trace_support)
-    public_evidence = () if partial and not target.get("target_citation") else answer_evidence
-    public_citations = () if partial and not target.get("target_citation") else citations
-    public_viewer_refs = () if partial and not target.get("target_citation") else viewer_refs
+    public_evidence = answer_evidence
+    public_citations = citations
+    public_viewer_refs = viewer_refs
     context_pack = {
         "answer_evidence": public_evidence,
         "supporting_context": (),
@@ -974,7 +975,7 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
         "metadata_facts": (),
         "legal_relations": (),
         "document_relations": (),
-        "article_amendment_relations": tuple(_public_article_relation(row) for row in exact_support),
+        "article_amendment_relations": public_relations,
         "trace_support": tuple(_public_article_relation(row) for row in trace_support),
         "answer_scope": "partial_exact_article_relation" if partial else "exact_article_relation",
         "warnings": ("article_relation_exact_support_partial_trace_omitted",) if trace_support else (),
@@ -1036,12 +1037,16 @@ def _document_relation_target(store, query: str) -> dict:
         return {
             "mode": "article",
             "role": amendment_role,
-            "relation_types": tuple(relation_config.get("schema_only_relation_types", ())),
+            "relation_types": tuple(
+                relation_type for relation_type in relation_config.get("schema_only_relation_types", ()) if relation_type != "RENAMES"
+            ),
             "target_citation": target_citation,
         }
     if contains_intent_phrase(query, relation_config.get("unsupported_detail_terms", ())):
         return {"mode": "unsupported"}
     if article_detail:
+        if relation_intent.relation_type == "MODIFY_PROVISION":
+            relation_types = ("MODIFIES",)
         return {
             "mode": "article",
             "role": amendment_role,
@@ -1206,6 +1211,20 @@ def _article_relation_citation(row: dict) -> dict:
     }
 
 
+def _deduplicated_article_relation_citations(store, rows: tuple[dict, ...]) -> tuple[dict, ...]:
+    grouped: dict[tuple[object, ...], dict] = {}
+    for row in rows:
+        citation = _article_relation_citation(row)
+        key = (
+            citation.get("evidence_id"),
+            citation.get("source_document_id"),
+            tuple(citation.get("page_numbers") or ()),
+            tuple(sorted(row.get("bbox_refs") or ())),
+        )
+        grouped.setdefault(key, citation)
+    return tuple(_citation_with_authority(store, row) for row in grouped.values())
+
+
 def _document_relation_answer(store, relations: tuple[dict, ...]) -> str:
     intent = store.config.setting("intent_config", {}) or {}
     relation_config = intent.get("document_relation", {}) or {}
@@ -1231,15 +1250,36 @@ def _document_relation_amendment_role(row: dict) -> str | None:
 
 def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: tuple[dict, ...]) -> str:
     relation_config = (store.config.setting("intent_config", {}) or {}).get("document_relation", {}) or {}
-    labels = sorted(str(row["target_citation"]) for row in relations if row.get("target_citation"))
+    all_relations = tuple(relations) + tuple(trace_support)
+    by_target: dict[str, set[str]] = {}
+    for row in all_relations:
+        target = str(row.get("target_citation") or "")
+        if target:
+            by_target.setdefault(target, set()).add(str(row.get("relation_type") or ""))
+    relation_labels = {
+        "DELETES": "dihapus",
+        "MODIFIES": "diubah",
+        "RENAMES": "dinomori ulang",
+    }
+    labels = []
+    for target in sorted(by_target, key=_legal_reference_sort_key):
+        types = by_target[target]
+        suffix = " / ".join(relation_labels[relation] for relation in ("DELETES", "MODIFIES", "RENAMES") if relation in types)
+        labels.append(f"{target} ({suffix})" if suffix else target)
     if not labels:
-        trace_labels = sorted(str(row["target_citation"]) for row in trace_support if row.get("target_citation"))
-        listed = ", ".join(trace_labels) if trace_labels else "relasi yang diminta"
+        listed = "relasi yang diminta"
         return f"Relasi amandemen tingkat pasal untuk {listed} hanya tersedia sebagai trace dan belum citable/highlightable."
     answer = str(relation_config.get("article_answer_template", "{relations}")).format(relations=", ".join(labels))
     if trace_support:
         answer += f" Dukungan exact-highlight bersifat parsial; {len(trace_support)} relasi lain hanya trace dan tidak highlightable."
     return answer
+
+
+def _legal_reference_sort_key(value: str) -> tuple[int, str]:
+    match = re.search(r"Pasal\s*(\d+)([A-Za-z]?)", value)
+    if not match:
+        return (10**9, value.casefold())
+    return (int(match.group(1)), match.group(2).casefold())
 
 
 def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str] | None:

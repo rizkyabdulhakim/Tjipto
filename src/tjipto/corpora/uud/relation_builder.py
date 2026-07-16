@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from tjipto.corpora.parser_dispatch import parse_legal_references
+
 
 def build_document_relations(source_documents: list[dict]) -> list[dict]:
     source_by_role = {row["source_role"]: row for row in source_documents}
@@ -30,7 +32,7 @@ def build_article_amendment_relations(
     rows = []
     for edge in graph_edges:
         relation_type = edge.get("edge_type")
-        if relation_type not in {"MODIFIES", "DELETES"}:
+        if relation_type not in {"MODIFIES", "DELETES", "RENAMES"}:
             continue
         supporting_ids = edge.get("supporting_evidence_ids") or ()
         evidence_row = evidence_by_id.get(supporting_ids[0]) if supporting_ids else None
@@ -53,7 +55,8 @@ def build_article_amendment_relations(
             and all(ref in bbox_ids for ref in bbox_refs)
         )
         support_class = "exact_article_relation" if exact_support else "trace_article_relation"
-        trace_only_reason = None if exact_support else _trace_reason(evidence_row, target_span_ids, bbox_refs)
+        trace_only_reason = None if exact_support else _trace_reason(evidence_row, target_phrase, target_span_ids, bbox_refs)
+        relation_bbox_refs = bbox_refs if exact_support else list(evidence_row.get("bbox_refs") or ())
         rows.append(
             {
                 "relation_id": f"uud_article_amendment_relation::{relation_type.lower()}::{evidence_row['evidence_id']}::{target_unit_id}",
@@ -65,7 +68,7 @@ def build_article_amendment_relations(
                 "target_citation": target_citation,
                 "source_legal_unit_id": source_unit_id,
                 "evidence_id": evidence_row["evidence_id"],
-                "bbox_refs": bbox_refs,
+                "bbox_refs": relation_bbox_refs,
                 "text_span_ids": target_span_ids,
                 "page_number": (evidence_row.get("page_numbers") or [None])[0],
                 "quoted_text": _target_quote(target_span_ids, spans_by_id) if exact_support else evidence_row.get("quoted_text"),
@@ -86,7 +89,10 @@ def build_article_amendment_relations(
 def _target_span_ids(evidence: dict, citation: str, spans_by_id: dict[str, dict]) -> list[str]:
     pattern = re.compile(rf"(?i)(?<!\w){re.escape(citation.strip())}(?!\w)")
     return [
-        span_id for span_id in evidence.get("text_span_ids") or () if pattern.search(str(spans_by_id.get(span_id, {}).get("text") or ""))
+        span_id
+        for span_id in evidence.get("text_span_ids") or ()
+        if pattern.search(str(spans_by_id.get(span_id, {}).get("text") or ""))
+        and _isolates_reference(str(spans_by_id.get(span_id, {}).get("text") or ""), citation)
     ]
 
 
@@ -96,17 +102,28 @@ def _target_bbox_refs(evidence: dict, citation: str, bboxes_by_id: dict[str, dic
         bbox_id
         for bbox_id in evidence.get("bbox_refs") or ()
         if pattern.search(str(bboxes_by_id.get(bbox_id, {}).get("text") or ""))
+        and _isolates_reference(str(bboxes_by_id.get(bbox_id, {}).get("text") or ""), citation)
         and bboxes_by_id.get(bbox_id, {}).get("bbox_precision") == "exact"
         and bboxes_by_id.get(bbox_id, {}).get("viewer_highlightable") is True
     ]
+
+
+def _isolates_reference(text: str, citation: str) -> bool:
+    references = parse_legal_references("uud", text)
+    return len(references) == 1 and str(references[0]["reference"]).casefold() == citation.casefold()
 
 
 def _target_quote(span_ids: list[str], spans_by_id: dict[str, dict]) -> str:
     return " ".join(str(spans_by_id[span_id].get("text") or "").strip() for span_id in span_ids).strip()
 
 
-def _trace_reason(evidence: dict, span_ids: list[str], bbox_refs: list[str]) -> str:
+def _trace_reason(evidence: dict, citation: str, span_ids: list[str], bbox_refs: list[str]) -> str:
     if not span_ids:
+        if any(
+            str(ref["reference"]).casefold() == citation.casefold()
+            for ref in parse_legal_references("uud", str(evidence.get("quoted_text") or ""))
+        ):
+            return "shared_source_line_target_not_isolatable"
         return "unresolved_target_mention"
     if not bbox_refs:
         return "missing_relation_local_bbox"

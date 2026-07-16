@@ -18,6 +18,7 @@ from tjipto.corpora.disposition import (
     SPAN_ROLES,
 )
 from tjipto.corpora.intent_config import contains_intent_phrase, resolve_instrument_intent
+from tjipto.corpora.parser_dispatch import parse_legal_references
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
 from tjipto.corpora.uud.provenance_exceptions import (
@@ -323,6 +324,8 @@ def build_validation_report(
         document_relations=document_relations or (),
         article_amendment_relations=article_amendment_relations or (),
         bbox_rows=bbox_rows,
+        evidence=evidence,
+        legal_units=legal_units,
     )
     validation_report["legal_graph_baseline"] = {
         "status": "authority_aware_evidence_gated",
@@ -1090,6 +1093,13 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         local_bbox_text = normalize_source_text(
             " ".join(str(bbox_by_id[bbox_id].get("text") or "") for bbox_id in row.get("bbox_refs") or () if bbox_id in bbox_by_id)
         )
+        isolated_bbox = any(
+            len(parse_legal_references("uud", str(bbox_by_id[bbox_id].get("text") or ""))) == 1
+            and normalize_source_text(parse_legal_references("uud", str(bbox_by_id[bbox_id].get("text") or ""))[0]["reference"])
+            == target_phrase
+            for bbox_id in row.get("bbox_refs") or ()
+            if bbox_id in bbox_by_id
+        )
         exact_support = (
             evidence_row.get("bbox_precision") == "exact"
             and evidence_row.get("viewer_highlightable") is True
@@ -1097,6 +1107,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             and bool(target_spans)
             and target_phrase in target_text
             and target_phrase in local_bbox_text
+            and isolated_bbox
         )
         support_class = row.get("support_class")
         if support_class not in {"exact_article_relation", "trace_article_relation"}:
@@ -1120,7 +1131,62 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             if not row.get("trace_only_reason"):
                 errors.append(f"article_relation_trace_missing_reason:{row['relation_id']}")
 
+    source_relation_errors = _source_relation_contract_errors(
+        evidence=evidence,
+        legal_units=legal_units,
+        article_amendment_relations=article_amendment_relations,
+    )
+    errors.extend(source_relation_errors)
+
     return tuple(sorted(set(errors)))
+
+
+def _source_relation_contract_errors(
+    *, evidence: list[dict], legal_units: list[dict], article_amendment_relations: list[dict]
+) -> tuple[str, ...]:
+    units = {(row.get("source_document_id"), row.get("unit_label")) for row in legal_units}
+    expected: set[tuple[str, str, str]] = set()
+    for row in evidence:
+        citation = str(row.get("citation") or "")
+        if citation.endswith(" Scope"):
+            role = str(row.get("source_role") or "")
+            for reference in parse_legal_references("uud", str(row.get("quoted_text") or "")):
+                label = str(reference["reference"])
+                if (row.get("source_document_id"), label) in units:
+                    expected.add((role, "MODIFIES", label))
+        elif citation == "Perubahan Keempat Clause (c)":
+            text = str(row.get("quoted_text") or "")
+            for reference in parse_legal_references("uud", text):
+                start = int(reference["start"])
+                if (
+                    "menjadi" in text[max(0, start - 40) : start].casefold()
+                    and ("uud::current_consolidated", str(reference["reference"])) in units
+                ):
+                    expected.add((str(row.get("source_role") or ""), "RENAMES", str(reference["reference"])))
+        elif citation == "Perubahan Keempat Clause (d)":
+            for reference in parse_legal_references("uud", str(row.get("quoted_text") or "")):
+                label = str(reference["reference"])
+                if (row.get("source_document_id"), label) in units:
+                    expected.add((str(row.get("source_role") or ""), "DELETES", label))
+    actual = [
+        (str(row.get("source_role") or ""), str(row.get("relation_type") or ""), str(row.get("target_citation") or ""))
+        for row in article_amendment_relations
+    ]
+    actual_set = set(actual)
+    errors = [
+        f"article_relation_missing_source_reference:{role}:{relation}:{target}" for role, relation, target in sorted(expected - actual_set)
+    ]
+    errors.extend(
+        f"article_relation_unexpected_source_reference:{role}:{relation}:{target}"
+        for role, relation, target in sorted(actual_set - expected)
+    )
+    counts = Counter(actual)
+    errors.extend(
+        f"article_relation_duplicate_source_reference:{role}:{relation}:{target}"
+        for (role, relation, target), count in sorted(counts.items())
+        if count > 1
+    )
+    return tuple(errors)
 
 
 def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox_by_id: dict[str, dict]) -> dict:
@@ -1572,6 +1638,8 @@ def _article_relation_runtime_policy_health(
     document_relations: list[dict] | tuple[dict, ...],
     article_amendment_relations: list[dict] | tuple[dict, ...],
     bbox_rows: list[dict],
+    evidence: list[dict],
+    legal_units: list[dict],
 ) -> dict:
     bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
     exact_rows = [row for row in article_amendment_relations if row.get("support_class") == "exact_article_relation"]
@@ -1588,6 +1656,12 @@ def _article_relation_runtime_policy_health(
         groups[row.get("source_role")].add(str(row.get("support_class")))
     partial_groups = [support for support in groups.values() if {"exact_article_relation", "trace_article_relation"} <= support]
     trace_reason_counts = Counter(row.get("trace_only_reason") for row in trace_rows)
+    runtime_status = "not_executed_in_offline_validation__run_public_runtime_policy_gate"
+    source_contract_errors = _source_relation_contract_errors(
+        evidence=evidence,
+        legal_units=legal_units,
+        article_amendment_relations=list(article_amendment_relations),
+    )
     return {
         "article_relation_total_count": len(article_amendment_relations),
         "article_relation_exact_support_count": len(exact_rows),
@@ -1600,8 +1674,18 @@ def _article_relation_runtime_policy_health(
         "article_relation_invalid_coordinates": len(invalid_coordinates),
         "article_relation_partial_answer_risk_count": len(partial_groups),
         "document_relation_exact_support_partial_trace_omitted_count": len(partial_groups),
-        "relation_runtime_policy_slow_gate_status": "covered_by_runtime_policy_test",
+        "relation_runtime_policy_slow_gate_status": runtime_status,
         "document_relation_count": len(document_relations),
+        "source_relation_contract_status": "complete" if not source_contract_errors else "incomplete",
+        "source_relation_missing_count": sum(
+            1 for error in source_contract_errors if error.startswith("article_relation_missing_source_reference:")
+        ),
+        "source_relation_unexpected_count": sum(
+            1 for error in source_contract_errors if error.startswith("article_relation_unexpected_source_reference:")
+        ),
+        "source_relation_duplicate_count": sum(
+            1 for error in source_contract_errors if error.startswith("article_relation_duplicate_source_reference:")
+        ),
     }
 
 
@@ -1614,7 +1698,7 @@ def _legal_graph_authority_health(
 ) -> dict:
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_ids = {row["bbox_id"] for row in bbox_rows}
-    relation_edges = [row for row in graph_edges if row.get("edge_type") in {"MODIFIES", "DELETES"}]
+    relation_edges = [row for row in graph_edges if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES"}]
     article_relation_refs = {row.get("article_relation_ref") for row in relation_edges if row.get("article_relation_ref")}
     exact_edges = [row for row in relation_edges if row.get("support_kind") == "exact_source_relation"]
     trace_edges = [row for row in relation_edges if row.get("support_kind") != "exact_source_relation"]

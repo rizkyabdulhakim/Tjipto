@@ -44,6 +44,12 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported_corpus_parser:unknown"):
             parser_dispatch.get_parser("unknown")
 
+    def test_parser_dispatch_preserves_all_reference_ranges(self) -> None:
+        text = "Pasal19, Pasal\n28C, dan pasal 28G."
+        rows = parser_dispatch.parse_legal_references("uud", text)
+        self.assertEqual([row["reference"] for row in rows], ["Pasal 19", "Pasal 28C", "Pasal 28G"])
+        self.assertEqual([text[int(row["start"]) : int(row["end"])] for row in rows], ["Pasal19", "Pasal\n28C", "pasal 28G"])
+
     def test_generic_layers_use_parser_dispatch_not_uud_parser(self) -> None:
         for rel_path in (
             "src/tjipto/retrieval/query.py",

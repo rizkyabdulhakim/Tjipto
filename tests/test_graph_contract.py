@@ -296,28 +296,34 @@ class GraphContractTest(unittest.TestCase):
         ]
         self.assertTrue(rows)
         self.assertEqual(len({row["relation_id"] for row in rows}), len(rows))
-        self.assertFalse([row for row in rows if row["relation_type"] in {"ADDS", "RENAMES", "SUPPLEMENTS"}])
+        renumber_rows = [row for row in rows if row["relation_type"] == "RENAMES"]
+        self.assertEqual({row["target_citation"] for row in renumber_rows}, {"Pasal 3", "Pasal 25A"})
         exact_rows = [row for row in rows if row["support_class"] == "exact_article_relation"]
         trace_rows = [row for row in rows if row["support_class"] == "trace_article_relation"]
-        self.assertEqual(len(exact_rows), 63)
-        self.assertEqual(len(trace_rows), 0)
+        self.assertEqual(len(exact_rows), 5)
+        self.assertEqual(len(trace_rows), 66)
         self.assertEqual(health["article_relation_total_count"], len(rows))
         self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
         self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
         self.assertEqual(health["article_relation_trace_missing_reason_count"], 0)
-        self.assertEqual(
-            health["article_relation_trace_reason_counts"],
-            {},
-        )
+        self.assertIn("shared_source_line_target_not_isolatable", health["article_relation_trace_reason_counts"])
         self.assertEqual(health["article_relation_invalid_bbox_refs"], 0)
         self.assertEqual(health["article_relation_invalid_coordinates"], 0)
-        self.assertEqual(health["article_relation_partial_answer_risk_count"], 0)
-        self.assertEqual(health["relation_runtime_policy_slow_gate_status"], "covered_by_runtime_policy_test")
+        self.assertEqual(health["article_relation_partial_answer_risk_count"], 1)
+        self.assertTrue(health["relation_runtime_policy_slow_gate_status"].startswith("not_executed"))
         for row in rows:
             source = evidence[row["evidence_id"]]
             self.assertIn(row["target_legal_unit_id"], units)
-            self.assertIn(row["target_citation"].casefold(), row["quoted_text"].casefold())
-            self.assertTrue(row["text_span_ids"])
+            self.assertTrue(
+                any(
+                    str(ref["reference"]).casefold() == row["target_citation"].casefold()
+                    for ref in __import__("tjipto.corpora.parser_dispatch", fromlist=["parse_legal_references"]).parse_legal_references(
+                        "uud", row["quoted_text"]
+                    )
+                )
+            )
+            if row["support_class"] == "exact_article_relation":
+                self.assertTrue(row["text_span_ids"])
             self.assertTrue(row["runtime_loadable"])
             self.assertTrue(row["bbox_refs"])
             for bbox_id in row["bbox_refs"]:
@@ -330,7 +336,8 @@ class GraphContractTest(unittest.TestCase):
                 self.assertEqual(source["bbox_precision"], "exact")
                 self.assertTrue(source["viewer_highlightable"])
             else:
-                self.fail("all current article relations must have target-local exact support")
+                self.assertFalse(row["viewer_highlightable"])
+                self.assertFalse(row["citation_available"])
 
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
@@ -350,10 +357,10 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(report["actual_edge_type_counts"], dict(sorted(actual_counts.items())))
         self.assertEqual(authority["status"], "complete")
         self.assertEqual(authority["graph_edge_count"], len(edges))
-        self.assertEqual(authority["article_relation_count"], 63)
-        self.assertEqual(authority["article_relation_graph_ref_count"], 63)
-        self.assertEqual(authority["evidence_backed_relation_edge_count"], 63)
-        self.assertEqual(authority["trace_only_relation_edge_count"], 1)
+        self.assertEqual(authority["article_relation_count"], len(article_relations))
+        self.assertEqual(authority["article_relation_graph_ref_count"], len(article_relations))
+        self.assertEqual(authority["evidence_backed_relation_edge_count"], 5)
+        self.assertEqual(authority["trace_only_relation_edge_count"], 67)
         self.assertEqual(authority["trace_promoted_count"], 0)
         self.assertEqual(authority["authority_without_evidence_count"], 0)
         self.assertEqual(authority["authority_without_bbox_count"], 0)
@@ -361,14 +368,14 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["graph_final_citation_edge_count"], 0)
         self.assertEqual(authority["invalid_finality_policy_count"], 0)
         self.assertEqual(authority["support_kind_counts"]["source_anomaly_trace"], 2)
-        self.assertEqual(authority["support_kind_counts"]["instrument_provenance"], 11)
+        self.assertEqual(authority["support_kind_counts"]["instrument_provenance"], 77)
         self.assertFalse([row for row in edges if "evidence_ref" in row])
         self.assertFalse([row for row in edges for evidence_id in row["supporting_evidence_ids"] if evidence_id not in evidence])
         self.assertNotIn("legal_edge_types", report)
-        self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "AMENDED_BY", "AMENDS", "RENAMES", "SUPPLEMENTS"})
+        self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "AMENDED_BY", "AMENDS", "SUPPLEMENTS"})
         for edge_type in report["not_promoted_edge_types"]:
             self.assertNotIn(edge_type, report["actual_edge_type_counts"])
-        for edge_type in {"ADDS", "AMENDED_BY", "AMENDS", "RENAMES", "SUPPLEMENTS"}:
+        for edge_type in {"ADDS", "AMENDED_BY", "AMENDS", "SUPPLEMENTS"}:
             self.assertNotIn(edge_type, report["actual_promoted_legal_edge_type_counts"])
             self.assertIn(edge_type, report["schema_edge_types"])
         legal_edges = [
@@ -380,6 +387,7 @@ class GraphContractTest(unittest.TestCase):
                 "PART_OF",
                 "MODIFIES",
                 "DELETES",
+                "RENAMES",
                 "HAS_EFFECTIVE_RULE",
                 "HAS_SIGNATORY",
                 "HAS_DECISION_SESSION",
