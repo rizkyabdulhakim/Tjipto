@@ -46,6 +46,7 @@ def validate_uud_trust_boundary(
     page_text_spans: list[dict],
     source_documents: list[dict],
     pages: list[dict],
+    word_bboxes: list[dict] | tuple[dict, ...] = (),
 ) -> list[Violation]:
     violations: list[Violation] = []
     collections = {
@@ -67,6 +68,31 @@ def validate_uud_trust_boundary(
                     _violation("AUTHORITY_MISSING", artifact, row_id, missing[0], "non-null", None, "authority decision incomplete")
                 )
                 continue
+            expected_status = "citable_exact" if row["citable"] else "not_citable"
+            if row["citable_status"] != expected_status:
+                violations.append(
+                    _violation(
+                        "CITABLE_STATUS_CONFLICT",
+                        artifact,
+                        row_id,
+                        "citable_status",
+                        expected_status,
+                        row["citable_status"],
+                        "citable status contradicts boolean decision",
+                    )
+                )
+            if row["citation_finality_reason"] != row["reason_code"]:
+                violations.append(
+                    _violation(
+                        "FINALITY_REASON_CONFLICT",
+                        artifact,
+                        row_id,
+                        "citation_finality_reason",
+                        row["reason_code"],
+                        row["citation_finality_reason"],
+                        "finality reason contradicts authority reason",
+                    )
+                )
             error = authority_state_error(
                 authority_kind=row["authority_kind"],
                 citable=row["citable"],
@@ -78,11 +104,72 @@ def validate_uud_trust_boundary(
             if error:
                 violations.append(_violation("AUTHORITY_STATE_CONTRADICTION", artifact, row_id, "authority", "allowed state", error, error))
     _validate_retrieval_traces(retrieval_units, violations)
+    _validate_runtime_evidence_links(retrieval_units, chunks, evidence, page_text_spans, violations)
     _validate_coordinates(bbox_rows, violations)
     _validate_hierarchy(legal_units, chunks, graph_edges, violations)
     _validate_graph(graph_nodes, graph_edges, legal_units, evidence, bbox_rows, source_documents, pages, page_text_spans, violations)
-    _validate_evidence_closure(evidence, bbox_rows, page_text_spans, source_documents, pages, violations)
+    _validate_evidence_closure(evidence, bbox_rows, page_text_spans, source_documents, pages, violations, list(word_bboxes))
     return violations
+
+
+def _validate_runtime_evidence_links(
+    retrieval_units: list[dict],
+    chunks: list[dict],
+    evidence: list[dict],
+    spans: list[dict],
+    violations: list[Violation],
+) -> None:
+    evidence_ids = {row["evidence_id"] for row in evidence}
+    for row in retrieval_units:
+        if row.get("evidence_id") not in evidence_ids:
+            violations.append(
+                _violation(
+                    "RETRIEVAL_EVIDENCE_UNRESOLVED",
+                    "retrieval_units",
+                    row["retrieval_unit_id"],
+                    "evidence_id",
+                    "existing evidence",
+                    row.get("evidence_id"),
+                    "retrieval evidence missing",
+                )
+            )
+    for row in chunks:
+        for evidence_id in row.get("evidence_ids") or ():
+            if evidence_id not in evidence_ids:
+                violations.append(
+                    _violation(
+                        "CHUNK_EVIDENCE_UNRESOLVED",
+                        "chunks",
+                        row["chunk_id"],
+                        "evidence_ids",
+                        "existing evidence",
+                        evidence_id,
+                        "chunk evidence missing",
+                    )
+                )
+    for row in spans:
+        has_exact_support = bool(row.get("evidence_ids") and row.get("span_bbox_ids"))
+        if (
+            row.get("promotion_status") == "promoted_legal_unit"
+            and has_exact_support
+            and (
+                row.get("authority_kind") != "normative_legal_text"
+                or row.get("citable") is not True
+                or row.get("citation_final") is not True
+                or row.get("evidence_available") is not True
+            )
+        ):
+            violations.append(
+                _violation(
+                    "NORMATIVE_SPAN_REJECTED",
+                    "page_text_spans",
+                    row["text_span_id"],
+                    "authority",
+                    "exact normative authority",
+                    row.get("authority_kind"),
+                    "verified exact promoted span was rejected",
+                )
+            )
 
 
 def _validate_retrieval_traces(rows: list[dict], violations: list[Violation]) -> None:
@@ -370,7 +457,9 @@ def _validate_edge_refs(
 def _validate_relation_support(edge: dict, violations: list[Violation]) -> None:
     kind, method, evidence_ids = edge.get("support_kind"), edge.get("derivation_method"), edge.get("supporting_evidence_ids") or []
     valid = True
-    if kind == "deterministic_structure":
+    if kind == "exact_source_relation":
+        valid = method == "explicit_source_text" and bool(evidence_ids) and bool(edge.get("text_span_ids")) and bool(edge.get("bbox_refs"))
+    elif kind == "deterministic_structure":
         valid = method == "deterministic_structural_rule" and not evidence_ids
     elif kind == "endpoint_provenance":
         valid = method == "endpoint_metadata" and bool(evidence_ids)
@@ -397,10 +486,17 @@ def _validate_relation_support(edge: dict, violations: list[Violation]) -> None:
 
 
 def _validate_evidence_closure(
-    evidence: list[dict], bboxes: list[dict], spans: list[dict], sources: list[dict], pages: list[dict], violations: list[Violation]
+    evidence: list[dict],
+    bboxes: list[dict],
+    spans: list[dict],
+    sources: list[dict],
+    pages: list[dict],
+    violations: list[Violation],
+    word_bboxes: list[dict],
 ) -> None:
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
-    bbox_ids = {row["bbox_id"] for row in bboxes}
+    bbox_by_id = {row["bbox_id"]: row for row in bboxes} | {row["word_bbox_id"]: row for row in word_bboxes}
+    bbox_ids = set(bbox_by_id)
     span_ids = {row["text_span_id"] for row in spans}
     source_ids = {row["source_document_id"] for row in sources}
     page_keys = {(row["source_document_id"], row["page_number"]) for row in pages}
@@ -442,7 +538,7 @@ def _validate_evidence_closure(
                 )
     for span in spans:
         row_id = span["text_span_id"]
-        for evidence_id in span.get("target_evidence_ids") or ():
+        for evidence_id in span.get("evidence_ids") or ():
             target = evidence_by_id.get(evidence_id)
             if target is None:
                 violations.append(
@@ -450,7 +546,7 @@ def _validate_evidence_closure(
                         "REFERENCE_UNRESOLVED_EVIDENCE",
                         "page_text_spans",
                         row_id,
-                        "target_evidence_ids",
+                        "evidence_ids",
                         "existing evidence",
                         evidence_id,
                         "span evidence missing",
@@ -462,25 +558,42 @@ def _validate_evidence_closure(
                         "SPAN_EVIDENCE_REVERSE_CLOSURE",
                         "page_text_spans",
                         row_id,
-                        "target_evidence_ids",
+                        "evidence_ids",
                         "evidence references span",
                         evidence_id,
                         "reverse span closure missing",
                     )
                 )
-        for bbox_id in span.get("target_bbox_ids") or ():
-            if bbox_id not in bbox_ids:
+        for bbox_id in span.get("span_bbox_ids") or ():
+            bbox = bbox_by_id.get(bbox_id)
+            if bbox is None:
                 violations.append(
                     _violation(
                         "REFERENCE_UNRESOLVED_BBOX",
                         "page_text_spans",
                         row_id,
-                        "target_bbox_ids",
+                        "span_bbox_ids",
                         "existing bbox",
                         bbox_id,
                         "span bbox missing",
                     )
                 )
+            elif not _intersects(span, bbox) or any(span.get(field) != bbox.get(field) for field in ("source_document_id", "page_number")):
+                violations.append(
+                    _violation(
+                        "SPAN_BBOX_NONOVERLAP",
+                        "page_text_spans",
+                        row_id,
+                        "span_bbox_ids",
+                        "intersecting source/page bbox",
+                        bbox_id,
+                        "span-local bbox is not quote geometry",
+                    )
+                )
+
+
+def _intersects(left: dict, right: dict) -> bool:
+    return min(left["x1"], right["x1"]) > max(left["x0"], right["x0"]) and min(left["y1"], right["y1"]) > max(left["y0"], right["y0"])
 
 
 def _violation(code: str, artifact: str, row_id: str, field: str, expected: object, actual: object, reason: str) -> Violation:

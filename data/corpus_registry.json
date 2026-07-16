@@ -1,6 +1,20 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
+    "manifest_sha256": "2375c4289347bfd3deaa45f594ccadd288bf9ae5b58a7fd68be986763c1a5216",
+    "runtime_required_artifacts": [
+      "evidence_registry",
+      "bbox_registry",
+      "legal_units",
+      "chunks",
+      "retrieval_units",
+      "graph_nodes",
+      "graph_edges",
+      "source_documents",
+      "pages",
+      "page_text_spans",
+      "word_bboxes"
+    ],
     "query_strategy": "uud_1945",
     "structured_strategy": "uud_1945",
     "query_normalization_enabled": true,

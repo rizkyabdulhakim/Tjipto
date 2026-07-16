@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -29,7 +30,14 @@ def atomic_promote_artifacts(
             for path in sorted(stage_dir.iterdir()):
                 if path.is_file():
                     target = final_dir / path.name
-                    path.replace(target)
+                    for attempt in range(3):
+                        try:
+                            path.replace(target)
+                            break
+                        except PermissionError:
+                            if attempt == 2:
+                                raise
+                            time.sleep(0.1)
                     promoted.append(path.name)
         except Exception:
             for name in promoted:

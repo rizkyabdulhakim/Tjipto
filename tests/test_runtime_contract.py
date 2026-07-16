@@ -1737,13 +1737,9 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(invariant["status"], "complete")
         self.assertEqual(arbitration["status"], "complete")
         self.assertEqual(default_boundary["status"], "complete")
-        self.assertEqual(default_boundary["runtime_health_mode"], "capped_canary")
-        self.assertGreater(default_boundary["runtime_check_count"], 0)
-        self.assertFalse(default_boundary["runtime_check_actual_elapsed_recorded"])
-        self.assertGreaterEqual(default_boundary["runtime_check_deterministic_elapsed_ms"], 0)
-        self.assertGreater(default_boundary["runtime_check_budget_ms"], 0)
-        self.assertLessEqual(default_boundary["runtime_check_deterministic_elapsed_ms"], default_boundary["runtime_check_budget_ms"])
-        self.assertEqual(default_boundary["runtime_check_budget_status"], "pass")
+        self.assertEqual(default_boundary["runtime_health_mode"], "test_suite_owned")
+        self.assertEqual(default_boundary["runtime_check_count"], 0)
+        self.assertNotIn("actual_elapsed_ms", default_boundary)
         self.assertGreater(matrix["matrix_query_count"], 0)
         self.assertEqual(partial["health_mode"], "resolver_config_decision")
         self.assertEqual(general["health_mode"], "resolver_config_decision")
@@ -1896,7 +1892,7 @@ class RuntimeContractTest(unittest.TestCase):
                 json.dumps(
                     {
                         "corpus_id": "demo",
-                        "schema_version": 2,
+                        "schema_version": 3,
                         "evidence_registry": "proof.rows",
                         "bbox_registry": "boxes.rows",
                         "graph_nodes": "nodes.rows",
@@ -1912,7 +1908,9 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(store.evidence[0]["evidence_id"], "demo_evidence_1")
             self.assertEqual(store.bboxes_for("demo_evidence_1")[0]["bbox_id"], "box_1")
             self.assertEqual(GraphStore(config).counts(), {"nodes": 2, "edges": 1})
-            self.assertEqual(LegalRuntimeService(root).ask("demo", "generic corpus resolution")["status"], "limited_answer")
+            response = LegalRuntimeService(root).ask("demo", "generic corpus resolution")
+            self.assertEqual(response["status"], "corpus_not_ready")
+            self.assertFalse(response["readiness"])
             self.assertEqual(config.query_strategy, "generic")
             self.assertEqual(route_retrieval("demo", "Pasal 1", store)["intent"], "natural_language")
             self.assertNotEqual(route_retrieval("demo", "Jakarta", store)["intent"], "metadata_lookup")
@@ -1933,7 +1931,7 @@ class RuntimeContractTest(unittest.TestCase):
             (root / "data").mkdir()
             (root / "corpus").mkdir()
             (root / "corpus/manifest.json").write_text(
-                json.dumps({"corpus_id": "demo", "schema_version": 2}),
+                json.dumps({"corpus_id": "demo", "schema_version": 3}),
                 encoding="utf-8",
             )
             (root / "data/corpus_registry.json").write_text(
@@ -1975,7 +1973,7 @@ class RuntimeContractTest(unittest.TestCase):
             (root / "data/final/demo").mkdir(parents=True)
             (root / "data/corpus_registry.json").write_text(json.dumps({"demo": "data/final/demo/manifest.json"}), encoding="utf-8")
             (root / "data/final/demo/manifest.json").write_text(
-                json.dumps({"corpus_id": "demo", "schema_version": 2}),
+                json.dumps({"corpus_id": "demo", "schema_version": 3}),
                 encoding="utf-8",
             )
             old = os.environ.get("TJIPTO_REPO_ROOT")
@@ -2023,7 +2021,7 @@ class RuntimeContractTest(unittest.TestCase):
                     json.dumps(
                         {
                             "corpus_id": "demo",
-                            "schema_version": 2,
+                            "schema_version": 3,
                             "evidence_registry": artifact_path,
                         }
                     ),

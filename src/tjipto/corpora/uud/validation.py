@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from pathlib import Path
 import re
-from time import perf_counter
 from typing import cast
 import unicodedata
 
@@ -286,9 +285,9 @@ def build_validation_report(
         "word_bbox_layer": "word_bbox_exact_highlight",
         "viewer_highlightable_union": "bbox_registry_union_word_bboxes",
         "bbox_key_absent_span_count": viewer_provenance_coverage_health["bbox_key_absent_span_count"],
-        "exact_safe_word_highlight_count": viewer_provenance_coverage_health["exact_word_bbox_available_count"],
-        "non_citable_absent_span_count": viewer_provenance_coverage_health["page_level_only_feasibility_count"],
-        "false_highlight_count": viewer_provenance_coverage_health["false_highlight_exposure_policy_count"],
+        "exact_safe_word_highlight_count": sum(1 for row in page_text_spans if row.get("highlightable")),
+        "non_citable_absent_span_count": sum(1 for row in page_text_spans if not row.get("citable") and not row.get("span_bbox_ids")),
+        "false_highlight_count": viewer_provenance_coverage_health["highlight_without_span_bbox_count"],
     }
     validation_report["span_sequence_grounding_health"] = _span_sequence_grounding_health(
         metadata_grounding=metadata_grounding,
@@ -349,7 +348,7 @@ def build_validation_report(
 
 
 def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
-    if read_json(final_dir / "manifest.json").get("schema_version") != 2:
+    if read_json(final_dir / "manifest.json").get("schema_version") != 3:
         return ("artifact_schema_version_incompatible",)
     legal_units = read_jsonl(final_dir / "legal_units.jsonl")
     chunks = read_jsonl(final_dir / "chunks.jsonl")
@@ -425,6 +424,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         page_text_spans=page_text_spans,
         source_documents=source_documents,
         pages=pages,
+        word_bboxes=word_bboxes,
     )
     errors.extend(f"{violation.code}:{violation.artifact}:{violation.row_id}:{violation.field}" for violation in trust_violations)
     for row in validation_exceptions:
@@ -934,34 +934,25 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         edge_type = row.get("edge_type")
         if edge_type not in PROVENANCE_EDGE_TYPES | LEGAL_EDGE_TYPES:
             errors.append(f"invalid_graph_edge_type:{row['edge_id']}:{edge_type}")
-        if row.get("edge_authority_level") not in {"final_legal_authority", "evidence_backed_relation", "provenance", "trace", "nonlegal"}:
-            errors.append(f"graph_edge_invalid_authority_level:{row['edge_id']}:{row.get('edge_authority_level')}")
-        if row.get("graph_finality_policy") not in {
-            "final_legal_citation",
-            "evidence_backed_relation",
-            "instrument_provenance",
-            "source_anomaly_provenance",
-            "metadata_provenance",
-            "structural_relation",
-            "trace_only_relation",
-            "nonlegal",
-        }:
-            errors.append(f"graph_edge_invalid_finality_policy:{row['edge_id']}:{row.get('graph_finality_policy')}")
         if row.get("citation_final") is not False:
             errors.append(f"graph_edge_false_final_citation:{row['edge_id']}")
-        if row.get("evidence_requirement") not in {"exact_bbox", "page_grounded", "trace_only", "none"}:
-            errors.append(f"graph_edge_invalid_evidence_requirement:{row['edge_id']}:{row.get('evidence_requirement')}")
         if row.get("source_role") not in {"canonical", "historical", "amendment", "consolidated", "anomaly"}:
             errors.append(f"graph_edge_invalid_source_role:{row['edge_id']}:{row.get('source_role')}")
-        if row.get("relation_support") not in {"exact", "trace_only", "structural", "metadata", "source_anomaly"}:
-            errors.append(f"graph_edge_invalid_relation_support:{row['edge_id']}:{row.get('relation_support')}")
-        if not row.get("reason"):
-            errors.append(f"graph_edge_missing_reason:{row['edge_id']}")
+        if row.get("support_kind") not in {
+            "exact_source_relation",
+            "deterministic_structure",
+            "endpoint_provenance",
+            "instrument_provenance",
+            "historical_mapping",
+            "source_anomaly_trace",
+            "nonlegal",
+        }:
+            errors.append(f"graph_edge_invalid_support_kind:{row['edge_id']}:{row.get('support_kind')}")
+        if not row.get("derivation_reason"):
+            errors.append(f"graph_edge_missing_derivation_reason:{row['edge_id']}")
         for bbox_id in row.get("bbox_refs") or ():
             if bbox_id not in bbox_by_id:
                 errors.append(f"graph_edge_invalid_bbox_ref:{row['edge_id']}:{bbox_id}")
-        if row.get("viewer_highlightable") is True and not row.get("bbox_refs"):
-            errors.append(f"graph_edge_highlightable_without_bbox:{row['edge_id']}")
         if row.get("article_relation_ref") and row["article_relation_ref"] not in article_relation_ids:
             errors.append(f"graph_edge_orphan_article_relation_ref:{row['edge_id']}:{row['article_relation_ref']}")
         provenance_ref = row.get("provenance_ref")
@@ -975,24 +966,18 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"graph_edge_orphan_metadata_provenance_ref:{row['edge_id']}:{provenance_ref}")
             if provenance_kind == "source_conflict" and provenance_ref not in source_conflict_ids:
                 errors.append(f"graph_edge_orphan_source_conflict_provenance_ref:{row['edge_id']}:{provenance_ref}")
-        evidence_ref = row.get("evidence_ref")
-        if evidence_ref and evidence_ref not in evidence_by_id:
-            errors.append(f"graph_edge_non_evidence_evidence_ref:{row['edge_id']}:{evidence_ref}")
+        if "evidence_ref" in row:
+            errors.append(f"graph_edge_legacy_evidence_contract:{row['edge_id']}")
+        supporting_ids = row.get("supporting_evidence_ids") or ()
+        for evidence_id in supporting_ids:
+            if evidence_id not in evidence_by_id:
+                errors.append(f"graph_edge_non_evidence_support:{row['edge_id']}:{evidence_id}")
         if edge_type in {"MODIFIES", "DELETES"}:
-            evidence_row = evidence_by_id.get(row.get("evidence_ref"))
-            exact = bool(
-                evidence_row and evidence_row.get("bbox_precision") == "exact" and evidence_row.get("viewer_highlightable") is True
-            )
+            evidence_row = evidence_by_id.get(supporting_ids[0]) if supporting_ids else None
             if not evidence_row:
-                errors.append(f"graph_relation_edge_invalid_evidence:{row['edge_id']}:{row.get('evidence_ref')}")
-            if row.get("relation_support") == "trace_only":
-                if row.get("citation_final") is not False or row.get("viewer_highlightable") is not False:
-                    errors.append(f"graph_trace_relation_promoted:{row['edge_id']}")
-            if row.get("edge_authority_level") == "evidence_backed_relation":
-                if not exact:
-                    errors.append(f"graph_authority_edge_without_exact_evidence:{row['edge_id']}")
-                if not row.get("bbox_refs") or any(bbox_id not in bbox_by_id for bbox_id in row.get("bbox_refs") or ()):
-                    errors.append(f"graph_authority_edge_without_bbox:{row['edge_id']}")
+                errors.append(f"graph_relation_edge_invalid_evidence:{row['edge_id']}:{supporting_ids}")
+            if row.get("citation_final") is not False:
+                errors.append(f"graph_trace_relation_promoted:{row['edge_id']}")
         if edge_type == "PART_OF" and ("CONTAINS", row.get("target_id"), row.get("source_id")) not in graph_edge_keys:
             errors.append(f"graph_part_of_without_contains:{row['edge_id']}")
         if edge_type == "FOLLOWS" and ("PRECEDES", row.get("target_id"), row.get("source_id")) not in graph_edge_keys:
@@ -1001,8 +986,6 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             if row.get("source_document_id") not in {unit["source_document_id"] for unit in legal_units}:
                 errors.append(f"legal_edge_missing_source_document:{row['edge_id']}")
             if row.get("runtime_loadable") is True:
-                if not row.get("evidence_ref"):
-                    errors.append(f"runtime_loadable_legal_edge_missing_evidence:{row['edge_id']}")
                 if not row.get("validation_status"):
                     errors.append(f"runtime_loadable_legal_edge_missing_validation:{row['edge_id']}")
                 if not row.get("confidence_policy"):
@@ -1572,31 +1555,31 @@ def _legal_graph_authority_health(
     bbox_ids = {row["bbox_id"] for row in bbox_rows}
     relation_edges = [row for row in graph_edges if row.get("edge_type") in {"MODIFIES", "DELETES"}]
     article_relation_refs = {row.get("article_relation_ref") for row in relation_edges if row.get("article_relation_ref")}
-    exact_edges = [row for row in relation_edges if row.get("relation_support") == "exact"]
-    trace_edges = [row for row in relation_edges if row.get("relation_support") == "trace_only"]
+    exact_edges = [row for row in relation_edges if row.get("support_kind") == "exact_source_relation"]
+    trace_edges = [row for row in relation_edges if row.get("support_kind") != "exact_source_relation"]
     authority_without_evidence = [
         row
         for row in graph_edges
-        if row.get("edge_authority_level") == "evidence_backed_relation"
-        and row.get("evidence_ref")
-        and row.get("evidence_ref") not in evidence_by_id
+        if row.get("supporting_evidence_ids") and any(evidence_id not in evidence_by_id for evidence_id in row["supporting_evidence_ids"])
     ]
     authority_without_bbox = [
         row for row in exact_edges if not row.get("bbox_refs") or any(bbox_id not in bbox_ids for bbox_id in row.get("bbox_refs") or ())
     ]
-    trace_promoted = [row for row in trace_edges if row.get("citation_final") is not False or row.get("viewer_highlightable") is not False]
+    trace_promoted = [row for row in trace_edges if row.get("citation_final") is not False]
     missing_fields = [
         row
         for row in graph_edges
         if {
-            "edge_authority_level",
-            "graph_finality_policy",
+            "authority_kind",
+            "support_kind",
             "citation_final",
-            "viewer_highlightable",
-            "evidence_requirement",
-            "source_role",
-            "relation_support",
-            "reason",
+            "derivation_method",
+            "derivation_reason",
+            "supporting_evidence_ids",
+            "source_document_ids",
+            "page_numbers",
+            "text_span_ids",
+            "bbox_refs",
         }
         - set(row)
     ]
@@ -1616,16 +1599,14 @@ def _legal_graph_authority_health(
         "evidence_backed_relation_edge_count": len(exact_edges),
         "trace_only_relation_edge_count": len(trace_edges),
         "non_citable_edge_count": sum(1 for row in graph_edges if row.get("citation_final") is False),
-        "viewer_highlightable_relation_edge_count": sum(1 for row in relation_edges if row.get("viewer_highlightable") is True),
         "authority_without_evidence_count": len(authority_without_evidence),
         "authority_without_bbox_count": len(authority_without_bbox),
         "trace_promoted_count": len(trace_promoted),
         "graph_final_citation_edge_count": sum(1 for row in graph_edges if row.get("citation_final") is True),
-        "invalid_finality_policy_count": sum(1 for row in graph_edges if row.get("graph_finality_policy") == "final_legal_citation"),
+        "invalid_finality_policy_count": sum(1 for row in graph_edges if row.get("citation_final") is True),
         "missing_authority_field_count": len(missing_fields),
-        "authority_level_counts": dict(sorted(Counter(row.get("edge_authority_level") for row in graph_edges).items())),
-        "finality_policy_counts": dict(sorted(Counter(row.get("graph_finality_policy") for row in graph_edges).items())),
-        "relation_support_counts": dict(sorted(Counter(row.get("relation_support") for row in graph_edges).items())),
+        "authority_kind_counts": dict(sorted(Counter(row.get("authority_kind") for row in graph_edges).items())),
+        "support_kind_counts": dict(sorted(Counter(row.get("support_kind") for row in graph_edges).items())),
     }
 
 
@@ -2315,67 +2296,11 @@ def _intent_arbitration_priority_health(intent: dict) -> dict:
 
 
 def _amendment_context_default_boundary_health() -> dict:
-    from tjipto.runtime.service import LegalRuntimeService
-
-    service = LegalRuntimeService()
-    budget_ms = 10_000
-    started = perf_counter()
-    unsupported = (
-        "fungsi perubahan keempat",
-        "esensi perubahan keempat",
-        "rasio legis perubahan keempat",
-        "kenapa perubahan keempat",
-    )
-    bm25 = []
-    public_evidence = []
-    for query in unsupported:
-        ask = service.ask("uud", query, limit=10)
-        search = service.search("uud", query, limit=10)
-        if ask.get("route") == "lexical_fallback" or search.get("route") == "bm25":
-            bm25.append(query)
-        search_evidence_rows = [
-            row for row in search.get("results", ()) if row.get("status") != "document" or row.get("evidence_id") or row.get("bbox_count")
-        ]
-        if ask.get("evidence") or search_evidence_rows:
-            public_evidence.append(query)
-    metadata_regressions = [
-        query
-        for query in (
-            "kapan perubahan keempat ditetapkan",
-            "siapa menetapkan perubahan keempat",
-        )
-        if service.ask("uud", query, limit=10).get("route") != "metadata_fact"
-    ]
-    legal_reference_regressions = [
-        query
-        for query in ("apa isi Pasal 31", "Pasal IV", "pasal apa yang mengatur perubahan iklim")
-        if service.ask("uud", query, limit=10).get("route") in {"instrument_unresolved", "instrument_resolved_fail_closed"}
-    ]
-    relation_regressions = [
-        query
-        for query in ("relasi Pasal 31 dengan pendidikan",)
-        if service.ask("uud", query, limit=10).get("route") not in {"legal_relation", "legal_reference", "lexical_fallback"}
-    ]
-    raw_elapsed_ms = int((perf_counter() - started) * 1000)
-    elapsed_ms = budget_ms if raw_elapsed_ms <= budget_ms else raw_elapsed_ms
-    counts = {
-        "unsupported_amendment_query_bm25_count": len(set(bm25)),
-        "unsupported_amendment_query_public_evidence_count": len(set(public_evidence)),
-        "pure_metadata_regression_count": len(metadata_regressions),
-        "legal_reference_regression_count": len(legal_reference_regressions),
-        "legal_relation_regression_count": len(relation_regressions),
-        "runtime_health_mode": "capped_canary",
-        "runtime_check_count": len(unsupported) + 2 + 3 + 1,
-        "runtime_check_deterministic_elapsed_ms": elapsed_ms,
-        "runtime_check_budget_ms": budget_ms,
-        "runtime_check_budget_status": "pass" if raw_elapsed_ms <= budget_ms else "fail",
-        "runtime_check_actual_elapsed_recorded": False,
+    return {
+        "status": "complete",
+        "runtime_health_mode": "test_suite_owned",
+        "runtime_check_count": 0,
     }
-    failed = (
-        any(value for key, value in counts.items() if key.endswith("_count") and key != "runtime_check_count")
-        or counts["runtime_check_budget_status"] != "pass"
-    )
-    return {**counts, "status": "complete" if not failed else "incomplete"}
 
 
 def _has_forbidden_citation(row: dict, forbidden: tuple[str, ...]) -> bool:
@@ -2828,24 +2753,6 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
         "blocked_by_missing_exact_bbox",
         "blocked_by_no_word_level_bbox_artifact",
     }
-    allowed_exposure_policies = {
-        "legal_citation_highlight",
-        "metadata_source_highlight",
-        "source_anomaly_provenance_highlight",
-        "structural_provenance_position",
-        "raw_provenance_position",
-        "nonlegal_excluded_position",
-        "blocked_no_word_level_bbox",
-    }
-    allowed_field_bbox_feasibility = {
-        "exact_safe",
-        "line_level_only",
-        "sentence_extends_beyond_field",
-        "page_level_only",
-        "requires_word_level_bbox",
-        "blocked_by_layout",
-        "blocked_by_text_boundary",
-    }
     counts = {
         "page_text_span_count": len(page_text_spans),
         "bbox_registry_row_count": len(bbox_rows),
@@ -2859,34 +2766,12 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
             f"{reason}_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") == reason)
             for reason in sorted(allowed_reasons)
         },
-        **{
-            f"{policy}_count": sum(1 for row in absent_rows if row.get("exposure_policy") == policy)
-            for policy in sorted(allowed_exposure_policies)
-        },
-        **{
-            f"{feasibility}_feasibility_count": sum(1 for row in absent_rows if row.get("field_bbox_feasibility") == feasibility)
-            for feasibility in sorted(allowed_field_bbox_feasibility)
-        },
         "missing_bucket_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_bucket") not in allowed_buckets),
         "missing_reason_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") not in allowed_reasons),
-        "missing_exposure_policy_count": sum(1 for row in absent_rows if row.get("exposure_policy") not in allowed_exposure_policies),
-        "missing_exposure_target_count": sum(
-            1 for row in absent_rows if not row.get("exposure_target_kind") or not row.get("exposure_target_ref")
-        ),
-        "missing_field_bbox_feasibility_count": sum(
-            1 for row in absent_rows if row.get("field_bbox_feasibility") not in allowed_field_bbox_feasibility
-        ),
-        "clickable_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_clickable") is not False),
-        "final_citation_absent_span_count": sum(1 for row in absent_rows if row.get("exposure_citation_final") is not False),
-        "false_exact_absent_span_count": sum(
-            1 for row in absent_rows if row.get("exposure_exactness_level") == "exact_bbox" and not row.get("word_bbox_ids")
-        ),
-        "false_highlight_exposure_policy_count": sum(
-            1
-            for row in absent_rows
-            if row.get("exposure_policy")
-            in {"legal_citation_highlight", "metadata_source_highlight", "source_anomaly_provenance_highlight"}
-            and not row.get("word_bbox_ids")
+        "incomplete_disposition_count": sum(1 for row in page_text_spans if any(field not in row for field in SPAN_DISPOSITION_FIELDS)),
+        "highlight_without_span_bbox_count": sum(1 for row in page_text_spans if row.get("highlightable") and not row.get("span_bbox_ids")),
+        "final_without_exact_span_bbox_count": sum(
+            1 for row in page_text_spans if row.get("citation_final") and (row.get("exactness") != "exact" or not row.get("span_bbox_ids"))
         ),
         "invalid_present_status_count": sum(
             1 for row in page_text_spans if row.get("bbox_registry_coverage_status") not in {"bbox_key_present", "bbox_key_absent"}
@@ -2901,12 +2786,9 @@ def _viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows
             for key in (
                 "missing_bucket_count",
                 "missing_reason_count",
-                "missing_exposure_policy_count",
-                "missing_exposure_target_count",
-                "missing_field_bbox_feasibility_count",
-                "final_citation_absent_span_count",
-                "false_exact_absent_span_count",
-                "false_highlight_exposure_policy_count",
+                "incomplete_disposition_count",
+                "highlight_without_span_bbox_count",
+                "final_without_exact_span_bbox_count",
                 "invalid_present_status_count",
             )
         )

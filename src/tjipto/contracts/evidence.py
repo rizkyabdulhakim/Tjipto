@@ -7,8 +7,10 @@ EVIDENCE_DECISION_FIELDS = (
     "citation_final",
     "highlightable",
     "exactness",
-    "target_evidence_ids",
-    "target_bbox_ids",
+    "evidence_ids",
+    "span_bbox_ids",
+    "evidence_bbox_ids",
+    "context_bbox_ids",
     "reason_code",
     "reason",
 )

@@ -9,6 +9,7 @@ from uuid import uuid4
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
 from tjipto.corpora.parser_dispatch import parse_legal_reference
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters
@@ -30,20 +31,48 @@ _ANSWER_TEMPLATES = {
 }
 
 
+def _integrity_failure(corpus_id: str, query: str, error_code: str | None) -> dict:
+    unknown = error_code in {"unknown_corpus", "registry_unavailable"}
+    route = "unsupported_corpus" if unknown else "corpus_integrity"
+    return {
+        "status": "unsupported_corpus" if unknown else "corpus_not_ready",
+        "route": route,
+        "intent": route,
+        "corpus_id": corpus_id,
+        "original_query": query,
+        "normalized_query": query.strip(),
+        "reason": error_code or "corpus_load_failure",
+        "reason_code": error_code or "corpus_load_failure",
+        "readiness": False,
+        "evidence": (),
+        "citations": (),
+        "viewer_refs": (),
+        "context_pack": empty_context_pack(error_code),
+        "answer_scope": "insufficient_evidence",
+        "answer_type": "none",
+        "answer": _ANSWER_TEMPLATES["insufficient"],
+    }
+
+
 class LegalRuntimeService:
     def __init__(self, repo_root: Path | None = None):
         self.registry = CorpusRegistry(repo_root)
+        self.repository = VerifiedCorpusRepository(self.registry)
+        self._integrity_error: str | None = None
 
     def _store(self, corpus_id: str):
-        config = self.registry.resolve(corpus_id)
-        if config is None:
+        try:
+            config = self.repository.load(corpus_id).config
+            self._integrity_error = None
+        except CorpusIntegrityError as error:
+            self._integrity_error = error.code
             return None
         return EvidenceStore(config)
 
     def search(self, corpus_id: str, query: str, limit: int = 10, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
         if store is None:
-            return _catalog_search_response(corpus_id, query, (), "unsupported_corpus", "unsupported_corpus")
+            return _integrity_failure(corpus_id, query, self._integrity_error) | {"results": ()}
         normalized_filters = normalize_filters(filters, config=store.config)
         if normalized_filters.get("_error"):
             return _catalog_search_response(
@@ -74,7 +103,7 @@ class LegalRuntimeService:
     ) -> dict:
         store = self._store(corpus_id)
         if store is None:
-            return route_retrieval(corpus_id, query, None) | _empty_citation_fields()
+            return _integrity_failure(corpus_id, query, self._integrity_error) | _empty_citation_fields()
         scope = scope_guard_context(store, query)
         if scope:
             return {
@@ -125,7 +154,7 @@ class LegalRuntimeService:
     ) -> dict:
         store = self._store(corpus_id)
         if store is None:
-            return {"status": "unsupported_corpus", "corpus_id": corpus_id}
+            return _integrity_failure(corpus_id, "", self._integrity_error)
         if evidence_id is None:
             source = _source_document_by_id(store, source_document_id)
             if source is None:
@@ -180,7 +209,7 @@ class LegalRuntimeService:
     ) -> dict:
         store = self._store(corpus_id)
         if store is None:
-            return {"status": "unsupported_corpus", "corpus_id": corpus_id}
+            return _integrity_failure(corpus_id, "", self._integrity_error)
         if evidence_id is None:
             source = _source_document_by_id(store, source_document_id)
             if source is None:
@@ -220,18 +249,22 @@ class LegalRuntimeService:
         )
 
     def capabilities(self, corpus_id: str) -> dict:
-        if self._store(corpus_id) is None:
-            return {"status": "unsupported_corpus", "corpus_id": corpus_id, "capabilities": ()}
+        store = self._store(corpus_id)
+        if store is None:
+            return _integrity_failure(corpus_id, "", self._integrity_error) | {"capabilities": ()}
         return {
             "status": "ok",
             "corpus_id": corpus_id,
+            "readiness": True,
+            "manifest_digest": store.config.manifest_digest,
+            "artifact_set_digest": store.config.artifact_set_digest,
             "capabilities": ("search", "ask", "citation", "viewer", "bookmarks"),
         }
 
     def bookmarks(self, corpus_id: str) -> dict:
         store = self._store(corpus_id)
         if store is None:
-            return {"status": "unsupported_corpus", "corpus_id": corpus_id, "bookmarks": ()}
+            return _integrity_failure(corpus_id, "", self._integrity_error) | {"bookmarks": ()}
         with _BOOKMARK_LOCK:
             snapshot = tuple(row.copy() for row in _BOOKMARKS.values() if row["corpus_id"] == corpus_id)
         bookmarks = tuple(sorted((self._bookmark_status(row, store) for row in snapshot), key=lambda row: row["bookmark_id"]))
@@ -253,7 +286,7 @@ class LegalRuntimeService:
     ) -> dict:
         store = self._store(corpus_id)
         if store is None:
-            return {"status": "unsupported_corpus", "corpus_id": corpus_id}
+            return _integrity_failure(corpus_id, "", self._integrity_error)
         evidence = store.get(evidence_id)
         if evidence is None or evidence.get("status") != "final":
             return {"status": "unavailable", "reason": "evidence_unavailable", "corpus_id": corpus_id}
@@ -280,6 +313,8 @@ class LegalRuntimeService:
 
     def ask(self, corpus_id: str, query: str, limit: int = 3, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
+        if store is None:
+            return _integrity_failure(corpus_id, query, self._integrity_error)
         anomaly = _source_anomaly_response(store, corpus_id, query)
         if anomaly:
             return anomaly

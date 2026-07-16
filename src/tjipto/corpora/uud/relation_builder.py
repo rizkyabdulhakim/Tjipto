@@ -27,7 +27,8 @@ def build_article_amendment_relations(
         relation_type = edge.get("edge_type")
         if relation_type not in {"MODIFIES", "DELETES"}:
             continue
-        evidence_row = evidence_by_id.get(edge.get("evidence_ref"))
+        supporting_ids = edge.get("supporting_evidence_ids") or ()
+        evidence_row = evidence_by_id.get(supporting_ids[0]) if supporting_ids else None
         source_unit_id = _legal_unit_id(edge.get("source_id"))
         target_unit_id = _legal_unit_id(edge.get("target_id"))
         target = units.get(target_unit_id or "")

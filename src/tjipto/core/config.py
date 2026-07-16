@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Mapping, Sequence
 
 from tjipto.core.manifest import read_json, read_jsonl
 
@@ -16,9 +17,12 @@ ARTIFACT_ALIASES = {
 class CorpusConfig:
     corpus_id: str
     manifest_path: Path
-    manifest: dict
-    settings: dict | None = None
+    manifest: Mapping
+    settings: Mapping | None = None
     repo_root: Path | None = None
+    verified_artifacts: Mapping[str, object] | None = None
+    manifest_digest: str | None = None
+    artifact_set_digest: str | None = None
 
     def setting(self, key: str, default=None):
         return (self.settings or {}).get(key, default)
@@ -67,8 +71,12 @@ class CorpusConfig:
             raise ValueError("invalid_source_path")
         return resolved
 
-    def json(self, logical_key: str) -> dict:
+    def json(self, logical_key: str) -> Mapping:
+        if self.verified_artifacts is not None:
+            return self.verified_artifacts[self.manifest[logical_key]]  # type: ignore[return-value,index]
         return read_json(self.artifact_path(logical_key))
 
-    def jsonl(self, logical_key: str) -> list[dict]:
+    def jsonl(self, logical_key: str) -> Sequence[Mapping]:
+        if self.verified_artifacts is not None:
+            return self.verified_artifacts[self.manifest[ARTIFACT_ALIASES.get(logical_key, logical_key)]]  # type: ignore[return-value,index]
         return read_jsonl(self.artifact_path(logical_key))

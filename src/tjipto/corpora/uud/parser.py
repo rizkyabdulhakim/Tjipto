@@ -67,6 +67,18 @@ def uud_label_keys(value: object) -> set[str]:
     return {label, UUD_COMPACT_BAB_RE.sub(r"bab \1\2", label)}
 
 
+def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
+    target = parse_uud_pasal_reference(text, allow_roman=True)
+    if not target:
+        return None
+    normalized = normalize_uud_query_reference(text).casefold()
+    if re.search(r"\b(?:setelah|sesudah)\b", normalized):
+        return target, "next"
+    if re.search(r"\bsebelum\b", normalized):
+        return target, "previous"
+    return None
+
+
 def parser_adapter():
     from tjipto.corpora.parser_dispatch import CorpusParser
 
@@ -77,4 +89,5 @@ def parser_adapter():
         parse_pasal_reference=parse_uud_pasal_reference,
         parse_ayat_reference=parse_uud_ayat_reference,
         label_keys=uud_label_keys,
+        resolve_navigation=resolve_uud_navigation,
     )

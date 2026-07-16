@@ -40,6 +40,18 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def verified_file_bytes(path: Path, record: dict) -> tuple[bytes | None, str | None]:
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None, "artifact_missing"
+    if len(data) != record.get("bytes"):
+        return None, "artifact_size_mismatch"
+    if hashlib.sha256(data).hexdigest() != record.get("sha256"):
+        return None, "artifact_sha256_mismatch"
+    return data, None
+
+
 def validate_manifest(final_dir: Path) -> tuple[str, ...]:
     manifest_path = final_dir / "manifest.json"
     manifest = read_json(manifest_path)
@@ -50,10 +62,9 @@ def validate_manifest(final_dir: Path) -> tuple[str, ...]:
             if part in lowered:
                 errors.append(f"forbidden active path part:{rel}:{part}")
         path = final_dir / rel
-        if not path.exists():
-            errors.append(f"missing:{rel}")
-        elif file_sha256(path) != record["sha256"]:
-            errors.append(f"sha256_mismatch:{rel}")
+        _, integrity_error = verified_file_bytes(path, record)
+        if integrity_error:
+            errors.append(f"{integrity_error}:{rel}")
         origin = record.get("origin")
         if origin not in ALLOWED_ARTIFACT_ORIGINS:
             errors.append(f"invalid_artifact_origin:{rel}:{origin}")

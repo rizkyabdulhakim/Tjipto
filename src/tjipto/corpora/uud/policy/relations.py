@@ -11,10 +11,20 @@ ENDPOINT_EDGES = {
 INSTRUMENT_EDGES = {"MODIFIES", "DELETES", "HAS_SIGNATORY", "HAS_DECISION_SESSION", "HAS_EFFECTIVE_RULE"}
 
 
-def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidence: list[dict]) -> None:
+def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidence: list[dict], article_relations: list[dict]) -> None:
     nodes_by_id = {row["node_id"]: row for row in nodes}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
+    relations_by_id = {row["relation_id"]: row for row in article_relations}
     for edge in edges:
+        for field in (
+            "edge_authority_level",
+            "evidence_requirement",
+            "relation_support",
+            "graph_finality_policy",
+            "viewer_highlightable",
+            "reason",
+        ):
+            edge.pop(field, None)
         source = nodes_by_id[edge["source_id"]]
         target = nodes_by_id[edge["target_id"]]
         edge_type = edge["edge_type"]
@@ -28,9 +38,14 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
         elif edge_type in ENDPOINT_EDGES:
             support_kind = "endpoint_provenance"
             derivation_method = "endpoint_metadata"
+        elif edge_type in {"MODIFIES", "DELETES"}:
+            relation = relations_by_id.get(str(edge.get("article_relation_ref") or ""), {})
+            exact_relation = relation.get("support_class") == "exact_article_relation"
+            support_kind = "exact_source_relation" if exact_relation else "instrument_provenance"
+            derivation_method = "explicit_source_text" if exact_relation else "reviewed_corpus_spec"
         elif edge_type in INSTRUMENT_EDGES:
             support_kind = "instrument_provenance"
-            derivation_method = "reviewed_corpus_spec" if edge_type == "DELETES" else "explicit_source_text"
+            derivation_method = "explicit_source_text" if supports else "reviewed_corpus_spec"
         elif edge_type == "HAS_SOURCE_ANOMALY":
             support_kind = "source_anomaly_trace"
             derivation_method = "reviewed_corpus_spec"
@@ -53,6 +68,7 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
                         *(row.get("source_document_id") for row in supports),
                     ]
                 ),
+                "source_role": _source_role_class(source.get("source_role") or target.get("source_role") or edge.get("source_role")),
                 "page_numbers": sorted(
                     {
                         page
@@ -71,7 +87,7 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
 
 
 def _direct_evidence_ids(edge: dict, source: dict, target: dict, evidence_by_id: dict[str, dict]) -> list[str]:
-    candidates = [edge.get("evidence_ref"), source.get("final_evidence_id"), target.get("final_evidence_id")]
+    candidates = [*(edge.get("supporting_evidence_ids") or ()), source.get("final_evidence_id"), target.get("final_evidence_id")]
     for node in (source, target):
         if node.get("node_type") == "final_evidence":
             candidates.append(node.get("evidence_id") or str(node.get("node_id", "")).removeprefix("final_evidence::"))
@@ -86,3 +102,16 @@ def _edge_bbox_refs(edge_type: str, target: dict, supports: list[dict]) -> list[
 
 def _ordered_unique(values) -> list:
     return list(dict.fromkeys(value for value in values if value is not None))
+
+
+def _source_role_class(source_role: object) -> str:
+    value = str(source_role or "")
+    if value == "current_consolidated":
+        return "consolidated"
+    if value == "original_historical":
+        return "historical"
+    if value.startswith("amendment_"):
+        return "amendment"
+    if "anomaly" in value:
+        return "anomaly"
+    return "canonical"

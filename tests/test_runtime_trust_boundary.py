@@ -56,7 +56,8 @@ class RuntimeTrustBoundaryTest(unittest.TestCase):
                 manifest["schema_version"] = schema
                 (root / "data/final/uud/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
                 result = LegalRuntimeService(root).ask("uud", "Pasal 7A")
-                self.assertEqual(result["status"], "unsupported_corpus")
+                self.assertEqual(result["status"], "corpus_not_ready")
+                self.assertEqual(result["reason_code"], "unsupported_schema")
                 self.assertFalse(result.get("citations"))
 
     def test_bookmark_read_write_is_concurrency_safe_and_sorted(self) -> None:

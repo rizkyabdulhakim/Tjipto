@@ -42,8 +42,6 @@ def apply_page_text_span_dispositions(
         page_text_spans=page_text_spans,
         bbox_rows=bbox_rows,
         word_bboxes=word_bboxes,
-        legal_units=legal_units,
-        chunks_by_unit=chunks_by_unit,
         metadata_grounding=metadata_grounding,
     )
 
@@ -232,21 +230,20 @@ def _apply_bbox_registry_coverage(
     page_text_spans: list[dict],
     bbox_rows: list[dict],
     word_bboxes: list[dict],
-    legal_units: list[dict],
-    chunks_by_unit: dict[str, dict],
     metadata_grounding: list[dict],
 ) -> None:
     bbox_keys = {_bbox_registry_key(row) for row in bbox_rows}
-    legal_context = _legal_coverage_context(legal_units, chunks_by_unit)
     metadata_context = _rows_by_span(metadata_grounding)
     words_by_page = word_rows_by_page(word_bboxes)
     for span in page_text_spans:
         if _bbox_registry_key(span) in bbox_keys:
             span["bbox_registry_coverage_status"] = "bbox_key_present"
+            if span.get("promotion_status") == "promoted_legal_unit":
+                span["bbox_registry_coverage_reason"] = "blocked_by_no_word_level_bbox_artifact"
+                _apply_word_bbox_promotion(span, words_by_page)
             continue
         bucket, reason = _missing_bbox_coverage(
             span=span,
-            legal_context=legal_context.get(span["text_span_id"], {}),
             metadata_rows=metadata_context.get(span["text_span_id"], []),
         )
         span["bbox_registry_coverage_status"] = "bbox_key_absent"
@@ -262,19 +259,7 @@ def _apply_bbox_registry_coverage(
         _apply_word_bbox_promotion(span, words_by_page)
 
 
-def _legal_coverage_context(legal_units: list[dict], chunks_by_unit: dict[str, dict]) -> dict[str, dict]:
-    refs: dict[str, dict] = {}
-    for unit in legal_units:
-        chunk = chunks_by_unit.get(unit["legal_unit_id"], {})
-        for span_id in unit.get("text_span_ids") or chunk.get("text_span_ids") or ():
-            context = refs.setdefault(span_id, {"chunk_statuses": set(), "runtime_flags": set()})
-            if chunk.get("status"):
-                context["chunk_statuses"].add(chunk["status"])
-            context["runtime_flags"].add(bool(chunk.get("runtime_loadable")))
-    return refs
-
-
-def _missing_bbox_coverage(*, span: dict, legal_context: dict, metadata_rows: list[dict]) -> tuple[str, str]:
+def _missing_bbox_coverage(*, span: dict, metadata_rows: list[dict]) -> tuple[str, str]:
     if span.get("promotion_status") == "excluded_nonlegal" or _is_marker_only_text(span.get("text")):
         return "nonlegal_excluded_provenance", "nonlegal_excluded_from_public_highlight"
     if span.get("promotion_status") == "promoted_metadata" or metadata_rows:
@@ -289,9 +274,7 @@ def _missing_bbox_coverage(*, span: dict, legal_context: dict, metadata_rows: li
     if span.get("promotion_status") == "excluded_structural":
         return "structural_provenance_only", "structural_provenance_only"
     if span.get("promotion_status") == "promoted_legal_unit":
-        if True in legal_context.get("runtime_flags", set()):
-            return "legal_citation_candidate", "blocked_by_no_word_level_bbox_artifact"
-        return "raw_span_only_with_reason", "blocked_by_no_word_level_bbox_artifact"
+        return "legal_citation_candidate", "blocked_by_no_word_level_bbox_artifact"
     return "raw_span_only_with_reason", "blocked_by_missing_exact_bbox"
 
 
@@ -338,7 +321,7 @@ def _apply_word_bbox_promotion(
     span: dict,
     words_by_page: dict[tuple[str, int], list[dict]],
 ) -> None:
-    if span.get("bbox_registry_coverage_reason") not in {
+    if span.get("promotion_status") != "promoted_legal_unit" and span.get("bbox_registry_coverage_reason") not in {
         "blocked_by_missing_exact_bbox",
         "blocked_by_layout",
         "blocked_by_no_word_level_bbox_artifact",
@@ -355,21 +338,23 @@ def _apply_word_bbox_promotion(
     if not match:
         return
     span["word_bbox_ids"] = match["matched_word_bbox_ids"]
+    span["span_bbox_ids"] = [
+        bbox_id
+        for bbox_id in match["matched_word_bbox_ids"]
+        if any(
+            row.get("word_bbox_id") == bbox_id and _intersects(span, row)
+            for row in words_by_page[(span["source_document_id"], span["page_number"])]
+        )
+    ]
     span["word_bbox_match_method"] = match["match_method"]
     span["word_bbox_match_confidence"] = match["match_confidence"]
     span["word_bbox_candidate_count"] = match["candidate_count"]
     span["word_bbox_distance_to_existing_span_bbox"] = match["distance_to_existing_span_bbox"]
     span["bbox_registry_coverage_reason"] = "exact_word_bbox_available"
-    span["exposure_clickable"] = True
-    span["exposure_exactness_level"] = "exact_bbox"
-    span["field_bbox_feasibility"] = "exact_safe"
-    if span.get("promotion_status") == "promoted_source_conflict":
-        span["exposure_policy"] = "source_anomaly_provenance_highlight"
-    elif span.get("bbox_registry_coverage_bucket") == "metadata_provenance_candidate":
-        span["exposure_policy"] = "metadata_source_highlight"
-    elif span.get("promotion_status") == "promoted_legal_unit":
-        span["bbox_registry_coverage_bucket"] = "legal_citation_candidate"
-        span["exposure_policy"] = "legal_citation_highlight"
+
+
+def _intersects(left: dict, right: dict) -> bool:
+    return min(left["x1"], right["x1"]) > max(left["x0"], right["x0"]) and min(left["y1"], right["y1"]) > max(left["y0"], right["y0"])
 
 
 def _is_marker_only_text(text: str | None) -> bool:

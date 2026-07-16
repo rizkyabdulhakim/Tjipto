@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from tjipto.runtime.api import BadRequest, handle_pdf_request, handle_request
+from tjipto.runtime.service import LegalRuntimeService
 
 
 DEFAULT_LOCAL_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
@@ -26,14 +27,18 @@ def make_server(
     port: int = 8000,
     repo_root: Path | None = None,
 ) -> ThreadingHTTPServer:
+    service = LegalRuntimeService(repo_root)
+
     class Handler(TjiptoHttpHandler):
         root = repo_root
+        runtime_service = service
 
     return ThreadingHTTPServer((host, port), Handler)
 
 
 class TjiptoHttpHandler(BaseHTTPRequestHandler):
     root: Path | None = None
+    runtime_service: LegalRuntimeService
 
     def do_OPTIONS(self) -> None:
         self._json(204, {})
@@ -44,14 +49,14 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
             return
         route = self._route()
         if route and len(route) == 2 and route[1] == "capabilities":
-            self._json(200, handle_request(route[0], "capabilities", {}, self.root))
+            self._json(200, handle_request(route[0], "capabilities", {}, self.root, self.runtime_service))
             return
         if route and len(route) == 2 and route[1] == "bookmarks":
-            self._json(200, handle_request(route[0], "bookmarks", {}, self.root))
+            self._json(200, handle_request(route[0], "bookmarks", {}, self.root, self.runtime_service))
             return
         if route and len(route) == 2 and route[1] == "pdf":
             try:
-                result = handle_pdf_request(route[0], self._query_payload(), self.root)
+                result = handle_pdf_request(route[0], self._query_payload(), self.root, self.runtime_service)
             except BadRequest as error:
                 self._json(400, {"status": "bad_request", "reason": error.reason})
                 return
@@ -71,7 +76,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         try:
             payload = self._read_json()
             action = "bookmark" if route[1] == "bookmarks" else route[1]
-            response = handle_request(route[0], action, payload, self.root)
+            response = handle_request(route[0], action, payload, self.root, self.runtime_service)
             self._json(200, response)
         except PayloadTooLarge as error:
             self._discard_oversized_body(error.size)

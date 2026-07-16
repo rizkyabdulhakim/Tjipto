@@ -354,18 +354,18 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["graph_edge_count"], len(edges))
         self.assertEqual(authority["article_relation_count"], 63)
         self.assertEqual(authority["article_relation_graph_ref_count"], 63)
-        self.assertEqual(authority["evidence_backed_relation_edge_count"], 33)
-        self.assertEqual(authority["trace_only_relation_edge_count"], 31)
+        self.assertEqual(authority["evidence_backed_relation_edge_count"], 32)
+        self.assertEqual(authority["trace_only_relation_edge_count"], 32)
         self.assertEqual(authority["trace_promoted_count"], 0)
         self.assertEqual(authority["authority_without_evidence_count"], 0)
         self.assertEqual(authority["authority_without_bbox_count"], 0)
         self.assertEqual(authority["missing_authority_field_count"], 0)
         self.assertEqual(authority["graph_final_citation_edge_count"], 0)
         self.assertEqual(authority["invalid_finality_policy_count"], 0)
-        self.assertEqual(authority["finality_policy_counts"]["source_anomaly_provenance"], 2)
-        self.assertEqual(authority["finality_policy_counts"]["metadata_provenance"], 3)
-        self.assertEqual(authority["finality_policy_counts"]["trace_only_relation"], 31)
-        self.assertFalse([row for row in edges if row.get("evidence_ref") and row["evidence_ref"] not in evidence])
+        self.assertEqual(authority["support_kind_counts"]["source_anomaly_trace"], 2)
+        self.assertEqual(authority["support_kind_counts"]["instrument_provenance"], 42)
+        self.assertFalse([row for row in edges if "evidence_ref" in row])
+        self.assertFalse([row for row in edges for evidence_id in row["supporting_evidence_ids"] if evidence_id not in evidence])
         self.assertNotIn("legal_edge_types", report)
         self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "AMENDED_BY", "AMENDS", "RENAMES", "SUPPLEMENTS"})
         for edge_type in report["not_promoted_edge_types"]:
@@ -402,28 +402,21 @@ class GraphContractTest(unittest.TestCase):
             self.assertIn(row["target_id"], nodes)
             self.assertEqual(row["relation_type"], row["edge_type"])
             self.assertTrue(row.get("source_document_id"))
-            self.assertIn(row["edge_authority_level"], {"evidence_backed_relation", "provenance", "trace"})
+            self.assertTrue(row["authority_kind"])
+            self.assertFalse(row["citation_final"])
             self.assertIn(
-                row["graph_finality_policy"],
+                row["support_kind"],
                 {
-                    "final_legal_citation",
-                    "evidence_backed_relation",
+                    "exact_source_relation",
+                    "deterministic_structure",
+                    "endpoint_provenance",
                     "instrument_provenance",
-                    "source_anomaly_provenance",
-                    "metadata_provenance",
-                    "structural_relation",
-                    "trace_only_relation",
-                    "nonlegal",
+                    "historical_mapping",
+                    "source_anomaly_trace",
                 },
             )
-            self.assertFalse(row["citation_final"])
-            self.assertIn(row["evidence_requirement"], {"exact_bbox", "page_grounded", "trace_only", "none"})
-            self.assertIn(row["source_role"], {"canonical", "historical", "amendment", "consolidated", "anomaly"})
-            self.assertIn(row["relation_support"], {"exact", "trace_only", "structural", "metadata", "source_anomaly"})
-            self.assertTrue(row["reason"])
+            self.assertTrue(row["derivation_reason"])
             if row.get("runtime_loadable") is True:
-                self.assertTrue(row.get("evidence_ref"))
-                self.assertIn(row["evidence_ref"], evidence)
                 self.assertTrue(row.get("validation_status"))
                 self.assertTrue(row.get("confidence_policy"))
             if row.get("provenance_ref"):
@@ -431,26 +424,21 @@ class GraphContractTest(unittest.TestCase):
                 self.assertIn(row["provenance_support"], {"exact_bbox", "page_grounded", "trace_only", "structural", "nonlegal"})
                 if row["provenance_ref_kind"] == "metadata_grounding":
                     self.assertIn(row["provenance_ref"], metadata_grounding)
-                    self.assertFalse(row.get("evidence_ref"))
+                    self.assertFalse(row["supporting_evidence_ids"])
                 if row["provenance_ref_kind"] == "source_conflict":
                     self.assertIn(row["provenance_ref"], source_conflicts)
-                    self.assertFalse(row.get("evidence_ref"))
-                    self.assertEqual(row["graph_finality_policy"], "source_anomaly_provenance")
+                    self.assertFalse(row["supporting_evidence_ids"])
+                    self.assertEqual(row["support_kind"], "source_anomaly_trace")
             if row["edge_type"] in {"MODIFIES", "DELETES"}:
-                source = evidence[row["evidence_ref"]]
+                self.assertEqual(len(row["supporting_evidence_ids"]), 1)
+                source = evidence[row["supporting_evidence_ids"][0]]
                 self.assertTrue(set(row["bbox_refs"]) <= bbox_ids)
                 if row.get("article_relation_ref"):
                     self.assertIn(row["article_relation_ref"], article_relations)
-                if row["relation_support"] == "exact":
-                    self.assertEqual(row["edge_authority_level"], "evidence_backed_relation")
-                    self.assertEqual(row["evidence_requirement"], "exact_bbox")
-                    self.assertTrue(row["viewer_highlightable"])
+                if row["support_kind"] == "exact_source_relation":
                     self.assertEqual(source["bbox_precision"], "exact")
                 else:
-                    self.assertEqual(row["edge_authority_level"], "trace")
-                    self.assertEqual(row["evidence_requirement"], "trace_only")
-                    self.assertFalse(row["viewer_highlightable"])
-                    self.assertEqual(row["reason"], "instrument_trace_only_not_public_citation")
+                    self.assertFalse(row["citation_final"])
 
     def test_uud_ingestion_artifacts_are_consistent(self) -> None:
         import fitz

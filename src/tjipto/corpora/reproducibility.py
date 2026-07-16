@@ -181,15 +181,17 @@ def validate_corpus_ingestion_artifacts(corpus_id: str, repo_root: Path) -> dict
             if not edge.get("source_document_id"):
                 errors.append(f"graph_legal_edge_missing_source_document:{edge['edge_id']}")
             if edge.get("runtime_loadable") is True:
-                if not edge.get("evidence_ref"):
-                    errors.append(f"graph_runtime_edge_missing_evidence:{edge['edge_id']}")
                 if not edge.get("validation_status"):
                     errors.append(f"graph_runtime_edge_missing_validation:{edge['edge_id']}")
                 if not edge.get("confidence_policy"):
                     errors.append(f"graph_runtime_edge_missing_confidence:{edge['edge_id']}")
-            ref = edge.get("evidence_ref")
-            if ref and ref not in evidence_ids:
-                errors.append(f"graph_legal_edge_unknown_evidence_ref:{edge['edge_id']}:{ref}")
+            if "evidence_ref" in edge:
+                errors.append(f"graph_legacy_evidence_contract:{edge['edge_id']}")
+            for ref in edge.get("supporting_evidence_ids") or ():
+                if ref not in evidence_ids:
+                    errors.append(f"graph_legal_edge_unknown_evidence_ref:{edge['edge_id']}:{ref}")
+            if edge.get("support_kind") == "exact_source_relation" and not edge.get("supporting_evidence_ids"):
+                errors.append(f"graph_exact_relation_missing_evidence:{edge['edge_id']}")
             if edge.get("edge_type") in {"AMENDS", "AMENDED_BY"} and str(edge["source_id"]).startswith("source_role::"):
                 errors.append(f"graph_source_role_amends_promoted:{edge['edge_id']}")
 

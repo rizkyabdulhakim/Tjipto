@@ -46,16 +46,22 @@ def apply_authority_contract(
             bbox_by_span[span_id].extend(row.get("bbox_refs") or ())
     for span in spans:
         evidence_ids = list(dict.fromkeys(evidence_by_span[span["text_span_id"]]))
-        bbox_ids = list(dict.fromkeys(bbox_by_span[span["text_span_id"]]))
-        exact = span.get("promotion_status") == "promoted_legal_unit" and bool(evidence_ids and bbox_ids)
+        evidence_bbox_ids = list(dict.fromkeys(bbox_by_span[span["text_span_id"]]))
+        span_bbox_ids = list(dict.fromkeys(span.get("span_bbox_ids") or ()))
+        exact = span.get("promotion_status") == "promoted_legal_unit" and bool(evidence_ids and span_bbox_ids)
+        for field in tuple(span):
+            if field.startswith("exposure_") or field in {"target_evidence_ids", "target_bbox_ids", "word_bbox_ids"}:
+                span.pop(field)
         span.update(
             {
                 "classification": span.get("semantic_classification") or "unclassified_source_text",
                 "legal_force": span.get("legal_force") or "nonlegal",
                 "highlightable": exact,
-                "target_evidence_ids": evidence_ids,
-                "target_bbox_ids": bbox_ids,
-                "reason": span.get("validation_basis") or span.get("exclusion_reason") or "source_span_policy",
+                "evidence_ids": evidence_ids,
+                "span_bbox_ids": span_bbox_ids,
+                "evidence_bbox_ids": evidence_bbox_ids,
+                "context_bbox_ids": [],
+                "reason": span.get("exclusion_reason") or ("exact_evidence_unavailable" if not exact else "exact_evidence"),
             }
         )
         span.update(_decision("normative_legal_text" if exact else _span_nonfinal_kind(span), exact, exact, span["reason"]))

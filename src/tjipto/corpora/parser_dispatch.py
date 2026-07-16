@@ -17,6 +17,7 @@ class CorpusParser:
     parse_pasal_reference: Callable[..., str | None]
     parse_ayat_reference: Callable[[str], str | None]
     label_keys: Callable[[object], set[str]]
+    resolve_navigation: Callable[[str], tuple[str, str] | None]
 
 
 _PARSERS: dict[str, CorpusParser] = {
@@ -53,3 +54,7 @@ def parse_ayat_reference(corpus_id: str, text: str) -> str | None:
 
 def label_keys(corpus_id: str, value: object) -> set[str]:
     return get_parser(corpus_id).label_keys(value)
+
+
+def resolve_navigation(corpus_id: str, text: str) -> tuple[str, str] | None:
+    return get_parser(corpus_id).resolve_navigation(text)

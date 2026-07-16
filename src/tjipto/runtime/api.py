@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 from tjipto.runtime.service import LegalRuntimeService
@@ -11,8 +12,14 @@ class BadRequest(ValueError):
         super().__init__(reason)
 
 
-def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path | None = None) -> dict:
-    service = LegalRuntimeService(repo_root)
+def handle_request(
+    corpus_id: str,
+    action: str,
+    payload: dict,
+    repo_root: Path | None = None,
+    service: LegalRuntimeService | None = None,
+) -> dict:
+    service = service or _service_for(repo_root)
     if action == "search":
         return _public_search(
             service.search(
@@ -67,6 +74,8 @@ def handle_request(corpus_id: str, action: str, payload: dict, repo_root: Path |
 
 
 def _public_search(result: dict) -> dict:
+    if result.get("readiness") is False:
+        return _public_integrity(result) | {"results": ()}
     return {
         "status": result.get("status"),
         "public_status": result.get("public_status"),
@@ -78,6 +87,8 @@ def _public_search(result: dict) -> dict:
 
 
 def _public_ask(result: dict) -> dict:
+    if result.get("readiness") is False:
+        return _public_integrity(result)
     public = {
         "status": result.get("status"),
         "answer": result.get("answer"),
@@ -101,6 +112,8 @@ def _public_ask(result: dict) -> dict:
 
 
 def _public_citation_response(result: dict) -> dict:
+    if result.get("readiness") is False:
+        return _public_integrity(result) | {"citation_payloads": ()}
     public = {
         "status": result.get("status"),
         "public_status": result.get("public_status", result.get("status")),
@@ -118,6 +131,8 @@ def _public_citation_response(result: dict) -> dict:
 
 
 def _public_viewer(result: dict) -> dict:
+    if result.get("readiness") is False:
+        return _public_integrity(result)
     public = {
         "status": result.get("status"),
         "corpus_id": result.get("corpus_id"),
@@ -148,6 +163,21 @@ def _public_viewer(result: dict) -> dict:
             "access_url": result["pdf"].get("access_url"),
         }
     return public
+
+
+def _public_integrity(result: dict) -> dict:
+    return {
+        "status": result["status"],
+        "route": result.get("route", "corpus_integrity"),
+        "reason_code": result.get("reason_code") or result.get("reason"),
+        "corpus_id": result.get("corpus_id"),
+        "readiness": False,
+        "answer_type": "none",
+        "evidence": (),
+        "citations": (),
+        "viewer_refs": (),
+        "context_pack": result.get("context_pack", {}),
+    }
 
 
 def _public_bbox(row: dict) -> dict:
@@ -297,8 +327,13 @@ def _public_viewer_ref(row: dict) -> dict:
     }
 
 
-def handle_pdf_request(corpus_id: str, payload: dict, repo_root: Path | None = None) -> dict:
-    return LegalRuntimeService(repo_root).pdf_access(
+def handle_pdf_request(
+    corpus_id: str,
+    payload: dict,
+    repo_root: Path | None = None,
+    service: LegalRuntimeService | None = None,
+) -> dict:
+    return (service or _service_for(repo_root)).pdf_access(
         corpus_id,
         _optional_str(payload, "evidence_id"),
         source_document_id=_required_str(payload, "source_document_id"),
@@ -307,6 +342,11 @@ def handle_pdf_request(corpus_id: str, payload: dict, repo_root: Path | None = N
         bbox_id=_optional_str(payload, "bbox_id"),
         source_pdf_path=_optional_str(payload, "source_pdf_path"),
     )
+
+
+@lru_cache(maxsize=4)
+def _service_for(repo_root: Path | None) -> LegalRuntimeService:
+    return LegalRuntimeService(repo_root)
 
 
 def _limit(payload: dict, *, default: int) -> int:

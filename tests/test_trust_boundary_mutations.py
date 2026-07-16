@@ -26,6 +26,7 @@ class TrustBoundaryMutationTest(unittest.TestCase):
             "retrieval_units": read_jsonl(FINAL / "retrieval_units.jsonl"),
             "evidence": read_jsonl(FINAL / "evidence_registry.jsonl"),
             "bbox_rows": read_jsonl(FINAL / "bbox_registry.jsonl"),
+            "word_bboxes": read_jsonl(FINAL / "word_bboxes.jsonl"),
             "page_text_spans": read_jsonl(FINAL / "page_text_spans.jsonl"),
             "source_documents": read_jsonl(FINAL / "source_documents.jsonl"),
             "pages": read_jsonl(FINAL / "pages.jsonl"),
@@ -57,6 +58,11 @@ class TrustBoundaryMutationTest(unittest.TestCase):
             ("GRAPH_EDGE_ENDPOINT_UNRESOLVED", self._unresolved_endpoint),
             ("DERIVATION_METHOD_UNKNOWN", self._unknown_derivation),
             ("RELATION_SUPPORT_MISMATCH", self._relation_support_mismatch),
+            ("CITABLE_STATUS_CONFLICT", self._citable_status_conflict),
+            ("FINALITY_REASON_CONFLICT", self._finality_reason_conflict),
+            ("RETRIEVAL_EVIDENCE_UNRESOLVED", self._missing_retrieval_evidence),
+            ("CHUNK_EVIDENCE_UNRESOLVED", self._missing_chunk_evidence),
+            ("NORMATIVE_SPAN_REJECTED", self._reject_normative_span),
         )
         for expected, mutate in cases:
             with self.subTest(expected=expected):
@@ -165,6 +171,37 @@ class TrustBoundaryMutationTest(unittest.TestCase):
     def _relation_support_mismatch(rows):
         row = next(row for row in rows["graph_edges"] if row["support_kind"] == "deterministic_structure")
         row["supporting_evidence_ids"] = [rows["evidence"][0]["evidence_id"]]
+
+    @staticmethod
+    def _citable_status_conflict(rows):
+        rows["evidence"][0]["citable_status"] = "not_citable"
+
+    @staticmethod
+    def _finality_reason_conflict(rows):
+        rows["evidence"][0]["citation_finality_reason"] = "wrong"
+
+    @staticmethod
+    def _missing_retrieval_evidence(rows):
+        rows["retrieval_units"][0]["evidence_id"] = "missing"
+
+    @staticmethod
+    def _missing_chunk_evidence(rows):
+        row = next(row for row in rows["chunks"] if row.get("evidence_ids"))
+        row["evidence_ids"] = ["missing"]
+
+    @staticmethod
+    def _reject_normative_span(rows):
+        row = next(row for row in rows["page_text_spans"] if row.get("citation_final"))
+        row.update(
+            authority_decision(
+                authority_kind="rejected",
+                citable=False,
+                citation_final=False,
+                exactness="rejected",
+                evidence_available=False,
+                reason_code="mutation_fixture",
+            )
+        )
 
 
 def _sibling_pair(units: list[dict]) -> list[dict]:

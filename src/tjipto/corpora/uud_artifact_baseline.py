@@ -149,7 +149,18 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
         metadata_grounding=metadata_grounding,
     )
-    apply_graph_relation_policy(edges=graph_edges, nodes=graph_nodes, evidence=evidence)
+    article_amendment_relations = build_article_amendment_relations(
+        graph_edges=graph_edges,
+        legal_units=legal_units,
+        evidence=evidence,
+        bbox_rows=bbox_rows,
+    )
+    apply_graph_relation_policy(
+        edges=graph_edges,
+        nodes=graph_nodes,
+        evidence=evidence,
+        article_relations=article_amendment_relations,
+    )
     apply_authority_contract(
         spans=page_text_spans,
         evidence=evidence,
@@ -160,12 +171,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         edges=graph_edges,
     )
     document_relations = build_document_relations(list(source_documents.values()))
-    article_amendment_relations = build_article_amendment_relations(
-        graph_edges=graph_edges,
-        legal_units=legal_units,
-        evidence=evidence,
-        bbox_rows=bbox_rows,
-    )
     promotion_decisions = build_promotion_decisions(
         evidence=evidence,
         metadata_grounding=metadata_grounding,

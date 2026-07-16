@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, resolve_instrument_intent
+from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
 from tjipto.corpora.parser_dispatch import (
     DEFAULT_CORPUS_ID,
     label_keys,
     parse_ayat_reference,
     parse_bab_reference,
     parse_pasal_reference,
+    resolve_navigation,
 )
 from tjipto.evidence.store import EvidenceStore
 
@@ -19,7 +20,7 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
     instrument = _instrument_rows(store, query, limit, strategy=strategy, config=config)
     if instrument:
         return instrument
-    navigation = _navigation_rows(store, query, limit, intent, _corpus_id(config))
+    navigation = _navigation_rows(store, query, limit, _corpus_id(config))
     if navigation:
         return navigation
     targets = _targets(query, intent, _corpus_id(config))
@@ -122,16 +123,12 @@ def _navigation_rows(
     store: EvidenceStore,
     query: str,
     limit: int,
-    intent: dict,
     corpus_id: str,
 ) -> tuple[dict, ...]:
-    direction = next(
-        (name for name, aliases in intent["structural_navigation"].items() if contains_intent_phrase(query, aliases)),
-        None,
-    )
-    label = parse_pasal_reference(corpus_id, query, allow_roman=True)
-    if direction not in {"next", "previous"} or not label:
+    navigation = resolve_navigation(corpus_id, query)
+    if navigation is None:
         return ()
+    label, direction = navigation
     preferred_role = getattr(store.config, "preferred_source_role", None)
     source = next(
         (

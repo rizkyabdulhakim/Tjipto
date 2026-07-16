@@ -126,7 +126,7 @@ class EvidenceStore:
                 continue
             span_matches = exact_bboxes_for_text_spans([span], self._bbox_rows_all())
             if not span_matches:
-                span_matches = [bbox_by_id[bbox_id] for bbox_id in span.get("word_bbox_ids") or () if bbox_id in bbox_by_id]
+                span_matches = [bbox_by_id[bbox_id] for bbox_id in span.get("span_bbox_ids") or () if bbox_id in bbox_by_id]
             for bbox in span_matches:
                 bbox_id = str(bbox.get("bbox_id") or "")
                 resolved_bbox = bbox_by_id.get(bbox_id)

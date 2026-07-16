@@ -385,7 +385,7 @@ class UudBuilderContractTest(unittest.TestCase):
             self.assertTrue(row["bbox_registry_coverage_bucket"])
             self.assertTrue(row["bbox_registry_coverage_reason"])
             if row["bbox_registry_coverage_reason"] == "exact_word_bbox_available":
-                self.assertTrue(row["word_bbox_ids"])
+                self.assertTrue(row["span_bbox_ids"])
 
     def test_metadata_block_reuses_existing_exact_bbox_rows_when_safe(self) -> None:
         rows = {row["metadata_grounding_id"]: row for row in read_jsonl(FINAL / "metadata_grounding.jsonl")}
