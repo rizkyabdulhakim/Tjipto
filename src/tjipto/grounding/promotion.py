@@ -57,7 +57,12 @@ def build_promotion_decisions(
 
 
 def _needs_decision(row: dict) -> bool:
-    return row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True
+    return (
+        row.get("bbox_precision") != "exact"
+        or row.get("viewer_highlightable") is not True
+        or row.get("failure_reason") == "instrument_trace_only_not_public_citation"
+        or row.get("promotion_candidate") is True
+    )
 
 
 def _record_decision(
@@ -86,7 +91,7 @@ def _record_decision(
     exact_bbox = record.get("bbox_precision") == "exact" and _bbox_refs_valid(bbox_refs, bbox_by_id, exact_only=True)
     bbox_union_status = _bbox_union_status(bbox_refs, bbox_by_id, exact_bbox)
     highlightable = record.get("viewer_highlightable") is True
-    reason = _reason(record)
+    reason = _reason(record, record_type)
     can_be_exact = exact_quote and span_match_status == "normalized_span_sequence_match" and exact_bbox and highlightable
     metadata_feasibility = _metadata_promotion_feasibility(
         record_type=record_type,
@@ -97,6 +102,14 @@ def _record_decision(
         matched_span_ids=matched_span_ids,
         can_be_exact=can_be_exact,
     )
+    if can_be_exact:
+        decision = "already_exact" if record.get("bbox_precision") == "exact" and highlightable else "recover_exact"
+        candidate_status = "already_exact" if decision == "already_exact" else "recovered_exact"
+        promotion_result = decision
+    else:
+        decision = "keep_non_exact"
+        candidate_status = "blocked"
+        promotion_result = "blocked_after_recovery_attempt"
     return {
         "bbox_union_status": bbox_union_status,
         "blocker_evidence": _blocker_evidence(
@@ -107,9 +120,9 @@ def _record_decision(
         ),
         "can_be_exact_citation": can_be_exact,
         "can_be_exact_highlight": can_be_exact,
-        "candidate_status": "exact_candidate" if can_be_exact else "blocked",
+        "candidate_status": candidate_status,
         "current_grounding_status": record.get("grounding_status") or record.get("bbox_precision"),
-        "decision": "keep_non_exact",
+        "decision": decision,
         "decision_id": f"promotion_decision::{record_type}::{record_id}",
         "exact_bbox_available": exact_bbox,
         "exact_quote_available": exact_quote,
@@ -129,7 +142,7 @@ def _record_decision(
         "page_number": min(page_numbers) if page_numbers else None,
         "policy_reason": reason,
         "promotion_attempt_method": "source_page_span_bbox_feasibility",
-        "promotion_attempt_result": "blocked_after_feasibility_check",
+        "promotion_attempt_result": promotion_result,
         "promotion_attempted": True,
         "quote_match_status": quote_match_status,
         "record_id": record_id,
@@ -141,13 +154,18 @@ def _record_decision(
     }
 
 
-def _reason(record: dict) -> str:
-    return (
+def _reason(record: dict, record_type: str | None = None) -> str:
+    reason = (
         record.get("failure_reason")
         or record.get("rejection_reason")
         or record.get("grounding_status")
         or ("non_highlightable_exact_bbox" if record.get("bbox_precision") == "exact" else "non_exact_grounding")
     )
+    if reason in {"blocked", "insufficient_evidence"}:
+        return "non_exact_grounding"
+    if reason == "non_exact_grounding" and record_type == "bbox":
+        return "bbox_geometry_unavailable"
+    return reason
 
 
 def _quote_match_status(record: dict, page_text: dict[tuple[str, int], str], page_numbers: list[int]) -> str:

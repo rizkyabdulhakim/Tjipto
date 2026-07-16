@@ -65,6 +65,10 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
         return False, row["forced_rejection_reason"]
     if row.get("runtime_loadable") is False:
         return False, "runtime_not_loadable"
+    if not row.get("metadata_grounding"):
+        lineage_error = store.lineage_error(row)
+        if lineage_error:
+            return False, f"source_lineage_invalid:{lineage_error}"
     legal_unit = _legal_unit(store, row.get("legal_unit_id"))
     chunk = _chunk_for_unit(store, row.get("legal_unit_id"))
     retrieval_unit = _retrieval_unit(store, row.get("evidence_id"))

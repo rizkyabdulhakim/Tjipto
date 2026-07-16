@@ -123,10 +123,23 @@ def apply_chunk_grounding(
             chunk["text"],
             allow_containing_span=not chunk_evidence and review_category(chunk) == ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
         )
+        if not chunk["text_span_ids"] and chunk_evidence:
+            evidence_span_ids = [span_id for item in chunk_evidence for span_id in item.get("text_span_ids") or ()]
+            if evidence_span_ids:
+                chunk["text_span_ids"] = list(dict.fromkeys(evidence_span_ids))
+                chunk_grounding_status = "text_span_exact_from_evidence"
         chunk["grounding_status"] = chunk_grounding_status
         if not chunk["text_span_ids"]:
             chunk["failure_reason"] = "text_span_exact_match_unavailable"
         chunk["runtime_loadable"] = unit.get("runtime_loadable") is not False and bool(chunk_evidence) and bool(chunk["text_span_ids"])
+        if (
+            chunk["runtime_loadable"]
+            and unit.get("unit_type") == "bab_record"
+            and "dihapus" in compact(unit.get("text"))
+            and unit.get("source_role") != "current_consolidated"
+        ):
+            chunk["canonical_use_allowed"] = True
+            chunk["status"] = "active_canonical_record"
         chunk["validation_status"], chunk["validation_basis"] = _chunk_validation(chunk)
         apply_review_category(chunk)
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
@@ -146,6 +159,7 @@ def apply_chunk_grounding(
         unit["temporal_context"] = source.get("temporal_context", unit["source_role"])
         unit["page_numbers"] = page_numbers
         unit["text_span_ids"] = text_span_ids
+        unit["evidence_ids"] = [row["evidence_id"] for row in unit_evidence]
         unit["bbox_ids"] = [bbox_id for row in unit_evidence for bbox_id in row.get("bbox_refs") or ()]
         unit["grounding_status"] = grounding_status
         unit["validation_status"] = "accepted_grounding" if text_span_ids else "grounding_unavailable"

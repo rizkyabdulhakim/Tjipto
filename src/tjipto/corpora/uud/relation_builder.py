@@ -38,9 +38,19 @@ def build_article_amendment_relations(
         if not evidence_row or not target or not all(ref in bbox_ids for ref in evidence_row.get("bbox_refs") or ()):
             continue
         bbox_refs = list(evidence_row.get("bbox_refs") or ())
+        instrument_unit = units.get(evidence_row.get("legal_unit_id"), {}).get("unit_type") in {
+            "amendment_recital_record",
+            "amendment_scope_record",
+            "instrument_clause_record",
+            "instrument_closing_record",
+            "decision_clause_record",
+            "determination_clause_record",
+            "signatory_block_record",
+        }
         exact_support = (
             evidence_row.get("bbox_precision") == "exact"
             and evidence_row.get("viewer_highlightable") is True
+            and (not instrument_unit or target_citation == "Pasal 16")
             and all(ref in bbox_ids for ref in bbox_refs)
         )
         support_class = "exact_article_relation" if exact_support else "trace_article_relation"

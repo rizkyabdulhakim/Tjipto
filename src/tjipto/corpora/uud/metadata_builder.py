@@ -39,8 +39,8 @@ GROUNDING_FIELD_ORDER = (
 # Indonesian legal office labels parsed from source PDFs; these are not credentials.
 CHAIR_TOKEN = "Ketua,"  # nosec B105
 VICE_CHAIR_TOKEN = "Wakil"  # nosec B105
-CHAIR_ROLE = "Ketua"  # nosec B105
-VICE_CHAIR_ROLE = "Wakil Ketua"  # nosec B105
+CHAIR_ROLE = "Ketua"
+VICE_CHAIR_ROLE = "Wakil Ketua"
 
 
 def build_document_metadata(source_documents: dict[str, dict], metadata_grounding: list[dict]) -> list[dict]:

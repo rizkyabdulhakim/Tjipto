@@ -37,6 +37,23 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             self.assertEqual(result["reason_code"], "evidence_quote_source_mismatch")
             self.assertFalse(result["citations"])
 
+    def test_source_sha_mutation_fails_lineage_before_answer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "data", root / "data")
+            final = root / "data/final/uud"
+            artifact = final / "evidence_registry.jsonl"
+            rows = [json.loads(line) for line in artifact.read_text(encoding="utf-8").splitlines() if line]
+            rows[0]["source_sha256"] = "0" * 64
+            data = ("\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n").encode("utf-8")
+            artifact.write_bytes(data)
+            manifest = json.loads((final / "manifest.json").read_text(encoding="utf-8"))
+            manifest["files"]["evidence_registry.jsonl"].update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
+            _write_trusted_manifest(root, manifest)
+            self.assertTrue(any(error.startswith("EVIDENCE_SOURCE_LINEAGE_INVALID") for error in validate_uud_artifact_dir(final)))
+            result = LegalRuntimeService(root).ask("uud", "Pasal 1")
+            self.assertFalse(result["citations"])
+
     def test_manifest_contract_cannot_remove_minimum_quote_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

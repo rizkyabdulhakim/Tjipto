@@ -80,6 +80,10 @@ def _append_source_units(
         if source_id == "uud::amendment_4_historical" and unit_type == "pasal_record" and label == "Pasal 37":
             current_bab = None
         end = _unit_end(source_text, tokens, index, unit_type)
+        if source_id == "uud::amendment_4_historical" and unit_type == "bab_record" and label == "BAB IV":
+            boundary = next((candidate for candidate in tokens[index + 1 :] if candidate.group(1) == "Pasal 23B"), None)
+            if boundary is not None:
+                end = boundary.start()
         text = source_text[token.start() : end]
         page_start, page_end = _span_pages(token.start(), end, page_ranges)
         legal_id = f"uud_legal_unit_{UUD_LEGAL_UNIT_ID_STARTS[source_id] + source_count:05d}"

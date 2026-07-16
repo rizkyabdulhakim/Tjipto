@@ -8,7 +8,7 @@ from pathlib import Path
 from threading import RLock
 
 from tjipto.contracts.artifacts import MINIMUM_ARTIFACT_FIELDS
-from tjipto.contracts.evidence import exact_quote_support_reason
+from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage_reason
 from tjipto.core.manifest import ALLOWED_ARTIFACT_ORIGINS, verified_file_bytes
 
 
@@ -203,6 +203,7 @@ def _validate_exact_evidence(manifest: dict, artifacts: dict[str, object]) -> No
     evidence = _rows_for(manifest, artifacts, "evidence_registry")
     spans = {row["text_span_id"]: row for row in _rows_for(manifest, artifacts, "page_text_spans")}
     bboxes = {row["bbox_id"]: row for row in _rows_for(manifest, artifacts, "bbox_registry")}
+    sources = {row["source_document_id"]: row for row in _rows_for(manifest, artifacts, "source_documents")}
     for bbox in bboxes.values():
         if bbox.get("viewer_highlightable") is not True:
             continue
@@ -238,6 +239,14 @@ def _validate_exact_evidence(manifest: dict, artifacts: dict[str, object]) -> No
         )
         if reason:
             raise CorpusIntegrityError("evidence_quote_source_mismatch")
+        lineage = source_lineage_reason(
+            evidence=row,
+            source_documents_by_id=sources,
+            spans_by_id=spans,
+            bboxes_by_id=bboxes,
+        )
+        if lineage:
+            raise CorpusIntegrityError("evidence_source_lineage_invalid")
 
 
 def _rows_for(manifest: dict, artifacts: dict[str, object], logical_key: str) -> list[dict]:

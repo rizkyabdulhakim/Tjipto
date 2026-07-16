@@ -4,7 +4,7 @@ import re
 
 from tjipto.contracts.coordinates import coordinate_metadata
 from tjipto.corpora.uud.bbox_builder import aggregate_bbox_precision, apply_inserted_bab_heading_bbox_policy, build_bbox_rows
-from tjipto.corpora.uud.provenance_exceptions import SEGMENTATION_BOUNDARY_LABELS
+from tjipto.corpora.uud.provenance_exceptions import RECOVERABLE_GROUNDING_LABELS, SEGMENTATION_BOUNDARY_LABELS
 from tjipto.corpora.uud.specs import INSERTED_BAB_SPECS
 from tjipto.corpora.uud.structure_builder import compact, slug
 
@@ -13,7 +13,11 @@ def _admit_evidence(unit: dict, chunk: dict) -> bool:
     if unit.get("unit_type") == "effective_clause_record":
         return False
     if unit.get("unit_type") == "bab_record":
-        return unit.get("source_role") == "current_consolidated" and "dihapus" in compact(unit.get("text"))
+        return "dihapus" in compact(unit.get("text")) and unit.get("source_role") in {
+            "current_consolidated",
+            "original_historical",
+            "amendment_4_historical",
+        }
     return chunk.get("status") == "active_canonical_record"
 
 
@@ -46,19 +50,12 @@ def build_evidence_and_bboxes(
             line_entries=pdf_lines_by_source[source_id],
         )
         trace_only = unit["unit_label"] in SEGMENTATION_BOUNDARY_LABELS
-        if trace_only:
-            for bbox in bbox_records:
-                bbox["bbox_precision"] = "page_grounded_only"
-                bbox["viewer_highlightable"] = False
-                bbox["failure_reason"] = "instrument_trace_only_not_public_citation"
-        elif unit["unit_type"] == "decision_clause_record":
-            for bbox in bbox_records:
-                bbox["viewer_highlightable"] = False
+        recoverable = unit["unit_label"] in RECOVERABLE_GROUNDING_LABELS
         quoted_text = "\n".join(row["text"] for row in bbox_records)
         evidence.append(
             {
                 "bbox_refs": [row["bbox_id"] for row in bbox_records],
-                "bbox_precision": "page_grounded_only" if trace_only else aggregate_bbox_precision(bbox_records),
+                "bbox_precision": aggregate_bbox_precision(bbox_records),
                 "citation": unit["unit_label"],
                 "corpus_id": "uud",
                 "evidence_id": evidence_id,
@@ -77,6 +74,7 @@ def build_evidence_and_bboxes(
                 "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
             }
             | ({"failure_reason": "instrument_trace_only_not_public_citation"} if trace_only else {})
+            | ({"promotion_candidate": True} if recoverable else {})
         )
         bbox_rows.extend(bbox_records)
     _append_inserted_bab_bbox_refs(
@@ -88,6 +86,11 @@ def build_evidence_and_bboxes(
         pdf_lines_by_source=pdf_lines_by_source,
     )
     apply_inserted_bab_heading_bbox_policy(bbox_rows, evidence)
+    for bbox in bbox_rows:
+        if any(row.get("evidence_id") == bbox.get("evidence_id") and row.get("promotion_candidate") is True for row in evidence):
+            bbox["promotion_candidate"] = True
+        if bbox.get("bbox_precision") != "exact" or bbox.get("viewer_highlightable") is not True:
+            bbox.setdefault("failure_reason", "bbox_geometry_unavailable")
     evidence.sort(key=lambda row: row["evidence_id"])
     bbox_rows.sort(key=lambda row: (row["source_document_id"], row["page_number"], row["bbox_id"]))
     return evidence, bbox_rows
@@ -182,8 +185,8 @@ def _append_inserted_bab_bbox_refs(
         row["page_numbers"] = sorted({item["page_number"] for item in rows})
         unit = units_by_id[row["legal_unit_id"]]
         if unit["unit_label"] in SEGMENTATION_BOUNDARY_LABELS:
-            row["bbox_precision"] = "page_grounded_only"
-            row["viewer_highlightable"] = False
+            # Historical instrument records retain exact source geometry. Their
+            # non-final authority is applied by the UUD authority policy.
             row.setdefault("failure_reason", "instrument_trace_only_not_public_citation")
 
 

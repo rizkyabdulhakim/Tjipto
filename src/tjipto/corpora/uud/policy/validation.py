@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from tjipto.contracts.authority import authority_state_error
 from tjipto.contracts.coordinates import COORDINATE_SPACE, TRANSFORM_VERSION
-from tjipto.contracts.evidence import exact_quote_support_reason
+from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage_reason
 from tjipto.contracts.violations import Violation
 
 
@@ -500,6 +500,7 @@ def _validate_evidence_closure(
     bbox_ids = set(bbox_by_id)
     span_ids = {row["text_span_id"] for row in spans}
     source_ids = {row["source_document_id"] for row in sources}
+    sources_by_id = {row["source_document_id"]: row for row in sources}
     page_keys = {(row["source_document_id"], row["page_number"]) for row in pages}
     for row in evidence:
         row_id = row["evidence_id"]
@@ -564,6 +565,24 @@ def _validate_evidence_closure(
                         "exact evidence quote is not source-faithful",
                     )
                 )
+            lineage_error = source_lineage_reason(
+                evidence=row,
+                source_documents_by_id=sources_by_id,
+                spans_by_id={item["text_span_id"]: item for item in spans},
+                bboxes_by_id=bbox_by_id,
+            )
+            if lineage_error:
+                violations.append(
+                    _violation(
+                        "EVIDENCE_SOURCE_LINEAGE_INVALID",
+                        "evidence_registry",
+                        row_id,
+                        "source_lineage",
+                        "source-faithful evidence",
+                        lineage_error,
+                        "evidence lineage does not resolve to its source document",
+                    )
+                )
     for span in spans:
         row_id = span["text_span_id"]
         for evidence_id in span.get("evidence_ids") or ():
@@ -604,6 +623,44 @@ def _validate_evidence_closure(
                         "existing bbox",
                         bbox_id,
                         "span bbox missing",
+                    )
+                )
+        for bbox_id in span.get("context_bbox_ids") or ():
+            bbox = bbox_by_id.get(bbox_id)
+            if bbox is None:
+                violations.append(
+                    _violation(
+                        "REFERENCE_UNRESOLVED_BBOX",
+                        "page_text_spans",
+                        row_id,
+                        "context_bbox_ids",
+                        "existing bbox",
+                        bbox_id,
+                        "context bbox missing",
+                    )
+                )
+            elif bbox_id in (span.get("span_bbox_ids") or ()) or bbox_id in (span.get("evidence_bbox_ids") or ()):
+                violations.append(
+                    _violation(
+                        "CONTEXT_BBOX_OVERLAP",
+                        "page_text_spans",
+                        row_id,
+                        "context_bbox_ids",
+                        "context-only bbox references",
+                        bbox_id,
+                        "context bbox cannot be quote geometry",
+                    )
+                )
+            elif bbox.get("source_document_id") != span.get("source_document_id") or bbox.get("page_number") != span.get("page_number"):
+                violations.append(
+                    _violation(
+                        "CONTEXT_BBOX_PROVENANCE_MISMATCH",
+                        "page_text_spans",
+                        row_id,
+                        "context_bbox_ids",
+                        "same source and page",
+                        bbox_id,
+                        "context bbox provenance mismatch",
                     )
                 )
             elif not _intersects(span, bbox) or any(span.get(field) != bbox.get(field) for field in ("source_document_id", "page_number")):

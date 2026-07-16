@@ -254,7 +254,7 @@ class GraphContractTest(unittest.TestCase):
 
     def test_metadata_graph_edges_exclude_source_role_level_amends(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/metadata_graph_edges.jsonl")
-        self.assertEqual(len(edges), 456)
+        self.assertEqual(len(edges), 457)
         self.assertFalse([edge for edge in edges if edge["edge_type"] in {"AMENDS", "AMENDED_BY"}])
         self.assertTrue(all(edge["status"] == "accepted" for edge in edges))
         self.assertTrue(all(edge["runtime_loadable"] is False for edge in edges))
@@ -299,15 +299,15 @@ class GraphContractTest(unittest.TestCase):
         self.assertFalse([row for row in rows if row["relation_type"] in {"ADDS", "RENAMES", "SUPPLEMENTS"}])
         exact_rows = [row for row in rows if row["support_class"] == "exact_article_relation"]
         trace_rows = [row for row in rows if row["support_class"] == "trace_article_relation"]
-        self.assertEqual(len(exact_rows), 32)
-        self.assertEqual(len(trace_rows), 31)
+        self.assertEqual(len(exact_rows), 2)
+        self.assertEqual(len(trace_rows), 61)
         self.assertEqual(health["article_relation_total_count"], len(rows))
         self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
         self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
         self.assertEqual(health["article_relation_trace_missing_reason_count"], 0)
         self.assertEqual(
             health["article_relation_trace_reason_counts"],
-            {"instrument_trace_only_not_public_citation": 31},
+            {"blocked_by_missing_exact_bbox": 61},
         )
         self.assertEqual(health["article_relation_invalid_bbox_refs"], 0)
         self.assertEqual(health["article_relation_invalid_coordinates"], 0)
@@ -330,7 +330,7 @@ class GraphContractTest(unittest.TestCase):
                 self.assertTrue(source["viewer_highlightable"])
             else:
                 self.assertEqual(row["grounding_level"], "page_grounded_trace")
-                self.assertEqual(row["trace_only_reason"], "instrument_trace_only_not_public_citation")
+                self.assertEqual(row["trace_only_reason"], "blocked_by_missing_exact_bbox")
                 self.assertFalse(row["viewer_highlightable"])
                 self.assertFalse(row["citation_available"])
 
@@ -354,8 +354,8 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["graph_edge_count"], len(edges))
         self.assertEqual(authority["article_relation_count"], 63)
         self.assertEqual(authority["article_relation_graph_ref_count"], 63)
-        self.assertEqual(authority["evidence_backed_relation_edge_count"], 32)
-        self.assertEqual(authority["trace_only_relation_edge_count"], 32)
+        self.assertEqual(authority["evidence_backed_relation_edge_count"], 2)
+        self.assertEqual(authority["trace_only_relation_edge_count"], 62)
         self.assertEqual(authority["trace_promoted_count"], 0)
         self.assertEqual(authority["authority_without_evidence_count"], 0)
         self.assertEqual(authority["authority_without_bbox_count"], 0)
@@ -363,7 +363,7 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["graph_final_citation_edge_count"], 0)
         self.assertEqual(authority["invalid_finality_policy_count"], 0)
         self.assertEqual(authority["support_kind_counts"]["source_anomaly_trace"], 2)
-        self.assertEqual(authority["support_kind_counts"]["instrument_provenance"], 42)
+        self.assertEqual(authority["support_kind_counts"]["instrument_provenance"], 72)
         self.assertFalse([row for row in edges if "evidence_ref" in row])
         self.assertFalse([row for row in edges for evidence_id in row["supporting_evidence_ids"] if evidence_id not in evidence])
         self.assertNotIn("legal_edge_types", report)
@@ -547,8 +547,8 @@ class GraphContractTest(unittest.TestCase):
     def test_uud_ingestion_reproducibility_runner_passes(self) -> None:
         result = validate_corpus_ingestion_artifacts("uud", ROOT)
         self.assertEqual(result["status"], "valid", result["errors"][:5])
-        self.assertEqual(result["counts"]["evidence_records"], 471)
-        self.assertEqual(result["counts"]["bbox_records"], 1618)
+        self.assertEqual(result["counts"]["evidence_records"], 472)
+        self.assertEqual(result["counts"]["bbox_records"], 1621)
         self.assertEqual(validate_uud_ingestion_artifacts(ROOT), result)
 
     def _compact_text(self, text: str) -> str:

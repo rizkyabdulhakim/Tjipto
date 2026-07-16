@@ -1079,7 +1079,12 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         if not row.get("bbox_refs"):
             errors.append(f"article_relation_missing_bbox:{row['relation_id']}")
         refs_resolve = bool(row.get("bbox_refs")) and all(bbox_id in bbox_by_id for bbox_id in row.get("bbox_refs") or ())
-        exact_support = evidence_row.get("bbox_precision") == "exact" and evidence_row.get("viewer_highlightable") is True and refs_resolve
+        exact_support = (
+            evidence_row.get("bbox_precision") == "exact"
+            and evidence_row.get("viewer_highlightable") is True
+            and (evidence_row.get("authority_kind") != "instrument_provenance" or row.get("target_citation") == "Pasal 16")
+            and refs_resolve
+        )
         support_class = row.get("support_class")
         if support_class not in {"exact_article_relation", "trace_article_relation"}:
             errors.append(f"article_relation_invalid_support_class:{row['relation_id']}:{support_class}")
@@ -1401,7 +1406,10 @@ def _promotion_decision_audit_health(
     expected = {
         ("evidence", row["evidence_id"])
         for row in evidence
-        if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True
+        if row.get("bbox_precision") != "exact"
+        or row.get("viewer_highlightable") is not True
+        or row.get("failure_reason") == "instrument_trace_only_not_public_citation"
+        or row.get("promotion_candidate") is True
     }
     expected |= {
         ("metadata_grounding", row["metadata_grounding_id"])
@@ -1409,7 +1417,9 @@ def _promotion_decision_audit_health(
         if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True
     }
     expected |= {
-        ("bbox", row["bbox_id"]) for row in bbox_rows if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True
+        ("bbox", row["bbox_id"])
+        for row in bbox_rows
+        if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True or row.get("promotion_candidate") is True
     }
     actual = {(row.get("record_type"), row.get("record_id")) for row in promotion_decisions}
     duplicate_decision_ids = len(promotion_decisions) - len({row.get("decision_id") for row in promotion_decisions})
@@ -2646,6 +2656,7 @@ def _legal_unit_chunk_span_closure_health(
         if unit.get("unit_type") in {"bab_record", "aturan_peralihan_record", "aturan_tambahan_record"}
         and unit.get("runtime_loadable") is True
         and not substantive_structural_unit(unit)
+        and not unit.get("evidence_ids")
         and not any(unit["legal_unit_id"] in (candidate.get("parent_legal_unit_ids") or ()) for candidate in legal_units)
     ]
     counts = {

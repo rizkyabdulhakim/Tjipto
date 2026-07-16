@@ -38,13 +38,12 @@ class CleanHandoffContractTest(unittest.TestCase):
             self.skipTest("git archive production check requires a git checkout")
         with tempfile.TemporaryDirectory() as tmp:
             local_root = Path(tmp) / "work"
-            subprocess.run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(local_root)], check=True)  # nosec B603 B607
             (local_root / "apps/web/node_modules/pkg").mkdir(parents=True)
             (local_root / "apps/web/dist").mkdir(parents=True)
             archive = Path(tmp) / "tjipto-clean.zip"
             subprocess.run(  # nosec B603 B607
                 ["git", "archive", "--format=zip", "--worktree-attributes", "HEAD", "-o", str(archive)],
-                cwd=local_root,
+                cwd=ROOT,
                 check=True,
             )
             self.assertEqual(forbidden_entries(archive), [])

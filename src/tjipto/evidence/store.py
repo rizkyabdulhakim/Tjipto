@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tjipto.contracts.evidence import source_lineage_reason
+
 
 class EvidenceStore:
     def __init__(self, config):
@@ -97,6 +99,14 @@ class EvidenceStore:
 
     def get(self, evidence_id: str) -> dict | None:
         return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)
+
+    def lineage_error(self, evidence: dict) -> str | None:
+        return source_lineage_reason(
+            evidence=evidence,
+            source_documents_by_id={row["source_document_id"]: row for row in self.source_documents},
+            spans_by_id={row["text_span_id"]: row for row in self.page_text_spans},
+            bboxes_by_id=self._bbox_rows_by_id(),
+        )
 
     def bboxes_for(self, evidence_id: str) -> list[dict]:
         if self._bbox_by_evidence is None:

@@ -14,6 +14,7 @@ from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters, source_role_for_query
 from tjipto.retrieval.router import route_retrieval
+from tjipto.retrieval.structured import has_structured_target
 from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
@@ -1270,6 +1271,8 @@ def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str
     if decision.target_status == "not_instrument":
         return None
     if decision.target_status == "instrument_unresolved":
+        if has_structured_target(query, strategy=getattr(config, "structured_strategy", "generic"), config=config):
+            return None
         return None, "instrument_unresolved", decision.reason
     row = next(
         (

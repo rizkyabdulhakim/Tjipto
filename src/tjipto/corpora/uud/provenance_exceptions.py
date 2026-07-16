@@ -11,12 +11,17 @@ NONCANONICAL_SOURCE_TYPO_REF = "source_typo_reference::uud_source_typo_reference
 SEGMENTATION_BOUNDARY_LABELS = {
     "Perubahan Pertama Decision",
     "Perubahan Pertama Effective",
-    "Perubahan Ketiga Scope",
     "Perubahan Ketiga Decision",
     "Perubahan Ketiga Effective",
-    "Perubahan Keempat Scope",
     "Perubahan Keempat Decision",
     "Perubahan Keempat Effective",
+}
+RECOVERABLE_GROUNDING_LABELS = {
+    "Perubahan Pertama Decision",
+    "Perubahan Ketiga Scope",
+    "Perubahan Ketiga Decision",
+    "Perubahan Keempat Scope",
+    "Perubahan Keempat Decision",
 }
 PROVENANCE_REVIEW_CATEGORIES = (
     ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
