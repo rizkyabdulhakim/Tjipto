@@ -267,6 +267,65 @@ class GraphContractTest(unittest.TestCase):
             errors = validate_uud_artifact_dir(target)
             self.assertTrue(any(error.startswith("article_relation_unknown_target:") for error in errors))
 
+    def test_renames_adversarial_mutations_fail_semantic_validation(self) -> None:
+        mutations = (
+            ("old_range", lambda row, edge: row.__setitem__("old_reference_range", [0, 1]), "article_relation_old_range_text_mismatch:"),
+            (
+                "valid_evidence",
+                lambda row, edge: row.__setitem__(
+                    "evidence_id", "uud_instrument_final_citation_evidence::amendment_1_historical::00002::perubahan_pertama_scope"
+                ),
+                "article_relation_bbox_source_mismatch:",
+            ),
+            ("source_sha", lambda row, edge: row.__setitem__("source_pdf_sha256", "0" * 64), "article_relation_source_sha_mismatch:"),
+            ("bbox_precision", lambda row, edge: row.__setitem__("bbox_precision", "coarse"), "article_relation_bbox_precision_mismatch:"),
+            (
+                "target_precision",
+                lambda row, edge: row.__setitem__("target_precision", "shared_span"),
+                "article_relation_exact_precision_mismatch:",
+            ),
+            (
+                "source_endpoint",
+                lambda row, edge: row.__setitem__("source_legal_unit_id", "uud_legal_unit_00012"),
+                "article_relation_source_label_mismatch:",
+            ),
+            (
+                "target_role",
+                lambda row, edge: row.__setitem__("target_source_role", "amendment_2_historical"),
+                "article_relation_target_role_mismatch:",
+            ),
+            (
+                "graph_endpoint",
+                lambda row, edge: edge.__setitem__("target_legal_unit_id", "legal_unit::uud_legal_unit_00012"),
+                "graph_relation_target_mismatch:",
+            ),
+        )
+        for name, mutate, expected in mutations:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temp_dir:
+                target = Path(temp_dir) / "uud"
+                shutil.copytree(ROOT / "data/final/uud", target)
+                relation_path = target / "article_amendment_relations.jsonl"
+                relations = [json.loads(line) for line in relation_path.read_text(encoding="utf-8").splitlines() if line]
+                row = next(item for item in relations if item["relation_type"] == "RENAMES" and item["old_reference"] == "Pasal 25E")
+                edge_path = target / "graph_edges.jsonl"
+                edges = [json.loads(line) for line in edge_path.read_text(encoding="utf-8").splitlines() if line]
+                edge = next(item for item in edges if item.get("article_relation_ref") == row["relation_id"])
+                mutate(row, edge)
+                relation_path.write_text(
+                    "\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in relations) + "\n", encoding="utf-8"
+                )
+                edge_path.write_text(
+                    "\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in edges) + "\n", encoding="utf-8"
+                )
+                manifest_path = target / "manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                for filename in ("article_amendment_relations.jsonl", "graph_edges.jsonl"):
+                    payload = (target / filename).read_bytes()
+                    manifest["files"][filename].update({"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()})
+                manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+                errors = validate_uud_artifact_dir(target)
+                self.assertTrue(any(error.startswith(expected) for error in errors), (name, errors[:10]))
+
     def test_metadata_graph_edges_exclude_source_role_level_amends(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/metadata_graph_edges.jsonl")
         self.assertEqual(len(edges), 457)
@@ -323,6 +382,10 @@ class GraphContractTest(unittest.TestCase):
         )
         self.assertTrue(all(row["target_precision"] == "shared_span" for row in renumber_rows if row["target_citation"] == "Pasal 3"))
         self.assertTrue(all(not row["target_bbox_refs"] for row in renumber_rows if row["target_citation"] == "Pasal 3"))
+        for row in renumber_rows:
+            if row["target_citation"] == "Pasal 3":
+                self.assertIn("Pasal 3", row["quoted_text"][row["old_reference_range"][0] : row["old_reference_range"][1]])
+                self.assertIn(row["old_reference_range_kind"], {"literal", "contextual"})
         self.assertEqual(
             {row["target_precision"] for row in renumber_rows if row["target_citation"] == "Pasal 25A"},
             {"target_local"},

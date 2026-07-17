@@ -68,6 +68,9 @@ class CorpusBoundaryContractTest(unittest.TestCase):
             ],
         )
         self.assertTrue(all(text[row["old_range"][0] : row["old_range"][1]] for row in rows))
+        self.assertEqual(text[rows[1]["old_range"][0] : rows[1]["old_range"][1]], "Pasal 3 ayat (3) dan ayat (4)")
+        self.assertEqual(rows[1]["old_range_kind"], "contextual")
+        self.assertEqual(rows[2]["new_range_kind"], "literal")
 
     def test_generic_layers_use_parser_dispatch_not_uud_parser(self) -> None:
         for rel_path in (

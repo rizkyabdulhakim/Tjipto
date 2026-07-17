@@ -47,8 +47,8 @@
       "format": "jsonl",
       "artifact_schema": 4,
       "primary_id": "relation_id",
-      "bytes": 326209,
-      "sha256": "8bfb5892a61200391acc93eda4919c416ac428e84e6a44a8e561c36a62d66e6a"
+      "bytes": 336298,
+      "sha256": "8046c5f58663ed9a27e3b0996dee4546abeddc4069900a222c84f6cb4de43c1a"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -207,8 +207,8 @@
         "authority_kind",
         "citation_final"
       ],
-      "bytes": 6585680,
-      "sha256": "12483f936f351a2cc5d0d1ba0705697564f3e1c372e1b876dd381125b7cccb56"
+      "bytes": 6586016,
+      "sha256": "c5a9eac672727f937b5da25d1b466cb76779c944e14783dc75607e221beb17a7"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",

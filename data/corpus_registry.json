@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "db98d739f9099db46ef20b6b0302587d5ca3eaaeed654e7643247591f4541f03",
+    "manifest_sha256": "a48f92dcfa4922866d300eaa0a4c13a8069435291f5965d01ebf1c7f7cee69c3",
     "runtime_required_artifacts": [
       "evidence_registry",
       "bbox_registry",

@@ -619,6 +619,7 @@ class RuntimeContractTest(unittest.TestCase):
             [(row["source_reference"], row["target_reference"]) for row in exact["article_amendment_relations"]],
             [("Pasal 25E", "Pasal 25A")],
         )
+        self.assertEqual(exact["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00428")
         self.assertEqual(len(exact["citations"]), 1)
         self.assertIn("dukungan sumber exact", exact["answer"].casefold())
 
@@ -626,12 +627,11 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(paragraph["route"], "document_relation")
         self.assertEqual(paragraph["status"], "limited_answer")
         self.assertEqual(
-            {(row["source_reference"], row["target_reference"]) for row in paragraph["article_amendment_relations"]},
-            {
-                ("Pasal 3 ayat (3)", "Pasal 3 ayat (2)"),
-                ("Pasal 3 ayat (4)", "Pasal 3 ayat (3)"),
-            },
+            [(row["source_reference"], row["target_reference"]) for row in paragraph["article_amendment_relations"]],
+            [("Pasal 3 ayat (3)", "Pasal 3 ayat (2)")],
         )
+        self.assertEqual(paragraph["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00483")
+        self.assertEqual(paragraph["article_amendment_relations"][0]["source_reference_range_kind"], "literal")
         self.assertTrue(all(not row["viewer_highlightable"] for row in paragraph["article_amendment_relations"]))
         self.assertNotIn("didukung bukti exact:", paragraph["answer"].casefold())
 
@@ -641,6 +641,7 @@ class RuntimeContractTest(unittest.TestCase):
 
         public = handle_request("uud", "ask", {"query": "Pasal 25E menjadi Pasal 25A"}, service=self.service)
         self.assertEqual(public["article_amendment_relations"][0]["target_reference"], "Pasal 25A")
+        self.assertEqual(public["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00428")
 
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
         for case in _relation_cases():

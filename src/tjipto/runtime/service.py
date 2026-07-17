@@ -1107,6 +1107,11 @@ def _article_relation_target_citation(corpus_id: str | None, query: str, *, pref
     if prefer_last:
         references = parse_legal_references(corpus_id, query)
         if references:
+            matches = list(re.finditer(r"\bpasal\s*([0-9]+[A-Za-z]?)(?:\s*ayat\s*\(\s*(\d+)\s*\))?", query or "", re.IGNORECASE))
+            if matches:
+                match = matches[-1]
+                reference = f"Pasal {match.group(1)}"
+                return f"{reference} ayat ({match.group(2)})" if match.group(2) else reference
             return str(references[-1]["reference"])
     ref = parse_legal_reference(corpus_id, query)
     pasal = ref.get("pasal")
@@ -1118,7 +1123,7 @@ def _article_relation_matches_target(store, row: dict, target_citation: str | No
     if not target_citation:
         return True
     target = _normalize_article_target(target_citation)
-    citation = _normalize_article_target(row.get("target_citation"))
+    citation = _normalize_article_target(row.get("target_reference") or row.get("new_reference") or row.get("target_citation"))
     if target == citation:
         return True
     unit: dict = next((unit for unit in store.legal_units if unit.get("legal_unit_id") == row.get("target_legal_unit_id")), {})
@@ -1193,14 +1198,18 @@ def _public_article_relation(row: dict) -> dict:
         "relation_id": row.get("relation_id"),
         "relation_type": row.get("relation_type"),
         "source_role": row.get("source_role"),
+        "source_legal_unit_id": row.get("source_legal_unit_id"),
+        "source_legal_unit_role": row.get("source_legal_unit_role"),
         "source_label": row.get("source_label"),
         "source_reference": row.get("old_reference"),
         "source_reference_range": row.get("old_reference_range"),
+        "source_reference_range_kind": row.get("old_reference_range_kind"),
         "target_legal_unit_id": row.get("target_legal_unit_id"),
         "target_label": row.get("target_label") or row.get("target_citation"),
         "target_citation": row.get("target_citation"),
         "target_reference": row.get("new_reference"),
         "target_reference_range": row.get("new_reference_range"),
+        "target_reference_range_kind": row.get("new_reference_range_kind"),
         "target_source_role": row.get("target_source_role"),
         "evidence_id": row.get("evidence_id"),
         "bbox_refs": tuple(row.get("bbox_refs") or ()),

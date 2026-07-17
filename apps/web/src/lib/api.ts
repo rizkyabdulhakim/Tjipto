@@ -62,14 +62,17 @@ export interface ArticleAmendmentRelationPayload {
   relation_id?: string;
   relation_type?: string;
   source_legal_unit_id?: string;
+  source_legal_unit_role?: string;
   source_label?: string;
   source_reference?: string;
   source_reference_range?: [number, number];
+  source_reference_range_kind?: "literal" | "contextual";
   source_role?: string;
   target_legal_unit_id?: string;
   target_label?: string;
   target_reference?: string;
   target_reference_range?: [number, number];
+  target_reference_range_kind?: "literal" | "contextual";
   target_source_role?: string;
   evidence_id?: string;
   text_span_ids?: string[];

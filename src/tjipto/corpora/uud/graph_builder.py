@@ -5,6 +5,7 @@ import re
 
 from tjipto.corpora.uud.specs import UUD_INSERTED_BAB_PREDECESSORS, UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.parser_dispatch import parse_legal_references
+from tjipto.corpora.uud.policy.relations import is_deletion_provision, is_renumbering_provision, is_scope_provision
 from tjipto.corpora.uud.relation_builder import parse_renumbering_mappings
 
 
@@ -222,7 +223,7 @@ def build_graph_artifacts(
             break
 
     for row in evidence:
-        if row.get("citation", "").endswith(" Scope"):
+        if is_scope_provision(row):
             source_node = unit_node_ids.get(row["legal_unit_id"])
             for label in _scope_target_labels(row.get("quoted_text")):
                 target = _resolve_legal_unit_by_label(
@@ -248,7 +249,7 @@ def build_graph_artifacts(
                         confidence_policy="explicit_scope_article_reference",
                     )
 
-    delete_clause = next((row for row in evidence if row.get("citation") == "Perubahan Keempat Clause (d)"), None)
+    delete_clause = next((row for row in evidence if is_deletion_provision(row)), None)
     if delete_clause:
         source_node = unit_node_ids[delete_clause["legal_unit_id"]]
         for label in ("BAB IV", "Pasal 16"):
@@ -271,7 +272,7 @@ def build_graph_artifacts(
                     confidence_policy="explicit_delete_clause_reference",
                 )
 
-    renumber_clause = next((row for row in evidence if row.get("citation") == "Perubahan Keempat Clause (c)"), None)
+    renumber_clause = next((row for row in evidence if is_renumbering_provision(row)), None)
     if renumber_clause:
         source_node = unit_node_ids.get(renumber_clause["legal_unit_id"])
         for mapping in parse_renumbering_mappings(str(renumber_clause.get("quoted_text") or "")):
@@ -297,6 +298,7 @@ def build_graph_artifacts(
                     source_legal_unit_id=source_unit["legal_unit_id"],
                     target_legal_unit_id=target_unit["legal_unit_id"],
                     target_citation=target_unit.get("unit_label"),
+                    source_legal_unit_role=source_unit.get("source_role"),
                     reference_mapping=mapping,
                     article_relation_ref=_article_relation_ref(
                         "RENAMES",

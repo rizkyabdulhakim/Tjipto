@@ -11,6 +11,24 @@ ENDPOINT_EDGES = {
 INSTRUMENT_EDGES = {"MODIFIES", "DELETES", "RENAMES", "HAS_SIGNATORY", "HAS_DECISION_SESSION", "HAS_EFFECTIVE_RULE"}
 
 
+def is_renumbering_provision(row: dict) -> bool:
+    """Identify the reviewed UUD provision by structure, not display citation."""
+    hierarchy = {str(value).strip().casefold() for value in row.get("hierarchy") or ()}
+    text = str(row.get("quoted_text") or "").casefold()
+    return str(row.get("source_role") or "").startswith("amendment_") and "(c)" in hierarchy and "menjadi" in text
+
+
+def is_scope_provision(row: dict) -> bool:
+    hierarchy = tuple(str(value).strip().casefold() for value in row.get("hierarchy") or ())
+    return bool(hierarchy) and hierarchy[-1].endswith(" scope")
+
+
+def is_deletion_provision(row: dict) -> bool:
+    hierarchy = {str(value).strip().casefold() for value in row.get("hierarchy") or ()}
+    text = str(row.get("quoted_text") or "").casefold()
+    return "(d)" in hierarchy and any(term in text for term in ("dihapus", "menghapus", "penghapusan"))
+
+
 def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidence: list[dict], article_relations: list[dict]) -> None:
     nodes_by_id = {row["node_id"]: row for row in nodes}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}

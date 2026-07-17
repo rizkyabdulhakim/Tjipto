@@ -34,6 +34,7 @@ from tjipto.corpora.uud.provenance_exceptions import (
 from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit, substantive_structural_unit
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
+from tjipto.corpora.uud.policy.relations import is_deletion_provision, is_renumbering_provision, is_scope_provision
 from tjipto.core.manifest import read_json, read_jsonl
 
 
@@ -1013,6 +1014,27 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                     "new_reference"
                 ):
                     errors.append(f"graph_renames_mapping_mismatch:{row['edge_id']}")
+                if relation.get("old_reference_range") != mapping.get("old_range") or relation.get("new_reference_range") != mapping.get(
+                    "new_range"
+                ):
+                    errors.append(f"graph_renames_range_mismatch:{row['edge_id']}")
+                if relation.get("old_reference_range_kind") != mapping.get("old_range_kind") or relation.get(
+                    "new_reference_range_kind"
+                ) != mapping.get("new_range_kind"):
+                    errors.append(f"graph_renames_range_kind_mismatch:{row['edge_id']}")
+                if relation.get("source_legal_unit_role") != mapping.get("source_role"):
+                    errors.append(f"graph_renames_source_role_mismatch:{row['edge_id']}")
+        if edge_type in {"MODIFIES", "DELETES", "RENAMES"}:
+            relation = article_relations_by_id.get(row.get("article_relation_ref"))
+            if relation is not None:
+                if list(row.get("supporting_evidence_ids") or ()) != [relation.get("evidence_id")]:
+                    errors.append(f"graph_relation_evidence_mismatch:{row['edge_id']}")
+                if row.get("source_legal_unit_id") != relation.get("source_legal_unit_id"):
+                    errors.append(f"graph_relation_source_mismatch:{row['edge_id']}")
+                if row.get("target_legal_unit_id") != relation.get("target_legal_unit_id"):
+                    errors.append(f"graph_relation_target_mismatch:{row['edge_id']}")
+                if row.get("target_citation") != relation.get("target_citation"):
+                    errors.append(f"graph_relation_target_label_mismatch:{row['edge_id']}")
         provenance_ref = row.get("provenance_ref")
         provenance_kind = row.get("provenance_ref_kind")
         if provenance_ref or provenance_kind:
@@ -1091,10 +1113,26 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             continue
         source_unit = units_by_id.get(row.get("source_legal_unit_id"))
         target_unit = units_by_id.get(row.get("target_legal_unit_id"))
+        if row.get("source_document_id") != evidence_row.get("source_document_id"):
+            errors.append(f"article_relation_source_document_mismatch:{row['relation_id']}")
+        if row.get("source_role") != evidence_row.get("source_role"):
+            errors.append(f"article_relation_source_role_mismatch:{row['relation_id']}")
+        if row.get("source_pdf_sha256") != evidence_row.get("source_sha256"):
+            errors.append(f"article_relation_source_sha_mismatch:{row['relation_id']}")
+        if row.get("bbox_precision") != evidence_row.get("bbox_precision"):
+            errors.append(f"article_relation_bbox_precision_mismatch:{row['relation_id']}")
+        if row.get("page_number") not in set(evidence_row.get("page_numbers") or ()):
+            errors.append(f"article_relation_page_mismatch:{row['relation_id']}")
+        if not set(row.get("text_span_ids") or ()) <= set(evidence_row.get("text_span_ids") or ()):
+            errors.append(f"article_relation_span_support_mismatch:{row['relation_id']}")
+        if not set(row.get("bbox_refs") or ()) <= set(evidence_row.get("bbox_refs") or ()):
+            errors.append(f"article_relation_bbox_support_mismatch:{row['relation_id']}")
         if source_unit is None:
             errors.append(f"article_relation_unknown_source:{row['relation_id']}:{row.get('source_legal_unit_id')}")
         elif row.get("source_label") != source_unit.get("unit_label"):
             errors.append(f"article_relation_source_label_mismatch:{row['relation_id']}")
+        elif row.get("source_legal_unit_role") not in {None, source_unit.get("source_role")}:
+            errors.append(f"article_relation_source_role_unit_mismatch:{row['relation_id']}")
         if row.get("target_legal_unit_id") not in units_by_id:
             errors.append(f"article_relation_unknown_target:{row['relation_id']}:{row.get('target_legal_unit_id')}")
         elif target_unit is not None and row.get("target_label") not in {None, target_unit.get("unit_label")}:
@@ -1110,11 +1148,19 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 str(row.get("target_citation") or "").casefold()
             ):
                 errors.append(f"article_relation_target_mapping_mismatch:{row['relation_id']}")
+            if source_unit is not None and not _reference_belongs_to_unit(row.get("old_reference"), source_unit):
+                errors.append(f"article_relation_source_mapping_mismatch:{row['relation_id']}")
+            if target_unit is not None and not _reference_belongs_to_unit(row.get("new_reference"), target_unit):
+                errors.append(f"article_relation_target_mapping_mismatch:{row['relation_id']}")
+            mapping_support = _validate_mapping_support(row, evidence_row)
+            errors.extend(f"{code}:{row['relation_id']}" for code in mapping_support)
         if not str(row.get("target_citation") or "").startswith(("Pasal ", "Ayat ")):
             errors.append(f"article_relation_non_pasal_ayat_target:{row['relation_id']}:{row.get('target_citation')}")
         if row.get("support_class") == "trace_article_relation":
             if row.get("quoted_text") != evidence_row.get("quoted_text"):
                 errors.append(f"article_relation_quote_mismatch:{row['relation_id']}")
+        elif row.get("relation_type") == "RENAMES" and row.get("quoted_text") != evidence_row.get("quoted_text"):
+            errors.append(f"article_relation_mapping_quote_mismatch:{row['relation_id']}")
         elif normalize_source_text(row.get("target_citation")) not in normalize_source_text(row.get("quoted_text")):
             errors.append(f"article_relation_target_quote_mismatch:{row['relation_id']}")
         for bbox_id in row.get("bbox_refs") or ():
@@ -1123,6 +1169,16 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         if not row.get("bbox_refs"):
             errors.append(f"article_relation_missing_bbox:{row['relation_id']}")
         target_bbox_refs = tuple(row.get("target_bbox_refs") or ())
+        if not set(target_bbox_refs) <= set(row.get("bbox_refs") or ()):
+            errors.append(f"article_relation_target_bbox_support_mismatch:{row['relation_id']}")
+        for bbox_id in (*(row.get("bbox_refs") or ()), *target_bbox_refs):
+            bbox = bbox_by_id.get(bbox_id)
+            if bbox is None:
+                continue
+            if bbox.get("source_document_id") != evidence_row.get("source_document_id"):
+                errors.append(f"article_relation_bbox_source_mismatch:{row['relation_id']}:{bbox_id}")
+            if bbox.get("page_number") not in set(evidence_row.get("page_numbers") or ()):
+                errors.append(f"article_relation_bbox_page_mismatch:{row['relation_id']}:{bbox_id}")
         target_spans = [span_by_id.get(span_id) for span_id in row.get("target_text_span_ids") or ()]
         target_phrase = normalize_source_text(row.get("new_reference") or row.get("target_citation"))
         target_text = normalize_source_text(" ".join(str(span.get("text") or "") for span in target_spans if span))
@@ -1145,6 +1201,14 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             and target_phrase in local_bbox_text
             and isolated_bbox
         )
+        if (
+            row.get("relation_type") == "RENAMES"
+            and row.get("support_class") == "exact_article_relation"
+            and set(row.get("bbox_refs") or ()) <= set(target_bbox_refs)
+        ):
+            errors.append(f"article_relation_target_only_bbox_support:{row['relation_id']}")
+        if row.get("source_support_exact") is not _validate_source_support(evidence_row, row):
+            errors.append(f"article_relation_source_support_mismatch:{row['relation_id']}")
         support_class = row.get("support_class")
         if support_class not in {"exact_article_relation", "trace_article_relation"}:
             errors.append(f"article_relation_invalid_support_class:{row['relation_id']}:{support_class}")
@@ -1155,6 +1219,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"article_relation_exact_wrong_grounding:{row['relation_id']}")
             if row.get("viewer_highlightable") is not True or row.get("citation_available") is not True:
                 errors.append(f"article_relation_exact_not_public_resolvable:{row['relation_id']}")
+            if row.get("target_precision") != "target_local":
+                errors.append(f"article_relation_exact_precision_mismatch:{row['relation_id']}")
             if not row.get("target_text_span_ids"):
                 errors.append(f"article_relation_missing_target_span:{row['relation_id']}")
         if support_class == "trace_article_relation":
@@ -1177,30 +1243,112 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     return tuple(sorted(set(errors)))
 
 
+def _reference_belongs_to_unit(reference: object, unit: dict) -> bool:
+    value = normalize_source_text(reference)
+    label = normalize_source_text(unit.get("unit_label"))
+    return bool(value and label and (value == label or value.startswith(f"{label} ayat ")))
+
+
+def _validate_mapping_support(row: dict, evidence: dict) -> tuple[str, ...]:
+    quoted = str(evidence.get("quoted_text") or "")
+    old_range = _range_value(row.get("old_reference_range"), len(quoted))
+    new_range = _range_value(row.get("new_reference_range"), len(quoted))
+    errors: list[str] = []
+    if old_range is None or new_range is None:
+        return ("article_relation_invalid_reference_range",)
+    if old_range[1] > new_range[0]:
+        errors.append("article_relation_reference_range_order")
+    if not _validator_range_matches_reference(
+        quoted[old_range[0] : old_range[1]], row.get("old_reference"), row.get("old_reference_range_kind")
+    ):
+        errors.append("article_relation_old_range_text_mismatch")
+    if not _validator_range_matches_reference(
+        quoted[new_range[0] : new_range[1]], row.get("new_reference"), row.get("new_reference_range_kind")
+    ):
+        errors.append("article_relation_new_range_text_mismatch")
+    if "menjadi" not in normalize_source_text(quoted[old_range[1] : new_range[0]]):
+        errors.append("article_relation_missing_transition_support")
+    if not evidence.get("text_span_ids") or not evidence.get("bbox_refs"):
+        errors.append("article_relation_missing_support_segment")
+    return tuple(errors)
+
+
+def _validate_source_support(evidence: dict, row: dict) -> bool:
+    if row.get("relation_type") != "RENAMES":
+        return evidence.get("bbox_precision") == "exact" and evidence.get("viewer_highlightable") is True
+    return not bool(_validate_mapping_support(row, evidence))
+
+
+def _range_value(value: object, length: int) -> tuple[int, int] | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    try:
+        start, end = int(value[0]), int(value[1])
+    except (TypeError, ValueError):
+        return None
+    return (start, end) if 0 <= start < end <= length else None
+
+
+def _validator_range_matches_reference(text: str, reference: object, kind: object) -> bool:
+    expected = normalize_source_text(reference)
+    actual = normalize_source_text(text)
+    if kind != "contextual":
+        return actual == expected
+    parsed = parse_legal_references("uud", text)
+    if not parsed or not expected.startswith(normalize_source_text(parsed[0]["reference"])):
+        return False
+    ayat = re.search(r"\bayat\s*\(\s*(\d+)\s*\)", expected, re.IGNORECASE)
+    return bool(ayat and any(match.group(1) == ayat.group(1) for match in re.finditer(r"\bayat\s*\(\s*(\d+)\s*\)", text, re.IGNORECASE)))
+
+
+def _independent_renumbering_mappings(text: str) -> list[dict[str, str]]:
+    """Build the validation oracle from raw source references, independently."""
+    rows: list[dict[str, str]] = []
+    for transition in re.finditer(r"\bmenjadi\b", text, re.IGNORECASE):
+        left_start = max(text.rfind(";", 0, transition.start()), text.rfind(".", 0, transition.start())) + 1
+        right_end = text.find(";", transition.end())
+        right_end = len(text) if right_end < 0 else right_end
+        old_refs = _independent_reference_groups(text[left_start : transition.start()])
+        new_refs = _independent_reference_groups(text[transition.end() : right_end])
+        if old_refs and len(old_refs) == len(new_refs):
+            rows.extend({"old_reference": old, "new_reference": new} for old, new in zip(old_refs, new_refs))
+    return rows
+
+
+def _independent_reference_groups(segment: str) -> list[str]:
+    references = parse_legal_references("uud", segment)
+    groups: list[str] = []
+    for index, reference in enumerate(references):
+        start = int(reference["start"])
+        end = int(references[index + 1]["start"]) if index + 1 < len(references) else len(segment)
+        ayats = re.findall(r"\bayat\s*\(\s*(\d+)\s*\)", segment[start:end], re.IGNORECASE)
+        if ayats:
+            groups.extend(f"{reference['reference']} ayat ({number})" for number in ayats)
+        else:
+            groups.append(str(reference["reference"]))
+    return groups
+
+
 def _source_relation_contract_errors(
     *, evidence: list[dict], legal_units: list[dict], article_amendment_relations: list[dict]
 ) -> tuple[str, ...]:
     units = {(row.get("source_document_id"), row.get("unit_label")) for row in legal_units}
     expected: set[tuple[str, str, str, str]] = set()
     for row in evidence:
-        citation = str(row.get("citation") or "")
-        if citation.endswith(" Scope"):
+        if is_scope_provision(row):
             role = str(row.get("source_role") or "")
             for reference in parse_legal_references("uud", str(row.get("quoted_text") or "")):
                 label = str(reference["reference"])
                 if (row.get("source_document_id"), label) in units:
                     expected.add((role, "MODIFIES", "", label))
-        elif citation == "Perubahan Keempat Clause (c)":
-            text = str(row.get("quoted_text") or "")
-            from tjipto.corpora.uud.relation_builder import parse_renumbering_mappings
-
-            for mapping in parse_renumbering_mappings(text):
+        elif is_renumbering_provision(row):
+            for mapping in _independent_renumbering_mappings(str(row.get("quoted_text") or "")):
                 target = str(mapping["new_reference"]).split(" ayat", 1)[0]
                 if ("uud::current_consolidated", target) in units:
                     expected.add(
                         (str(row.get("source_role") or ""), "RENAMES", str(mapping["old_reference"]), str(mapping["new_reference"]))
                     )
-        elif citation == "Perubahan Keempat Clause (d)":
+        elif is_deletion_provision(row):
             for reference in parse_legal_references("uud", str(row.get("quoted_text") or "")):
                 label = str(reference["reference"])
                 if (row.get("source_document_id"), label) in units:

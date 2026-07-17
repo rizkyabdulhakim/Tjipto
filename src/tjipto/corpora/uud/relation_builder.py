@@ -32,6 +32,8 @@ def parse_renumbering_mappings(text: str) -> list[dict]:
                     "new_reference": new["reference"],
                     "old_range": (old["start"], old["end"]),
                     "new_range": (new["start"], new["end"]),
+                    "old_range_kind": old["range_kind"],
+                    "new_range_kind": new["range_kind"],
                     "source_role": source_role,
                 }
             )
@@ -52,16 +54,18 @@ def _reference_units(text: str, start: int, end: int) -> list[dict]:
                     "reference": str(reference["reference"]),
                     "start": start + local_start,
                     "end": start + int(reference["end"]),
+                    "range_kind": "literal",
                 }
             )
             continue
-        for ayat in ayats:
+        for ayat_index, ayat in enumerate(ayats):
             prefix = str(reference["reference"])
             rows.append(
                 {
                     "reference": f"{prefix} ayat ({ayat.group(1)})",
-                    "start": start + local_start if ayat.start() == 0 else start + local_start + ayat.start(),
+                    "start": start + local_start,
                     "end": start + local_start + ayat.end(),
+                    "range_kind": "literal" if ayat_index == 0 else "contextual",
                 }
             )
     return rows
@@ -120,16 +124,28 @@ def build_article_amendment_relations(
         target_phrase = str(mapping.get("new_reference") or target_citation or "")
         target_span_ids = _target_span_ids(evidence_row, target_phrase, spans_by_id)
         bbox_refs = _target_bbox_refs(evidence_row, target_phrase, bboxes_by_id)
-        exact_support = (
+        source_support_exact = _complete_mapping_support(evidence_row, mapping)
+        target_support_exact = (
             evidence_row.get("bbox_precision") == "exact"
             and evidence_row.get("viewer_highlightable") is True
             and bool(target_span_ids)
             and bool(bbox_refs)
             and all(ref in bbox_ids for ref in bbox_refs)
         )
+        exact_support = source_support_exact and target_support_exact
         support_class = "exact_article_relation" if exact_support else "trace_article_relation"
-        trace_only_reason = None if exact_support else _trace_reason(evidence_row, target_phrase, target_span_ids, bbox_refs)
-        relation_bbox_refs = bbox_refs if exact_support else list(evidence_row.get("bbox_refs") or ())
+        trace_only_reason = (
+            None
+            if exact_support
+            else _trace_reason(
+                evidence_row, target_phrase, target_span_ids, bbox_refs, mapping=mapping, source_support_exact=source_support_exact
+            )
+        )
+        relation_bbox_refs = (
+            list(evidence_row.get("bbox_refs") or ())
+            if mapping
+            else (bbox_refs if exact_support else list(evidence_row.get("bbox_refs") or ()))
+        )
         relation_span_ids = target_span_ids if exact_support else list(evidence_row.get("text_span_ids") or ())
         target_reference = target_phrase
         old_reference = str(mapping.get("old_reference") or "")
@@ -143,6 +159,7 @@ def build_article_amendment_relations(
                 "target_legal_unit_id": target_unit_id,
                 "target_citation": target_citation,
                 "source_legal_unit_id": source_unit_id,
+                "source_legal_unit_role": source_unit.get("source_role") if source_unit else None,
                 "source_label": source_unit.get("unit_label") if source_unit else None,
                 "target_label": target_citation,
                 "target_source_role": target.get("source_role") if target else None,
@@ -150,22 +167,28 @@ def build_article_amendment_relations(
                 "new_reference": target_reference,
                 "old_reference_range": mapping.get("old_range"),
                 "new_reference_range": mapping.get("new_range"),
+                "old_reference_range_kind": mapping.get("old_range_kind"),
+                "new_reference_range_kind": mapping.get("new_range_kind"),
                 "evidence_id": evidence_row["evidence_id"],
                 "bbox_refs": relation_bbox_refs,
                 "text_span_ids": relation_span_ids,
                 "target_text_span_ids": target_span_ids,
                 "target_bbox_refs": bbox_refs,
                 "page_number": (evidence_row.get("page_numbers") or [None])[0],
-                "quoted_text": _target_quote(target_span_ids, spans_by_id) if exact_support else evidence_row.get("quoted_text"),
+                "quoted_text": evidence_row.get("quoted_text")
+                if mapping
+                else (_target_quote(target_span_ids, spans_by_id) if exact_support else evidence_row.get("quoted_text")),
                 "source_pdf_sha256": evidence_row.get("source_sha256"),
                 "grounding_level": (
                     "exact_source_text"
                     if exact_support
                     else "exact_source_text_shared_target"
-                    if mapping and evidence_row.get("bbox_precision") == "exact" and evidence_row.get("viewer_highlightable") is True
+                    if source_support_exact
+                    else "target_reference_only"
+                    if mapping and target_support_exact
                     else "page_grounded_trace"
                 ),
-                "source_support_exact": evidence_row.get("bbox_precision") == "exact" and evidence_row.get("viewer_highlightable") is True,
+                "source_support_exact": source_support_exact,
                 "target_precision": "target_local" if exact_support else ("shared_span" if mapping else "unresolved"),
                 "support_class": support_class,
                 "bbox_precision": evidence_row.get("bbox_precision"),
@@ -223,7 +246,17 @@ def _target_quote(span_ids: list[str], spans_by_id: dict[str, dict]) -> str:
     return " ".join(str(spans_by_id[span_id].get("text") or "").strip() for span_id in span_ids).strip()
 
 
-def _trace_reason(evidence: dict, citation: str, span_ids: list[str], bbox_refs: list[str]) -> str:
+def _trace_reason(
+    evidence: dict,
+    citation: str,
+    span_ids: list[str],
+    bbox_refs: list[str],
+    *,
+    mapping: dict | None = None,
+    source_support_exact: bool = True,
+) -> str:
+    if mapping and not source_support_exact:
+        return "mapping_support_incomplete"
     if not span_ids:
         if _reference_pattern(citation).search(str(evidence.get("quoted_text") or "")):
             return "shared_source_line_target_not_isolatable"
@@ -231,6 +264,49 @@ def _trace_reason(evidence: dict, citation: str, span_ids: list[str], bbox_refs:
     if not bbox_refs:
         return "missing_relation_local_bbox"
     return evidence.get("failure_reason") or "relation_target_proof_incomplete"
+
+
+def _complete_mapping_support(evidence: dict, mapping: dict) -> bool:
+    if not mapping:
+        return evidence.get("bbox_precision") == "exact" and evidence.get("viewer_highlightable") is True
+    quoted = str(evidence.get("quoted_text") or "")
+    old_range = _valid_range(mapping.get("old_range"), len(quoted))
+    new_range = _valid_range(mapping.get("new_range"), len(quoted))
+    if old_range is None or new_range is None or old_range[1] > new_range[0]:
+        return False
+    if not _range_matches_reference(quoted[old_range[0] : old_range[1]], mapping.get("old_reference"), mapping.get("old_range_kind")):
+        return False
+    if not _range_matches_reference(quoted[new_range[0] : new_range[1]], mapping.get("new_reference"), mapping.get("new_range_kind")):
+        return False
+    if "menjadi" not in _normalize_reference(quoted[old_range[1] : new_range[0]]):
+        return False
+    return bool(evidence.get("text_span_ids")) and bool(evidence.get("bbox_refs"))
+
+
+def _valid_range(value: object, length: int) -> tuple[int, int] | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    try:
+        start, end = int(value[0]), int(value[1])
+    except (TypeError, ValueError):
+        return None
+    return (start, end) if 0 <= start < end <= length else None
+
+
+def _normalize_reference(value: object) -> str:
+    return " ".join(str(value or "").casefold().split())
+
+
+def _range_matches_reference(text: str, reference: object, kind: object) -> bool:
+    expected = _normalize_reference(reference)
+    actual = _normalize_reference(text)
+    if kind != "contextual":
+        return actual == expected
+    parsed = parse_legal_references("uud", text)
+    if not parsed or not expected.startswith(_normalize_reference(parsed[0]["reference"])):
+        return False
+    ayat = re.search(r"\bayat\s*\(\s*(\d+)\s*\)", expected, re.IGNORECASE)
+    return bool(ayat and any(match.group(1) == ayat.group(1) for match in _AYAT_RE.finditer(text)))
 
 
 def _relation_id(relation_type: str, evidence_id: str, target_unit_id: str | None, mapping: dict) -> str:
