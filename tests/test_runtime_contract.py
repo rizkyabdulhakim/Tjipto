@@ -611,6 +611,37 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertFalse(reverse["citations"])
             self.assertFalse(reverse["viewer_refs"])
 
+    def test_renames_route_preserves_paragraph_mapping_and_anomaly_precedence(self) -> None:
+        exact = self.service.ask("uud", "Pasal 25E menjadi Pasal 25A")
+        self.assertEqual(exact["route"], "document_relation")
+        self.assertEqual(exact["status"], "answer_ready")
+        self.assertEqual(
+            [(row["source_reference"], row["target_reference"]) for row in exact["article_amendment_relations"]],
+            [("Pasal 25E", "Pasal 25A")],
+        )
+        self.assertEqual(len(exact["citations"]), 1)
+        self.assertIn("dukungan sumber exact", exact["answer"].casefold())
+
+        paragraph = self.service.ask("uud", "Pasal 3 ayat (3) menjadi Pasal 3 ayat (2)")
+        self.assertEqual(paragraph["route"], "document_relation")
+        self.assertEqual(paragraph["status"], "limited_answer")
+        self.assertEqual(
+            {(row["source_reference"], row["target_reference"]) for row in paragraph["article_amendment_relations"]},
+            {
+                ("Pasal 3 ayat (3)", "Pasal 3 ayat (2)"),
+                ("Pasal 3 ayat (4)", "Pasal 3 ayat (3)"),
+            },
+        )
+        self.assertTrue(all(not row["viewer_highlightable"] for row in paragraph["article_amendment_relations"]))
+        self.assertNotIn("didukung bukti exact:", paragraph["answer"].casefold())
+
+        anomaly = self.service.ask("uud", "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?")
+        self.assertEqual(anomaly["route"], "source_anomaly_explanation")
+        self.assertFalse(anomaly.get("article_amendment_relations"))
+
+        public = handle_request("uud", "ask", {"query": "Pasal 25E menjadi Pasal 25A"}, service=self.service)
+        self.assertEqual(public["article_amendment_relations"][0]["target_reference"], "Pasal 25A")
+
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
         for case in _relation_cases():
             result = self.service.ask("uud", case["query"], limit=5)
@@ -1401,7 +1432,6 @@ class RuntimeContractTest(unittest.TestCase):
 
     @pytest.mark.runtime_policy
     @pytest.mark.slow
-    @unittest.skipUnless(os.environ.get("TJIPTO_RUN_RUNTIME_POLICY") == "1", "set TJIPTO_RUN_RUNTIME_POLICY=1 to run")
     def test_instrument_intent_matrix_blocks_neighbor_fallback(self) -> None:
         intent = CorpusRegistry(ROOT).resolve("uud").setting("intent_config")
         matrix = intent["instrument_intent_matrix"]

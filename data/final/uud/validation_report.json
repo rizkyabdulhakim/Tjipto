@@ -44,7 +44,7 @@
     "retrieval_units": 472,
     "promotion_decisions": 57,
     "graph_nodes": 2821,
-    "graph_edges": 4675,
+    "graph_edges": 4676,
     "page_text_spans": 2193,
     "word_bboxes": 11336
   },
@@ -1925,15 +1925,16 @@
     "status": "complete"
   },
   "article_relation_runtime_policy_health": {
-    "article_relation_total_count": 71,
-    "article_relation_exact_support_count": 5,
-    "article_relation_trace_only_count": 66,
+    "article_relation_total_count": 72,
+    "article_relation_exact_support_count": 3,
+    "article_relation_trace_only_count": 69,
     "article_relation_trace_missing_reason_count": 0,
     "article_relation_trace_reason_counts": {
-      "shared_source_line_target_not_isolatable": 66
+      "shared_source_line_target_not_isolatable": 66,
+      "unresolved_target_mention": 3
     },
-    "article_relation_promoted_from_scope_count": 2,
-    "article_relation_unpromoted_trace_count": 66,
+    "article_relation_promoted_from_scope_count": 1,
+    "article_relation_unpromoted_trace_count": 69,
     "article_relation_invalid_bbox_refs": 0,
     "article_relation_invalid_coordinates": 0,
     "article_relation_partial_answer_risk_count": 1,
@@ -1963,7 +1964,7 @@
       "PAGE_GROUNDED_AT": 477,
       "PART_OF": 528,
       "PRECEDES": 7,
-      "RENAMES": 2,
+      "RENAMES": 3,
       "USES_SOURCE_PDF": 472
     },
     "actual_promoted_legal_edge_type_counts": {
@@ -1978,7 +1979,7 @@
       "MODIFIES": 68,
       "PART_OF": 528,
       "PRECEDES": 7,
-      "RENAMES": 2
+      "RENAMES": 3
     },
     "runtime_loadable_legal_edge_type_counts": {
       "CONTAINS": 435,
@@ -1987,7 +1988,7 @@
       "HAS_SIGNATORY": 4,
       "MODIFIES": 68,
       "PART_OF": 435,
-      "RENAMES": 2
+      "RENAMES": 3
     },
     "schema_edge_types": [
       "ADDS",
@@ -2013,16 +2014,16 @@
       "AMENDS",
       "SUPPLEMENTS"
     ],
-    "runtime_loadable_legal_edges": 949
+    "runtime_loadable_legal_edges": 950
   },
   "legal_graph_authority_health": {
     "status": "complete",
-    "graph_edge_count": 4675,
-    "article_relation_count": 71,
-    "article_relation_graph_ref_count": 71,
-    "evidence_backed_relation_edge_count": 5,
-    "trace_only_relation_edge_count": 67,
-    "non_citable_edge_count": 4675,
+    "graph_edge_count": 4676,
+    "article_relation_count": 72,
+    "article_relation_graph_ref_count": 72,
+    "evidence_backed_relation_edge_count": 3,
+    "trace_only_relation_edge_count": 70,
+    "non_citable_edge_count": 4676,
     "authority_without_evidence_count": 0,
     "authority_without_bbox_count": 0,
     "trace_promoted_count": 0,
@@ -2032,15 +2033,15 @@
     "authority_kind_counts": {
       "deterministic_structure": 1077,
       "endpoint_provenance": 3514,
-      "exact_relation_support": 5,
-      "instrument_provenance": 77,
+      "exact_relation_support": 3,
+      "instrument_provenance": 80,
       "source_anomaly_trace": 2
     },
     "support_kind_counts": {
       "deterministic_structure": 1077,
       "endpoint_provenance": 3514,
-      "exact_source_relation": 5,
-      "instrument_provenance": 77,
+      "exact_source_relation": 3,
+      "instrument_provenance": 80,
       "source_anomaly_trace": 2
     }
   }

@@ -45,6 +45,9 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
         self.assertNotIn("presiden", criminal_policy["supported_function_terms"])
         relation_families = configured["document_relation"]["relation_families"]
         self.assertIn("dicabut", relation_families["DELETE_OR_REMOVE_PROVISION"]["terms"])
+        self.assertIn("RENAME_PROVISION", relation_families)
+        self.assertEqual(relation_families["RENAME_PROVISION"]["relation_types"], ["RENAMES"])
+        self.assertNotIn("RENAMES", configured["document_relation"]["schema_only_relation_types"])
         for case in _intent_cases():
             if case["kind"] == "metadata":
                 self.assertEqual(

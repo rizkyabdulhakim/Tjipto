@@ -7,7 +7,7 @@ import threading
 from uuid import uuid4
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
-from tjipto.corpora.parser_dispatch import parse_legal_reference
+from tjipto.corpora.parser_dispatch import parse_legal_reference, parse_legal_references
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
@@ -1025,6 +1025,8 @@ def _document_relation_target(store, query: str) -> dict:
     amendment_signal = amendment_role in set(getattr(config, "source_roles", ()) or ()) or contains_intent_phrase(
         query, relation_config.get("source_terms", ())
     )
+    if relation_intent.relation_type == "RENAME_PROVISION":
+        amendment_signal = True
     target_original = contains_intent_phrase(query, relation_config.get("target_document_terms", ()))
     article_detail = contains_intent_phrase(query, relation_config.get("article_detail_terms", ()))
     source_less_delete = relation_intent.relation_type == "DELETE_OR_REMOVE_PROVISION" and article_detail
@@ -1032,7 +1034,9 @@ def _document_relation_target(store, query: str) -> dict:
         return {"mode": None}
     if not (relation_signal or add_signal) or (not amendment_signal and not source_less_delete):
         return {"mode": None}
-    target_citation = _article_relation_target_citation(getattr(config, "corpus_id", None), query)
+    target_citation = _article_relation_target_citation(
+        getattr(config, "corpus_id", None), query, prefer_last=relation_intent.relation_type == "RENAME_PROVISION"
+    )
     if add_signal:
         return {
             "mode": "article",
@@ -1040,6 +1044,13 @@ def _document_relation_target(store, query: str) -> dict:
             "relation_types": tuple(
                 relation_type for relation_type in relation_config.get("schema_only_relation_types", ()) if relation_type != "RENAMES"
             ),
+            "target_citation": target_citation,
+        }
+    if relation_intent.relation_type == "RENAME_PROVISION":
+        return {
+            "mode": "article",
+            "role": amendment_role,
+            "relation_types": ("RENAMES",),
             "target_citation": target_citation,
         }
     if contains_intent_phrase(query, relation_config.get("unsupported_detail_terms", ())):
@@ -1090,9 +1101,13 @@ def _article_relation_support(store, target: dict) -> tuple[dict, ...]:
     )
 
 
-def _article_relation_target_citation(corpus_id: str | None, query: str) -> str | None:
+def _article_relation_target_citation(corpus_id: str | None, query: str, *, prefer_last: bool = False) -> str | None:
     if not corpus_id:
         return None
+    if prefer_last:
+        references = parse_legal_references(corpus_id, query)
+        if references:
+            return str(references[-1]["reference"])
     ref = parse_legal_reference(corpus_id, query)
     pasal = ref.get("pasal")
     ayat = ref.get("ayat")
@@ -1123,15 +1138,16 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
         return None
     if store.lineage_error(row):
         return None
-    bboxes = [bbox for bbox in store.bboxes_for(row["evidence_id"]) if bbox.get("bbox_id") in set(relation.get("bbox_refs") or ())]
-    if not bboxes or not set(relation.get("bbox_refs") or ()) <= {bbox["bbox_id"] for bbox in bboxes}:
+    target_bbox_refs = tuple(relation.get("target_bbox_refs") or ())
+    bboxes = [bbox for bbox in store.bboxes_for(row["evidence_id"]) if bbox.get("bbox_id") in set(target_bbox_refs)]
+    if not bboxes or not set(target_bbox_refs) <= {bbox["bbox_id"] for bbox in bboxes}:
         return None
     if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True:
         return None
     return {
         **row,
-        "bbox_refs": tuple(relation.get("bbox_refs") or ()),
-        "text_span_ids": tuple(relation.get("text_span_ids") or row.get("text_span_ids") or ()),
+        "bbox_refs": target_bbox_refs,
+        "text_span_ids": tuple(relation.get("target_text_span_ids") or relation.get("text_span_ids") or row.get("text_span_ids") or ()),
         "quoted_text": relation.get("quoted_text") or row.get("quoted_text"),
         "bbox_count": len(bboxes),
         "route_sources": ("article_amendment_relation",),
@@ -1140,9 +1156,9 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
             "action": "viewer",
             "evidence_id": row["evidence_id"],
             "page_numbers": tuple(row.get("page_numbers") or ()),
-            "text_span_ids": tuple(relation.get("text_span_ids") or row.get("text_span_ids") or ()),
+            "text_span_ids": tuple(relation.get("target_text_span_ids") or relation.get("text_span_ids") or row.get("text_span_ids") or ()),
             "bbox_count": len(bboxes),
-            "bbox_refs": tuple(relation.get("bbox_refs") or ()),
+            "bbox_refs": target_bbox_refs,
             "can_resolve": True,
         },
     }
@@ -1177,11 +1193,22 @@ def _public_article_relation(row: dict) -> dict:
         "relation_id": row.get("relation_id"),
         "relation_type": row.get("relation_type"),
         "source_role": row.get("source_role"),
+        "source_label": row.get("source_label"),
+        "source_reference": row.get("old_reference"),
+        "source_reference_range": row.get("old_reference_range"),
         "target_legal_unit_id": row.get("target_legal_unit_id"),
+        "target_label": row.get("target_label") or row.get("target_citation"),
         "target_citation": row.get("target_citation"),
+        "target_reference": row.get("new_reference"),
+        "target_reference_range": row.get("new_reference_range"),
+        "target_source_role": row.get("target_source_role"),
         "evidence_id": row.get("evidence_id"),
         "bbox_refs": tuple(row.get("bbox_refs") or ()),
+        "target_bbox_refs": tuple(row.get("target_bbox_refs") or ()),
+        "target_precision": row.get("target_precision"),
+        "source_support_exact": row.get("source_support_exact") is True,
         "text_span_ids": tuple(row.get("text_span_ids") or ()),
+        "target_text_span_ids": tuple(row.get("target_text_span_ids") or ()),
         "support_class": row.get("support_class"),
         "grounding_level": row.get("grounding_level"),
         "trace_only_reason": row.get("trace_only_reason"),
@@ -1212,15 +1239,10 @@ def _article_relation_citation(row: dict) -> dict:
 
 
 def _deduplicated_article_relation_citations(store, rows: tuple[dict, ...]) -> tuple[dict, ...]:
-    grouped: dict[tuple[object, ...], dict] = {}
+    grouped: dict[object, dict] = {}
     for row in rows:
         citation = _article_relation_citation(row)
-        key = (
-            citation.get("evidence_id"),
-            citation.get("source_document_id"),
-            tuple(citation.get("page_numbers") or ()),
-            tuple(sorted(row.get("bbox_refs") or ())),
-        )
+        key = citation.get("evidence_id")
         grouped.setdefault(key, citation)
     return tuple(_citation_with_authority(store, row) for row in grouped.values())
 
@@ -1250,29 +1272,41 @@ def _document_relation_amendment_role(row: dict) -> str | None:
 
 def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: tuple[dict, ...]) -> str:
     relation_config = (store.config.setting("intent_config", {}) or {}).get("document_relation", {}) or {}
-    all_relations = tuple(relations) + tuple(trace_support)
-    by_target: dict[str, set[str]] = {}
-    for row in all_relations:
-        target = str(row.get("target_citation") or "")
-        if target:
-            by_target.setdefault(target, set()).add(str(row.get("relation_type") or ""))
+
+    def labels_for(rows: tuple[dict, ...]) -> list[str]:
+        by_target: dict[str, set[str]] = {}
+        for row in rows:
+            target = str(row.get("new_reference") or row.get("target_citation") or "")
+            if target:
+                by_target.setdefault(target, set()).add(str(row.get("relation_type") or ""))
+        labels = []
+        for target in sorted(by_target, key=_legal_reference_sort_key):
+            types = by_target[target]
+            suffix = " / ".join(relation_labels[relation] for relation in ("DELETES", "MODIFIES", "RENAMES") if relation in types)
+            labels.append(f"{target} ({suffix})" if suffix else target)
+        return labels
+
     relation_labels = {
         "DELETES": "dihapus",
         "MODIFIES": "diubah",
         "RENAMES": "dinomori ulang",
     }
-    labels = []
-    for target in sorted(by_target, key=_legal_reference_sort_key):
-        types = by_target[target]
-        suffix = " / ".join(relation_labels[relation] for relation in ("DELETES", "MODIFIES", "RENAMES") if relation in types)
-        labels.append(f"{target} ({suffix})" if suffix else target)
-    if not labels:
+    exact_labels = labels_for(tuple(relations))
+    trace_labels = labels_for(tuple(trace_support))
+    if not exact_labels and not trace_labels:
         listed = "relasi yang diminta"
-        return f"Relasi amandemen tingkat pasal untuk {listed} hanya tersedia sebagai trace dan belum citable/highlightable."
-    answer = str(relation_config.get("article_answer_template", "{relations}")).format(relations=", ".join(labels))
-    if trace_support:
-        answer += f" Dukungan exact-highlight bersifat parsial; {len(trace_support)} relasi lain hanya trace dan tidak highlightable."
-    return answer
+        return str(relation_config.get("article_trace_answer_template", "Relasi trace: {relations}. ")).format(relations=listed)
+    if exact_labels and trace_labels:
+        return str(
+            relation_config.get("article_mixed_answer_template", "Relasi exact: {exact_relations}. Relasi trace: {trace_relations}. ")
+        ).format(exact_relations=", ".join(exact_labels), trace_relations=", ".join(trace_labels))
+    if trace_labels:
+        return str(relation_config.get("article_trace_answer_template", "Relasi trace: {relations}. ")).format(
+            relations=", ".join(trace_labels)
+        )
+    return str(relation_config.get("article_exact_answer_template", "Relasi exact: {relations}. ")).format(
+        relations=", ".join(exact_labels)
+    )
 
 
 def _legal_reference_sort_key(value: str) -> tuple[int, str]:
@@ -1370,6 +1404,11 @@ def _matched_source_conflict(store, query: str) -> dict | None:
 
 def _is_source_anomaly_query(store, query: str) -> bool:
     folded = (query or "").casefold()
+    relation_intent = classify_relation_intent(store, query)
+    if relation_intent.relation_type == "RENAME_PROVISION" and not any(
+        marker in folded for marker in ("konflik", "anomali", "pasal iii", "source anomaly", "sumber anomali")
+    ):
+        return False
     terms = _source_conflict_intent(store).get("query_terms") or ()
     return any(str(term).casefold() in folded for term in terms)
 

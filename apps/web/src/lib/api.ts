@@ -26,6 +26,7 @@ export interface TjiptoAskResponse {
   viewer_refs?: ViewerRefPayload[];
   metadata_support?: MetadataSupportPayload[];
   document_relations?: DocumentRelationPayload[];
+  article_amendment_relations?: ArticleAmendmentRelationPayload[];
   trace_support?: TraceSupportPayload[];
 }
 
@@ -55,6 +56,32 @@ export interface DocumentRelationPayload {
   support_type?: string;
   reason?: string;
   highlightable?: boolean;
+}
+
+export interface ArticleAmendmentRelationPayload {
+  relation_id?: string;
+  relation_type?: string;
+  source_legal_unit_id?: string;
+  source_label?: string;
+  source_reference?: string;
+  source_reference_range?: [number, number];
+  source_role?: string;
+  target_legal_unit_id?: string;
+  target_label?: string;
+  target_reference?: string;
+  target_reference_range?: [number, number];
+  target_source_role?: string;
+  evidence_id?: string;
+  text_span_ids?: string[];
+  bbox_refs?: string[];
+  target_text_span_ids?: string[];
+  target_bbox_refs?: string[];
+  target_precision?: string;
+  source_support_exact?: boolean;
+  support_class?: string;
+  trace_only_reason?: string;
+  citation_available?: boolean;
+  viewer_highlightable?: boolean;
 }
 
 export interface TraceSupportPayload {

@@ -5,7 +5,7 @@
   "chunks": "chunks.jsonl",
   "corpus_id": "uud",
   "counts": {
-    "article_amendment_relations": 71,
+    "article_amendment_relations": 72,
     "article_versions": 218,
     "bbox_records": 1621,
     "chunks": 651,
@@ -13,7 +13,7 @@
     "document_relations": 8,
     "evidence_records": 472,
     "excluded_records": 0,
-    "graph_edges": 4675,
+    "graph_edges": 4676,
     "graph_nodes": 2821,
     "legal_units": 651,
     "metadata_assertions": 1343,
@@ -47,8 +47,8 @@
       "format": "jsonl",
       "artifact_schema": 4,
       "primary_id": "relation_id",
-      "bytes": 247004,
-      "sha256": "2b66eac66d15f757dd68d03bf3053c78a92a286006a3f00b5b0ed2a6ef5b9089"
+      "bytes": 326209,
+      "sha256": "8bfb5892a61200391acc93eda4919c416ac428e84e6a44a8e561c36a62d66e6a"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -207,8 +207,8 @@
         "authority_kind",
         "citation_final"
       ],
-      "bytes": 6582802,
-      "sha256": "eeb49b8d75d2f2be97e5a7332f1ad43ab8508ec5cf6cbd21a664f10fa611324e"
+      "bytes": 6585680,
+      "sha256": "12483f936f351a2cc5d0d1ba0705697564f3e1c372e1b876dd381125b7cccb56"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -471,8 +471,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 4,
-      "bytes": 71756,
-      "sha256": "7941982a1cf154adb0c16a15b599da31cebee75f8b3191c0cc218cc862343684"
+      "bytes": 71794,
+      "sha256": "9f581789a43e95c1ac246b0d856b3cbb03488dfbaecd9e74d2fc67590d94a317"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

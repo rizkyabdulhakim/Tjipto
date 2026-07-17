@@ -5,6 +5,7 @@ import re
 
 from tjipto.corpora.uud.specs import UUD_INSERTED_BAB_PREDECESSORS, UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.parser_dispatch import parse_legal_references
+from tjipto.corpora.uud.relation_builder import parse_renumbering_mappings
 
 
 def build_graph_artifacts(
@@ -272,21 +273,21 @@ def build_graph_artifacts(
 
     renumber_clause = next((row for row in evidence if row.get("citation") == "Perubahan Keempat Clause (c)"), None)
     if renumber_clause:
-        renumberings = (
-            ("amendment_3_historical", "Pasal 3", "current_consolidated", "Pasal 3"),
-            ("amendment_2_historical", "Pasal 25E", "current_consolidated", "Pasal 25A"),
-        )
         source_node = unit_node_ids.get(renumber_clause["legal_unit_id"])
-        for source_role, source_label, target_role, target_label in renumberings:
+        for mapping in parse_renumbering_mappings(str(renumber_clause.get("quoted_text") or "")):
+            source_role = mapping["source_role"]
+            source_label = str(mapping["old_reference"]).split(" ayat", 1)[0]
+            target_label = str(mapping["new_reference"]).split(" ayat", 1)[0]
             source_unit = next(
                 (row for row in legal_units if row.get("source_role") == source_role and row.get("unit_label") == source_label),
                 None,
             )
             target_unit = next(
-                (row for row in legal_units if row.get("source_role") == target_role and row.get("unit_label") == target_label),
+                (row for row in legal_units if row.get("source_role") == "current_consolidated" and row.get("unit_label") == target_label),
                 None,
             )
             if source_node and source_unit and target_unit:
+                mapping_key = f"{mapping['old_reference']}->{mapping['new_reference']}"
                 add_edge(
                     unit_node_ids[source_unit["legal_unit_id"]],
                     unit_node_ids[target_unit["legal_unit_id"]],
@@ -296,9 +297,15 @@ def build_graph_artifacts(
                     source_legal_unit_id=source_unit["legal_unit_id"],
                     target_legal_unit_id=target_unit["legal_unit_id"],
                     target_citation=target_unit.get("unit_label"),
+                    reference_mapping=mapping,
                     article_relation_ref=_article_relation_ref(
-                        "RENAMES", renumber_clause["evidence_id"], target_unit["legal_unit_id"], target_unit.get("unit_label")
+                        "RENAMES",
+                        renumber_clause["evidence_id"],
+                        target_unit["legal_unit_id"],
+                        target_unit.get("unit_label"),
+                        mapping_key,
                     ),
+                    _identity_evidence_id=f"{renumber_clause['evidence_id']}::{mapping_key}",
                     runtime_loadable=True,
                     validation_status="accepted_renumbering_clause",
                     confidence_policy="explicit_renumbering_clause_reference",
@@ -374,10 +381,17 @@ def _edge_id(edge_type: str, source_id: str, target_id: str, supporting_evidence
     return f"edge::{digest}"
 
 
-def _article_relation_ref(relation_type: str, evidence_id: str, target_unit_id: str, target_citation: str | None) -> str | None:
+def _article_relation_ref(
+    relation_type: str,
+    evidence_id: str,
+    target_unit_id: str,
+    target_citation: str | None,
+    mapping_key: str | None = None,
+) -> str | None:
     if not str(target_citation or "").startswith(("Pasal ", "Ayat ")):
         return None
-    return f"uud_article_amendment_relation::{relation_type.lower()}::{evidence_id}::{target_unit_id}"
+    suffix = f"::{mapping_key}" if mapping_key else ""
+    return f"uud_article_amendment_relation::{relation_type.lower()}::{evidence_id}::{target_unit_id}{suffix}"
 
 
 def _is_false_inserted_bab_parent(child: dict, parent: dict) -> bool:

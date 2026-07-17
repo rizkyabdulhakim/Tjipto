@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "c5a1c4fa8eaeadc3c8ff40b37b60746b8618c25e13d3c5034c93d348738345c3",
+    "manifest_sha256": "db98d739f9099db46ef20b6b0302587d5ca3eaaeed654e7643247591f4541f03",
     "runtime_required_artifacts": [
       "evidence_registry",
       "bbox_registry",
@@ -784,6 +784,18 @@
       },
       "document_relation": {
         "relation_families": {
+          "RENAME_PROVISION": {
+            "terms": [
+              "renumbering",
+              "penomoran ulang",
+              "penomoran kembali",
+              "dinomori ulang",
+              "nomor baru"
+            ],
+            "relation_types": [
+              "RENAMES"
+            ]
+          },
           "DELETE_OR_REMOVE_PROVISION": {
             "terms": [
               "menghapus",
@@ -871,13 +883,14 @@
         "schema_only_relation_types": [
           "ADDS",
           "INSERTS",
-          "RENAMES",
           "SUPPLEMENTS"
         ],
         "source_role_label_prefix": "Perubahan ",
         "document_answer_template": "Jejak relasi dokumen menunjukkan UUD 1945 diubah oleh {relations}. Relasi ini source-role/document-level dan tidak memiliki highlight BBox pasal/ayat exact.",
         "single_document_answer_template": "Jejak relasi dokumen menunjukkan {relation} mengubah UUD 1945 pada tingkat dokumen/source-role. Detail pasal/ayat exact tidak tersedia sebagai dukungan relasi terpromosi.",
-        "article_answer_template": "Relasi amandemen tingkat pasal yang didukung bukti exact: {relations}."
+        "article_exact_answer_template": "Relasi amandemen dengan dukungan sumber exact: {relations}.",
+        "article_trace_answer_template": "Relasi amandemen didukung jejak sumber, tetapi belum dapat diisolasi sebagai bukti target exact: {relations}.",
+        "article_mixed_answer_template": "Relasi exact: {exact_relations}. Relasi trace/shared-span: {trace_relations}."
       },
       "structured_sections": [
         {

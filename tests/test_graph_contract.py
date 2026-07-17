@@ -4,6 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
+import tempfile
 import unicodedata
 import unittest
 
@@ -15,6 +17,7 @@ from tjipto.graph.store import GraphStore
 from tjipto.core.manifest import read_jsonl
 from tjipto.corpora.reproducibility import validate_corpus_ingestion_artifacts
 from tjipto.corpora.uud_reproducibility import validate_uud_ingestion_artifacts
+from tjipto.corpora.uud.validation import validate_uud_artifact_dir
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -252,6 +255,18 @@ class GraphContractTest(unittest.TestCase):
     def test_uud_baseline_validator_passes(self) -> None:
         self.assertEqual(validate_uud_artifact_baseline(ROOT), ())
 
+    def test_renames_endpoint_and_mapping_mutations_fail_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "uud"
+            shutil.copytree(ROOT / "data/final/uud", target)
+            path = target / "article_amendment_relations.jsonl"
+            rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+            row = next(item for item in rows if item["relation_type"] == "RENAMES")
+            row["target_legal_unit_id"] = "missing-target"
+            path.write_text("\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in rows) + "\n", encoding="utf-8")
+            errors = validate_uud_artifact_dir(target)
+            self.assertTrue(any(error.startswith("article_relation_unknown_target:") for error in errors))
+
     def test_metadata_graph_edges_exclude_source_role_level_amends(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/metadata_graph_edges.jsonl")
         self.assertEqual(len(edges), 457)
@@ -298,10 +313,24 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(len({row["relation_id"] for row in rows}), len(rows))
         renumber_rows = [row for row in rows if row["relation_type"] == "RENAMES"]
         self.assertEqual({row["target_citation"] for row in renumber_rows}, {"Pasal 3", "Pasal 25A"})
+        self.assertEqual(
+            {(row["old_reference"], row["new_reference"]) for row in renumber_rows},
+            {
+                ("Pasal 3 ayat (3)", "Pasal 3 ayat (2)"),
+                ("Pasal 3 ayat (4)", "Pasal 3 ayat (3)"),
+                ("Pasal 25E", "Pasal 25A"),
+            },
+        )
+        self.assertTrue(all(row["target_precision"] == "shared_span" for row in renumber_rows if row["target_citation"] == "Pasal 3"))
+        self.assertTrue(all(not row["target_bbox_refs"] for row in renumber_rows if row["target_citation"] == "Pasal 3"))
+        self.assertEqual(
+            {row["target_precision"] for row in renumber_rows if row["target_citation"] == "Pasal 25A"},
+            {"target_local"},
+        )
         exact_rows = [row for row in rows if row["support_class"] == "exact_article_relation"]
         trace_rows = [row for row in rows if row["support_class"] == "trace_article_relation"]
-        self.assertEqual(len(exact_rows), 5)
-        self.assertEqual(len(trace_rows), 66)
+        self.assertEqual(len(exact_rows), 3)
+        self.assertEqual(len(trace_rows), 69)
         self.assertEqual(health["article_relation_total_count"], len(rows))
         self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
         self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
@@ -359,8 +388,8 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["graph_edge_count"], len(edges))
         self.assertEqual(authority["article_relation_count"], len(article_relations))
         self.assertEqual(authority["article_relation_graph_ref_count"], len(article_relations))
-        self.assertEqual(authority["evidence_backed_relation_edge_count"], 5)
-        self.assertEqual(authority["trace_only_relation_edge_count"], 67)
+        self.assertEqual(authority["evidence_backed_relation_edge_count"], 3)
+        self.assertEqual(authority["trace_only_relation_edge_count"], 70)
         self.assertEqual(authority["trace_promoted_count"], 0)
         self.assertEqual(authority["authority_without_evidence_count"], 0)
         self.assertEqual(authority["authority_without_bbox_count"], 0)
@@ -368,7 +397,7 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(authority["graph_final_citation_edge_count"], 0)
         self.assertEqual(authority["invalid_finality_policy_count"], 0)
         self.assertEqual(authority["support_kind_counts"]["source_anomaly_trace"], 2)
-        self.assertEqual(authority["support_kind_counts"]["instrument_provenance"], 77)
+        self.assertEqual(authority["support_kind_counts"]["instrument_provenance"], 80)
         self.assertFalse([row for row in edges if "evidence_ref" in row])
         self.assertFalse([row for row in edges for evidence_id in row["supporting_evidence_ids"] if evidence_id not in evidence])
         self.assertNotIn("legal_edge_types", report)

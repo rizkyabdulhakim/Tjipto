@@ -6,6 +6,7 @@ import unittest
 
 from tjipto.corpora import parser_dispatch
 from tjipto.corpora.uud import parser as uud_parser
+from tjipto.corpora.uud.relation_builder import parse_renumbering_mappings
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +50,24 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         rows = parser_dispatch.parse_legal_references("uud", text)
         self.assertEqual([row["reference"] for row in rows], ["Pasal 19", "Pasal 28C", "Pasal 28G"])
         self.assertEqual([text[int(row["start"]) : int(row["end"])] for row in rows], ["Pasal19", "Pasal\n28C", "pasal 28G"])
+
+    def test_renumbering_parser_preserves_paragraph_level_pairs(self) -> None:
+        text = (
+            "Pengubahan penomoran Pasal 3 ayat (3) dan ayat (4) Perubahan Ketiga "
+            "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945 menjadi "
+            "Pasal 3 ayat (2) dan ayat (3); Pasal 25E Perubahan Kedua "
+            "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945 menjadi Pasal 25A."
+        )
+        rows = parse_renumbering_mappings(text)
+        self.assertEqual(
+            [(row["old_reference"], row["new_reference"]) for row in rows],
+            [
+                ("Pasal 3 ayat (3)", "Pasal 3 ayat (2)"),
+                ("Pasal 3 ayat (4)", "Pasal 3 ayat (3)"),
+                ("Pasal 25E", "Pasal 25A"),
+            ],
+        )
+        self.assertTrue(all(text[row["old_range"][0] : row["old_range"][1]] for row in rows))
 
     def test_generic_layers_use_parser_dispatch_not_uud_parser(self) -> None:
         for rel_path in (
