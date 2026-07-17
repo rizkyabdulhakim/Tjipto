@@ -221,18 +221,7 @@ export default function App() {
             >
               <Menu size={20} className="text-[var(--tj-text-primary)]" />
             </button>
-            <div className="flex items-center gap-2">
-              <span
-                style={{
-                  fontSize: 15,
-                  fontWeight: 600,
-                  color: "var(--tj-text-primary)",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                Tjipto
-              </span>
-            </div>
+            <div className="flex items-center gap-2" aria-hidden="true" />
             <button
               onClick={newChat}
               className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-[var(--tj-surface-hover)] active:scale-90 transition-all"
