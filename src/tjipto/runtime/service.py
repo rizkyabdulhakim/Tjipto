@@ -931,9 +931,8 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
         return _relation_not_promoted(corpus_id, query, templates)
     exact_support = tuple(row for row in support if _is_exact_article_relation(row))
     exact_targets = {row.get("target_legal_unit_id") for row in exact_support}
-    trace_support = tuple(
-        row for row in support if not _is_exact_article_relation(row) and row.get("target_legal_unit_id") not in exact_targets
-    )
+    trace_support = tuple(row for row in support if not _is_exact_article_relation(row) and row.get("target_legal_unit_id") not in exact_targets)
+    nonfinal_support = tuple(row for row in exact_support if row.get("citation_final") is not True)
     public_relations = tuple(_public_article_relation(row) for row in (*exact_support, *trace_support))
     answer_evidence = tuple(row for row in (_article_relation_evidence(store, row) for row in exact_support) if row)
     if not answer_evidence:
@@ -965,7 +964,7 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
         }
     citations = _deduplicated_article_relation_citations(store, answer_evidence)
     viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence)
-    partial = bool(trace_support)
+    partial = bool(trace_support) or any(row.get("citation_final") is not True for row in exact_support)
     public_evidence = answer_evidence
     public_citations = citations
     public_viewer_refs = viewer_refs
@@ -996,7 +995,7 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
         "legal_relations": (),
         "document_relations": (),
         "article_amendment_relations": public_relations,
-        "trace_support": tuple(_public_article_relation(row) for row in trace_support),
+        "trace_support": tuple(_public_article_relation(row) for row in (*trace_support, *nonfinal_support)),
         "answer_scope": "partial_exact_article_relation" if partial else "exact_article_relation",
         "warnings": ("article_relation_exact_support_partial_trace_omitted",) if trace_support else (),
         "insufficient_reasons": (),
@@ -1254,6 +1253,11 @@ def public_article_relation(row: dict) -> dict:
         "target_text_span_ids": tuple(row.get("target_text_span_ids") or ()),
         "support_class": row.get("support_class"),
         "grounding_level": row.get("grounding_level"),
+        "authority_kind": row.get("authority_kind"),
+        "citation_final": row.get("citation_final") is True,
+        "recovery_capability": row.get("recovery_capability"),
+        "recovery_status": row.get("recovery_status"),
+        "target_geometry_method": row.get("target_geometry_method"),
         "trace_only_reason": row.get("trace_only_reason"),
         "citation_available": row.get("citation_available") is True,
         "viewer_highlightable": row.get("viewer_highlightable") is True,

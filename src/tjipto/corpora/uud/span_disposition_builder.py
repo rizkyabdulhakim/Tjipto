@@ -234,9 +234,15 @@ def _apply_bbox_registry_coverage(
     metadata_grounding: list[dict],
 ) -> None:
     bbox_keys = {_bbox_registry_key(row) for row in bbox_rows}
+    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
     metadata_context = _rows_by_span(metadata_grounding)
     words_by_page = word_rows_by_page(word_bboxes)
     for span in page_text_spans:
+        span["span_bbox_ids"] = [
+            bbox_id
+            for bbox_id in span.get("span_bbox_ids") or ()
+            if bbox_id in bbox_by_id and _intersects(span, bbox_by_id[bbox_id])
+        ]
         if _bbox_registry_key(span) in bbox_keys:
             span["bbox_registry_coverage_status"] = "bbox_key_present"
             if span.get("promotion_status") == "promoted_legal_unit":

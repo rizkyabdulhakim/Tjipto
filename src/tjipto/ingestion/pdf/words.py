@@ -22,11 +22,17 @@ def build_word_bbox_rows(
     for page_number in range(1, doc.page_count + 1):
         page = doc[page_number - 1]
         rect = page.rect
-        for word_index, word in enumerate(page.get_text("words", sort=True)):
+        page_words = page.get_text("words", sort=True)
+        page_characters = _page_characters(page)
+        character_cursor = 0
+        for word_index, word in enumerate(page_words):
             x0, y0, x1, y1, text, block_index, line_index, word_no = word
             normalized_text = normalize_text(text)
             if not compact_text(normalized_text):
                 continue
+            character_rows, character_cursor = _match_word_characters(
+                text, page_characters, character_cursor, source_document_id, page_number, word_index
+            )
             rows.append(
                 {
                     "word_bbox_id": f"{bbox_id_prefix}::{source_document_id}::{page_number:04d}::{word_index:05d}",
@@ -56,9 +62,66 @@ def build_word_bbox_rows(
                     "bbox_source": bbox_source,
                     "extractor": extractor,
                     "extractor_version": extractor_version or STABLE_EXTRACTOR_VERSION,
+                    "characters": character_rows,
                 }
             )
     return rows
+
+
+def _page_characters(page) -> list[dict]:
+    """Return actual PDF character geometry; never approximates from word boxes."""
+    rows: list[dict] = []
+    raw = page.get_text("rawdict", sort=True)
+    for block in raw.get("blocks", []):
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                rows.extend(span.get("chars", []))
+    return rows
+
+
+def _match_word_characters(
+    text: str,
+    characters: list[dict],
+    cursor: int,
+    source_document_id: str,
+    page_number: int,
+    word_index: int,
+) -> tuple[list[dict], int]:
+    target = compact_text(text)
+    if not target:
+        return [], cursor
+    compacted = ""
+    matched: list[dict] = []
+    index = cursor
+    while index < len(characters) and len(compacted) < len(target):
+        char = characters[index]
+        value = str(char.get("c") or "")
+        matched.append(char)
+        compacted = compact_text(compacted + value)
+        index += 1
+    if compacted != target:
+        return [], cursor
+    result = []
+    char_index = 0
+    for char in matched:
+        value = str(char.get("c") or "")
+        if not compact_text(value):
+            continue
+        x0, y0, x1, y1 = char.get("bbox", (None, None, None, None))
+        if not all(isinstance(item, (int, float)) for item in (x0, y0, x1, y1)):
+            return [], cursor
+        result.append(
+            {
+                "character_bbox_id": f"uud_character_bbox::{source_document_id}::{page_number:04d}::{word_index:05d}::{char_index:03d}",
+                "text": value,
+                "x0": x0,
+                "y0": y0,
+                "x1": x1,
+                "y1": y1,
+            }
+        )
+        char_index += 1
+    return result, index
 
 
 def word_rows_by_page(word_bboxes: list[dict]) -> dict[tuple[str, int], list[dict]]:

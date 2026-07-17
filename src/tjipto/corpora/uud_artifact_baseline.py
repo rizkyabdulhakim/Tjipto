@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import sys
 
 from tjipto.corpora.uud.bbox_builder import pdf_lines
@@ -181,6 +182,18 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         pages=pages,
         article_relations=article_amendment_relations,
     )
+    validation_exceptions = [
+        {
+            **row,
+            "chunk_id": row.get("chunk_id"),
+            "current_resolution_state": "historical_review_context",
+            "resolving_commit": "797d2f8",
+            "runtime_loadable": False,
+            "authoritative_evidence_id": None,
+        }
+        for line in (final_dir / "validation_exceptions.jsonl").read_text(encoding="utf-8").splitlines()
+        for row in [json.loads(line)]
+    ]
     write_jsonl(final_dir / "legal_units.jsonl", legal_units)
     write_jsonl(final_dir / "chunks.jsonl", chunks)
     write_jsonl(final_dir / "evidence_registry.jsonl", evidence)
@@ -202,6 +215,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
     write_jsonl(final_dir / "word_bboxes.jsonl", word_bboxes)
     write_jsonl(final_dir / "promotion_decisions.jsonl", promotion_decisions)
+    write_jsonl(final_dir / "validation_exceptions.jsonl", validation_exceptions)
     write_json(final_dir / "pdf_health_report.json", pdf_health_report)
 
     corpus_config = CorpusRegistry(repo_root).resolve("uud")

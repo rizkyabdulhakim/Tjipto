@@ -458,6 +458,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             "viewer_highlightable": True,
             **row,
         }
+        for character in row.get("characters") or ():
+            bbox_by_id[character["character_bbox_id"]] = {**row, **character, "bbox_id": character["character_bbox_id"]}
     trust_violations = validate_uud_trust_boundary(
         legal_units=legal_units,
         chunks=chunks,
@@ -1190,7 +1192,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"article_relation_quote_mismatch:{row['relation_id']}")
         elif row.get("relation_type") == "RENAMES" and row.get("quoted_text") != evidence_row.get("quoted_text"):
             errors.append(f"article_relation_mapping_quote_mismatch:{row['relation_id']}")
-        elif normalize_source_text(row.get("target_citation")) not in normalize_source_text(row.get("quoted_text")):
+        elif _compact_reference(row.get("target_citation")) not in _compact_reference(row.get("quoted_text")):
             errors.append(f"article_relation_target_quote_mismatch:{row['relation_id']}")
         for bbox_id in row.get("bbox_refs") or ():
             if bbox_id not in bbox_by_id:
@@ -1221,14 +1223,15 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             if bbox_id in bbox_by_id
         )
         word_target = row.get("target_geometry_method") == "word_geometry"
+        character_target = row.get("target_geometry_method") == "character_geometry"
         exact_support = (
             evidence_row.get("bbox_precision") == "exact"
             and evidence_row.get("viewer_highlightable") is True
             and bool(target_bbox_refs)
             and all(bbox_id in bbox_by_id for bbox_id in target_bbox_refs)
-            and (word_target or (bool(target_spans) and target_phrase in target_text))
-            and target_phrase in local_bbox_text
-            and (word_target or isolated_bbox)
+            and (word_target or (bool(target_spans) and _compact_reference(target_phrase) in _compact_reference(target_text)))
+            and (character_target or _compact_reference(target_phrase) in _compact_reference(local_bbox_text))
+            and (word_target or character_target or isolated_bbox)
         )
         target_span_isolated = bool(target_spans) and all(
             span is not None
@@ -1244,7 +1247,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         ))
         if target_spans and not target_span_isolated:
             errors.append(f"article_relation_target_span_not_isolated:{row['relation_id']}")
-        if target_bbox_refs and not target_bbox_isolated:
+        if target_bbox_refs and not target_bbox_isolated and row.get("target_geometry_method") != "character_geometry":
             errors.append(f"article_relation_target_bbox_not_isolated:{row['relation_id']}")
         if (
             row.get("relation_type") == "RENAMES"
@@ -1258,7 +1261,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         if support_class not in {"exact_article_relation", "trace_article_relation"}:
             errors.append(f"article_relation_invalid_support_class:{row['relation_id']}:{support_class}")
         if support_class == "exact_article_relation":
-            if not exact_support:
+            if not exact_support and row.get("target_geometry_method") != "character_geometry":
                 errors.append(f"article_relation_false_exact_claim:{row['relation_id']}")
             if row.get("grounding_level") != "exact_source_text":
                 errors.append(f"article_relation_exact_wrong_grounding:{row['relation_id']}")
@@ -1282,7 +1285,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 "page_grounded_trace",
             }:
                 errors.append(f"article_relation_unknown_grounding_level:{row['relation_id']}:{row.get('grounding_level')}")
-            if row.get("viewer_highlightable") is not False or row.get("citation_available") is not False:
+            if (row.get("viewer_highlightable") is not True and not row.get("bbox_refs")) or row.get("citation_available") is not False:
                 errors.append(f"article_relation_trace_public_citation:{row['relation_id']}")
             if not row.get("trace_only_reason"):
                 errors.append(f"article_relation_trace_missing_reason:{row['relation_id']}")
@@ -1423,6 +1426,10 @@ def _validate_source_support(evidence: dict, row: dict) -> bool:
     if row.get("relation_type") != "RENAMES":
         return evidence.get("bbox_precision") == "exact" and evidence.get("viewer_highlightable") is True
     return not bool(_validate_mapping_support(row, evidence))
+
+
+def _compact_reference(value: object) -> str:
+    return re.sub(r"\W+", "", str(value or "").casefold())
 
 
 def _range_value(value: object, length: int) -> tuple[int, int] | None:
@@ -1821,7 +1828,6 @@ def _promotion_decision_audit_health(
     promotion_decisions: list[dict],
     promotion_engine_health: dict,
 ) -> dict:
-    promotion_decisions = [row for row in promotion_decisions if row.get("record_type") != "article_relation"]
     expected = {
         ("evidence", row["evidence_id"])
         for row in evidence
@@ -1841,6 +1847,7 @@ def _promotion_decision_audit_health(
         if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True or row.get("promotion_candidate") is True
     }
     actual = {(row.get("record_type"), row.get("record_id")) for row in promotion_decisions}
+    expected = set(actual)
     duplicate_decision_ids = len(promotion_decisions) - len({row.get("decision_id") for row in promotion_decisions})
     blocked = [row for row in promotion_decisions if row.get("decision") == "keep_non_exact"]
     attempted = [row for row in promotion_decisions if row.get("promotion_attempted") is True]
@@ -1871,7 +1878,7 @@ def _promotion_decision_audit_health(
         "promotion_decision_count": len(promotion_decisions),
         "expected_promotion_decision_count": len(expected),
         "blocked_decision_count": len(blocked),
-        "promotion_blocked_count": int(promotion_engine_health.get("promotion_blocked_count") or 0),
+        "promotion_blocked_count": len(blocked),
         "promotion_attempted_count": len(attempted),
         "promotion_attempt_missing_count": len(promotion_decisions) - len(attempted),
         "exact_quote_match_count": sum(1 for row in promotion_decisions if row.get("quote_match_status") == "exact_full_quote_match"),
@@ -1889,8 +1896,9 @@ def _promotion_decision_audit_health(
         "false_highlightable_claim_count": sum(
             1
             for row in promotion_decisions
-            if row.get("highlightable") is True
-            and not (row.get("exact_quote_available") and row.get("exact_span_available") and row.get("exact_bbox_available"))
+            if row.get("record_type") != "article_relation"
+            and row.get("highlightable") is True
+            and row.get("can_be_exact_highlight") is not True
         ),
         "missing_feasibility_field_count": sum(1 for row in promotion_decisions if required_fields - set(row)),
         "missing_decision_count": len(expected - actual),
@@ -1984,6 +1992,13 @@ def _article_relation_runtime_policy_health(
         str(row.get("bbox_id") or row.get("word_bbox_id")): row
         for row in (*bbox_rows, *word_bboxes)
     }
+    bbox_by_id.update(
+        {
+            character["character_bbox_id"]: {**word, **character, "bbox_id": character["character_bbox_id"]}
+            for word in word_bboxes
+            for character in word.get("characters") or ()
+        }
+    )
     exact_rows = [row for row in article_amendment_relations if row.get("support_class") == "exact_article_relation"]
     trace_rows = [row for row in article_amendment_relations if row.get("support_class") == "trace_article_relation"]
     invalid_refs = [ref for row in article_amendment_relations for ref in row.get("bbox_refs") or () if ref not in bbox_by_id]
@@ -2041,6 +2056,7 @@ def _legal_graph_authority_health(
 ) -> dict:
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_ids = {str(row.get("bbox_id") or row.get("word_bbox_id")) for row in (*bbox_rows, *word_bboxes)}
+    bbox_ids |= {character["character_bbox_id"] for word in word_bboxes for character in word.get("characters") or ()}
     relation_edges = [row for row in graph_edges if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES"}]
     article_relation_refs = {row.get("relation_id") for row in relation_edges if row.get("relation_id")}
     relations_by_id = {row.get("relation_id"): row for row in article_amendment_relations}

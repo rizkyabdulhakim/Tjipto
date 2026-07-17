@@ -150,6 +150,7 @@ def _validate_cross_artifact_references(manifest: dict, artifacts: dict[str, obj
     source_ids = {row["source_document_id"] for row in rows("source_documents")}
     span_ids = {row["text_span_id"] for row in rows("page_text_spans")}
     bbox_ids = {row["bbox_id"] for row in rows("bbox_registry")} | {row["word_bbox_id"] for row in rows("word_bboxes")}
+    bbox_ids |= {character["character_bbox_id"] for word in rows("word_bboxes") for character in word.get("characters") or ()}
     relation_ids = {row["relation_id"] for row in rows("article_amendment_relations")}
     for row in rows("retrieval_units"):
         if row["evidence_id"] not in evidence_ids or row["legal_unit_id"] not in unit_ids or row["chunk_id"] not in chunk_ids:

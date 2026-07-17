@@ -169,6 +169,25 @@ class EvidenceStore:
                 "viewer_highlightable": True,
                 **row,
             }
+            for character in row.get("characters") or ():
+                rows[character["character_bbox_id"]] = {
+                    "bbox_id": character["character_bbox_id"],
+                    "bbox_precision": "exact",
+                    "viewer_highlightable": True,
+                    "source_document_id": row["source_document_id"],
+                    "source_pdf": row.get("source_pdf"),
+                    "source_pdf_path": row.get("source_pdf_path"),
+                    "source_sha256": row.get("source_sha256"),
+                    "page_number": row["page_number"],
+                    "page_width": row.get("page_width"),
+                    "page_height": row.get("page_height"),
+                    "coordinate_space": row.get("coordinate_space"),
+                    "coordinate_origin": row.get("coordinate_origin"),
+                    "page_rotation": row.get("page_rotation"),
+                    "page_box_basis": row.get("page_box_basis"),
+                    "transform_version": row.get("transform_version"),
+                    **character,
+                }
         return rows
 
     def _page_text_span(self, text_span_id: str) -> dict | None:

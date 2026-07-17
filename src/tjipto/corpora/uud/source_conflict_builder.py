@@ -41,6 +41,12 @@ def apply_source_conflict_grounding(
         row["page_numbers"] = list(row.get("affected_pages") or [])
         row["text_span_ids"] = _matching_text_spans(row, page_text_spans)
         row["evidence_ids"] = evidence_ids
+        row["authoritative_evidence_id"] = evidence_ids[0] if evidence_ids else None
+        row["authority_kind"] = "source_anomaly_provenance"
+        row["citation_final"] = False
+        row["target_precision"] = "source_provenance"
+        row["recovery_capability"] = "exact_materialized" if evidence_ids else "technically_unrecoverable"
+        row["recovery_status"] = "materialized" if evidence_ids else "failed"
         row["bbox_ids"] = [bbox_id for evidence_id in evidence_ids for bbox_id in bbox_by_evidence.get(evidence_id, [])]
         raw_provenance_bboxes = exact_bboxes_for_text_spans(
             [span_by_id.get(text_span_id) for text_span_id in row["text_span_ids"]],
@@ -86,6 +92,7 @@ def apply_source_conflict_grounding(
                 text_span_ids=row["text_span_ids"],
                 raw_provenance_text_span_ids=raw_provenance_text_span_ids,
             )
+            row["recovery_failure_code"] = row["failure_reason"]
 
 
 def _candidate_evidence_refs(row: dict) -> tuple[str, ...]:

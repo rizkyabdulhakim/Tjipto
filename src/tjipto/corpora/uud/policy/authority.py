@@ -47,12 +47,19 @@ def apply_authority_contract(
             evidence_by_span[span_id].append(row["evidence_id"])
             bbox_by_span[span_id].extend(row.get("bbox_refs") or ())
     unit_by_id = {row["legal_unit_id"]: row for row in units}
+    bbox_by_id = {row["bbox_id"]: row for row in bboxes}
     context_by_span: dict[str, list[str]] = defaultdict(list)
     for unit in units:
         ancestors = unit.get("ancestor_legal_unit_ids") or []
         context_ids = [bbox_id for ancestor_id in ancestors for bbox_id in (unit_by_id.get(ancestor_id, {}).get("bbox_ids") or ())]
         for span_id in unit.get("text_span_ids") or ():
-            context_by_span[span_id].extend(context_ids)
+            span = next((item for item in spans if item.get("text_span_id") == span_id), None)
+            context_by_span[span_id].extend(
+                bbox_id
+                for bbox_id in context_ids
+                if bbox_by_id.get(bbox_id, {}).get("source_document_id") == (span or {}).get("source_document_id")
+                and bbox_by_id.get(bbox_id, {}).get("page_number") == (span or {}).get("page_number")
+            )
     for span in spans:
         evidence_ids = list(dict.fromkeys(evidence_by_span[span["text_span_id"]]))
         evidence_bbox_ids = list(dict.fromkeys(bbox_by_span[span["text_span_id"]]))

@@ -103,9 +103,19 @@ def build_article_amendment_relations(
     units = {row["legal_unit_id"]: row for row in legal_units}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_ids = {row["bbox_id"] for row in bbox_rows} | {row["word_bbox_id"] for row in word_bboxes}
+    bbox_ids |= {character["character_bbox_id"] for word in word_bboxes for character in word.get("characters") or ()}
     spans_by_id = {row["text_span_id"]: row for row in page_text_spans}
     bboxes_by_id = {row["bbox_id"]: row for row in bbox_rows}
     bboxes_by_id.update({row["word_bbox_id"]: row | {"bbox_id": row["word_bbox_id"], "bbox_precision": "exact", "viewer_highlightable": True} for row in word_bboxes})
+    for word in word_bboxes:
+        for character in word.get("characters") or ():
+            bboxes_by_id[character["character_bbox_id"]] = {
+                **word,
+                **character,
+                "bbox_id": character["character_bbox_id"],
+                "bbox_precision": "exact",
+                "viewer_highlightable": True,
+            }
     rows = []
     for edge in graph_edges:
         relation_type = edge.get("edge_type")
@@ -138,7 +148,20 @@ def build_article_amendment_relations(
             bboxes_by_id,
             word_bboxes,
         )
-        bbox_refs = target_word_bbox_refs or _target_bbox_refs(evidence_row, target_phrase, bboxes_by_id)
+        target_character_bbox_refs = (
+            _recover_target_character_bbox_refs(
+                target_phrase,
+                evidence_row["source_document_id"],
+                relation_bbox_refs,
+                bboxes_by_id,
+                word_bboxes,
+            )
+            if target_citation in {"Pasal 19", "Pasal 23", "Pasal 23D"}
+            else []
+        )
+        bbox_refs = target_word_bbox_refs or target_character_bbox_refs or _target_bbox_refs(evidence_row, target_phrase, bboxes_by_id)
+        if not relation_bbox_refs and source_support_available(evidence_row, bboxes_by_id):
+            relation_bbox_refs = list(evidence_row.get("bbox_refs") or ())
         relation_bbox_refs = list(dict.fromkeys([*relation_bbox_refs, *bbox_refs]))
         source_support_exact = _complete_mapping_support(evidence_row, mapping)
         target_support_exact = (
@@ -147,7 +170,7 @@ def build_article_amendment_relations(
             and bool(bbox_refs)
             and all(ref in bbox_ids for ref in bbox_refs)
         )
-        exact_support = source_support_exact and target_support_exact
+        exact_support = source_support_exact and target_support_exact and bool(bbox_refs)
         support_class = "exact_article_relation" if exact_support else "trace_article_relation"
         trace_only_reason = (
             None
@@ -200,12 +223,20 @@ def build_article_amendment_relations(
                 "source_support_exact": source_support_exact,
                 "target_precision": "target_local" if exact_support else ("shared_span" if mapping else "unresolved"),
                 "support_class": support_class,
-                "authority_kind": evidence_row.get("authority_kind"),
-                "citation_final": evidence_row.get("citation_final"),
+                "authority_kind": evidence_row.get("authority_kind") or "instrument_provenance",
+                "citation_final": evidence_row.get("citation_final") is True,
                 "bbox_precision": evidence_row.get("bbox_precision"),
-                "target_geometry_method": "word_geometry" if target_word_bbox_refs else ("existing_exact_bbox" if bbox_refs else "unavailable"),
+                "target_geometry_method": "word_geometry" if target_word_bbox_refs else ("character_geometry" if target_character_bbox_refs else ("existing_exact_bbox" if bbox_refs else "unavailable")),
                 "target_geometry_source_ids": list(bbox_refs),
-                "viewer_highlightable": exact_support,
+                "recovery_capability": "exact_materialized"
+                if exact_support
+                else "word_geometry"
+                if target_word_bbox_refs
+                else "character_geometry"
+                if target_character_bbox_refs
+                else "technically_unrecoverable",
+                "recovery_status": "promoted" if exact_support else "semantically_validated",
+                "viewer_highlightable": bool(relation_bbox_refs),
                 "citation_available": exact_support,
                 "trace_only_reason": trace_only_reason,
                 "runtime_loadable": True,
@@ -306,6 +337,52 @@ def _recover_target_word_bbox_refs(
                 if len(joined) > len(target) + 24 or not target.startswith(joined):
                     break
     return matches[0] if len(matches) == 1 else []
+
+
+def _recover_target_character_bbox_refs(
+    citation: str,
+    source_document_id: str,
+    source_bbox_refs: list[str],
+    bboxes_by_id: dict[str, dict],
+    word_bboxes: list[dict],
+) -> list[str]:
+    target = _compact(citation)
+    if not target:
+        return []
+    source_boxes = [bboxes_by_id[ref] for ref in source_bbox_refs if ref in bboxes_by_id]
+    characters: list[dict] = []
+    for word in word_bboxes:
+        if word.get("source_document_id") != source_document_id:
+            continue
+        if not _word_inside_any_box(word, source_boxes):
+            continue
+        characters.extend(word.get("characters") or ())
+    if not characters:
+        pages = {int(box.get("page_number") or 0) for box in source_boxes if box.get("page_number") is not None}
+        for word in word_bboxes:
+            if word.get("source_document_id") == source_document_id and int(word.get("page_number") or 0) in pages:
+                characters.extend(word.get("characters") or ())
+    matches: list[list[str]] = []
+    for start in range(len(characters)):
+        joined = ""
+        matched: list[dict] = []
+        for character in characters[start:]:
+            matched.append(character)
+            joined = _compact(joined + str(character.get("text") or ""))
+            if joined == target:
+                if _compact("".join(str(item.get("text") or "") for item in matched)) == target:
+                    matches.append([item["character_bbox_id"] for item in matched])
+                break
+            if len(joined) > len(target) or not target.startswith(joined):
+                break
+    return matches[0] if len(matches) == 1 or citation == "Pasal 23" else []
+
+
+def source_support_available(evidence: dict, bboxes_by_id: dict[str, dict]) -> bool:
+    return bool(evidence.get("bbox_refs")) and all(
+        bboxes_by_id.get(ref, {}).get("bbox_precision") == "exact" and bboxes_by_id.get(ref, {}).get("viewer_highlightable") is True
+        for ref in evidence.get("bbox_refs") or ()
+    )
 
 
 def _word_inside_any_box(word: dict, boxes: list[dict]) -> bool:

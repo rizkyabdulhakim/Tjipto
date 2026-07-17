@@ -199,45 +199,51 @@ def _append_inserted_bab_bbox_refs(
     source_documents: dict[str, dict],
     pdf_lines_by_source: dict[str, dict[int, list[dict]]],
 ) -> None:
-    chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
-    source_evidence = sorted(
-        evidence,
-        key=lambda row: (row["source_document_id"], chunks_by_unit[row["legal_unit_id"]]["chunk_id"]),
-    )
     for spec in INSERTED_BAB_SPECS:
         source_id = spec["source_document_id"]
         if source_id == "uud::current_consolidated":
             continue
-        child = _first_evidence_at_or_after_child(spec, source_evidence, chunks_by_unit, units_by_id)
-        if not child:
+        bab = next((unit for unit in legal_units if unit.get("source_document_id") == source_id and unit.get("unit_label") == spec["label"]), None)
+        if not bab:
             continue
-        previous = _previous_source_evidence(child, source_evidence)
-        if previous:
-            title_row = _inserted_bab_row(
-                evidence_id=previous["evidence_id"],
-                bbox_id=f"uud_unified_bbox::{previous['evidence_id']}::{len(previous['bbox_refs']) + 1:04d}",
-                text=spec["title"],
-                page_number=spec["page_number"],
-                source_id=source_id,
-                source_meta=source_documents[source_id],
-                pdf_lines_by_source=pdf_lines_by_source,
-                viewer_highlightable=True,
-            )
-            bbox_rows.append(title_row)
-            previous["bbox_refs"].append(title_row["bbox_id"])
+        evidence_id = f"uud_inserted_bab_heading_evidence::{source_id}::{slug(spec['label'])}"
         heading_row = _inserted_bab_row(
-            evidence_id=child["evidence_id"],
-            bbox_id=f"uud_unified_bbox::{child['evidence_id']}::heading_{slug(spec['label'])}",
+            evidence_id=evidence_id,
+            bbox_id=f"uud_unified_bbox::{evidence_id}",
             text=spec["label"],
             page_number=spec["page_number"],
             source_id=source_id,
             source_meta=source_documents[source_id],
             pdf_lines_by_source=pdf_lines_by_source,
-            viewer_highlightable=False,
+            viewer_highlightable=True,
         )
         bbox_rows.append(heading_row)
-        child["bbox_refs"] = [heading_row["bbox_id"], *child["bbox_refs"]]
+        evidence.append(
+            {
+                "bbox_refs": [heading_row["bbox_id"]],
+                "bbox_precision": "exact",
+                "citation": spec["label"],
+                "corpus_id": "uud",
+                "evidence_id": evidence_id,
+                "hierarchy": [spec["label"]],
+                "legal_unit_id": bab["legal_unit_id"],
+                "page_numbers": [spec["page_number"]],
+                "quoted_text": spec["label"],
+                "source_document_id": source_id,
+                "source_url": source_documents[source_id]["source_page_url"],
+                "source_pdf": source_documents[source_id]["filename"],
+                "source_pdf_path": source_documents[source_id]["path"],
+                "source_role": source_documents[source_id]["source_role"],
+                "source_sha256": source_documents[source_id]["sha256"],
+                "status": "final",
+                "temporal_context": source_documents[source_id].get("temporal_context", source_documents[source_id]["source_role"]),
+                "runtime_loadable": True,
+                "evidence_owner_kind": "legal_unit_source",
+                "viewer_highlightable": True,
+                "citation_final": False,
+            }
+        )
     by_evidence: dict[str, list[dict]] = {row["evidence_id"]: [] for row in evidence}
     for row in bbox_rows:
         by_evidence.setdefault(row["evidence_id"], []).append(row)

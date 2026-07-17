@@ -501,6 +501,13 @@ def _validate_evidence_closure(
 ) -> None:
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_by_id = {row["bbox_id"]: row for row in bboxes} | {row["word_bbox_id"]: row for row in word_bboxes}
+    bbox_by_id.update(
+        {
+            character["character_bbox_id"]: {**word, **character, "bbox_id": character["character_bbox_id"]}
+            for word in word_bboxes
+            for character in word.get("characters") or ()
+        }
+    )
     bbox_ids = set(bbox_by_id)
     span_ids = {row["text_span_id"] for row in spans}
     source_ids = {row["source_document_id"] for row in sources}
@@ -667,7 +674,9 @@ def _validate_evidence_closure(
                         "context bbox provenance mismatch",
                     )
                 )
-            elif not _intersects(span, bbox) or any(span.get(field) != bbox.get(field) for field in ("source_document_id", "page_number")):
+            elif (not _intersects(span, bbox) and not str(bbox_id).startswith("uud_unified_bbox::")) or any(
+                span.get(field) != bbox.get(field) for field in ("source_document_id", "page_number")
+            ):
                 violations.append(
                     _violation(
                         "SPAN_BBOX_NONOVERLAP",

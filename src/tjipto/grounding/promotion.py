@@ -11,7 +11,7 @@ def build_promotion_decisions(
     bbox_rows: list[dict],
     page_text_spans: list[dict],
     pages: list[dict],
-    article_relations: list[dict] = (),
+    article_relations: list[dict] | tuple[dict, ...] = (),
 ) -> list[dict]:
     page_text = {(row["source_document_id"], row["page_number"]): row.get("text", "") for row in pages}
     spans_by_page: dict[tuple[str, int], list[dict]] = {}
