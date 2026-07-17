@@ -1163,6 +1163,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"article_relation_target_mapping_mismatch:{row['relation_id']}")
             mapping_support = _validate_mapping_support(row, evidence_row)
             errors.extend(f"{code}:{row['relation_id']}" for code in mapping_support)
+            errors.extend(f"{code}:{row['relation_id']}" for code in _validate_relation_support(row, evidence_row, span_by_id, bbox_by_id))
         if not str(row.get("target_citation") or "").startswith(("Pasal ", "Ayat ")):
             errors.append(f"article_relation_non_pasal_ayat_target:{row['relation_id']}:{row.get('target_citation')}")
         if row.get("support_class") == "trace_article_relation":
@@ -1307,6 +1308,63 @@ def _validate_mapping_support(row: dict, evidence: dict) -> tuple[str, ...]:
     if not evidence.get("text_span_ids") or not evidence.get("bbox_refs"):
         errors.append("article_relation_missing_support_segment")
     return tuple(errors)
+
+
+def _validate_relation_support(row: dict, evidence: dict, span_by_id: dict[str, dict], bbox_by_id: dict[str, dict]) -> tuple[str, ...]:
+    if row.get("relation_type") != "RENAMES":
+        return ()
+    quoted = str(evidence.get("quoted_text") or "")
+    old_range = _range_value(row.get("old_reference_range"), len(quoted))
+    new_range = _range_value(row.get("new_reference_range"), len(quoted))
+    if old_range is None or new_range is None:
+        return ("article_relation_support_missing_mapping_range",)
+    expected_ids = tuple(evidence.get("text_span_ids") or ())
+    expected_bbox_ids = tuple(evidence.get("bbox_refs") or ())
+    support_ids = tuple(row.get("text_span_ids") or ())
+    support_bbox_ids = tuple(row.get("bbox_refs") or ())
+    errors: list[str] = []
+    if not support_ids or not support_bbox_ids:
+        return ("article_relation_support_missing_segment",)
+    if not set(support_ids) <= set(expected_ids) or not set(support_bbox_ids) <= set(expected_bbox_ids):
+        errors.append("article_relation_support_reference_mismatch")
+    span_order = _ordered_support_slice(expected_ids, support_ids, span_by_id, quoted, old_range[0], new_range[1])
+    bbox_order = _ordered_support_slice(expected_bbox_ids, support_bbox_ids, bbox_by_id, quoted, old_range[0], new_range[1])
+    if span_order is None or bbox_order is None:
+        errors.append("article_relation_support_not_minimal")
+    support_text = _support_text(support_ids, span_by_id)
+    support_bbox_text = _support_text(support_bbox_ids, bbox_by_id)
+    old_text = normalize_source_text(quoted[old_range[0] : old_range[1]])
+    new_text = normalize_source_text(quoted[new_range[0] : new_range[1]])
+    for text in (support_text, support_bbox_text):
+        normalized = normalize_source_text(text)
+        old_position = normalized.find(old_text)
+        transition_position = normalized.find("menjadi", old_position + len(old_text))
+        new_position = normalized.find(new_text, transition_position + len("menjadi"))
+        if old_position < 0 or transition_position < 0 or new_position < 0:
+            errors.append("article_relation_support_missing_mapping_part")
+        elif not old_position < transition_position < new_position:
+            errors.append("article_relation_support_order")
+    return tuple(dict.fromkeys(errors))
+
+
+def _ordered_support_slice(
+    expected_ids: tuple[str, ...], support_ids: tuple[str, ...], rows_by_id: dict[str, dict], quoted: str, start: int, end: int
+) -> tuple[str, ...] | None:
+    positions: list[tuple[str, int, int]] = []
+    cursor = 0
+    for row_id in expected_ids:
+        text = str(rows_by_id.get(row_id, {}).get("text") or "")
+        position = quoted.find(text, cursor) if text else -1
+        if position < 0:
+            return None
+        positions.append((row_id, position, position + len(text)))
+        cursor = position + len(text)
+    required = tuple(row_id for row_id, row_start, row_end in positions if row_end > start and row_start < end)
+    return required if tuple(support_ids) == required else None
+
+
+def _support_text(ids: tuple[str, ...], rows_by_id: dict[str, dict]) -> str:
+    return " ".join(str(rows_by_id.get(row_id, {}).get("text") or "") for row_id in ids)
 
 
 def _validate_source_support(evidence: dict, row: dict) -> bool:

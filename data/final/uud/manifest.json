@@ -47,8 +47,8 @@
       "format": "jsonl",
       "artifact_schema": 4,
       "primary_id": "relation_id",
-      "bytes": 341013,
-      "sha256": "3ea3610aac427bc99a03ded67841ae288cc10a23acadead99a2b254f7220a130"
+      "bytes": 340123,
+      "sha256": "4e84339fec2b8db90ccbbc0bc1963d78912c4fe85bfaba7c74dca97a437a4165"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",

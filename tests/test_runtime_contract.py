@@ -621,6 +621,11 @@ class RuntimeContractTest(unittest.TestCase):
         )
         self.assertEqual(exact["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00428")
         self.assertEqual(len(exact["citations"]), 1)
+        self.assertEqual(exact["viewer_refs"][0]["source_document_id"], "uud::amendment_4_historical")
+        self.assertEqual(
+            set(exact["viewer_refs"][0]["target_bbox_refs"]),
+            set(exact["viewer_refs"][0]["source_proof_bbox_refs"]) & set(exact["viewer_refs"][0]["target_bbox_refs"]),
+        )
         self.assertIn("dukungan sumber exact", exact["answer"].casefold())
 
         paragraph = self.service.ask("uud", "Pasal 3 ayat (3) menjadi Pasal 3 ayat (2)")
@@ -648,6 +653,7 @@ class RuntimeContractTest(unittest.TestCase):
         public = handle_request("uud", "ask", {"query": "Pasal 25E menjadi Pasal 25A"}, service=self.service)
         self.assertEqual(public["article_amendment_relations"][0]["target_reference"], "Pasal 25A")
         self.assertEqual(public["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00428")
+        self.assertEqual(public["article_amendment_relations"][0]["source_document_id"], "uud::amendment_4_historical")
 
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
         for case in _relation_cases():

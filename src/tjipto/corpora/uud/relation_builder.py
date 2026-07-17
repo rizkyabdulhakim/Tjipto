@@ -141,8 +141,12 @@ def build_article_amendment_relations(
                 evidence_row, target_phrase, target_span_ids, bbox_refs, mapping=mapping, source_support_exact=source_support_exact
             )
         )
-        relation_bbox_refs = list(evidence_row.get("bbox_refs") or ())
-        relation_span_ids = list(evidence_row.get("text_span_ids") or ())
+        relation_span_ids, relation_bbox_refs = _relation_support_refs(
+            evidence_row,
+            mapping,
+            spans_by_id,
+            bboxes_by_id,
+        )
         target_reference = target_phrase
         old_reference = str(mapping.get("old_reference") or "")
         rows.append(
@@ -206,6 +210,41 @@ def _target_span_ids(evidence: dict, citation: str, spans_by_id: dict[str, dict]
         if pattern.search(str(spans_by_id.get(span_id, {}).get("text") or ""))
         and _isolates_reference(str(spans_by_id.get(span_id, {}).get("text") or ""), citation)
     ]
+
+
+def _relation_support_refs(
+    evidence: dict,
+    mapping: dict,
+    spans_by_id: dict[str, dict],
+    bboxes_by_id: dict[str, dict],
+) -> tuple[list[str], list[str]]:
+    if not mapping:
+        return list(evidence.get("text_span_ids") or ()), list(evidence.get("bbox_refs") or ())
+    old_range = _valid_range(mapping.get("old_range"), len(str(evidence.get("quoted_text") or "")))
+    new_range = _valid_range(mapping.get("new_range"), len(str(evidence.get("quoted_text") or "")))
+    if old_range is None or new_range is None:
+        return [], []
+    start, end = old_range[0], new_range[1]
+    return (
+        _slice_support_ids(evidence.get("text_span_ids") or (), spans_by_id, start, end, str(evidence.get("quoted_text") or "")),
+        _slice_support_ids(evidence.get("bbox_refs") or (), bboxes_by_id, start, end, str(evidence.get("quoted_text") or "")),
+    )
+
+
+def _slice_support_ids(ids: list[str] | tuple[str, ...], rows_by_id: dict[str, dict], start: int, end: int, quoted: str) -> list[str]:
+    cursor = 0
+    ranges: list[tuple[str, int, int]] = []
+    for row_id in ids:
+        text = str(rows_by_id.get(row_id, {}).get("text") or "")
+        if not text:
+            continue
+        position = quoted.find(text, cursor)
+        if position < 0:
+            return []
+        ranges.append((row_id, position, position + len(text)))
+        cursor = position + len(text)
+    selected = [row_id for row_id, row_start, row_end in ranges if row_end > start and row_start < end]
+    return selected
 
 
 def _target_bbox_refs(evidence: dict, citation: str, bboxes_by_id: dict[str, dict]) -> list[str]:

@@ -1173,6 +1173,7 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
         "viewer_ref": {
             "action": "viewer",
             "evidence_id": row["evidence_id"],
+            "source_document_id": row.get("source_document_id"),
             "page_numbers": tuple(row.get("page_numbers") or ()),
             "text_span_ids": proof_text_span_ids,
             "bbox_count": len(proof_bboxes),
@@ -1200,8 +1201,8 @@ def _public_document_relation(row: dict) -> dict:
     return {
         "relation_id": row.get("relation_id"),
         "relation_type": row.get("relation_type"),
-        "source_role": row.get("source_role"),
         "source_document_id": row.get("source_document_id"),
+        "source_role": row.get("source_role"),
         "target_source_role": row.get("target_source_role"),
         "target_document_id": row.get("target_document_id"),
         "support_type": row.get("support_type"),
@@ -1214,6 +1215,7 @@ def public_article_relation(row: dict) -> dict:
     return {
         "relation_id": row.get("relation_id"),
         "relation_type": row.get("relation_type"),
+        "source_document_id": row.get("source_document_id"),
         "source_role": row.get("source_role"),
         "source_legal_unit_id": row.get("source_legal_unit_id"),
         "source_legal_unit_role": row.get("source_legal_unit_role"),

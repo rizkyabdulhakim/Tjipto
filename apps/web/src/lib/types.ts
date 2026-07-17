@@ -28,6 +28,12 @@ export interface Citation {
   sourceRole?: string;
   temporalContext?: string;
   sourceStatusLabel?: string;
+  relationSourceProofTextSpanIds?: string[];
+  relationSourceProofBBoxRefs?: string[];
+  relationTargetTextSpanIds?: string[];
+  relationTargetBBoxRefs?: string[];
+  relationTargetPrecision?: string;
+  relationProof?: boolean;
 }
 
 export interface ChatMessage {

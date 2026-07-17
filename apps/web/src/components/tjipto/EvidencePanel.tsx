@@ -307,6 +307,7 @@ function EvidenceContent({
               <RenderedViewer
                 key={`${citation.viewerMode ?? "evidence"}:${viewer.source_document_id}:${viewer.evidence_id ?? "document"}:${viewer.bbox_rectangles?.length ?? 0}`}
                 viewer={viewer}
+                citation={citation}
                 targetPage={pageNumber}
                 onRenderFailed={() => {
                   setRenderFailed(true);
@@ -454,10 +455,12 @@ function MetaRow({
 
 function RenderedViewer({
   viewer,
+  citation,
   targetPage,
   onRenderFailed,
 }: {
   viewer: ViewerPayload;
+  citation: Citation;
   targetPage: number;
   onRenderFailed: () => void;
 }) {
@@ -517,6 +520,7 @@ function RenderedViewer({
               pageNumber={pageNumber}
               active={pageNumber === targetPage}
               boxes={viewer.bbox_rectangles ?? []}
+              citation={citation}
               onRenderFailed={onRenderFailed}
               onRendered={() => setRenderedPages((count) => count + 1)}
             />
@@ -532,6 +536,7 @@ function PdfPage({
   pageNumber,
   active,
   boxes,
+  citation,
   onRenderFailed,
   onRendered,
 }: {
@@ -539,6 +544,7 @@ function PdfPage({
   pageNumber: number;
   active: boolean;
   boxes: NonNullable<ViewerPayload["bbox_rectangles"]>;
+  citation: Citation;
   onRenderFailed: () => void;
   onRendered: () => void;
 }) {
@@ -546,9 +552,11 @@ function PdfPage({
   const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
   const [pageViewport, setPageViewport] = useState<ReturnType<PDFPageProxy["getViewport"]> | null>(null);
   const [rendered, setRendered] = useState(false);
+  const relationProofIds = citation.relationProof ? citation.relationSourceProofBBoxRefs : undefined;
+  const targetIds = new Set(citation.relationTargetBBoxRefs ?? []);
   const pageBoxes = boxes.filter(
     (box) => box.page_number === pageNumber && box.viewer_highlightable === true,
-  );
+  ).filter((box) => !relationProofIds || relationProofIds.includes(String(box.bbox_id)));
 
   useEffect(() => {
     let cancelled = false;
@@ -604,7 +612,8 @@ function PdfPage({
           return (
             <span
               key={box.bbox_id}
-              data-bbox-highlight={active ? "active" : "related"}
+              data-bbox-highlight={targetIds.has(String(box.bbox_id)) ? "target" : active ? "active" : "related"}
+              data-relation-layer={relationProofIds ? (targetIds.has(String(box.bbox_id)) ? "target-emphasis" : "source-proof") : undefined}
               className="absolute"
               style={{
                 left: `${rect.left}%`,

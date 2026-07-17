@@ -180,9 +180,25 @@ async function runEvidenceContractSmoke(browser) {
   await relationSupport.getByText(/target target_local/).waitFor();
   await articleRelationPage.locator('[data-citation-footer="true"] button').first().click();
   await articleRelationPage.locator('[data-evidence-panel="normal"]').waitFor();
-  await articleRelationPage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  await articleRelationPage.locator('[data-relation-layer="source-proof"]').first().waitFor();
+  await articleRelationPage.locator('[data-relation-layer="target-emphasis"]').first().waitFor();
+  assert(
+    (await articleRelationPage.locator('[data-relation-layer="target-emphasis"]').count()) <=
+      (await articleRelationPage.locator('[data-relation-layer="source-proof"], [data-relation-layer="target-emphasis"]').count()),
+    "Target emphasis is not a source-proof subset.",
+  );
   await assertHighlightGeometry(articleRelationPage);
   await articleRelationPage.close();
+
+  const traceRelationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await ask(traceRelationPage, "Pasal 3 ayat (3) menjadi Pasal 3 ayat (2)");
+  await traceRelationPage.locator('[data-runtime-status="limited_answer"]').waitFor();
+  const traceRelationSupport = traceRelationPage.locator('[data-support-kind="article-relations"]');
+  await traceRelationSupport.waitFor();
+  await traceRelationSupport.getByText(/Source-backed trace-only/).waitFor();
+  assert((await traceRelationPage.locator('[data-citation-footer="true"]').count()) === 0, "Trace relation became a final citation.");
+  assert((await traceRelationPage.locator('[data-relation-layer="target-emphasis"]').count()) === 0, "Trace relation exposed target emphasis.");
+  await traceRelationPage.close();
 
   const insufficientPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(insufficientPage, "siapa presiden indonesia sekarang?");
@@ -213,6 +229,7 @@ async function runSmoke() {
     await page.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
     await page.locator('[data-pdf-document="full"]').waitFor();
     await page.locator('[data-evidence-panel="normal"]').waitFor();
+    assert((await page.locator("[data-relation-layer]").count()) === 0, "Generic evidence highlight manufactured relation proof.");
     await page.waitForFunction(() => {
       const document = window.document.querySelector('[data-pdf-document="full"]');
       return Number(document?.getAttribute("data-page-count") ?? "0") > 1;

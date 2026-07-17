@@ -61,6 +61,7 @@ export interface DocumentRelationPayload {
 export interface ArticleAmendmentRelationPayload {
   relation_id?: string;
   relation_type?: string;
+  source_document_id?: string;
   source_legal_unit_id?: string;
   source_legal_unit_role?: string;
   source_label?: string;
@@ -317,6 +318,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
     if (!item?.evidence_id || !item?.quoted_text) return [];
     const viewer = viewerRefs[index] ?? item.viewer_ref;
     if (viewer?.can_resolve !== true) return [];
+    const relation = (response.article_amendment_relations ?? []).find((candidate) => candidate.evidence_id === item.evidence_id);
     const authorityKind = item.authority_kind ?? fallbackAuthorityKind(response);
     const pages = Array.isArray(item.page_numbers)
       ? item.page_numbers
@@ -328,7 +330,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       id: index + 1,
       documentId: String(item.evidence_id),
       legalUnitId: item.legal_unit_id,
-      sourceDocumentId: item.source_document_id,
+      sourceDocumentId: item.source_document_id ?? viewer?.source_document_id,
       viewerRefId: viewer?.evidence_id,
       documentTitle: item.document_title ?? fallbackDocumentTitle(item.corpus_id),
       regulationType: "UUD",
@@ -343,6 +345,12 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       sourceRole: item.source_role,
       temporalContext: item.temporal_context,
       sourceStatusLabel: sourceStatusLabel(item.source_role, item.temporal_context),
+      relationSourceProofTextSpanIds: viewer?.source_proof_text_span_ids,
+      relationSourceProofBBoxRefs: viewer?.source_proof_bbox_refs,
+      relationTargetTextSpanIds: viewer?.target_text_span_ids,
+      relationTargetBBoxRefs: viewer?.target_bbox_refs,
+      relationTargetPrecision: relation?.target_precision,
+      relationProof: Array.isArray(viewer?.source_proof_bbox_refs) && viewer.source_proof_bbox_refs.length > 0,
     };
   });
 }

@@ -82,6 +82,32 @@ test("exact metadata provenance is mapped as non-final metadata source", () => {
   assert.equal(citations[0].sourceUrl, "https://peraturan.bpk.go.id/Details/101646/uud-no--");
 });
 
+test("relation citation preserves viewer source identity and proof layers", () => {
+  const citations = mapAskResponseToCitations({
+    status: "answer_ready",
+    citations: [{
+      evidence_id: "evidence_rename",
+      quoted_text: "Pasal 25E menjadi Pasal 25A",
+      citation_final: false,
+      page_numbers: [1],
+    }],
+    viewer_refs: [{
+      evidence_id: "evidence_rename",
+      source_document_id: "uud::amendment_4_historical",
+      page_numbers: [1],
+      source_proof_text_span_ids: ["span_old", "span_transition", "span_new"],
+      source_proof_bbox_refs: ["bbox_old", "bbox_transition", "bbox_new"],
+      target_text_span_ids: ["span_new"],
+      target_bbox_refs: ["bbox_new"],
+      can_resolve: true,
+    }],
+  });
+
+  assert.equal(citations[0].sourceDocumentId, "uud::amendment_4_historical");
+  assert.deepEqual(citations[0].relationSourceProofBBoxRefs, ["bbox_old", "bbox_transition", "bbox_new"]);
+  assert.deepEqual(citations[0].relationTargetBBoxRefs, ["bbox_new"]);
+});
+
 test("limited answer keeps backend answer text instead of fallback", () => {
   assert.equal(
     answerTextOrFallback({
