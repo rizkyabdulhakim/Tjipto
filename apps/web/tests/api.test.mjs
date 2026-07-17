@@ -185,3 +185,26 @@ test("exact source anomaly provenance stays non-final but clickable when viewer 
   assert.equal(citations[0].authorityLabel, "Source anomaly");
   assert.equal(citations[0].citationFinal, false);
 });
+
+test("article relation support preserves source proof and target precision wording", () => {
+  const support = mapAskResponseToSupportItems({
+    status: "answer_ready",
+    article_amendment_relations: [{
+      relation_id: "rename_25e_25a",
+      relation_type: "RENAMES",
+      source_reference: "Pasal 25E",
+      target_reference: "Pasal 25A",
+      evidence_id: "evidence_rename",
+      source_proof_text_span_ids: ["span_old", "span_transition", "span_new"],
+      source_proof_bbox_refs: ["bbox_old", "bbox_transition", "bbox_new"],
+      target_precision: "target_local",
+      support_class: "exact_article_relation",
+      viewer_highlightable: true,
+    }],
+  });
+
+  assert.equal(support.articleRelations.length, 1);
+  assert.match(support.articleRelations[0].label, /Pasal 25E.*Pasal 25A/);
+  assert.match(support.articleRelations[0].detail, /Source proof exact/);
+  assert.match(support.articleRelations[0].detail, /target target_local/);
+});

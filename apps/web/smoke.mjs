@@ -170,6 +170,20 @@ async function runEvidenceContractSmoke(browser) {
   await expectNoExactCitationUi(relationPage);
   await relationPage.close();
 
+  const articleRelationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await ask(articleRelationPage, "Pasal 25E menjadi Pasal 25A");
+  await articleRelationPage.locator('[data-runtime-status="answer_ready"]').waitFor();
+  const relationSupport = articleRelationPage.locator('[data-support-kind="article-relations"]');
+  await relationSupport.waitFor();
+  await relationSupport.getByText(/Pasal 25E.*Pasal 25A/).waitFor();
+  await relationSupport.getByText(/Source proof exact/).waitFor();
+  await relationSupport.getByText(/target target_local/).waitFor();
+  await articleRelationPage.locator('[data-citation-footer="true"] button').first().click();
+  await articleRelationPage.locator('[data-evidence-panel="normal"]').waitFor();
+  await articleRelationPage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  await assertHighlightGeometry(articleRelationPage);
+  await articleRelationPage.close();
+
   const insufficientPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(insufficientPage, "siapa presiden indonesia sekarang?");
   await insufficientPage.locator('[data-runtime-status="insufficient_evidence"]').waitFor();

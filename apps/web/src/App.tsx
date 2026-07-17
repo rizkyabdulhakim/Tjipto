@@ -95,6 +95,7 @@ export default function App() {
                 metadataSupport: support.metadata.length ? support.metadata : undefined,
                 traceSupport: support.trace.length ? support.trace : undefined,
                 documentRelations: support.documentRelations.length ? support.documentRelations : undefined,
+                articleRelations: support.articleRelations.length ? support.articleRelations : undefined,
               }
             : m,
         ),

@@ -635,6 +635,12 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(all(not row["viewer_highlightable"] for row in paragraph["article_amendment_relations"]))
         self.assertNotIn("didukung bukti exact:", paragraph["answer"].casefold())
 
+        paraphrase = self.service.ask("uud", "perubahan keempat mengubah penomoran pasal apa")
+        self.assertEqual(paraphrase["route"], "document_relation")
+        self.assertEqual(paraphrase["intent"], "document_amendment_relation")
+        self.assertEqual({row["relation_type"] for row in paraphrase["article_amendment_relations"]}, {"RENAMES"})
+        self.assertEqual(len(paraphrase["article_amendment_relations"]), 3)
+
         anomaly = self.service.ask("uud", "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?")
         self.assertEqual(anomaly["route"], "source_anomaly_explanation")
         self.assertFalse(anomaly.get("article_amendment_relations"))

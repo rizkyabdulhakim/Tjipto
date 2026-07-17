@@ -141,12 +141,8 @@ def build_article_amendment_relations(
                 evidence_row, target_phrase, target_span_ids, bbox_refs, mapping=mapping, source_support_exact=source_support_exact
             )
         )
-        relation_bbox_refs = (
-            list(evidence_row.get("bbox_refs") or ())
-            if mapping
-            else (bbox_refs if exact_support else list(evidence_row.get("bbox_refs") or ()))
-        )
-        relation_span_ids = target_span_ids if exact_support else list(evidence_row.get("text_span_ids") or ())
+        relation_bbox_refs = list(evidence_row.get("bbox_refs") or ())
+        relation_span_ids = list(evidence_row.get("text_span_ids") or ())
         target_reference = target_phrase
         old_reference = str(mapping.get("old_reference") or "")
         rows.append(

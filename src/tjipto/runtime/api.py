@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from tjipto.runtime.service import LegalRuntimeService
+from tjipto.runtime.service import LegalRuntimeService, public_article_relation
 
 
 class BadRequest(ValueError):
@@ -322,33 +322,7 @@ def _public_legal_relation(row: dict) -> dict:
 
 
 def _public_article_relation(row: dict) -> dict:
-    return {
-        "relation_id": row.get("relation_id"),
-        "relation_type": row.get("relation_type"),
-        "source_legal_unit_id": row.get("source_legal_unit_id"),
-        "source_label": row.get("source_label"),
-        "source_reference": row.get("source_reference"),
-        "source_reference_range": row.get("source_reference_range"),
-        "source_reference_range_kind": row.get("source_reference_range_kind"),
-        "source_role": row.get("source_role"),
-        "target_legal_unit_id": row.get("target_legal_unit_id"),
-        "target_label": row.get("target_label"),
-        "target_reference": row.get("target_reference"),
-        "target_reference_range": row.get("target_reference_range"),
-        "target_reference_range_kind": row.get("target_reference_range_kind"),
-        "target_source_role": row.get("target_source_role"),
-        "evidence_id": row.get("evidence_id"),
-        "text_span_ids": tuple(row.get("text_span_ids") or ()),
-        "bbox_refs": tuple(row.get("bbox_refs") or ()),
-        "target_text_span_ids": tuple(row.get("target_text_span_ids") or ()),
-        "target_bbox_refs": tuple(row.get("target_bbox_refs") or ()),
-        "target_precision": row.get("target_precision"),
-        "source_support_exact": row.get("source_support_exact") is True,
-        "support_class": row.get("support_class"),
-        "trace_only_reason": row.get("trace_only_reason"),
-        "citation_available": row.get("citation_available") is True,
-        "viewer_highlightable": row.get("viewer_highlightable") is True,
-    }
+    return public_article_relation(row)
 
 
 def _public_viewer_ref(row: dict) -> dict:
@@ -359,6 +333,10 @@ def _public_viewer_ref(row: dict) -> dict:
         "page_numbers": row.get("page_numbers", ()),
         "bbox_count": row.get("bbox_count"),
         "can_resolve": row.get("can_resolve"),
+        "source_proof_text_span_ids": row.get("source_proof_text_span_ids", ()),
+        "source_proof_bbox_refs": row.get("source_proof_bbox_refs", ()),
+        "target_text_span_ids": row.get("target_text_span_ids", ()),
+        "target_bbox_refs": row.get("target_bbox_refs", ()),
     }
 
 

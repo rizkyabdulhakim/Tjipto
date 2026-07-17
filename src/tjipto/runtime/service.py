@@ -64,15 +64,22 @@ class LegalRuntimeService:
         self.registry = CorpusRegistry(repo_root)
         self.repository = VerifiedCorpusRepository(self.registry)
         self._integrity_error: str | None = None
+        self._store_cache: dict[str, EvidenceStore] = {}
 
     def _store(self, corpus_id: str):
+        cached = self._store_cache.get(corpus_id)
+        if cached is not None:
+            self._integrity_error = None
+            return cached
         try:
             config = self.repository.load(corpus_id).config
             self._integrity_error = None
         except CorpusIntegrityError as error:
             self._integrity_error = error.code
             return None
-        return EvidenceStore(config)
+        store = EvidenceStore(config)
+        self._store_cache[corpus_id] = store
+        return store
 
     def search(self, corpus_id: str, query: str, limit: int = 10, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
@@ -1143,27 +1150,37 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
         return None
     if store.lineage_error(row):
         return None
+    proof_bbox_refs = tuple(relation.get("bbox_refs") or row.get("bbox_refs") or ())
+    proof_text_span_ids = tuple(relation.get("text_span_ids") or row.get("text_span_ids") or ())
     target_bbox_refs = tuple(relation.get("target_bbox_refs") or ())
-    bboxes = [bbox for bbox in store.bboxes_for(row["evidence_id"]) if bbox.get("bbox_id") in set(target_bbox_refs)]
-    if not bboxes or not set(target_bbox_refs) <= {bbox["bbox_id"] for bbox in bboxes}:
+    proof_bboxes = [bbox for bbox in store.bboxes_for(row["evidence_id"]) if bbox.get("bbox_id") in set(proof_bbox_refs)]
+    if not proof_bboxes or not set(proof_bbox_refs) <= {bbox["bbox_id"] for bbox in proof_bboxes}:
         return None
     if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True:
         return None
     return {
         **row,
-        "bbox_refs": target_bbox_refs,
-        "text_span_ids": tuple(relation.get("target_text_span_ids") or relation.get("text_span_ids") or row.get("text_span_ids") or ()),
+        "bbox_refs": proof_bbox_refs,
+        "text_span_ids": proof_text_span_ids,
+        "relation_source_proof_bbox_refs": proof_bbox_refs,
+        "relation_source_proof_text_span_ids": proof_text_span_ids,
+        "relation_target_bbox_refs": target_bbox_refs,
+        "relation_target_text_span_ids": tuple(relation.get("target_text_span_ids") or ()),
         "quoted_text": relation.get("quoted_text") or row.get("quoted_text"),
-        "bbox_count": len(bboxes),
+        "bbox_count": len(proof_bboxes),
         "route_sources": ("article_amendment_relation",),
         "article_amendment_relation": relation,
         "viewer_ref": {
             "action": "viewer",
             "evidence_id": row["evidence_id"],
             "page_numbers": tuple(row.get("page_numbers") or ()),
-            "text_span_ids": tuple(relation.get("target_text_span_ids") or relation.get("text_span_ids") or row.get("text_span_ids") or ()),
-            "bbox_count": len(bboxes),
-            "bbox_refs": target_bbox_refs,
+            "text_span_ids": proof_text_span_ids,
+            "bbox_count": len(proof_bboxes),
+            "bbox_refs": proof_bbox_refs,
+            "source_proof_text_span_ids": proof_text_span_ids,
+            "source_proof_bbox_refs": proof_bbox_refs,
+            "target_text_span_ids": tuple(relation.get("target_text_span_ids") or ()),
+            "target_bbox_refs": target_bbox_refs,
             "can_resolve": True,
         },
     }
@@ -1193,7 +1210,7 @@ def _public_document_relation(row: dict) -> dict:
     }
 
 
-def _public_article_relation(row: dict) -> dict:
+def public_article_relation(row: dict) -> dict:
     return {
         "relation_id": row.get("relation_id"),
         "relation_type": row.get("relation_type"),
@@ -1201,18 +1218,20 @@ def _public_article_relation(row: dict) -> dict:
         "source_legal_unit_id": row.get("source_legal_unit_id"),
         "source_legal_unit_role": row.get("source_legal_unit_role"),
         "source_label": row.get("source_label"),
-        "source_reference": row.get("old_reference"),
-        "source_reference_range": row.get("old_reference_range"),
-        "source_reference_range_kind": row.get("old_reference_range_kind"),
+        "source_reference": row.get("old_reference") or row.get("source_reference"),
+        "source_reference_range": row.get("old_reference_range") or row.get("source_reference_range"),
+        "source_reference_range_kind": row.get("old_reference_range_kind") or row.get("source_reference_range_kind"),
         "target_legal_unit_id": row.get("target_legal_unit_id"),
         "target_label": row.get("target_label") or row.get("target_citation"),
         "target_citation": row.get("target_citation"),
-        "target_reference": row.get("new_reference"),
-        "target_reference_range": row.get("new_reference_range"),
-        "target_reference_range_kind": row.get("new_reference_range_kind"),
+        "target_reference": row.get("new_reference") or row.get("target_reference"),
+        "target_reference_range": row.get("new_reference_range") or row.get("target_reference_range"),
+        "target_reference_range_kind": row.get("new_reference_range_kind") or row.get("target_reference_range_kind"),
         "target_source_role": row.get("target_source_role"),
         "evidence_id": row.get("evidence_id"),
         "bbox_refs": tuple(row.get("bbox_refs") or ()),
+        "source_proof_text_span_ids": tuple(row.get("text_span_ids") or ()),
+        "source_proof_bbox_refs": tuple(row.get("bbox_refs") or ()),
         "target_bbox_refs": tuple(row.get("target_bbox_refs") or ()),
         "target_precision": row.get("target_precision"),
         "source_support_exact": row.get("source_support_exact") is True,
@@ -1224,6 +1243,9 @@ def _public_article_relation(row: dict) -> dict:
         "citation_available": row.get("citation_available") is True,
         "viewer_highlightable": row.get("viewer_highlightable") is True,
     }
+
+
+_public_article_relation = public_article_relation
 
 
 def _article_relation_citation(row: dict) -> dict:

@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "a48f92dcfa4922866d300eaa0a4c13a8069435291f5965d01ebf1c7f7cee69c3",
+    "manifest_sha256": "729fb800fa98c957d81992245c1e3eb4ff3cc28baf889d5a9ebe5b7827bddbfe",
     "runtime_required_artifacts": [
       "evidence_registry",
       "bbox_registry",
@@ -787,6 +787,7 @@
           "RENAME_PROVISION": {
             "terms": [
               "renumbering",
+              "penomoran",
               "penomoran ulang",
               "penomoran kembali",
               "dinomori ulang",

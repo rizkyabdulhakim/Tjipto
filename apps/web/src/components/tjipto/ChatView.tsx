@@ -255,6 +255,7 @@ function AssistantMessage({
               metadataSupport={message.metadataSupport}
               traceSupport={message.traceSupport}
               documentRelations={message.documentRelations}
+              articleRelations={message.articleRelations}
             />
           )}
 
@@ -391,15 +392,18 @@ function SupportFooter({
   metadataSupport,
   traceSupport,
   documentRelations,
+  articleRelations,
 }: {
   metadataSupport?: SupportItem[];
   traceSupport?: SupportItem[];
   documentRelations?: SupportItem[];
+  articleRelations?: SupportItem[];
 }) {
   const groups = [
     ["metadata-support", "DUKUNGAN METADATA", metadataSupport],
     ["trace-support", "TRACE-ONLY", traceSupport],
     ["document-relations", "RELASI DOKUMEN", documentRelations],
+    ["article-relations", "BUKTI RELASI PASAL", articleRelations],
   ] as const;
   const visible = groups.filter(([, , rows]) => rows?.length);
   if (!visible.length) return null;

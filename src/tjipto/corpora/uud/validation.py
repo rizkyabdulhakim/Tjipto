@@ -1117,6 +1117,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"article_relation_source_document_mismatch:{row['relation_id']}")
         if row.get("source_role") != evidence_row.get("source_role"):
             errors.append(f"article_relation_source_role_mismatch:{row['relation_id']}")
+        if not row.get("source_legal_unit_role"):
+            errors.append(f"article_relation_missing_source_unit_role:{row['relation_id']}")
         if row.get("source_pdf_sha256") != evidence_row.get("source_sha256"):
             errors.append(f"article_relation_source_sha_mismatch:{row['relation_id']}")
         if row.get("bbox_precision") != evidence_row.get("bbox_precision"):
@@ -1131,19 +1133,26 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"article_relation_unknown_source:{row['relation_id']}:{row.get('source_legal_unit_id')}")
         elif row.get("source_label") != source_unit.get("unit_label"):
             errors.append(f"article_relation_source_label_mismatch:{row['relation_id']}")
-        elif row.get("source_legal_unit_role") not in {None, source_unit.get("source_role")}:
+        elif row.get("source_legal_unit_role") != source_unit.get("source_role"):
             errors.append(f"article_relation_source_role_unit_mismatch:{row['relation_id']}")
         if row.get("target_legal_unit_id") not in units_by_id:
             errors.append(f"article_relation_unknown_target:{row['relation_id']}:{row.get('target_legal_unit_id')}")
         elif target_unit is not None and row.get("target_label") not in {None, target_unit.get("unit_label")}:
             errors.append(f"article_relation_target_label_mismatch:{row['relation_id']}")
-        if target_unit is not None and row.get("target_source_role") not in {None, target_unit.get("source_role")}:
+        if not row.get("target_source_role"):
+            errors.append(f"article_relation_missing_target_unit_role:{row['relation_id']}")
+        elif target_unit is not None and row.get("target_source_role") != target_unit.get("source_role"):
             errors.append(f"article_relation_target_role_mismatch:{row['relation_id']}")
         if row.get("relation_type") == "RENAMES":
             if not row.get("old_reference") or not row.get("new_reference"):
                 errors.append(f"article_relation_missing_renumber_mapping:{row['relation_id']}")
             if not row.get("old_reference_range") or not row.get("new_reference_range"):
                 errors.append(f"article_relation_missing_reference_range:{row['relation_id']}")
+            if row.get("old_reference_range_kind") not in {"literal", "contextual"} or row.get("new_reference_range_kind") not in {
+                "literal",
+                "contextual",
+            }:
+                errors.append(f"article_relation_invalid_reference_range_kind:{row['relation_id']}")
             if row.get("new_reference") and not str(row.get("new_reference")).casefold().startswith(
                 str(row.get("target_citation") or "").casefold()
             ):
@@ -1201,6 +1210,22 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             and target_phrase in local_bbox_text
             and isolated_bbox
         )
+        target_span_isolated = bool(target_spans) and all(
+            span is not None
+            and len(parse_legal_references("uud", str(span.get("text") or ""))) == 1
+            and target_phrase in normalize_source_text(str(span.get("text") or ""))
+            for span in target_spans
+        )
+        target_bbox_isolated = bool(target_bbox_refs) and all(
+            bbox_id in bbox_by_id
+            and len(parse_legal_references("uud", str(bbox_by_id[bbox_id].get("text") or ""))) == 1
+            and target_phrase in normalize_source_text(str(bbox_by_id[bbox_id].get("text") or ""))
+            for bbox_id in target_bbox_refs
+        )
+        if target_spans and not target_span_isolated:
+            errors.append(f"article_relation_target_span_not_isolated:{row['relation_id']}")
+        if target_bbox_refs and not target_bbox_isolated:
+            errors.append(f"article_relation_target_bbox_not_isolated:{row['relation_id']}")
         if (
             row.get("relation_type") == "RENAMES"
             and row.get("support_class") == "exact_article_relation"
@@ -1223,11 +1248,22 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"article_relation_exact_precision_mismatch:{row['relation_id']}")
             if not row.get("target_text_span_ids"):
                 errors.append(f"article_relation_missing_target_span:{row['relation_id']}")
+            if not row.get("text_span_ids"):
+                errors.append(f"article_relation_missing_support_span:{row['relation_id']}")
         if support_class == "trace_article_relation":
             if exact_support:
                 errors.append(f"article_relation_trace_should_be_exact:{row['relation_id']}")
+            if row.get("target_precision") == "target_local":
+                errors.append(f"article_relation_trace_target_local_precision:{row['relation_id']}")
             if row.get("grounding_level") == "exact_source_text" and row.get("target_precision") != "shared_span":
                 errors.append(f"article_relation_trace_false_exact_grounding:{row['relation_id']}")
+            if row.get("grounding_level") not in {
+                "exact_source_text",
+                "exact_source_text_shared_target",
+                "target_reference_only",
+                "page_grounded_trace",
+            }:
+                errors.append(f"article_relation_unknown_grounding_level:{row['relation_id']}:{row.get('grounding_level')}")
             if row.get("viewer_highlightable") is not False or row.get("citation_available") is not False:
                 errors.append(f"article_relation_trace_public_citation:{row['relation_id']}")
             if not row.get("trace_only_reason"):

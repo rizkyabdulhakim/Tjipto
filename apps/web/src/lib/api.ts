@@ -79,6 +79,8 @@ export interface ArticleAmendmentRelationPayload {
   bbox_refs?: string[];
   target_text_span_ids?: string[];
   target_bbox_refs?: string[];
+  source_proof_text_span_ids?: string[];
+  source_proof_bbox_refs?: string[];
   target_precision?: string;
   source_support_exact?: boolean;
   support_class?: string;
@@ -135,6 +137,10 @@ export interface ViewerRefPayload {
   bbox_count?: number;
   source_status_label?: string;
   can_resolve?: boolean;
+  source_proof_text_span_ids?: string[];
+  source_proof_bbox_refs?: string[];
+  target_text_span_ids?: string[];
+  target_bbox_refs?: string[];
 }
 
 export interface CitationPayload {
@@ -345,6 +351,7 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
   metadata: SupportItem[];
   trace: SupportItem[];
   documentRelations: SupportItem[];
+  articleRelations: SupportItem[];
 } {
   return {
     metadata: (response.metadata_support ?? []).map((row, index) => ({
@@ -374,6 +381,15 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
       label: String(row.relation_type ?? "document_relation"),
       detail: "Relasi tingkat dokumen, bukan sitasi atau highlight exact.",
       clickable: false,
+    })),
+    articleRelations: (response.article_amendment_relations ?? []).map((row, index) => ({
+      id: String(row.relation_id ?? `article_relation_${index}`),
+      kind: "article_relation",
+      label: `${row.relation_type ?? "RELATION"}: ${row.source_reference ?? row.source_label ?? "source"} → ${row.target_reference ?? row.target_label ?? "target"}`,
+      detail: row.support_class === "exact_article_relation"
+        ? `Source proof exact (${row.source_proof_text_span_ids?.length ?? row.text_span_ids?.length ?? 0} spans / ${row.source_proof_bbox_refs?.length ?? row.bbox_refs?.length ?? 0} BBoxes); target ${row.target_precision ?? "shared_span"}. Evidence ${row.evidence_id ?? "unavailable"}.`
+        : `Source-backed trace-only (${row.trace_only_reason ?? "precision not isolated"}; ${row.source_proof_text_span_ids?.length ?? row.text_span_ids?.length ?? 0} proof spans). Evidence ${row.evidence_id ?? "unavailable"}.`,
+      clickable: row.viewer_highlightable === true,
     })),
   };
 }
