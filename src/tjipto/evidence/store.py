@@ -116,6 +116,10 @@ class EvidenceStore:
             self._bbox_by_evidence = grouped
         return self._bbox_by_evidence.get(evidence_id, [])
 
+    def bboxes_for_refs(self, bbox_refs: tuple[str, ...] | list[str]) -> list[dict]:
+        by_id = self._bbox_rows_by_id()
+        return [by_id[bbox_id] for bbox_id in bbox_refs if bbox_id in by_id]
+
     def metadata_bboxes_for(self, metadata_grounding_id: str) -> list[dict]:
         if self._metadata_bbox_by_grounding is None:
             bbox_by_id = self._bbox_rows_by_id()

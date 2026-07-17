@@ -98,12 +98,14 @@ def build_article_amendment_relations(
     evidence: list[dict],
     bbox_rows: list[dict],
     page_text_spans: list[dict],
+    word_bboxes: list[dict],
 ) -> list[dict]:
     units = {row["legal_unit_id"]: row for row in legal_units}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
-    bbox_ids = {row["bbox_id"] for row in bbox_rows}
+    bbox_ids = {row["bbox_id"] for row in bbox_rows} | {row["word_bbox_id"] for row in word_bboxes}
     spans_by_id = {row["text_span_id"]: row for row in page_text_spans}
     bboxes_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    bboxes_by_id.update({row["word_bbox_id"]: row | {"bbox_id": row["word_bbox_id"], "bbox_precision": "exact", "viewer_highlightable": True} for row in word_bboxes})
     rows = []
     for edge in graph_edges:
         relation_type = edge.get("edge_type")
@@ -123,12 +125,25 @@ def build_article_amendment_relations(
         mapping = edge.get("reference_mapping") or {}
         target_phrase = str(mapping.get("new_reference") or target_citation or "")
         target_span_ids = _target_span_ids(evidence_row, target_phrase, spans_by_id)
-        bbox_refs = _target_bbox_refs(evidence_row, target_phrase, bboxes_by_id)
+        relation_span_ids, relation_bbox_refs = _relation_support_refs(
+            evidence_row,
+            mapping,
+            spans_by_id,
+            bboxes_by_id,
+        )
+        target_word_bbox_refs = _recover_target_word_bbox_refs(
+            target_phrase,
+            evidence_row["source_document_id"],
+            relation_bbox_refs,
+            bboxes_by_id,
+            word_bboxes,
+        )
+        bbox_refs = target_word_bbox_refs or _target_bbox_refs(evidence_row, target_phrase, bboxes_by_id)
+        relation_bbox_refs = list(dict.fromkeys([*relation_bbox_refs, *bbox_refs]))
         source_support_exact = _complete_mapping_support(evidence_row, mapping)
         target_support_exact = (
             evidence_row.get("bbox_precision") == "exact"
             and evidence_row.get("viewer_highlightable") is True
-            and bool(target_span_ids)
             and bool(bbox_refs)
             and all(ref in bbox_ids for ref in bbox_refs)
         )
@@ -140,12 +155,6 @@ def build_article_amendment_relations(
             else _trace_reason(
                 evidence_row, target_phrase, target_span_ids, bbox_refs, mapping=mapping, source_support_exact=source_support_exact
             )
-        )
-        relation_span_ids, relation_bbox_refs = _relation_support_refs(
-            evidence_row,
-            mapping,
-            spans_by_id,
-            bboxes_by_id,
         )
         target_reference = target_phrase
         old_reference = str(mapping.get("old_reference") or "")
@@ -177,7 +186,7 @@ def build_article_amendment_relations(
                 "page_number": (evidence_row.get("page_numbers") or [None])[0],
                 "quoted_text": evidence_row.get("quoted_text")
                 if mapping
-                else (_target_quote(target_span_ids, spans_by_id) if exact_support else evidence_row.get("quoted_text")),
+                else (_target_quote(target_span_ids, spans_by_id) if exact_support and target_span_ids else evidence_row.get("quoted_text")),
                 "source_pdf_sha256": evidence_row.get("source_sha256"),
                 "grounding_level": (
                     "exact_source_text"
@@ -191,7 +200,11 @@ def build_article_amendment_relations(
                 "source_support_exact": source_support_exact,
                 "target_precision": "target_local" if exact_support else ("shared_span" if mapping else "unresolved"),
                 "support_class": support_class,
+                "authority_kind": evidence_row.get("authority_kind"),
+                "citation_final": evidence_row.get("citation_final"),
                 "bbox_precision": evidence_row.get("bbox_precision"),
+                "target_geometry_method": "word_geometry" if target_word_bbox_refs else ("existing_exact_bbox" if bbox_refs else "unavailable"),
+                "target_geometry_source_ids": list(bbox_refs),
                 "viewer_highlightable": exact_support,
                 "citation_available": exact_support,
                 "trace_only_reason": trace_only_reason,
@@ -257,6 +270,56 @@ def _target_bbox_refs(evidence: dict, citation: str, bboxes_by_id: dict[str, dic
         and bboxes_by_id.get(bbox_id, {}).get("bbox_precision") == "exact"
         and bboxes_by_id.get(bbox_id, {}).get("viewer_highlightable") is True
     ]
+
+
+def _recover_target_word_bbox_refs(
+    citation: str,
+    source_document_id: str,
+    source_bbox_refs: list[str],
+    bboxes_by_id: dict[str, dict],
+    word_bboxes: list[dict],
+) -> list[str]:
+    """Return a unique contiguous word match wholly inside canonical source proof."""
+    target = _compact(citation)
+    source_boxes = [bboxes_by_id[ref] for ref in source_bbox_refs if ref in bboxes_by_id]
+    if not target or not source_boxes:
+        return []
+    words_by_page: dict[int, list[dict]] = {}
+    for word in word_bboxes:
+        if word.get("source_document_id") == source_document_id:
+            words_by_page.setdefault(int(word["page_number"]), []).append(word)
+    matches: list[list[str]] = []
+    for page_number, words in words_by_page.items():
+        page_boxes = [row for row in source_boxes if row.get("page_number") == page_number]
+        for start in range(len(words)):
+            joined = ""
+            matched: list[dict] = []
+            for word in words[start:]:
+                matched.append(word)
+                joined = _compact(f"{joined} {word.get('text', '')}")
+                if joined == target:
+                    if _word_phrase(" ".join(str(item.get("text") or "") for item in matched)) == _word_phrase(citation) and all(
+                        _word_inside_any_box(item, page_boxes) for item in matched
+                    ):
+                        matches.append([item["word_bbox_id"] for item in matched])
+                    break
+                if len(joined) > len(target) + 24 or not target.startswith(joined):
+                    break
+    return matches[0] if len(matches) == 1 else []
+
+
+def _word_inside_any_box(word: dict, boxes: list[dict]) -> bool:
+    center_x = (float(word["x0"]) + float(word["x1"])) / 2
+    center_y = (float(word["y0"]) + float(word["y1"])) / 2
+    return any(float(box["x0"]) <= center_x <= float(box["x1"]) and float(box["y0"]) <= center_y <= float(box["y1"]) for box in boxes)
+
+
+def _compact(value: object) -> str:
+    return "".join(re.findall(r"\w+", str(value or "").casefold()))
+
+
+def _word_phrase(value: object) -> str:
+    return " ".join(re.sub(r"[^\w]+", " ", str(value or "").casefold()).split())
 
 
 def _isolates_reference(text: str, citation: str) -> bool:

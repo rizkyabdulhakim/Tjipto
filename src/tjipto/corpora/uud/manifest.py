@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tjipto.corpora.uud.artifact_policy import UUD_ARTIFACT_SCHEMA
 from tjipto.artifacts.manifest import refresh_manifest as refresh_artifact_manifest
 from tjipto.contracts.artifacts import MINIMUM_ARTIFACT_FIELDS
 from tjipto.corpora.uud.artifact_policy import UUD_ARTIFACT_ORIGIN_POLICY
@@ -131,7 +132,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
                 "logical_key": logical_key,
                 "artifact_kind": logical_key,
                 "format": "json" if filename.endswith(".json") else "jsonl",
-                "artifact_schema": 4,
+                "artifact_schema": UUD_ARTIFACT_SCHEMA,
                 **({"primary_id": PRIMARY_IDS[logical_key]} if logical_key in PRIMARY_IDS else {}),
                 **({"required_fields": REQUIRED_FIELDS[logical_key]} if logical_key in REQUIRED_FIELDS else {}),
             }
@@ -149,7 +150,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "pdf_health_report": "pdf_health_report.json",
         "promotion_decisions": "promotion_decisions.jsonl",
         "retrieval_units": "retrieval_units.jsonl",
-        "schema_version": 4,
+        "schema_version": UUD_ARTIFACT_SCHEMA,
         "source_conflicts": "source_conflicts.jsonl",
         "source_documents": "source_documents.jsonl",
         "source_files": {row["path"]: row["sha256"] for row in sorted(source_documents.values(), key=lambda item: item["path"])},

@@ -155,6 +155,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         evidence=evidence,
         bbox_rows=bbox_rows,
         page_text_spans=page_text_spans,
+        word_bboxes=word_bboxes,
     )
     apply_graph_relation_policy(
         edges=graph_edges,
@@ -178,6 +179,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         bbox_rows=bbox_rows,
         page_text_spans=page_text_spans,
         pages=pages,
+        article_relations=article_amendment_relations,
     )
     write_jsonl(final_dir / "legal_units.jsonl", legal_units)
     write_jsonl(final_dir / "chunks.jsonl", chunks)

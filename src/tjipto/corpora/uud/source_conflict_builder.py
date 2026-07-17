@@ -30,6 +30,14 @@ def apply_source_conflict_grounding(
             for ref in _candidate_evidence_refs(row)
             if ref in evidence_by_id and evidence_by_id[ref]["source_document_id"] == row["source_document_id"]
         ]
+        if row.get("source_anomaly_kind") == "source_marker_sequence_anomaly":
+            evidence_ids.extend(
+                evidence["evidence_id"]
+                for evidence in evidence_by_id.values()
+                if evidence.get("source_document_id") == row["source_document_id"]
+                and evidence.get("hierarchy") == ["ATURAN TAMBAHAN", "Pasal III"]
+            )
+        evidence_ids = list(dict.fromkeys(evidence_ids))
         row["page_numbers"] = list(row.get("affected_pages") or [])
         row["text_span_ids"] = _matching_text_spans(row, page_text_spans)
         row["evidence_ids"] = evidence_ids

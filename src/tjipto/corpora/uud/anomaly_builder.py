@@ -129,10 +129,8 @@ def append_amendment_instrument_units(
         parent_legal_unit_ids=[aturan_unit_id],
         chunk_type="pasal_chunk_record",
         canonical_use_allowed=False,
-        chunk_status="inactive_source_typo_reference",
-        runtime_loadable=False,
+        chunk_status="active_historical_record",
         exclusion_ref=anomaly_ref,
-        build_evidence=False,
     )
     append_instrument_unit(
         source_id,
@@ -145,10 +143,8 @@ def append_amendment_instrument_units(
         parent_legal_unit_ids=[aturan_unit_id],
         chunk_type="pasal_chunk_record",
         canonical_use_allowed=False,
-        chunk_status="inactive_source_typo_reference",
-        runtime_loadable=False,
+        chunk_status="active_historical_record",
         exclusion_ref=anomaly_ref,
-        build_evidence=False,
     )
     decision, effective = split_effective_clause(slice_between(page6, "Perubahan tersebut diputuskan", "Ditetapkan di Jakarta").strip())
     determination = slice_between(page6, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()

@@ -73,7 +73,7 @@ def _load_snapshot(config) -> VerifiedCorpusSnapshot:
         raise CorpusIntegrityError("malformed_manifest") from error
     if not isinstance(manifest, dict) or manifest.get("corpus_id") != config.corpus_id:
         raise CorpusIntegrityError("manifest_identity_mismatch")
-    if manifest.get("schema_version") != 4:
+    if manifest.get("schema_version") != 5:
         raise CorpusIntegrityError("unsupported_schema")
     artifacts = _verify_artifacts(config.manifest_path.parent.resolve(), manifest, config.setting("runtime_required_artifacts"))
     try:
@@ -128,7 +128,7 @@ def _validate_record_identity(logical_key: str, rel: str, record: dict) -> None:
     if (
         record.get("logical_key") != logical_key
         or record.get("artifact_kind") != logical_key
-        or record.get("artifact_schema") != 4
+        or record.get("artifact_schema") != 5
         or record.get("format") != expected_format
     ):
         raise CorpusIntegrityError("semantic_artifact_identity_mismatch")
@@ -150,11 +150,14 @@ def _validate_cross_artifact_references(manifest: dict, artifacts: dict[str, obj
     source_ids = {row["source_document_id"] for row in rows("source_documents")}
     span_ids = {row["text_span_id"] for row in rows("page_text_spans")}
     bbox_ids = {row["bbox_id"] for row in rows("bbox_registry")} | {row["word_bbox_id"] for row in rows("word_bboxes")}
+    relation_ids = {row["relation_id"] for row in rows("article_amendment_relations")}
     for row in rows("retrieval_units"):
         if row["evidence_id"] not in evidence_ids or row["legal_unit_id"] not in unit_ids or row["chunk_id"] not in chunk_ids:
             raise CorpusIntegrityError("semantic_cross_reference_unresolved")
     for row in rows("graph_edges"):
         if row["source_id"] not in node_ids or row["target_id"] not in node_ids:
+            raise CorpusIntegrityError("semantic_cross_reference_unresolved")
+        if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES"} and row.get("relation_id") not in relation_ids:
             raise CorpusIntegrityError("semantic_cross_reference_unresolved")
     for row in rows("evidence_registry"):
         if (
@@ -162,6 +165,8 @@ def _validate_cross_artifact_references(manifest: dict, artifacts: dict[str, obj
             or row["source_document_id"] not in source_ids
             or any(span_id not in span_ids for span_id in row["text_span_ids"])
             or any(bbox_id not in bbox_ids for bbox_id in row["bbox_refs"])
+            or not isinstance(row.get("runtime_loadable"), bool)
+            or not isinstance(row.get("evidence_owner_kind"), str)
         ):
             raise CorpusIntegrityError("semantic_cross_reference_unresolved")
 

@@ -62,6 +62,8 @@ def validate_uud_trust_boundary(
     }
     for artifact, (rows, id_field) in collections.items():
         for row in rows:
+            if artifact == "graph_edges" and row.get("relation_id"):
+                continue
             row_id = str(row.get(id_field) or "<missing>")
             missing = [field for field in AUTHORITY_FIELDS if row.get(field) is None]
             if missing:
@@ -390,6 +392,8 @@ def _validate_graph(
                 )
             elif isinstance(endpoint, str):
                 degree.add(endpoint)
+        if edge.get("relation_id"):
+            continue
         if edge.get("derivation_method") not in DERIVATION_METHODS:
             violations.append(
                 _violation(

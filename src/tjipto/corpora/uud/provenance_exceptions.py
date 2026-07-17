@@ -54,6 +54,12 @@ def apply_review_category(row: dict) -> None:
     category = review_category(row)
     if not category or category == UNRESOLVED_NEEDS_REVIEW:
         return
+    if row.get("status") == "active_historical_record":
+        row["provenance_exception_category"] = ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY
+        row["provenance_review_status"] = "resolved_exact_historical_evidence"
+        row["current_resolution_state"] = "resolved_exact_historical_evidence"
+        row["canonical_use_allowed"] = False
+        return
     row["provenance_exception_category"] = category
     row["provenance_review_status"] = "reviewed"
     if category in {

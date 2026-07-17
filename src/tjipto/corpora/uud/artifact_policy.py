@@ -1,5 +1,25 @@
 from __future__ import annotations
 
+UUD_ARTIFACT_SCHEMA = 5
+
+RECOVERY_CAPABILITIES = {
+    "exact_materialized",
+    "word_geometry",
+    "character_geometry",
+    "ownership_transfer",
+    "policy_blocked",
+    "technically_unrecoverable",
+}
+
+RECOVERY_STATUSES = {
+    "not_attempted",
+    "attempted",
+    "materialized",
+    "semantically_validated",
+    "promoted",
+    "failed",
+}
+
 
 ALLOWED_ARTIFACT_ORIGINS = {
     "generated",

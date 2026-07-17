@@ -600,6 +600,8 @@ def _authority_kind(store, row: dict, *, can_resolve: bool | None = None, confli
     conflict_row = conflict or _source_conflict_by_evidence(store, row.get("evidence_id"))
     if conflict_row is not None or row.get("source_conflict_id"):
         return "source_anomaly" if _is_source_anomaly_conflict(conflict_row or row) else "source_conflict_provenance"
+    if _row_is_historical_anomaly(store, row):
+        return "source_anomaly"
     if _row_is_instrument_provenance(store, row):
         return "instrument_provenance"
     return "legal_citation"
@@ -643,6 +645,17 @@ def _row_is_instrument_provenance(store, row: dict) -> bool:
         return False
     unit: dict = next((item for item in units if item.get("legal_unit_id") == row.get("legal_unit_id")), {})
     return bool(unit) and _is_instrument_unit(store, unit)
+
+
+def _row_is_historical_anomaly(store, row: dict) -> bool:
+    if store is None:
+        return False
+    try:
+        units = store.legal_units
+    except (KeyError, OSError, ValueError):
+        return False
+    unit = next((item for item in units if item.get("legal_unit_id") == row.get("legal_unit_id")), {})
+    return unit.get("status") == "active_historical_record" and bool(unit.get("exclusion_ref"))
 
 
 def _citation_with_authority(store, row: dict, *, conflict: dict | None = None) -> dict:
@@ -1153,7 +1166,7 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
     proof_bbox_refs = tuple(relation.get("bbox_refs") or row.get("bbox_refs") or ())
     proof_text_span_ids = tuple(relation.get("text_span_ids") or row.get("text_span_ids") or ())
     target_bbox_refs = tuple(relation.get("target_bbox_refs") or ())
-    proof_bboxes = [bbox for bbox in store.bboxes_for(row["evidence_id"]) if bbox.get("bbox_id") in set(proof_bbox_refs)]
+    proof_bboxes = store.bboxes_for_refs(proof_bbox_refs)
     if not proof_bboxes or not set(proof_bbox_refs) <= {bbox["bbox_id"] for bbox in proof_bboxes}:
         return None
     if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True:

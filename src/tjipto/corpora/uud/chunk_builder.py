@@ -72,6 +72,8 @@ def _chunk_type(unit: dict) -> str:
 def _chunk_status(unit: dict) -> str:
     if unit.get("runtime_loadable") is False:
         return unit["status"]
+    if unit.get("status") == "active_historical_record":
+        return "active_historical_record"
     if substantive_structural_unit(unit):
         return "active_canonical_record"
     if _chunk_type(unit) in {"bab_structural_context_record", "aturan_section_context_record", "pasal_parent_context_record"}:

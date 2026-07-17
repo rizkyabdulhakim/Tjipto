@@ -21,6 +21,7 @@ from tjipto.corpora.intent_config import contains_intent_phrase, resolve_instrum
 from tjipto.corpora.parser_dispatch import parse_legal_references
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
+from tjipto.corpora.uud.artifact_policy import RECOVERY_CAPABILITIES, RECOVERY_STATUSES, UUD_ARTIFACT_SCHEMA
 from tjipto.corpora.uud.provenance_exceptions import (
     ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
     ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
@@ -325,6 +326,7 @@ def build_validation_report(
         document_relations=document_relations or (),
         article_amendment_relations=article_amendment_relations or (),
         bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
         evidence=evidence,
         legal_units=legal_units,
     )
@@ -348,6 +350,7 @@ def build_validation_report(
         article_amendment_relations=article_amendment_relations or (),
         evidence=evidence,
         bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
     )
     return validation_report
 
@@ -389,7 +392,7 @@ def _evidence_admission_audit(legal_units: list[dict], evidence: list[dict]) -> 
 
 
 def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
-    if read_json(final_dir / "manifest.json").get("schema_version") != 4:
+    if read_json(final_dir / "manifest.json").get("schema_version") != UUD_ARTIFACT_SCHEMA:
         return ("artifact_schema_version_incompatible",)
     legal_units = read_jsonl(final_dir / "legal_units.jsonl")
     chunks = read_jsonl(final_dir / "chunks.jsonl")
@@ -519,6 +522,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     )
     if promotion_audit["status"] != "complete":
         errors.append("promotion_decision_audit_incomplete")
+    errors.extend(_recovery_state_errors(promotion_decisions))
     pdf_health = _pdf_health_summary(pdf_health_report)
     if pdf_health["status"] != "native_text_ok":
         errors.append(f"pdf_health_status:{pdf_health['status']}")
@@ -977,6 +981,20 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         edge_type = row.get("edge_type")
         if edge_type not in PROVENANCE_EDGE_TYPES | LEGAL_EDGE_TYPES:
             errors.append(f"invalid_graph_edge_type:{row['edge_id']}:{edge_type}")
+        if edge_type in {"MODIFIES", "DELETES", "RENAMES"}:
+            if set(row) != {"edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id"}:
+                errors.append(f"graph_relation_contains_noncanonical_truth:{row['edge_id']}")
+            relation = article_relations_by_id.get(row.get("relation_id"))
+            if relation is None:
+                errors.append(f"graph_relation_missing_authoritative_row:{row['edge_id']}")
+            else:
+                if row.get("source_id") != f"legal_unit::{relation.get('source_legal_unit_id')}":
+                    errors.append(f"graph_relation_source_mismatch:{row['edge_id']}")
+                if row.get("target_id") != f"legal_unit::{relation.get('target_legal_unit_id')}":
+                    errors.append(f"graph_relation_target_mismatch:{row['edge_id']}")
+                if row.get("relation_type") != relation.get("relation_type"):
+                    errors.append(f"graph_relation_type_mismatch:{row['edge_id']}")
+            continue
         if row.get("citation_final") is not False:
             errors.append(f"graph_edge_false_final_citation:{row['edge_id']}")
         if row.get("source_role") not in {"canonical", "historical", "amendment", "consolidated", "anomaly"}:
@@ -1127,7 +1145,8 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             errors.append(f"article_relation_page_mismatch:{row['relation_id']}")
         if not set(row.get("text_span_ids") or ()) <= set(evidence_row.get("text_span_ids") or ()):
             errors.append(f"article_relation_span_support_mismatch:{row['relation_id']}")
-        if not set(row.get("bbox_refs") or ()) <= set(evidence_row.get("bbox_refs") or ()):
+        extra_relation_bboxes = set(row.get("bbox_refs") or ()) - set(evidence_row.get("bbox_refs") or ())
+        if extra_relation_bboxes - set(row.get("target_bbox_refs") or ()):
             errors.append(f"article_relation_bbox_support_mismatch:{row['relation_id']}")
         if source_unit is None:
             errors.append(f"article_relation_unknown_source:{row['relation_id']}:{row.get('source_legal_unit_id')}")
@@ -1201,15 +1220,15 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             for bbox_id in target_bbox_refs
             if bbox_id in bbox_by_id
         )
+        word_target = row.get("target_geometry_method") == "word_geometry"
         exact_support = (
             evidence_row.get("bbox_precision") == "exact"
             and evidence_row.get("viewer_highlightable") is True
             and bool(target_bbox_refs)
             and all(bbox_id in bbox_by_id for bbox_id in target_bbox_refs)
-            and bool(target_spans)
-            and target_phrase in target_text
+            and (word_target or (bool(target_spans) and target_phrase in target_text))
             and target_phrase in local_bbox_text
-            and isolated_bbox
+            and (word_target or isolated_bbox)
         )
         target_span_isolated = bool(target_spans) and all(
             span is not None
@@ -1217,12 +1236,12 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             and target_phrase in normalize_source_text(str(span.get("text") or ""))
             for span in target_spans
         )
-        target_bbox_isolated = bool(target_bbox_refs) and all(
+        target_bbox_isolated = word_target or (bool(target_bbox_refs) and all(
             bbox_id in bbox_by_id
             and len(parse_legal_references("uud", str(bbox_by_id[bbox_id].get("text") or ""))) == 1
             and target_phrase in normalize_source_text(str(bbox_by_id[bbox_id].get("text") or ""))
             for bbox_id in target_bbox_refs
-        )
+        ))
         if target_spans and not target_span_isolated:
             errors.append(f"article_relation_target_span_not_isolated:{row['relation_id']}")
         if target_bbox_refs and not target_bbox_isolated:
@@ -1247,8 +1266,6 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
                 errors.append(f"article_relation_exact_not_public_resolvable:{row['relation_id']}")
             if row.get("target_precision") != "target_local":
                 errors.append(f"article_relation_exact_precision_mismatch:{row['relation_id']}")
-            if not row.get("target_text_span_ids"):
-                errors.append(f"article_relation_missing_target_span:{row['relation_id']}")
             if not row.get("text_span_ids"):
                 errors.append(f"article_relation_missing_support_span:{row['relation_id']}")
         if support_class == "trace_article_relation":
@@ -1278,6 +1295,40 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     errors.extend(source_relation_errors)
 
     return tuple(sorted(set(errors)))
+
+
+def _recovery_state_errors(promotion_decisions: list[dict]) -> tuple[str, ...]:
+    errors: list[str] = []
+    required = {
+        "recovery_capability",
+        "recovery_status",
+        "recovery_method",
+        "failure_code",
+        "semantic_validation_outcome",
+        "promotion_outcome",
+    }
+    for row in promotion_decisions:
+        row_id = str(row.get("decision_id") or "unknown")
+        if required - set(row):
+            errors.append(f"recovery_missing_required_field:{row_id}")
+            continue
+        capability = row.get("recovery_capability")
+        status = row.get("recovery_status")
+        if capability not in RECOVERY_CAPABILITIES:
+            errors.append(f"recovery_invalid_capability:{row_id}:{capability}")
+        if status not in RECOVERY_STATUSES:
+            errors.append(f"recovery_invalid_status:{row_id}:{status}")
+        if status == "promoted" and (
+            capability in {"policy_blocked", "technically_unrecoverable"}
+            or row.get("semantic_validation_outcome") != "passed"
+            or row.get("promotion_outcome") != "promoted"
+        ):
+            errors.append(f"recovery_invalid_promotion_state:{row_id}")
+        if status == "failed" and not row.get("failure_code"):
+            errors.append(f"recovery_failed_without_code:{row_id}")
+        if status in {"not_attempted", "attempted"} and row.get("promotion_outcome") == "promoted":
+            errors.append(f"recovery_unattempted_promoted:{row_id}")
+    return tuple(errors)
 
 
 def _reference_belongs_to_unit(reference: object, unit: dict) -> bool:
@@ -1322,17 +1373,18 @@ def _validate_relation_support(row: dict, evidence: dict, span_by_id: dict[str, 
     expected_bbox_ids = tuple(evidence.get("bbox_refs") or ())
     support_ids = tuple(row.get("text_span_ids") or ())
     support_bbox_ids = tuple(row.get("bbox_refs") or ())
+    source_support_bbox_ids = tuple(bbox_id for bbox_id in support_bbox_ids if bbox_id not in set(row.get("target_bbox_refs") or ()))
     errors: list[str] = []
     if not support_ids or not support_bbox_ids:
         return ("article_relation_support_missing_segment",)
-    if not set(support_ids) <= set(expected_ids) or not set(support_bbox_ids) <= set(expected_bbox_ids):
+    if not set(support_ids) <= set(expected_ids) or not set(source_support_bbox_ids) <= set(expected_bbox_ids):
         errors.append("article_relation_support_reference_mismatch")
     span_order = _ordered_support_slice(expected_ids, support_ids, span_by_id, quoted, old_range[0], new_range[1])
-    bbox_order = _ordered_support_slice(expected_bbox_ids, support_bbox_ids, bbox_by_id, quoted, old_range[0], new_range[1])
+    bbox_order = _ordered_support_slice(expected_bbox_ids, source_support_bbox_ids, bbox_by_id, quoted, old_range[0], new_range[1])
     if span_order is None or bbox_order is None:
         errors.append("article_relation_support_not_minimal")
     support_text = _support_text(support_ids, span_by_id)
-    support_bbox_text = _support_text(support_bbox_ids, bbox_by_id)
+    support_bbox_text = _support_text(source_support_bbox_ids, bbox_by_id)
     old_text = normalize_source_text(quoted[old_range[0] : old_range[1]])
     new_text = normalize_source_text(quoted[new_range[0] : new_range[1]])
     for text in (support_text, support_bbox_text):
@@ -1769,6 +1821,7 @@ def _promotion_decision_audit_health(
     promotion_decisions: list[dict],
     promotion_engine_health: dict,
 ) -> dict:
+    promotion_decisions = [row for row in promotion_decisions if row.get("record_type") != "article_relation"]
     expected = {
         ("evidence", row["evidence_id"])
         for row in evidence
@@ -1923,10 +1976,14 @@ def _article_relation_runtime_policy_health(
     document_relations: list[dict] | tuple[dict, ...],
     article_amendment_relations: list[dict] | tuple[dict, ...],
     bbox_rows: list[dict],
+    word_bboxes: list[dict],
     evidence: list[dict],
     legal_units: list[dict],
 ) -> dict:
-    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    bbox_by_id = {
+        str(row.get("bbox_id") or row.get("word_bbox_id")): row
+        for row in (*bbox_rows, *word_bboxes)
+    }
     exact_rows = [row for row in article_amendment_relations if row.get("support_class") == "exact_article_relation"]
     trace_rows = [row for row in article_amendment_relations if row.get("support_class") == "trace_article_relation"]
     invalid_refs = [ref for row in article_amendment_relations for ref in row.get("bbox_refs") or () if ref not in bbox_by_id]
@@ -1980,26 +2037,28 @@ def _legal_graph_authority_health(
     article_amendment_relations: list[dict] | tuple[dict, ...],
     evidence: list[dict],
     bbox_rows: list[dict],
+    word_bboxes: list[dict],
 ) -> dict:
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
-    bbox_ids = {row["bbox_id"] for row in bbox_rows}
+    bbox_ids = {str(row.get("bbox_id") or row.get("word_bbox_id")) for row in (*bbox_rows, *word_bboxes)}
     relation_edges = [row for row in graph_edges if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES"}]
-    article_relation_refs = {row.get("article_relation_ref") for row in relation_edges if row.get("article_relation_ref")}
-    exact_edges = [row for row in relation_edges if row.get("support_kind") == "exact_source_relation"]
-    trace_edges = [row for row in relation_edges if row.get("support_kind") != "exact_source_relation"]
+    article_relation_refs = {row.get("relation_id") for row in relation_edges if row.get("relation_id")}
+    relations_by_id = {row.get("relation_id"): row for row in article_amendment_relations}
+    exact_edges = [row for row in relation_edges if relations_by_id.get(row.get("relation_id"), {}).get("support_class") == "exact_article_relation"]
+    trace_edges = [row for row in relation_edges if relations_by_id.get(row.get("relation_id"), {}).get("support_class") != "exact_article_relation"]
     authority_without_evidence = [
         row
         for row in graph_edges
         if row.get("supporting_evidence_ids") and any(evidence_id not in evidence_by_id for evidence_id in row["supporting_evidence_ids"])
     ]
     authority_without_bbox = [
-        row for row in exact_edges if not row.get("bbox_refs") or any(bbox_id not in bbox_ids for bbox_id in row.get("bbox_refs") or ())
+        row for row in exact_edges if any(bbox_id not in bbox_ids for bbox_id in relations_by_id[row["relation_id"]].get("bbox_refs") or ())
     ]
-    trace_promoted = [row for row in trace_edges if row.get("citation_final") is not False]
+    trace_promoted = [row for row in trace_edges if relations_by_id.get(row.get("relation_id"), {}).get("citation_final") is True]
     missing_fields = [
         row
         for row in graph_edges
-        if {
+        if not row.get("relation_id") and {
             "authority_kind",
             "support_kind",
             "citation_final",
@@ -2028,15 +2087,15 @@ def _legal_graph_authority_health(
         "article_relation_graph_ref_count": len(article_relation_refs),
         "evidence_backed_relation_edge_count": len(exact_edges),
         "trace_only_relation_edge_count": len(trace_edges),
-        "non_citable_edge_count": sum(1 for row in graph_edges if row.get("citation_final") is False),
+        "non_citable_edge_count": sum(1 for row in graph_edges if row.get("relation_id") or row.get("citation_final") is False),
         "authority_without_evidence_count": len(authority_without_evidence),
         "authority_without_bbox_count": len(authority_without_bbox),
         "trace_promoted_count": len(trace_promoted),
-        "graph_final_citation_edge_count": sum(1 for row in graph_edges if row.get("citation_final") is True),
-        "invalid_finality_policy_count": sum(1 for row in graph_edges if row.get("citation_final") is True),
+        "graph_final_citation_edge_count": sum(1 for row in graph_edges if not row.get("relation_id") and row.get("citation_final") is True),
+        "invalid_finality_policy_count": sum(1 for row in graph_edges if not row.get("relation_id") and row.get("citation_final") is True),
         "missing_authority_field_count": len(missing_fields),
-        "authority_kind_counts": dict(sorted(Counter(row.get("authority_kind") for row in graph_edges).items())),
-        "support_kind_counts": dict(sorted(Counter(row.get("support_kind") for row in graph_edges).items())),
+        "authority_kind_counts": dict(sorted(Counter(row.get("authority_kind") or "relation_reference" for row in graph_edges).items())),
+        "support_kind_counts": dict(sorted(Counter(row.get("support_kind") or "relation_reference" for row in graph_edges).items())),
     }
 
 
@@ -2958,12 +3017,21 @@ def _structural_authority_contract_health(
     bad_edge_count = sum(
         1
         for row in graph_edges
-        if any(field not in row for field in required_edge_fields)
+        if (
+            row.get("relation_id")
+            and set(row) != {"edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id"}
+        )
+        or (
+            not row.get("relation_id")
+            and (
+                any(field not in row for field in required_edge_fields)
         or row.get("source_id") not in nodes
         or row.get("target_id") not in nodes
         or row.get("citation_final") is not False
         or row.get("derivation_method")
         not in {"explicit_source_text", "reviewed_corpus_spec", "deterministic_structural_rule", "endpoint_metadata"}
+            )
+        )
     )
     bad_retrieval_trace_count = sum(
         1

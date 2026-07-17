@@ -19,7 +19,7 @@ def _admit_evidence(unit: dict, chunk: dict) -> bool:
             "original_historical",
             "amendment_4_historical",
         }
-    return chunk.get("status") == "active_canonical_record"
+    return chunk.get("status") in {"active_canonical_record", "active_historical_record"}
 
 
 def build_evidence_and_bboxes(
@@ -84,6 +84,8 @@ def build_evidence_and_bboxes(
                 "source_sha256": source_meta["sha256"],
                 "status": "final",
                 "temporal_context": source_meta.get("temporal_context", source_role),
+                "runtime_loadable": unit.get("runtime_loadable") is not False,
+                "evidence_owner_kind": "legal_unit_source",
                 "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
             }
             | ({"failure_reason": "instrument_trace_only_not_public_citation"} if trace_only else {})

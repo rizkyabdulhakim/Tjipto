@@ -11,6 +11,7 @@ def build_promotion_decisions(
     bbox_rows: list[dict],
     page_text_spans: list[dict],
     pages: list[dict],
+    article_relations: list[dict] = (),
 ) -> list[dict]:
     page_text = {(row["source_document_id"], row["page_number"]): row.get("text", "") for row in pages}
     spans_by_page: dict[tuple[str, int], list[dict]] = {}
@@ -53,7 +54,54 @@ def build_promotion_decisions(
         for row in bbox_rows
         if _needs_decision(row)
     )
+    decisions.extend(_relation_decision(row) for row in article_relations)
     return sorted(decisions, key=lambda row: (row["record_type"], row["record_id"], row["page_number"]))
+
+
+def _relation_decision(row: dict) -> dict:
+    exact = row.get("support_class") == "exact_article_relation"
+    target_refs = list(row.get("target_bbox_refs") or ())
+    capability = "exact_materialized" if exact else ("word_geometry" if row.get("trace_only_reason") == "shared_source_line_target_not_isolatable" else "technically_unrecoverable")
+    status = "promoted" if exact else "failed"
+    failure_code = None if exact else str(row.get("trace_only_reason") or "relation_target_proof_incomplete")
+    return {
+        "decision_id": f"promotion_decision::article_relation::{row['relation_id']}",
+        "record_id": row["relation_id"],
+        "record_type": "article_relation",
+        "source_document_id": row.get("source_document_id"),
+        "page_number": row.get("page_number"),
+        "recovery_capability": capability,
+        "recovery_status": status,
+        "recovery_method": row.get("target_geometry_method"),
+        "failure_code": failure_code,
+        "semantic_validation_outcome": "passed" if exact else "failed",
+        "promotion_outcome": "promoted" if exact else "not_promoted",
+        "promotion_attempted": True,
+        "promotion_attempt_method": "deterministic_relation_target_localization",
+        "promotion_attempt_result": "promoted" if exact else "failed",
+        "decision": "promote_exact" if exact else "keep_non_exact",
+        "candidate_status": "promoted" if exact else "blocked",
+        "current_grounding_status": row.get("grounding_level"),
+        "failure_reason": failure_code,
+        "exact_bbox_available": bool(target_refs),
+        "exact_quote_available": bool(row.get("quoted_text")),
+        "exact_span_available": bool(row.get("text_span_ids")),
+        "can_be_exact_citation": exact,
+        "can_be_exact_highlight": exact,
+        "highlightable": row.get("viewer_highlightable") is True,
+        "matched_page_numbers": [row.get("page_number")] if row.get("page_number") else [],
+        "matched_span_ids": list(row.get("target_text_span_ids") or ()),
+        "matched_text_excerpt": str(row.get("new_reference") or ""),
+        "quote_match_status": "exact_full_quote_match" if exact else "no_full_quote_match",
+        "span_match_status": "normalized_span_sequence_match" if row.get("text_span_ids") else "no_span_match",
+        "subspan_match_status": "matched" if row.get("target_text_span_ids") else "not_applicable",
+        "bbox_union_status": "exact_bbox_available" if target_refs else "not_supported_by_current_bbox_artifact",
+        "blocker_evidence": {"target_bbox_refs": target_refs, "failure_code": failure_code},
+        "field_bbox_feasibility": "exact_safe" if exact else "requires_word_level_bbox",
+        "metadata_exact_promotion_feasibility": None,
+        "policy_reason": failure_code or "exact_relation_proof",
+        "review_status": "validated",
+    }
 
 
 def _needs_decision(row: dict) -> bool:
@@ -149,6 +197,12 @@ def _record_decision(
         "record_type": record_type,
         "review_status": record.get("provenance_review_status") or "validated",
         "source_document_id": source_document_id,
+        "recovery_capability": "exact_materialized" if can_be_exact else "word_geometry",
+        "recovery_status": "promoted" if can_be_exact else "failed",
+        "recovery_method": "source_page_span_bbox_feasibility",
+        "failure_code": None if can_be_exact else reason,
+        "semantic_validation_outcome": "passed" if can_be_exact else "failed",
+        "promotion_outcome": "promoted" if can_be_exact else "not_promoted",
         "span_match_status": span_match_status,
         "subspan_match_status": subspan_match_status,
     }

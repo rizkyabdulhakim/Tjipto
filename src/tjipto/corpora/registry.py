@@ -7,7 +7,7 @@ import os
 from tjipto.core.config import CorpusConfig
 from tjipto.core.manifest import read_json
 
-SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = {4}
+SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = {5}
 
 
 class CorpusRegistry:

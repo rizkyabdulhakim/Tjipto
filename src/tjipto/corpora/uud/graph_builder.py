@@ -254,7 +254,7 @@ def build_graph_artifacts(
         source_node = unit_node_ids[delete_clause["legal_unit_id"]]
         for label in ("BAB IV", "Pasal 16"):
             target = _resolve_legal_unit_by_label(legal_units, delete_clause["source_document_id"], label)
-            if target:
+            if target and str(target.get("unit_label") or "").startswith(("Pasal ", "Ayat ")):
                 add_edge(
                     source_node,
                     unit_node_ids[target["legal_unit_id"]],

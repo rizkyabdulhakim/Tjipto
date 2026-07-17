@@ -90,6 +90,7 @@ def apply_authority_contract(
             raise ValueError("incomplete_span_decision")
     for row in evidence:
         exact = row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True
+        historical_anomaly = bool(units_by_id.get(row.get("legal_unit_id"), {}).get("exclusion_ref"))
         instrument_trace = units_by_id.get(row.get("legal_unit_id"), {}).get("unit_type") in {
             "amendment_recital_record",
             "amendment_scope_record",
@@ -101,10 +102,12 @@ def apply_authority_contract(
         }
         row.update(
             _decision(
-                "instrument_provenance" if instrument_trace else ("normative_legal_text" if exact else "page_only"),
-                exact and not instrument_trace,
-                exact and not instrument_trace,
-                "instrument_trace_only_not_public_citation"
+                "source_anomaly_trace" if historical_anomaly else ("instrument_provenance" if instrument_trace else ("normative_legal_text" if exact else "page_only")),
+                exact and not instrument_trace and not historical_anomaly,
+                exact and not instrument_trace and not historical_anomaly,
+                "historical_source_anomaly_not_final"
+                if historical_anomaly
+                else "instrument_trace_only_not_public_citation"
                 if instrument_trace
                 else ("exact_evidence" if exact else row.get("failure_reason", "not_exact")),
                 evidence_exists=True,
@@ -173,6 +176,8 @@ def apply_authority_contract(
             )
         )
     for row in edges:
+        if row.get("relation_id"):
+            continue
         edge_kind = EDGE_AUTHORITY.get(str(row.get("support_kind")))
         if edge_kind is None:
             raise ValueError(f"unknown_uud_graph_support:{row.get('support_kind')}")

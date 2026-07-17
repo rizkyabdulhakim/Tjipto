@@ -161,6 +161,10 @@ def apply_chunk_grounding(
         unit["text_span_ids"] = text_span_ids
         unit["evidence_ids"] = [row["evidence_id"] for row in unit_evidence]
         unit["bbox_ids"] = [bbox_id for row in unit_evidence for bbox_id in row.get("bbox_refs") or ()]
+        if not text_span_ids and unit.get("status") == "active_historical_record" and unit_evidence:
+            text_span_ids = list(dict.fromkeys(span_id for row in unit_evidence for span_id in row.get("text_span_ids") or ()))
+            unit["text_span_ids"] = text_span_ids
+            grounding_status = "text_span_exact_from_evidence"
         unit["grounding_status"] = grounding_status
         unit["validation_status"] = "accepted_grounding" if text_span_ids else "grounding_unavailable"
         if not text_span_ids:

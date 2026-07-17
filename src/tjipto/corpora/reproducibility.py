@@ -178,6 +178,10 @@ def validate_corpus_ingestion_artifacts(corpus_id: str, repo_root: Path) -> dict
         if edge["source_id"] not in graph_nodes or edge["target_id"] not in graph_nodes:
             errors.append(f"graph_edge_unknown_endpoint:{edge['edge_id']}")
         if edge.get("edge_type") in legal_edge_types:
+            if edge.get("relation_id"):
+                # Relation proof belongs to article_amendment_relations; the
+                # corpus validator checks that dereference independently.
+                continue
             if not edge.get("source_document_id"):
                 errors.append(f"graph_legal_edge_missing_source_document:{edge['edge_id']}")
             if edge.get("runtime_loadable") is True:

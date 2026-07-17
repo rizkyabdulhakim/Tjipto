@@ -122,6 +122,8 @@ def append_instrument_unit(
         "source_sha256": source_meta["sha256"],
         "status": "final",
         "temporal_context": temporal_context,
+        "runtime_loadable": runtime_loadable is not False,
+        "evidence_owner_kind": "legal_unit_source",
         "viewer_highlightable": any(row["viewer_highlightable"] for row in bbox_records),
     }
     evidence.append(evidence_row)

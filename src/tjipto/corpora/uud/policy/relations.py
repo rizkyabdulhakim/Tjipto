@@ -34,6 +34,25 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     relations_by_id = {row["relation_id"]: row for row in article_relations}
     for edge in edges:
+        edge_type = edge["edge_type"]
+        if edge_type in {"MODIFIES", "DELETES", "RENAMES"}:
+            relation_id = str(edge.get("article_relation_ref") or "")
+            relation = relations_by_id.get(relation_id)
+            if relation is None:
+                raise ValueError(f"missing_uud_article_relation:{edge['edge_id']}")
+            edge_id = edge["edge_id"]
+            edge.clear()
+            edge.update(
+                {
+                    "edge_id": edge_id,
+                    "source_id": f"legal_unit::{relation['source_legal_unit_id']}",
+                    "target_id": f"legal_unit::{relation['target_legal_unit_id']}",
+                    "edge_type": edge_type,
+                    "relation_type": relation["relation_type"],
+                    "relation_id": relation_id,
+                }
+            )
+            continue
         for field in (
             "edge_authority_level",
             "evidence_requirement",
@@ -45,7 +64,6 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
             edge.pop(field, None)
         source = nodes_by_id[edge["source_id"]]
         target = nodes_by_id[edge["target_id"]]
-        edge_type = edge["edge_type"]
         evidence_ids = _direct_evidence_ids(edge, source, target, evidence_by_id)
         supports = [evidence_by_id[evidence_id] for evidence_id in evidence_ids]
         if edge_type in STRUCTURAL_EDGES:

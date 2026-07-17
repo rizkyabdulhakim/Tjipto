@@ -208,7 +208,7 @@ def _append_instrument_units(
             "source_role": source_documents[source_id]["source_role"],
             "source_sha256": source_documents[source_id]["sha256"],
             "temporal_context": source_documents[source_id].get("temporal_context", source_documents[source_id]["source_role"]),
-            "status": chunk_status if runtime_loadable is False else "finalizable",
+            "status": chunk_status if runtime_loadable is False or chunk_status == "active_historical_record" else "finalizable",
             "text": text,
             "unit_label": unit_label,
             "unit_type": unit_type,
