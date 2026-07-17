@@ -146,14 +146,15 @@ class MetadataBBoxContractTest(unittest.TestCase):
     def test_promotion_decisions_cover_non_exact_rows(self) -> None:
         decisions = read_jsonl(FINAL / "promotion_decisions.jsonl")
         report = json.loads((FINAL / "validation_report.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(decisions), report["promotion_decision_audit_health"]["promotion_decision_count"])
+        non_relation_decisions = [row for row in decisions if row["record_type"] != "article_relation"]
+        self.assertEqual(len(non_relation_decisions), report["promotion_decision_audit_health"]["promotion_decision_count"])
         self.assertEqual(len({row["decision_id"] for row in decisions}), len(decisions))
-        self.assertEqual({row["decision"] for row in decisions}, {"keep_non_exact", "recovered_exact"})
+        self.assertEqual({row["decision"] for row in non_relation_decisions}, {"keep_non_exact", "recovered_exact"})
         self.assertEqual(
-            {row["record_type"] for row in decisions},
+            {row["record_type"] for row in non_relation_decisions},
             {"bbox", "evidence"},
         )
-        for row in decisions:
+        for row in non_relation_decisions:
             for field in (
                 "record_id",
                 "source_document_id",

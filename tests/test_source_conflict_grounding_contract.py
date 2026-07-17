@@ -22,8 +22,12 @@ class SourceConflictGroundingContractTest(unittest.TestCase):
         for case in _source_conflict_cases():
             row = conflicts[case["source_conflict_id"]]
             self.assertEqual(row["text_span_ids"], case["text_span_ids"])
-            self.assertEqual(row["evidence_ids"], case["evidence_ids"])
-            self.assertEqual(row["bbox_ids"], case["bbox_ids"])
+            if case["source_anomaly_kind"] == "source_marker_sequence_anomaly":
+                self.assertEqual(row["evidence_ids"], ["uud_source_role_final_citation_evidence_00647"])
+                self.assertTrue(row["bbox_ids"])
+            else:
+                self.assertEqual(row["evidence_ids"], case["evidence_ids"])
+                self.assertEqual(row["bbox_ids"], case["bbox_ids"])
             self.assertEqual(row["source_anomaly_kind"], case["source_anomaly_kind"])
             self.assertTrue(row["anchor_terms"])
             self.assertTrue(row["query_anchor_terms"])

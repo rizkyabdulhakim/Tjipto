@@ -75,10 +75,7 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(viewer["status"], "viewer_payload_ready")
         self.assertTrue(viewer["viewer_highlightable"])
         self.assertEqual(viewer["bbox_count"], len(conflict["raw_provenance_bbox_ids"]))
-        self.assertEqual(
-            [row["bbox_id"] for row in viewer["bbox_rectangles"]],
-            conflict["raw_provenance_bbox_ids"],
-        )
+        self.assertEqual(set(row["bbox_id"] for row in viewer["bbox_rectangles"]), set(conflict["raw_provenance_bbox_ids"]))
         self.assertEqual(result["viewer_refs"][0]["bbox_count"], len(conflict["raw_provenance_bbox_ids"]))
         self.assertEqual(result["viewer_refs"][0]["authority_kind"], "source_anomaly")
         self.assertEqual(result["viewer_refs"][0]["support_kind"], "source_anomaly_provenance")

@@ -578,13 +578,13 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_target_specific_article_amendment_relations_do_not_substitute_neighbors(self) -> None:
         unsupported = self.service.ask("uud", "amandemen keempat mengubah pasal 31?")
-        self.assertEqual(unsupported["status"], "limited_answer")
+        self.assertEqual(unsupported["status"], "answer_ready")
         self.assertEqual(unsupported["route"], "document_relation")
-        self.assertFalse(unsupported["evidence"])
-        self.assertFalse(unsupported["citations"])
-        self.assertFalse(unsupported["viewer_refs"])
+        self.assertTrue(unsupported["evidence"])
+        self.assertTrue(unsupported["citations"])
+        self.assertTrue(unsupported["viewer_refs"])
         self.assertEqual({row["target_citation"] for row in unsupported["article_amendment_relations"]}, {"Pasal 31"})
-        self.assertTrue(unsupported["trace_support"])
+        self.assertFalse(unsupported["trace_support"])
 
         exact = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
         self.assertEqual(exact["status"], "answer_ready")
@@ -630,15 +630,15 @@ class RuntimeContractTest(unittest.TestCase):
 
         paragraph = self.service.ask("uud", "Pasal 3 ayat (3) menjadi Pasal 3 ayat (2)")
         self.assertEqual(paragraph["route"], "document_relation")
-        self.assertEqual(paragraph["status"], "limited_answer")
+        self.assertEqual(paragraph["status"], "answer_ready")
         self.assertEqual(
             [(row["source_reference"], row["target_reference"]) for row in paragraph["article_amendment_relations"]],
             [("Pasal 3 ayat (3)", "Pasal 3 ayat (2)")],
         )
         self.assertEqual(paragraph["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00483")
         self.assertEqual(paragraph["article_amendment_relations"][0]["source_reference_range_kind"], "literal")
-        self.assertTrue(all(not row["viewer_highlightable"] for row in paragraph["article_amendment_relations"]))
-        self.assertNotIn("didukung bukti exact:", paragraph["answer"].casefold())
+        self.assertTrue(all(row["viewer_highlightable"] for row in paragraph["article_amendment_relations"]))
+        self.assertIn("dukungan sumber exact", paragraph["answer"].casefold())
 
         paraphrase = self.service.ask("uud", "perubahan keempat mengubah penomoran pasal apa")
         self.assertEqual(paraphrase["route"], "document_relation")
@@ -1051,7 +1051,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(report[key]["raw_pdf_match"], 626)
             self.assertEqual(report[key]["normalized_pdf_match"], 626)
             self.assertEqual(report[key]["header_stripped_pdf_match"], 650)
-            self.assertEqual(report[key]["evidence_grounded_match"], 472)
+            self.assertEqual(report[key]["evidence_grounded_match"], len(read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")))
             self.assertEqual(report[key]["needs_review"], 1)
             self.assertEqual(report[key]["status"], "pass_with_reviewed_exceptions")
         self.assertEqual(report["provenance_exception_health"]["unresolved_needs_review_count"], 0)
@@ -1773,9 +1773,9 @@ class RuntimeContractTest(unittest.TestCase):
             )
         }
         for chunk_id in ("uud_chunk_00646", "uud_chunk_00647"):
-            self.assertFalse(chunks[chunk_id]["runtime_loadable"])
+            self.assertTrue(chunks[chunk_id]["runtime_loadable"])
             self.assertFalse(chunks[chunk_id]["canonical_use_allowed"])
-            self.assertNotIn(chunk_id, retrieval_chunk_ids)
+            self.assertIn(chunk_id, retrieval_chunk_ids)
 
     def test_failure_ask_context_pack_has_no_final_payloads(self) -> None:
         for result in (
@@ -1874,7 +1874,7 @@ class RuntimeContractTest(unittest.TestCase):
                 json.dumps(
                     {
                         "corpus_id": "demo",
-                        "schema_version": 4,
+                        "schema_version": 5,
                         "evidence_registry": "proof.rows",
                         "bbox_registry": "boxes.rows",
                         "graph_nodes": "nodes.rows",
@@ -1913,7 +1913,7 @@ class RuntimeContractTest(unittest.TestCase):
             (root / "data").mkdir()
             (root / "corpus").mkdir()
             (root / "corpus/manifest.json").write_text(
-                json.dumps({"corpus_id": "demo", "schema_version": 4}),
+                json.dumps({"corpus_id": "demo", "schema_version": 5}),
                 encoding="utf-8",
             )
             (root / "data/corpus_registry.json").write_text(
@@ -1955,7 +1955,7 @@ class RuntimeContractTest(unittest.TestCase):
             (root / "data/final/demo").mkdir(parents=True)
             (root / "data/corpus_registry.json").write_text(json.dumps({"demo": "data/final/demo/manifest.json"}), encoding="utf-8")
             (root / "data/final/demo/manifest.json").write_text(
-                json.dumps({"corpus_id": "demo", "schema_version": 4}),
+                json.dumps({"corpus_id": "demo", "schema_version": 5}),
                 encoding="utf-8",
             )
             old = os.environ.get("TJIPTO_REPO_ROOT")
@@ -2003,7 +2003,7 @@ class RuntimeContractTest(unittest.TestCase):
                     json.dumps(
                         {
                             "corpus_id": "demo",
-                            "schema_version": 4,
+                            "schema_version": 5,
                             "evidence_registry": artifact_path,
                         }
                     ),

@@ -110,8 +110,6 @@ class TextSpanDispositionContractTest(unittest.TestCase):
             "uud_chunk_00634",
             "uud_chunk_00635",
             "uud_chunk_00648",
-            "uud_chunk_00646",
-            "uud_chunk_00647",
         ):
             chunk = self.chunks[chunk_id]
             self.assertFalse(chunk["runtime_loadable"], chunk_id)
