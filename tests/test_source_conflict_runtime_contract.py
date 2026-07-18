@@ -66,8 +66,8 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
             for row in read_jsonl(FINAL / "source_conflicts.jsonl")
             if row["source_conflict_id"] == "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict"
         )
-        self.assertEqual(len(conflict["text_span_ids"]), 3)
-        self.assertEqual(len(conflict["raw_provenance_text_span_ids"]), 3)
+        self.assertEqual(len(conflict["text_span_ids"]), 1)
+        self.assertEqual(len(conflict["raw_provenance_text_span_ids"]), 1)
         self.assertEqual(conflict["blocked_raw_provenance_text_span_reasons"], {})
         viewer = self.service.viewer("uud", citation["evidence_id"])
         self.assertEqual(viewer["authority_kind"], "source_anomaly")
@@ -142,11 +142,15 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertTrue(pasal_i["viewer_refs"][0]["can_resolve"])
 
         pasal_ii = self.service.ask("uud", "Pasal II Perubahan Keempat")
-        pasal_iii = self.service.ask("uud", "Pasal III Perubahan Keempat")
+        pasal_iii = self.service.ask("uud", "Pasal III Aturan Tambahan Perubahan Keempat")
         self.assertEqual(pasal_ii["source_conflict"]["source_conflict_id"], pasal_iii["source_conflict"]["source_conflict_id"])
         self.assertEqual(pasal_ii["route"], "source_anomaly_explanation")
         self.assertIn("Pasal III", pasal_ii["answer"])
         self.assertNotIn("PDF mencetak Pasal II.", pasal_ii["answer"])
+        peralihan = self.service.ask("uud", "Pasal III Aturan Peralihan Perubahan Keempat")
+        self.assertEqual(peralihan["route"], "legal_reference")
+        self.assertIsNone(peralihan.get("source_conflict"))
+        self.assertEqual(peralihan["citations"][0]["citation"], "Pasal III")
 
     def test_inserted_bab_queries_use_structural_heading_owners(self) -> None:
         for label in ("BAB IXA", "BAB XA", "BAB VIIA", "BAB VIIB", "BAB VIIIA"):

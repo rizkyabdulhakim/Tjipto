@@ -428,8 +428,8 @@
         "recovery_capability",
         "recovery_status"
       ],
-      "bytes": 7777,
-      "sha256": "a950e6ba2e4ad7ac4b6e7c97cba828d4d6ff8dca59204558960eb0f693a538f0"
+      "bytes": 7452,
+      "sha256": "68c9a917e6daa5c6328f4acf388c3d3c5d4d552b89ba645e8a051cc03b251dff"
     },
     "source_documents.jsonl": {
       "origin": "generated",
@@ -552,8 +552,8 @@
         "reason_code",
         "reason"
       ],
-      "bytes": 5500622,
-      "sha256": "f986141f492e250617f6aadf1f06f06c39976d6496781355207d3aac56ca331c"
+      "bytes": 5500588,
+      "sha256": "adb1bff98b14e45a6a6588c3c77e051cee910a51d1a95bb6e2bb7f197657205a"
     },
     "word_bboxes.jsonl": {
       "origin": "generated",

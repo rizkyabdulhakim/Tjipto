@@ -315,8 +315,8 @@ INSERTED_BAB_SPECS = (
 
 SOURCE_CONFLICT_SPECS = (
     {
-        "affected_pages": [5, 6],
-        "anchor_terms": ["ATURAN TAMBAHAN", "Pasal III"],
+        "affected_pages": [6],
+        "anchor_terms": ["Pasal III"],
         "classification": "source_pdf_contains_pasal_iii_anomaly",
         "corpus_id": "uud",
         "provenance": {"donor_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict"},
@@ -324,7 +324,15 @@ SOURCE_CONFLICT_SPECS = (
         "provenance_review_status": "reviewed",
         "provenance_summary": "source_pdf_contains_pasal_iii_anomaly",
         "final_authority_policy": "Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final.",
-        "query_anchor_terms": ["aturan tambahan", "pasal iii", "pasal ii", "pasal 3"],
+        "query_anchor_terms": [
+            "aturan tambahan pasal iii",
+            "pasal iii aturan tambahan",
+            "aturan tambahan pasal ii",
+            "pasal ii aturan tambahan",
+            "aturan tambahan",
+            "pasal iii",
+            "pasal ii",
+        ],
         "resolution_decision": {
             "canonical_reference_for_current_uud": "uud_1945_current_consolidated_text_aturan_tambahan_pasal_ii",
             "decision_scope": "pipeline_policy_not_final_legal_authority",

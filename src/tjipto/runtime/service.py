@@ -1490,6 +1490,14 @@ def _matched_source_conflict(store, query: str) -> dict | None:
 
 def _is_source_anomaly_query(store, query: str) -> bool:
     folded = (query or "").casefold()
+    # Pasal III in Aturan Peralihan is an ordinary historical provision.  The
+    # source-marker anomaly is scoped to the separate Aturan Tambahan section.
+    if "pasal iii" in folded and "aturan peralihan" in folded:
+        return False
+    if "pasal iii" in folded and "aturan tambahan" not in folded and not any(
+        marker in folded for marker in ("konflik", "anomali", "source anomaly", "sumber anomali")
+    ):
+        return False
     if "pasal ii" in folded and any(term in folded for term in ("perubahan keempat", "perubahan 4", "amendment 4")):
         return True
     relation_intent = classify_relation_intent(store, query)
