@@ -12,6 +12,7 @@ export interface Citation {
     | "metadata_trace"
     | "source_conflict_provenance"
     | "source_anomaly"
+    | "structural_context"
     | "instrument_provenance";
   authorityLabel?: string;
   citationFinal?: boolean;
@@ -19,6 +20,7 @@ export interface Citation {
   legalUnitId?: string;
   sourceDocumentId?: string;
   viewerRefId?: string;
+  relationId?: string;
   article?: string;
   paragraph?: string;
   pageNumber: number;

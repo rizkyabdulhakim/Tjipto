@@ -97,7 +97,11 @@ def apply_authority_contract(
             raise ValueError("incomplete_span_decision")
     for row in evidence:
         exact = row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True
+        structural_provenance = row.get("evidence_owner_kind") == "metadata_source" or str(row.get("evidence_id") or "").startswith(
+            "uud_inserted_bab_heading_evidence::"
+        )
         historical_anomaly = bool(units_by_id.get(row.get("legal_unit_id"), {}).get("exclusion_ref"))
+        historical_pasali = row.get("hierarchy") == ["ATURAN TAMBAHAN", "Pasal I"] and row.get("source_role") == "amendment_4_historical"
         instrument_trace = units_by_id.get(row.get("legal_unit_id"), {}).get("unit_type") in {
             "amendment_recital_record",
             "amendment_scope_record",
@@ -109,11 +113,21 @@ def apply_authority_contract(
         }
         row.update(
             _decision(
-                "source_anomaly_trace" if historical_anomaly else ("instrument_provenance" if instrument_trace else ("normative_legal_text" if exact else "page_only")),
-                exact and not instrument_trace and not historical_anomaly,
-                exact and not instrument_trace and not historical_anomaly,
-                "historical_source_anomaly_not_final"
+                "source_anomaly_trace"
+                if historical_pasali
+                else "structural_context"
+                if structural_provenance
+                else "source_anomaly_trace"
                 if historical_anomaly
+                else ("instrument_provenance" if instrument_trace else ("normative_legal_text" if exact else "page_only")),
+                exact and not historical_pasali and not structural_provenance and not instrument_trace and not historical_anomaly,
+                exact and not historical_pasali and not structural_provenance and not instrument_trace and not historical_anomaly,
+                "historical_source_anomaly_not_final"
+                if historical_pasali
+                else "historical_source_anomaly_not_final"
+                if historical_anomaly
+                else "structural_source_provenance_not_final"
+                if structural_provenance
                 else "instrument_trace_only_not_public_citation"
                 if instrument_trace
                 else ("exact_evidence" if exact else row.get("failure_reason", "not_exact")),

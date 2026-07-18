@@ -7,6 +7,7 @@ from typing import cast
 import unicodedata
 
 from tjipto.contracts.evidence import normalize_source_text
+from tjipto.contracts.authority import AUTHORITY_KINDS
 from tjipto.corpora.disposition import (
     EXCLUDED_STATUSES,
     LEGAL_FORCES,
@@ -318,7 +319,11 @@ def build_validation_report(
         bbox_rows=bbox_rows,
         promotion_decisions=promotion_decisions,
         promotion_engine_health=cast(dict, validation_report["promotion_engine_health"]),
+        article_relations=article_amendment_relations or (),
     )
+    validation_report["promotion_engine_health"]["promotion_blocked_count"] = validation_report["promotion_decision_audit_health"][
+        "blocked_decision_count"
+    ]
     validation_report["metadata_exact_promotion_feasibility_health"] = _metadata_exact_promotion_feasibility_health(
         promotion_decisions=promotion_decisions
     )
@@ -429,6 +434,10 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     source_document_ids = {row["source_document_id"] for row in source_documents}
     page_keys = {(row["source_document_id"], row["page_number"]) for row in pages}
     metadata_grounding_ids = {row["metadata_grounding_id"] for row in metadata_grounding}
+    for row in metadata_grounding:
+        support_id = row.get("supporting_evidence_id")
+        if not isinstance(support_id, str) or support_id not in evidence_by_id:
+            errors.append(f"metadata_supporting_evidence_unresolved:{row.get('metadata_grounding_id')}:{support_id}")
     metadata_grounding_ref_ids: set[str] = set()
     text_span_ids = {row["text_span_id"] for row in page_text_spans}
     span_by_id = {row["text_span_id"]: row for row in page_text_spans}
@@ -459,7 +468,19 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             **row,
         }
         for character in row.get("characters") or ():
-            bbox_by_id[character["character_bbox_id"]] = {**row, **character, "bbox_id": character["character_bbox_id"]}
+            character_id = str(character.get("character_bbox_id") or "")
+            if not character_id:
+                errors.append(f"character_bbox_missing_id:{word_bbox_id}")
+                continue
+            if not all(character.get(field) is not None for field in ("x0", "y0", "x1", "y1")):
+                errors.append(f"character_bbox_missing_coordinates:{character_id}")
+            elif character["x1"] < character["x0"] or character["y1"] < character["y0"] or character["x0"] < 0 or character["y0"] < 0:
+                errors.append(f"character_bbox_invalid_coordinates:{character_id}")
+            if character.get("page_number", row.get("page_number")) != row.get("page_number"):
+                errors.append(f"character_bbox_page_mismatch:{character_id}")
+            if character.get("source_document_id", row.get("source_document_id")) != row.get("source_document_id"):
+                errors.append(f"character_bbox_source_mismatch:{character_id}")
+            bbox_by_id[character_id] = {**row, **character, "bbox_id": character_id}
     trust_violations = validate_uud_trust_boundary(
         legal_units=legal_units,
         chunks=chunks,
@@ -521,9 +542,11 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         bbox_rows=bbox_rows,
         promotion_decisions=promotion_decisions,
         promotion_engine_health=promotion,
+        article_relations=article_amendment_relations,
     )
     if promotion_audit["status"] != "complete":
         errors.append("promotion_decision_audit_incomplete")
+    promotion["promotion_blocked_count"] = promotion_audit["blocked_decision_count"]
     errors.extend(_recovery_state_errors(promotion_decisions))
     pdf_health = _pdf_health_summary(pdf_health_report)
     if pdf_health["status"] != "native_text_ok":
@@ -1131,6 +1154,10 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         if not evidence_row:
             errors.append(f"article_relation_unknown_evidence:{row['relation_id']}:{row.get('evidence_id')}")
             continue
+        if row.get("authority_kind") not in AUTHORITY_KINDS:
+            errors.append(f"article_relation_invalid_authority_kind:{row['relation_id']}:{row.get('authority_kind')}")
+        if not isinstance(row.get("citation_final"), bool):
+            errors.append(f"article_relation_invalid_citation_final:{row['relation_id']}")
         source_unit = units_by_id.get(row.get("source_legal_unit_id"))
         target_unit = units_by_id.get(row.get("target_legal_unit_id"))
         if row.get("source_document_id") != evidence_row.get("source_document_id"):
@@ -1213,9 +1240,6 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         target_spans = [span_by_id.get(span_id) for span_id in row.get("target_text_span_ids") or ()]
         target_phrase = normalize_source_text(row.get("new_reference") or row.get("target_citation"))
         target_text = normalize_source_text(" ".join(str(span.get("text") or "") for span in target_spans if span))
-        local_bbox_text = normalize_source_text(
-            " ".join(str(bbox_by_id[bbox_id].get("text") or "") for bbox_id in target_bbox_refs if bbox_id in bbox_by_id)
-        )
         isolated_bbox = any(
             len(parse_legal_references("uud", str(bbox_by_id[bbox_id].get("text") or ""))) == 1
             and target_phrase in normalize_source_text(str(bbox_by_id[bbox_id].get("text") or ""))
@@ -1224,13 +1248,24 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         )
         word_target = row.get("target_geometry_method") == "word_geometry"
         character_target = row.get("target_geometry_method") == "character_geometry"
+        target_ref_text = "".join(str(bbox_by_id[bbox_id].get("text") or "") for bbox_id in target_bbox_refs if bbox_id in bbox_by_id)
+        reconstructed_target = _compact_reference(target_ref_text) == _compact_reference(target_phrase)
+        character_geometry_valid = bool(target_bbox_refs) and all(
+            str(bbox_id).startswith("uud_character_bbox::")
+            and bbox_by_id[bbox_id].get("source_document_id") == evidence_row.get("source_document_id")
+            and bbox_by_id[bbox_id].get("page_number") in set(evidence_row.get("page_numbers") or ())
+            and all(bbox_by_id[bbox_id].get(field) is not None for field in ("x0", "y0", "x1", "y1"))
+            for bbox_id in target_bbox_refs
+            if bbox_id in bbox_by_id
+        )
         exact_support = (
             evidence_row.get("bbox_precision") == "exact"
             and evidence_row.get("viewer_highlightable") is True
             and bool(target_bbox_refs)
             and all(bbox_id in bbox_by_id for bbox_id in target_bbox_refs)
-            and (word_target or (bool(target_spans) and _compact_reference(target_phrase) in _compact_reference(target_text)))
-            and (character_target or _compact_reference(target_phrase) in _compact_reference(local_bbox_text))
+            and (word_target or character_target or (bool(target_spans) and _compact_reference(target_phrase) in _compact_reference(target_text)))
+            and reconstructed_target
+            and (not character_target or character_geometry_valid)
             and (word_target or character_target or isolated_bbox)
         )
         target_span_isolated = bool(target_spans) and all(
@@ -1239,15 +1274,28 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
             and target_phrase in normalize_source_text(str(span.get("text") or ""))
             for span in target_spans
         )
-        target_bbox_isolated = word_target or (bool(target_bbox_refs) and all(
-            bbox_id in bbox_by_id
-            and len(parse_legal_references("uud", str(bbox_by_id[bbox_id].get("text") or ""))) == 1
-            and target_phrase in normalize_source_text(str(bbox_by_id[bbox_id].get("text") or ""))
-            for bbox_id in target_bbox_refs
-        ))
+        target_bbox_isolated = (
+            character_target
+            and character_geometry_valid
+            and reconstructed_target
+            or word_target
+            and reconstructed_target
+            and bool(target_bbox_refs)
+            and all(bbox_id in bbox_by_id for bbox_id in target_bbox_refs)
+            or not character_target
+            and not word_target
+            and bool(target_bbox_refs)
+            and reconstructed_target
+            and all(
+                bbox_id in bbox_by_id
+                and len(parse_legal_references("uud", str(bbox_by_id[bbox_id].get("text") or ""))) == 1
+                and target_phrase in normalize_source_text(str(bbox_by_id[bbox_id].get("text") or ""))
+                for bbox_id in target_bbox_refs
+            )
+        )
         if target_spans and not target_span_isolated:
             errors.append(f"article_relation_target_span_not_isolated:{row['relation_id']}")
-        if target_bbox_refs and not target_bbox_isolated and row.get("target_geometry_method") != "character_geometry":
+        if target_bbox_refs and not target_bbox_isolated:
             errors.append(f"article_relation_target_bbox_not_isolated:{row['relation_id']}")
         if (
             row.get("relation_type") == "RENAMES"
@@ -1261,7 +1309,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         if support_class not in {"exact_article_relation", "trace_article_relation"}:
             errors.append(f"article_relation_invalid_support_class:{row['relation_id']}:{support_class}")
         if support_class == "exact_article_relation":
-            if not exact_support and row.get("target_geometry_method") != "character_geometry":
+            if not exact_support:
                 errors.append(f"article_relation_false_exact_claim:{row['relation_id']}")
             if row.get("grounding_level") != "exact_source_text":
                 errors.append(f"article_relation_exact_wrong_grounding:{row['relation_id']}")
@@ -1827,6 +1875,7 @@ def _promotion_decision_audit_health(
     bbox_rows: list[dict],
     promotion_decisions: list[dict],
     promotion_engine_health: dict,
+    article_relations: list[dict] | tuple[dict, ...] = (),
 ) -> dict:
     expected = {
         ("evidence", row["evidence_id"])
@@ -1841,13 +1890,13 @@ def _promotion_decision_audit_health(
         for row in metadata_grounding
         if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True
     }
+    expected |= {("article_relation", row["relation_id"]) for row in article_relations}
     expected |= {
         ("bbox", row["bbox_id"])
         for row in bbox_rows
         if row.get("bbox_precision") != "exact" or row.get("viewer_highlightable") is not True or row.get("promotion_candidate") is True
     }
     actual = {(row.get("record_type"), row.get("record_id")) for row in promotion_decisions}
-    expected = set(actual)
     duplicate_decision_ids = len(promotion_decisions) - len({row.get("decision_id") for row in promotion_decisions})
     blocked = [row for row in promotion_decisions if row.get("decision") == "keep_non_exact"]
     attempted = [row for row in promotion_decisions if row.get("promotion_attempted") is True]

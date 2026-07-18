@@ -43,6 +43,7 @@ def handle_request(
             service.viewer(
                 corpus_id,
                 _optional_str(payload, "evidence_id"),
+                relation_id=_optional_str(payload, "relation_id"),
                 source_document_id=_optional_str(payload, "source_document_id"),
                 page_number=_optional_int(payload, "page_number"),
                 bbox_id=_optional_str(payload, "bbox_id"),

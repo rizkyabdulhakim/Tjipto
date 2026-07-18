@@ -82,6 +82,8 @@ def _chunk_status(unit: dict) -> str:
 
 
 def _canonical_use_allowed(unit: dict) -> bool:
+    if "canonical_use_allowed" in unit:
+        return unit["canonical_use_allowed"] is True
     return _chunk_status(unit) == "active_canonical_record"
 
 

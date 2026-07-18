@@ -128,9 +128,9 @@ def append_amendment_instrument_units(
         hierarchy=["ATURAN TAMBAHAN", "Pasal I"],
         parent_legal_unit_ids=[aturan_unit_id],
         chunk_type="pasal_chunk_record",
-        canonical_use_allowed=False,
+        canonical_use_allowed=True,
         chunk_status="active_historical_record",
-        exclusion_ref=anomaly_ref,
+        runtime_loadable=True,
     )
     append_instrument_unit(
         source_id,

@@ -164,6 +164,7 @@ class LegalRuntimeService:
         corpus_id: str,
         evidence_id: str | None,
         *,
+        relation_id: str | None = None,
         source_document_id: str | None = None,
         page_number: int | None = None,
         bbox_id: str | None = None,
@@ -191,12 +192,18 @@ class LegalRuntimeService:
             evidence, synthetic_bboxes = _source_conflict_viewer_evidence(store, evidence_id)
         if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
+        relation = _relation_for_evidence(store, evidence_id, relation_id)
+        if relation is not None:
+            evidence = evidence | {
+                "bbox_refs": tuple(relation.get("bbox_refs") or ()),
+                "quoted_text": relation.get("quoted_text") or evidence.get("quoted_text"),
+            }
         bboxes = (
             synthetic_bboxes
             if synthetic_bboxes is not None
             else store.metadata_bboxes_for(evidence_id)
             if evidence.get("metadata_grounding")
-            else store.bboxes_for(evidence_id)
+            else store.bboxes_for_refs(tuple(relation.get("bbox_refs") or ())) if relation is not None else store.bboxes_for(evidence_id)
         )
         return _viewer_with_authority(
             store,
@@ -218,6 +225,7 @@ class LegalRuntimeService:
         corpus_id: str,
         evidence_id: str | None,
         *,
+        relation_id: str | None = None,
         source_document_id: str,
         page_number: int,
         source_sha256: str | None = None,
@@ -246,12 +254,18 @@ class LegalRuntimeService:
             evidence, synthetic_bboxes = _source_conflict_viewer_evidence(store, evidence_id)
         if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
+        relation = _relation_for_evidence(store, evidence_id, relation_id)
+        if relation is not None:
+            evidence = evidence | {
+                "bbox_refs": tuple(relation.get("bbox_refs") or ()),
+                "quoted_text": relation.get("quoted_text") or evidence.get("quoted_text"),
+            }
         bboxes = (
             synthetic_bboxes
             if synthetic_bboxes is not None
             else store.metadata_bboxes_for(evidence_id)
             if evidence.get("metadata_grounding")
-            else store.bboxes_for(evidence_id)
+            else store.bboxes_for_refs(tuple(relation.get("bbox_refs") or ())) if relation is not None else store.bboxes_for(evidence_id)
         )
         return resolve_pdf_access(
             store,
@@ -537,6 +551,7 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
             "metadata_trace": "Metadata trace",
             "source_conflict_provenance": "Jejak audit sumber",
             "source_anomaly": "Source anomaly",
+            "structural_context": "Provenance struktural",
             "instrument_provenance": "Instrument provenance",
         }[authority_kind],
         "citation_final": authority_kind == "legal_citation",
@@ -556,6 +571,7 @@ def _support_kind_for_authority(authority_kind: str) -> str:
         "metadata_trace": "metadata_trace",
         "source_conflict_provenance": "source_anomaly_provenance",
         "source_anomaly": "source_anomaly_provenance",
+        "structural_context": "structural_provenance",
         "instrument_provenance": "instrument_provenance",
     }[authority_kind]
 
@@ -597,6 +613,10 @@ def _authority_kind(store, row: dict, *, can_resolve: bool | None = None, confli
     )
     if row.get("metadata_grounding") or row.get("metadata_field"):
         return "metadata_source" if viewer_resolvable else "metadata_trace"
+    if row.get("authority_kind") == "source_anomaly_trace" and row.get("citation_final") is False:
+        return "source_anomaly"
+    if row.get("authority_kind") == "structural_context":
+        return "structural_context"
     conflict_row = conflict or _source_conflict_by_evidence(store, row.get("evidence_id"))
     if conflict_row is not None or row.get("source_conflict_id"):
         return "source_anomaly" if _is_source_anomaly_conflict(conflict_row or row) else "source_conflict_provenance"
@@ -932,7 +952,6 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
     exact_support = tuple(row for row in support if _is_exact_article_relation(row))
     exact_targets = {row.get("target_legal_unit_id") for row in exact_support}
     trace_support = tuple(row for row in support if not _is_exact_article_relation(row) and row.get("target_legal_unit_id") not in exact_targets)
-    nonfinal_support = tuple(row for row in exact_support if row.get("citation_final") is not True)
     public_relations = tuple(_public_article_relation(row) for row in (*exact_support, *trace_support))
     answer_evidence = tuple(row for row in (_article_relation_evidence(store, row) for row in exact_support) if row)
     if not answer_evidence:
@@ -964,7 +983,7 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
         }
     citations = _deduplicated_article_relation_citations(store, answer_evidence)
     viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence)
-    partial = bool(trace_support) or any(row.get("citation_final") is not True for row in exact_support)
+    partial = bool(trace_support)
     public_evidence = answer_evidence
     public_citations = citations
     public_viewer_refs = viewer_refs
@@ -995,7 +1014,7 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
         "legal_relations": (),
         "document_relations": (),
         "article_amendment_relations": public_relations,
-        "trace_support": tuple(_public_article_relation(row) for row in (*trace_support, *nonfinal_support)),
+        "trace_support": tuple(_public_article_relation(row) for row in trace_support),
         "answer_scope": "partial_exact_article_relation" if partial else "exact_article_relation",
         "warnings": ("article_relation_exact_support_partial_trace_omitted",) if trace_support else (),
         "insufficient_reasons": (),
@@ -1197,6 +1216,19 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
             "can_resolve": True,
         },
     }
+
+
+def _relation_for_evidence(store, evidence_id: str | None, relation_id: str | None = None) -> dict | None:
+    if not evidence_id:
+        return None
+    return next(
+        (
+            row
+            for row in getattr(store, "article_amendment_relations", ())
+            if row.get("evidence_id") == evidence_id and (relation_id is None or row.get("relation_id") == relation_id)
+        ),
+        None,
+    )
 
 
 def _is_exact_article_relation(row: dict) -> bool:
@@ -1454,6 +1486,8 @@ def _matched_source_conflict(store, query: str) -> dict | None:
 
 def _is_source_anomaly_query(store, query: str) -> bool:
     folded = (query or "").casefold()
+    if "pasal ii" in folded and any(term in folded for term in ("perubahan keempat", "perubahan 4", "amendment 4")):
+        return True
     relation_intent = classify_relation_intent(store, query)
     if relation_intent.relation_type == "RENAME_PROVISION" and not any(
         marker in folded for marker in ("konflik", "anomali", "pasal iii", "source anomaly", "sumber anomali")

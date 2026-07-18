@@ -145,6 +145,9 @@ def _payload(store, row: dict) -> dict:
         "candidate_type": row.get("candidate_type"),
         "route_sources": tuple(row.get("route_sources") or ()),
         "evidence_status": row.get("status"),
+        "authority_kind": row.get("authority_kind"),
+        "citation_final": row.get("citation_final"),
+        "citable_status": row.get("citable_status"),
         "viewer_ref": {
             "action": "viewer",
             "evidence_id": row["evidence_id"],
@@ -177,6 +180,9 @@ def _citation_payload(row: dict) -> dict:
         "bbox_count": row.get("bbox_count"),
         "viewer_ref": row.get("viewer_ref"),
         "evidence_status": row.get("evidence_status"),
+        "authority_kind": row.get("authority_kind"),
+        "citation_final": row.get("citation_final"),
+        "citable_status": row.get("citable_status"),
     }
 
 

@@ -150,7 +150,7 @@ function EvidenceContent({
     setRenderFailed(false);
     const request = citation.viewerMode === "document" && citation.sourceDocumentId
       ? getDocumentViewerPayload(citation.sourceDocumentId)
-      : getLegalViewerPayload(citation.documentId);
+      : getLegalViewerPayload(citation.documentId, citation.relationId);
     request
       .then((payload) => {
         if (!stale) setViewer(payload);

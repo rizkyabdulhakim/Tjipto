@@ -147,19 +147,18 @@ def build_article_amendment_relations(
             relation_bbox_refs,
             bboxes_by_id,
             word_bboxes,
+            _target_quote(target_span_ids, spans_by_id) if target_span_ids else str(evidence_row.get("quoted_text") or ""),
         )
-        target_character_bbox_refs = (
-            _recover_target_character_bbox_refs(
-                target_phrase,
-                evidence_row["source_document_id"],
-                relation_bbox_refs,
-                bboxes_by_id,
-                word_bboxes,
-            )
-            if target_citation in {"Pasal 19", "Pasal 23", "Pasal 23D"}
-            else []
+        target_character_bbox_refs = _recover_target_character_bbox_refs(
+            target_phrase,
+            evidence_row["source_document_id"],
+            relation_bbox_refs,
+            bboxes_by_id,
+            word_bboxes,
+            _target_quote(target_span_ids, spans_by_id) if target_span_ids else str(evidence_row.get("quoted_text") or ""),
         )
-        bbox_refs = target_word_bbox_refs or target_character_bbox_refs or _target_bbox_refs(evidence_row, target_phrase, bboxes_by_id)
+        target_bbox_refs = target_character_bbox_refs or target_word_bbox_refs
+        bbox_refs = target_bbox_refs
         if not relation_bbox_refs and source_support_available(evidence_row, bboxes_by_id):
             relation_bbox_refs = list(evidence_row.get("bbox_refs") or ())
         relation_bbox_refs = list(dict.fromkeys([*relation_bbox_refs, *bbox_refs]))
@@ -170,7 +169,8 @@ def build_article_amendment_relations(
             and bool(bbox_refs)
             and all(ref in bbox_ids for ref in bbox_refs)
         )
-        exact_support = source_support_exact and target_support_exact and bool(bbox_refs)
+        target_local_geometry = bool(target_word_bbox_refs or target_character_bbox_refs)
+        exact_support = source_support_exact and target_support_exact and target_local_geometry
         support_class = "exact_article_relation" if exact_support else "trace_article_relation"
         trace_only_reason = (
             None
@@ -226,7 +226,7 @@ def build_article_amendment_relations(
                 "authority_kind": evidence_row.get("authority_kind") or "instrument_provenance",
                 "citation_final": evidence_row.get("citation_final") is True,
                 "bbox_precision": evidence_row.get("bbox_precision"),
-                "target_geometry_method": "word_geometry" if target_word_bbox_refs else ("character_geometry" if target_character_bbox_refs else ("existing_exact_bbox" if bbox_refs else "unavailable")),
+                "target_geometry_method": "character_geometry" if target_character_bbox_refs else ("word_geometry" if target_word_bbox_refs else "unavailable"),
                 "target_geometry_source_ids": list(bbox_refs),
                 "recovery_capability": "exact_materialized"
                 if exact_support
@@ -309,6 +309,7 @@ def _recover_target_word_bbox_refs(
     source_bbox_refs: list[str],
     bboxes_by_id: dict[str, dict],
     word_bboxes: list[dict],
+    source_text: str,
 ) -> list[str]:
     """Return a unique contiguous word match wholly inside canonical source proof."""
     target = _compact(citation)
@@ -321,6 +322,12 @@ def _recover_target_word_bbox_refs(
             words_by_page.setdefault(int(word["page_number"]), []).append(word)
     matches: list[list[str]] = []
     for page_number, words in words_by_page.items():
+        target_offsets = _target_offsets(source_text, citation, words)
+        offsets: list[int] = []
+        cursor = 0
+        for word in words:
+            offsets.append(cursor)
+            cursor += len(_compact(word.get("text", "")))
         page_boxes = [row for row in source_boxes if row.get("page_number") == page_number]
         for start in range(len(words)):
             joined = ""
@@ -329,7 +336,7 @@ def _recover_target_word_bbox_refs(
                 matched.append(word)
                 joined = _compact(f"{joined} {word.get('text', '')}")
                 if joined == target:
-                    if _word_phrase(" ".join(str(item.get("text") or "") for item in matched)) == _word_phrase(citation) and all(
+                    if offsets[start] in target_offsets and _compact("".join(str(item.get("text") or "") for item in matched)) == target and all(
                         _word_inside_any_box(item, page_boxes) for item in matched
                     ):
                         matches.append([item["word_bbox_id"] for item in matched])
@@ -345,6 +352,7 @@ def _recover_target_character_bbox_refs(
     source_bbox_refs: list[str],
     bboxes_by_id: dict[str, dict],
     word_bboxes: list[dict],
+    source_text: str,
 ) -> list[str]:
     target = _compact(citation)
     if not target:
@@ -356,13 +364,23 @@ def _recover_target_character_bbox_refs(
             continue
         if not _word_inside_any_box(word, source_boxes):
             continue
-        characters.extend(word.get("characters") or ())
-    if not characters:
-        pages = {int(box.get("page_number") or 0) for box in source_boxes if box.get("page_number") is not None}
-        for word in word_bboxes:
-            if word.get("source_document_id") == source_document_id and int(word.get("page_number") or 0) in pages:
-                characters.extend(word.get("characters") or ())
+        characters.extend(
+            {
+                **character,
+                "page_number": word.get("page_number"),
+                "source_document_id": word.get("source_document_id"),
+                "word_bbox_id": word.get("word_bbox_id"),
+            }
+            for character in word.get("characters") or ()
+            if _word_inside_any_box(character, source_boxes)
+        )
     matches: list[list[str]] = []
+    target_offsets = _target_offsets(source_text, citation, characters)
+    character_offsets: list[int] = []
+    cursor = 0
+    for character in characters:
+        character_offsets.append(cursor)
+        cursor += len(_compact(character.get("text") or ""))
     for start in range(len(characters)):
         joined = ""
         matched: list[dict] = []
@@ -370,12 +388,21 @@ def _recover_target_character_bbox_refs(
             matched.append(character)
             joined = _compact(joined + str(character.get("text") or ""))
             if joined == target:
-                if _compact("".join(str(item.get("text") or "") for item in matched)) == target:
+                next_character = characters[start + len(matched)] if start + len(matched) < len(characters) else None
+                next_text = str(next_character.get("text") or "") if next_character else ""
+                if (
+                    character_offsets[start] in target_offsets
+                    and
+                    (not next_text.isalnum() or next_character.get("word_bbox_id") != matched[-1].get("word_bbox_id"))
+                    and len({item.get("page_number") for item in matched}) == 1
+                    and all(item.get("source_document_id") == source_document_id for item in matched)
+                    and _compact("".join(str(item.get("text") or "") for item in matched)) == target
+                ):
                     matches.append([item["character_bbox_id"] for item in matched])
                 break
             if len(joined) > len(target) or not target.startswith(joined):
                 break
-    return matches[0] if len(matches) == 1 or citation == "Pasal 23" else []
+    return matches[0] if len(matches) == 1 else []
 
 
 def source_support_available(evidence: dict, bboxes_by_id: dict[str, dict]) -> bool:
@@ -395,6 +422,23 @@ def _compact(value: object) -> str:
     return "".join(re.findall(r"\w+", str(value or "").casefold()))
 
 
+def _target_offsets(source_text: str, citation: str, tokens: list[dict]) -> set[int]:
+    source = _compact(source_text)
+    target = _compact(citation)
+    if not source or not target:
+        return set()
+    relative = {len(_compact(source_text[: match.start()])) for match in _reference_pattern(citation).finditer(source_text)}
+    if not relative:
+        return set()
+    page = "".join(_compact(token.get("text") or "") for token in tokens)
+    starts: set[int] = set()
+    cursor = page.find(source)
+    while cursor >= 0:
+        starts.update(cursor + offset for offset in relative)
+        cursor = page.find(source, cursor + 1)
+    return starts
+
+
 def _word_phrase(value: object) -> str:
     return " ".join(re.sub(r"[^\w]+", " ", str(value or "").casefold()).split())
 
@@ -405,12 +449,13 @@ def _isolates_reference(text: str, citation: str) -> bool:
 
 
 def _reference_pattern(citation: str) -> re.Pattern:
-    parts = re.findall(r"Pasal\s+([0-9]+[A-Za-z]?)(?:\s+ayat\s+\((\d+)\))?", citation, re.IGNORECASE)
+    parts = re.findall(r"Pasal\s+([0-9]+)\s*([A-Za-z]?)(?:\s+ayat\s+\((\d+)\))?", citation, re.IGNORECASE)
     if not parts:
         return re.compile(r"(?!x)x")
-    pasal, ayat = parts[0]
+    number, suffix, ayat = parts[0]
+    pasal = rf"{number}\s*{suffix}" if suffix else number
     suffix = rf"\s*ayat\s*\(\s*{re.escape(ayat)}\s*\)" if ayat else ""
-    return re.compile(rf"(?i)\bpasal\s*{re.escape(pasal)}{suffix}\b")
+    return re.compile(rf"(?i)\bpasal\s*{pasal}{suffix}\b")
 
 
 def _ayat_count(text: str) -> int:

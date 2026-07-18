@@ -17,6 +17,7 @@ from tjipto.corpora.uud.metadata_builder import (
     build_metadata_assertions,
     build_metadata_block_grounding,
     build_metadata_graph_edges,
+    ensure_metadata_source_evidence,
     rebuild_metadata_grounding,
 )
 from tjipto.corpora.uud.pages_builder import build_pages
@@ -102,6 +103,17 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     )
     document_metadata = build_document_metadata(source_documents, metadata_grounding)
 
+    document_metadata, metadata_grounding, metadata_grounding_registry = rebuild_metadata_grounding(
+        document_metadata=document_metadata,
+        metadata_grounding=metadata_grounding,
+        evidence=evidence,
+        bbox_rows=bbox_rows,
+        word_bboxes=word_bboxes,
+        legal_units=legal_units,
+        page_text_spans=page_text_spans,
+        source_conflicts=source_conflicts,
+    )
+    ensure_metadata_source_evidence(evidence=evidence, metadata_grounding=metadata_grounding)
     document_metadata, metadata_grounding, metadata_grounding_registry = rebuild_metadata_grounding(
         document_metadata=document_metadata,
         metadata_grounding=metadata_grounding,

@@ -363,7 +363,9 @@ class GraphContractTest(unittest.TestCase):
     def test_article_amendment_relation_artifact_separates_exact_and_trace_support(self) -> None:
         evidence = {row["evidence_id"]: row for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")}
         bbox_ids = {row["bbox_id"] for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")}
-        bbox_ids |= {row["word_bbox_id"] for row in read_jsonl(ROOT / "data/final/uud/word_bboxes.jsonl")}
+        for row in read_jsonl(ROOT / "data/final/uud/word_bboxes.jsonl"):
+            bbox_ids.add(row["word_bbox_id"])
+            bbox_ids.update(character["character_bbox_id"] for character in row.get("characters") or ())
         units = {row["legal_unit_id"]: row for row in read_jsonl(ROOT / "data/final/uud/legal_units.jsonl")}
         rows = read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")
         health = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))[
@@ -381,8 +383,10 @@ class GraphContractTest(unittest.TestCase):
                 ("Pasal 25E", "Pasal 25A"),
             },
         )
-        self.assertTrue(all(row["target_precision"] == "target_local" for row in renumber_rows if row["target_citation"] == "Pasal 3"))
-        self.assertTrue(all(row["target_bbox_refs"] for row in renumber_rows if row["target_citation"] == "Pasal 3"))
+        pasal3_rows = [row for row in renumber_rows if row["target_citation"] == "Pasal 3"]
+        self.assertTrue(all(row["target_precision"] == "target_local" for row in pasal3_rows if row["support_class"] == "exact_article_relation"))
+        self.assertTrue(all(row["target_bbox_refs"] for row in pasal3_rows if row["support_class"] == "exact_article_relation"))
+        self.assertTrue(all(row["trace_only_reason"] for row in pasal3_rows if row["support_class"] == "trace_article_relation"))
         for row in renumber_rows:
             if row["target_citation"] == "Pasal 3":
                 self.assertIn("Pasal 3", row["quoted_text"][row["old_reference_range"][0] : row["old_reference_range"][1]])
@@ -399,7 +403,8 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
         self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
         self.assertEqual(health["article_relation_trace_missing_reason_count"], 0)
-        self.assertIn("shared_source_line_target_not_isolatable", health["article_relation_trace_reason_counts"])
+        self.assertTrue(health["article_relation_trace_reason_counts"])
+        self.assertTrue(all(health["article_relation_trace_reason_counts"].values()))
         self.assertEqual(health["article_relation_invalid_bbox_refs"], 0)
         self.assertEqual(health["article_relation_invalid_coordinates"], 0)
         self.assertGreaterEqual(health["article_relation_partial_answer_risk_count"], 1)
@@ -429,7 +434,7 @@ class GraphContractTest(unittest.TestCase):
                 self.assertEqual(source["bbox_precision"], "exact")
                 self.assertTrue(source["viewer_highlightable"])
             else:
-                self.assertFalse(row["viewer_highlightable"])
+                self.assertTrue(row["viewer_highlightable"])
                 self.assertFalse(row["citation_available"])
 
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:

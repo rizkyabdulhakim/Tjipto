@@ -187,7 +187,7 @@ class EvidenceContractTest(unittest.TestCase):
         anomaly_rows = [row for row in units if row.get("exclusion_ref") == "source_typo_reference::uud_source_typo_reference_00001"]
         self.assertEqual(
             {row["unit_label"] for row in anomaly_rows},
-            {"ATURAN TAMBAHAN source typo reference", "Pasal I", "Pasal III"},
+            {"ATURAN TAMBAHAN source typo reference", "Pasal III"},
         )
         for row in anomaly_rows:
             chunk = chunks[row["legal_unit_id"]]
@@ -200,6 +200,10 @@ class EvidenceContractTest(unittest.TestCase):
                 self.assertEqual(row["status"], "active_historical_record")
                 self.assertEqual(chunk["status"], "active_historical_record")
                 self.assertEqual(row["provenance_review_status"], "resolved_exact_historical_evidence")
+        pasal_i = next(row for row in units if row.get("hierarchy") == ["ATURAN TAMBAHAN", "Pasal I"])
+        self.assertIsNone(pasal_i.get("exclusion_ref"))
+        self.assertTrue(pasal_i["runtime_loadable"])
+        self.assertTrue(chunks[pasal_i["legal_unit_id"]]["canonical_use_allowed"])
 
     def test_closing_clauses_are_separated_from_normative_units(self) -> None:
         forbidden = (

@@ -33,6 +33,33 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
         if row.get("legal_unit_id") and _matches_unit(row, targets)
     }
     requested_role = source_role_for_query(query, strategy=strategy, config=config)
+    bab = parse_bab_reference(_corpus_id(config), query)
+    if bab:
+        dedicated_unit_ids = {
+            unit.get("legal_unit_id")
+            for unit in store.legal_units
+            if unit.get("unit_type") == "bab_record" and unit.get("unit_label", "").casefold() == bab.casefold()
+        }
+        dedicated = [
+            row
+            for row in store.evidence
+            if row.get("status") == "final"
+            and store.bboxes_for(row["evidence_id"])
+            and (requested_role is None or row.get("source_role") == requested_role)
+            and row.get("citation", "").casefold() == bab.casefold()
+            and row.get("legal_unit_id") in dedicated_unit_ids
+        ]
+        if not dedicated:
+            dedicated = [
+                row
+                for row in store.evidence
+                if row.get("status") == "final"
+                and store.bboxes_for(row["evidence_id"])
+                and row.get("citation", "").casefold() == bab.casefold()
+                and row.get("legal_unit_id") in dedicated_unit_ids
+            ]
+        if dedicated:
+            return tuple(dedicated[:limit])
     rows = [
         row
         for row in store.evidence

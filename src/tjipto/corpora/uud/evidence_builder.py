@@ -55,6 +55,7 @@ def append_instrument_unit(
     temporal_context = source_meta.get("temporal_context", source_role)
     unit = {
         "corpus_id": "uud",
+        "canonical_use_allowed": canonical_use_allowed,
         "hierarchy": hierarchy or [],
         "legal_unit_id": legal_unit_id,
         "page_end": page_end,

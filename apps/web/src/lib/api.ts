@@ -270,11 +270,11 @@ export async function saveLegalBookmark(evidenceId: string): Promise<BookmarkPoi
   return body.bookmark ?? null;
 }
 
-export async function getLegalViewerPayload(evidenceId: string): Promise<ViewerPayload> {
+export async function getLegalViewerPayload(evidenceId: string, relationId?: string): Promise<ViewerPayload> {
   const response = await fetch(corpusEndpoint("viewer"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ evidence_id: evidenceId }),
+    body: JSON.stringify({ evidence_id: evidenceId, ...(relationId ? { relation_id: relationId } : {}) }),
   });
   if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} viewer returned ${response.status}`);
   return response.json();
@@ -332,6 +332,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       legalUnitId: item.legal_unit_id,
       sourceDocumentId: item.source_document_id ?? viewer?.source_document_id,
       viewerRefId: viewer?.evidence_id,
+      relationId: relation?.relation_id,
       documentTitle: item.document_title ?? fallbackDocumentTitle(item.corpus_id),
       regulationType: "UUD",
       authorityKind,
@@ -463,6 +464,7 @@ function fallbackAuthorityLabel(authorityKind: Citation["authorityKind"]) {
     metadata_trace: "Metadata trace",
     source_conflict_provenance: "Jejak audit sumber",
     source_anomaly: "Source anomaly",
+    structural_context: "Provenance struktural",
     instrument_provenance: "Instrument provenance",
   }[authorityKind ?? "legal_citation"];
 }

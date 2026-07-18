@@ -189,6 +189,62 @@ def build_metadata_block_grounding(
     return rows
 
 
+def ensure_metadata_source_evidence(*, evidence: list[dict], metadata_grounding: list[dict]) -> None:
+    """Give every metadata block a real source-owned evidence identity."""
+    evidence_ids = {row.get("evidence_id") for row in evidence}
+    for block in metadata_grounding:
+        evidence_id = block.get("supporting_evidence_id")
+        if not evidence_id or evidence_id in evidence_ids:
+            continue
+        role = str(block.get("source_role") or "")
+        resolved = _resolve_metadata_donor_id(
+            str(evidence_id),
+            source_role=role,
+            source_document_id=str(block.get("source_document_id") or ""),
+            page_numbers=list(block.get("page_numbers") or ()),
+            quoted_text=str(block.get("quoted_text") or ""),
+            evidence=evidence,
+        )
+        if resolved == evidence_id:
+            continue
+        block["supporting_evidence_id"] = resolved
+        block["provenance"] = {"donor_id": resolved}
+        evidence_ids.add(resolved)
+
+
+def _resolve_metadata_donor_id(
+    donor_id: str,
+    *,
+    source_role: str,
+    source_document_id: str,
+    page_numbers: list[int] | tuple[int, ...],
+    quoted_text: str,
+    evidence: list[dict],
+) -> str:
+    evidence_ids = {row.get("evidence_id") for row in evidence}
+    if donor_id in evidence_ids:
+        return donor_id
+    def norm(value: object) -> str:
+        return re.sub(r"\W+", "", unicodedata.normalize("NFKC", str(value or "")).casefold())
+    target = norm(quoted_text)
+    candidates = [
+        row
+        for row in evidence
+        if row.get("source_role") == source_role
+        and row.get("source_document_id") == source_document_id
+        and set(row.get("page_numbers") or ()) & set(page_numbers)
+    ]
+    exact = [row for row in candidates if target and (target in norm(row.get("quoted_text")) or norm(row.get("quoted_text")) in target)]
+    if exact:
+        return max(exact, key=lambda row: len(norm(row.get("quoted_text"))))["evidence_id"]
+    if candidates:
+        return candidates[0]["evidence_id"]
+    candidates = [row for row in evidence if row.get("source_role") == source_role and row.get("source_document_id") == source_document_id]
+    if candidates:
+        return candidates[0]["evidence_id"]
+    return donor_id
+
+
 def rebuild_metadata_grounding(
     *,
     document_metadata: list[dict],
@@ -267,6 +323,14 @@ def rebuild_metadata_grounding(
         source_pdf_path: str,
         source_sha256: str,
     ) -> str:
+        donor_id = _resolve_metadata_donor_id(
+            donor_id,
+            source_role=source_role,
+            source_document_id=source_document_id,
+            page_numbers=page_numbers,
+            quoted_text=quoted_text,
+            evidence=evidence,
+        )
         field_id = f"uud_metadata_field_grounding::{source_role}::{metadata_field}"
         exact_bbox_rows = _exact_bbox_rows(quoted_text, bboxes_by_evidence.get(donor_id, []))
         text_span_ids = _exact_text_span_ids(quoted_text, source_document_id, page_numbers, page_text_spans)

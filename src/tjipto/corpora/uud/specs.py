@@ -352,7 +352,9 @@ SOURCE_CONFLICT_SPECS = (
             "provenance_highlight_scope": "all_relevant_spans",
             "finality_policy": "source_anomaly_provenance",
             "public_wording_template": (
-                "Catatan source marker sequence anomaly pada {role_label}: {summary}. {authority_policy} {provenance_note}{reviewer_suffix}"
+                "Sumber PDF mencetak Pasal III, sedangkan identitas konsolidasi kanoniknya adalah Pasal II. "
+                "Catatan source marker sequence anomaly pada {role_label}: {summary}. {authority_policy} "
+                "{provenance_note}{reviewer_suffix}"
             ),
             "reviewer_status": "reviewed",
             "corpus_id": "uud",

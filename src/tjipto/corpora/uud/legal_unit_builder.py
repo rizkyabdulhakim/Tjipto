@@ -139,6 +139,7 @@ def _append_inserted_bab_units(
             parent_ids.append(by_key[(source_id, spec["parent_label"])]["legal_unit_id"])
         row = {
             "corpus_id": "uud",
+            "canonical_use_allowed": True,
             "hierarchy": [],
             "legal_unit_id": legal_id,
             "page_end": spec["page_number"],
@@ -190,6 +191,7 @@ def _append_instrument_units(
         *,
         hierarchy: list[str] | None = None,
         parent_legal_unit_ids: list[str] | None = None,
+        canonical_use_allowed: bool = True,
         chunk_status: str = "active_canonical_record",
         runtime_loadable: bool | None = None,
         exclusion_ref: str | None = None,
@@ -198,6 +200,7 @@ def _append_instrument_units(
         legal_id = allocate_id()
         row = {
             "corpus_id": "uud",
+            "canonical_use_allowed": canonical_use_allowed,
             "hierarchy": hierarchy or [],
             "legal_unit_id": legal_id,
             "page_end": page_end,

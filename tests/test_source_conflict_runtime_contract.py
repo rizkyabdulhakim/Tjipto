@@ -133,6 +133,31 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
             for field in case["expect_empty"]:
                 self.assertFalse(result[field], case["query"])
 
+    def test_pasali_and_pasal_ii_source_routing_preserves_historical_provenance(self) -> None:
+        pasal_i = self.service.ask("uud", "Aturan Tambahan Pasal I Perubahan Keempat")
+        self.assertEqual(pasal_i["status"], "answer_ready")
+        self.assertEqual(pasal_i["citations"][0]["citation"], "Pasal I")
+        self.assertEqual(pasal_i["citations"][0]["authority_kind"], "source_anomaly")
+        self.assertFalse(pasal_i["citations"][0]["citation_final"])
+        self.assertTrue(pasal_i["viewer_refs"][0]["can_resolve"])
+
+        pasal_ii = self.service.ask("uud", "Pasal II Perubahan Keempat")
+        pasal_iii = self.service.ask("uud", "Pasal III Perubahan Keempat")
+        self.assertEqual(pasal_ii["source_conflict"]["source_conflict_id"], pasal_iii["source_conflict"]["source_conflict_id"])
+        self.assertEqual(pasal_ii["route"], "source_anomaly_explanation")
+        self.assertIn("Pasal III", pasal_ii["answer"])
+        self.assertNotIn("PDF mencetak Pasal II.", pasal_ii["answer"])
+
+    def test_inserted_bab_queries_use_structural_heading_owners(self) -> None:
+        for label in ("BAB IXA", "BAB XA", "BAB VIIA", "BAB VIIB", "BAB VIIIA"):
+            result = self.service.ask("uud", label)
+            self.assertEqual(result["status"], "answer_ready", label)
+            citation = result["citations"][0]
+            self.assertEqual(citation["citation"], label, label)
+            self.assertEqual(citation["authority_kind"], "structural_context", label)
+            self.assertFalse(citation["citation_final"], label)
+            self.assertTrue(result["viewer_refs"][0]["can_resolve"], label)
+
 
 def _source_conflict_cases() -> tuple[dict, ...]:
     path = ROOT / "tests/fixtures/uud/source_conflict_cases.jsonl"
