@@ -19,6 +19,37 @@ FINAL = ROOT / "data/final/uud"
 
 
 class VerifiedCorpusContractTest(unittest.TestCase):
+    def test_cached_snapshot_rejects_integrity_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "data", root / "data")
+            service = LegalRuntimeService(root)
+            service.repository.load("uud")
+            artifact = root / "data/final/uud/evidence_registry.jsonl"
+            artifact.write_bytes(artifact.read_bytes() + b" ")
+            with self.assertRaisesRegex(ValueError, "artifact_size_mismatch|artifact_sha256_mismatch"):
+                service.repository.load("uud")
+            self.assertEqual(service.repository.load_count, 1)
+
+    def test_cached_snapshot_rejects_semantic_mutation_with_new_hashes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "data", root / "data")
+            service = LegalRuntimeService(root)
+            service.repository.load("uud")
+            final = root / "data/final/uud"
+            artifact = final / "evidence_registry.jsonl"
+            rows = [json.loads(line) for line in artifact.read_text(encoding="utf-8").splitlines() if line]
+            rows[0]["quoted_text"] = "semantic mutation"
+            data = ("\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n").encode("utf-8")
+            artifact.write_bytes(data)
+            manifest = json.loads((final / "manifest.json").read_text(encoding="utf-8"))
+            manifest["files"]["evidence_registry.jsonl"].update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
+            _write_trusted_manifest(root, manifest)
+            with self.assertRaisesRegex(ValueError, "evidence_quote_source_mismatch|artifact_semantic_invalid"):
+                service.repository.load("uud")
+            self.assertEqual(service.repository.load_count, 1)
+
     def test_exact_quote_mutation_fails_offline_and_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

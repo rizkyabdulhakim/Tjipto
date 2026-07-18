@@ -203,7 +203,7 @@ class EvidenceContractTest(unittest.TestCase):
         pasal_i = next(row for row in units if row.get("hierarchy") == ["ATURAN TAMBAHAN", "Pasal I"])
         self.assertIsNone(pasal_i.get("exclusion_ref"))
         self.assertTrue(pasal_i["runtime_loadable"])
-        self.assertTrue(chunks[pasal_i["legal_unit_id"]]["canonical_use_allowed"])
+        self.assertFalse(chunks[pasal_i["legal_unit_id"]]["canonical_use_allowed"])
 
     def test_closing_clauses_are_separated_from_normative_units(self) -> None:
         forbidden = (

@@ -403,11 +403,17 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
         self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
         self.assertEqual(health["article_relation_trace_missing_reason_count"], 0)
-        self.assertTrue(health["article_relation_trace_reason_counts"])
+        if trace_rows:
+            self.assertTrue(health["article_relation_trace_reason_counts"])
+        else:
+            self.assertEqual(health["article_relation_trace_reason_counts"], {})
         self.assertTrue(all(health["article_relation_trace_reason_counts"].values()))
         self.assertEqual(health["article_relation_invalid_bbox_refs"], 0)
         self.assertEqual(health["article_relation_invalid_coordinates"], 0)
-        self.assertGreaterEqual(health["article_relation_partial_answer_risk_count"], 1)
+        if trace_rows:
+            self.assertGreaterEqual(health["article_relation_partial_answer_risk_count"], 1)
+        else:
+            self.assertEqual(health["article_relation_partial_answer_risk_count"], 0)
         self.assertTrue(health["relation_runtime_policy_slow_gate_status"].startswith("not_executed"))
         for row in rows:
             source = evidence[row["evidence_id"]]

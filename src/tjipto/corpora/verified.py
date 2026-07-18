@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from hashlib import sha256
+from importlib import import_module
 import json
 from pathlib import Path
 from threading import RLock
@@ -27,10 +28,65 @@ class CorpusReadiness:
 
 
 @dataclass(frozen=True)
-class VerifiedCorpusSnapshot:
+class CorpusSemanticAttestation:
+    status: str
+    violation_codes: tuple[str, ...] = ()
+
+
+_SNAPSHOT_TOKEN = object()
+
+
+@dataclass(frozen=True)
+class ValidatedCorpusSnapshot:
     config: object
     artifacts: Mapping[str, object]
     readiness: CorpusReadiness
+    semantic_attestation: CorpusSemanticAttestation
+    corpus_id: str
+    schema_version: int
+    manifest_digest: str
+    artifact_set_digest: str
+    _token: object = None
+
+    def __post_init__(self) -> None:
+        if self._token is not _SNAPSHOT_TOKEN:
+            raise TypeError("validated_snapshot_requires_publication")
+
+
+VerifiedCorpusSnapshot = ValidatedCorpusSnapshot
+
+
+class CorpusPublicationService:
+    def verify_and_publish(self, config) -> ValidatedCorpusSnapshot:
+        manifest, manifest_digest = _read_trusted_manifest(config)
+        artifacts = _verify_artifacts(config.manifest_path.parent.resolve(), manifest, config.setting("runtime_required_artifacts"))
+        _validate_cross_artifact_references(manifest, artifacts)
+        semantic_attestation = _run_semantic_validator(config, manifest, artifacts)
+        if semantic_attestation.violation_codes:
+            raise CorpusIntegrityError(semantic_attestation.violation_codes[0])
+        frozen_artifacts = _freeze(artifacts)
+        frozen_manifest = _freeze(manifest)
+        verified = replace(
+            config,
+            manifest=frozen_manifest,
+            settings=_freeze(config.settings or {}),
+            verified_artifacts=frozen_artifacts,
+            manifest_digest=manifest_digest,
+            artifact_set_digest=_artifact_digest(manifest),
+        )
+        artifact_set_digest = _artifact_digest(manifest)
+        readiness = CorpusReadiness(True, manifest_digest, artifact_set_digest)
+        return ValidatedCorpusSnapshot(
+            config=verified,
+            artifacts=frozen_artifacts,
+            readiness=readiness,
+            semantic_attestation=semantic_attestation,
+            corpus_id=config.corpus_id,
+            schema_version=manifest["schema_version"],
+            manifest_digest=manifest_digest,
+            artifact_set_digest=artifact_set_digest,
+            _token=_SNAPSHOT_TOKEN,
+        )
 
 
 class VerifiedCorpusRepository:
@@ -38,60 +94,77 @@ class VerifiedCorpusRepository:
 
     def __init__(self, registry):
         self.registry = registry
-        self._snapshots: dict[str, VerifiedCorpusSnapshot] = {}
+        self.publication = CorpusPublicationService()
+        self._snapshots: dict[tuple[str, str], ValidatedCorpusSnapshot] = {}
         self._lock = RLock()
         self.load_count = 0
 
     def load(self, corpus_id: str) -> VerifiedCorpusSnapshot:
         with self._lock:
-            cached = self._snapshots.get(corpus_id)
-            if cached is not None:
-                return cached
             config = self.registry.resolve(corpus_id)
             if config is None:
                 raise CorpusIntegrityError(self.registry.error_code or "corpus_load_failure")
-            snapshot = _load_snapshot(config)
-            self._snapshots[corpus_id] = snapshot
+            manifest_digest = _manifest_digest(config)
+            cache_key = (corpus_id, manifest_digest)
+            cached = self._snapshots.get(cache_key)
+            if cached is not None:
+                manifest, _ = _read_trusted_manifest(config)
+                _verify_artifact_integrity(config.manifest_path.parent.resolve(), manifest)
+                return cached
+            snapshot = self.publication.verify_and_publish(config)
+            self._snapshots[cache_key] = snapshot
             self.load_count += 1
             return snapshot
 
 
-def _load_snapshot(config) -> VerifiedCorpusSnapshot:
-    expected_digest = config.setting("manifest_sha256")
-    if not isinstance(expected_digest, str) or len(expected_digest) != 64:
-        raise CorpusIntegrityError("trusted_manifest_missing")
+def _read_manifest(config) -> tuple[dict, str]:
     try:
         manifest_bytes = config.manifest_path.read_bytes()
     except OSError as error:
         raise CorpusIntegrityError("manifest_missing") from error
     manifest_digest = sha256(manifest_bytes).hexdigest()
+    expected_digest = config.setting("manifest_sha256")
     if manifest_digest != expected_digest:
         raise CorpusIntegrityError("trusted_manifest_mismatch")
     try:
         manifest = json.loads(manifest_bytes.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise CorpusIntegrityError("malformed_manifest") from error
+    return manifest, manifest_digest
+
+
+def _read_trusted_manifest(config) -> tuple[dict, str]:
+    expected_digest = config.setting("manifest_sha256")
+    if not isinstance(expected_digest, str) or len(expected_digest) != 64:
+        raise CorpusIntegrityError("trusted_manifest_missing")
+    manifest, manifest_digest = _read_manifest(config)
     if not isinstance(manifest, dict) or manifest.get("corpus_id") != config.corpus_id:
         raise CorpusIntegrityError("manifest_identity_mismatch")
     if manifest.get("schema_version") != 5:
         raise CorpusIntegrityError("unsupported_schema")
-    artifacts = _verify_artifacts(config.manifest_path.parent.resolve(), manifest, config.setting("runtime_required_artifacts"))
+    return manifest, manifest_digest
+
+
+def _manifest_digest(config) -> str:
+    return _read_trusted_manifest(config)[1]
+
+
+def _run_semantic_validator(config, manifest: dict, artifacts: dict[str, object]) -> CorpusSemanticAttestation:
+    dotted_path = config.setting("semantic_validator")
+    if not isinstance(dotted_path, str) or ":" not in dotted_path:
+        return CorpusSemanticAttestation("not_configured")
+    module_name, function_name = dotted_path.split(":", 1)
     try:
-        _validate_cross_artifact_references(manifest, artifacts)
-    except (KeyError, TypeError) as error:
-        raise CorpusIntegrityError("artifact_semantic_invalid") from error
-    frozen_artifacts = _freeze(artifacts)
-    frozen_manifest = _freeze(manifest)
-    verified = replace(
-        config,
-        manifest=frozen_manifest,
-        settings=_freeze(config.settings or {}),
-        verified_artifacts=frozen_artifacts,
-        manifest_digest=manifest_digest,
-        artifact_set_digest=_artifact_digest(manifest),
-    )
-    readiness = CorpusReadiness(True, manifest_digest, verified.artifact_set_digest)
-    return VerifiedCorpusSnapshot(verified, frozen_artifacts, readiness)
+        validator = getattr(import_module(module_name), function_name)
+        logical_artifacts = {
+            record["logical_key"]: artifacts[rel]
+            for rel, record in manifest["files"].items()
+            if rel in artifacts
+        }
+        violations = tuple(validator(config.manifest_path.parent.resolve(), logical_artifacts))
+    except (AttributeError, ImportError, KeyError, TypeError, ValueError) as error:
+        raise CorpusIntegrityError("semantic_validator_unavailable") from error
+    return CorpusSemanticAttestation("passed" if not violations else "failed", violations)
 
 
 def _verify_artifacts(final_dir: Path, manifest: dict, required_value: object) -> dict[str, object]:
@@ -121,6 +194,22 @@ def _verify_artifacts(final_dir: Path, manifest: dict, required_value: object) -
         loaded[rel] = _parse_and_validate(data, record, logical_key)
     _validate_exact_evidence(manifest, loaded)
     return loaded
+
+
+def _verify_artifact_integrity(final_dir: Path, manifest: dict) -> None:
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        raise CorpusIntegrityError("manifest_files_missing")
+    for rel, record in sorted(files.items()):
+        if not isinstance(rel, str) or not isinstance(record, dict):
+            raise CorpusIntegrityError("manifest_malformed")
+        logical_key = record.get("logical_key")
+        if not isinstance(logical_key, str) or manifest.get(logical_key) != rel:
+            raise CorpusIntegrityError("semantic_artifact_identity_mismatch")
+        _validate_record_identity(logical_key, rel, record)
+        _, integrity_error = verified_file_bytes(_contained_path(final_dir, rel), record)
+        if integrity_error:
+            raise CorpusIntegrityError(integrity_error)
 
 
 def _validate_record_identity(logical_key: str, rel: str, record: dict) -> None:

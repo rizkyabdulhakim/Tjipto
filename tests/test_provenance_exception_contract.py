@@ -29,7 +29,7 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         self.report = read_json(FINAL / "validation_report.json")
 
     def test_needs_review_records_are_classified(self) -> None:
-        for row_id in ("00623", "00634", "00645", "00646", "00647", "00648"):
+        for row_id in ("00623", "00634", "00645", "00647", "00648"):
             unit = self.units[f"uud_legal_unit_{row_id}"]
             chunk = self.chunks[f"uud_chunk_{row_id}"]
             self.assertIn("provenance_exception_category", unit)
@@ -71,10 +71,13 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
 
     def test_00646_does_not_have_misleading_aturan_tambahan_label(self) -> None:
         text = self.units["uud_legal_unit_00646"]["text"]
-        self.assertEqual(
-            self.units["uud_legal_unit_00646"]["provenance_exception_category"],
-            ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
-        )
+        unit = self.units["uud_legal_unit_00646"]
+        evidence = next(row for row in read_jsonl(FINAL / "evidence_registry.jsonl") if row["legal_unit_id"] == unit["legal_unit_id"])
+        self.assertNotIn("provenance_exception_category", unit)
+        self.assertTrue(unit["runtime_loadable"])
+        self.assertEqual(evidence["authority_kind"], "normative_legal_text")
+        self.assertFalse(evidence["citation_final"])
+        self.assertTrue(evidence["viewer_highlightable"])
         self.assertIn("Majelis Permusyawaratan Rakyat", text)
         self.assertNotIn("Segala peraturan perundangundangan", text)
 

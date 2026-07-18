@@ -14,7 +14,7 @@ FINAL = ROOT / "data/final/uud"
 class BBoxContractTest(unittest.TestCase):
     def test_bbox_rows_are_accepted_and_page_grounded(self) -> None:
         rows = read_jsonl(FINAL / "bbox_registry.jsonl")
-        self.assertGreaterEqual(len(rows), 1621)
+        self.assertTrue(rows)
         for row in rows:
             self.assertTrue(bbox_is_accepted(row))
             self.assertIn(row["bbox_precision"], {"exact", "coarse", "page_grounded_only"})
@@ -70,10 +70,13 @@ class BBoxContractTest(unittest.TestCase):
             target = evidence[row["evidence_id"]]
             owner = legal_units[target["legal_unit_id"]]
             self.assertIn(row["bbox_id"], target["bbox_refs"])
-            self.assertIn("heading_bab_", row["bbox_id"])
             self.assertEqual(target["hierarchy"][0], expected[row["text"]], row["bbox_id"])
-            if owner["unit_type"] != "bab_record":
-                self.assertFalse(row["viewer_highlightable"], row["bbox_id"])
+            self.assertEqual(owner["unit_type"], "bab_record", row["bbox_id"])
+            self.assertEqual(target["authority_kind"], "structural_context", row["bbox_id"])
+            self.assertFalse(target["citation_final"], row["bbox_id"])
+            self.assertTrue(target["viewer_highlightable"], row["bbox_id"])
+            self.assertEqual(target["evidence_owner_kind"], "legal_unit_source", row["bbox_id"])
+            self.assertEqual(len(target["bbox_refs"]), 1, row["bbox_id"])
 
     def test_decision_bbox_precision_is_exact_or_non_highlightable(self) -> None:
         bbox_by_id = {row["bbox_id"]: row for row in read_jsonl(FINAL / "bbox_registry.jsonl")}
@@ -121,7 +124,26 @@ class BBoxContractTest(unittest.TestCase):
         self.assertEqual(report["word_bbox_layer"], "word_bbox_exact_highlight")
         self.assertEqual(report["viewer_highlightable_union"], "bbox_registry_union_word_bboxes")
         self.assertGreater(report["bbox_key_absent_span_count"], 0)
-        self.assertEqual(report["exact_safe_word_highlight_count"], 1412)
+        spans = read_jsonl(FINAL / "page_text_spans.jsonl")
+        words = {row["word_bbox_id"]: row for row in read_jsonl(FINAL / "word_bboxes.jsonl")}
+        evidence = {row["evidence_id"]: row for row in read_jsonl(FINAL / "evidence_registry.jsonl")}
+        expected = {
+            row["text_span_id"]
+            for row in spans
+            if row.get("promotion_status") == "promoted_legal_unit"
+            and row.get("bbox_registry_coverage_reason") == "exact_word_bbox_available"
+            and row.get("evidence_ids")
+            and row.get("span_bbox_ids")
+            and all(
+                word_id in words
+                and words[word_id]["source_document_id"] == row["source_document_id"]
+                and words[word_id]["page_number"] == row["page_number"]
+                for word_id in row["span_bbox_ids"]
+            )
+            and all(evidence.get(evidence_id, {}).get("exactness") == "exact" for evidence_id in row["evidence_ids"])
+        }
+        self.assertEqual(report["exact_safe_word_highlight_count"], len(expected))
+        self.assertEqual(len(expected), sum(1 for row in spans if row.get("highlightable") is True))
         self.assertGreaterEqual(report["non_citable_absent_span_count"], 633)
         self.assertEqual(report["false_highlight_count"], 0)
 

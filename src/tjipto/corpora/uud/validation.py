@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from pathlib import Path
 import re
+from collections.abc import Mapping
 from typing import cast
 import unicodedata
 
@@ -397,28 +398,49 @@ def _evidence_admission_audit(legal_units: list[dict], evidence: list[dict]) -> 
 
 
 def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
-    if read_json(final_dir / "manifest.json").get("schema_version") != UUD_ARTIFACT_SCHEMA:
+    manifest = read_json(final_dir / "manifest.json")
+    if manifest.get("schema_version") != UUD_ARTIFACT_SCHEMA:
         return ("artifact_schema_version_incompatible",)
-    legal_units = read_jsonl(final_dir / "legal_units.jsonl")
-    chunks = read_jsonl(final_dir / "chunks.jsonl")
-    evidence = read_jsonl(final_dir / "evidence_registry.jsonl")
-    bbox_rows = read_jsonl(final_dir / "bbox_registry.jsonl")
-    retrieval_units = read_jsonl(final_dir / "retrieval_units.jsonl")
-    metadata_grounding = read_jsonl(final_dir / "metadata_grounding.jsonl")
-    metadata_grounding_registry = read_jsonl(final_dir / "metadata_grounding_registry.jsonl")
-    document_relations = read_jsonl(final_dir / "document_relations.jsonl") if (final_dir / "document_relations.jsonl").exists() else []
-    article_amendment_relations = (
-        read_jsonl(final_dir / "article_amendment_relations.jsonl") if (final_dir / "article_amendment_relations.jsonl").exists() else []
-    )
-    promotion_decisions = read_jsonl(final_dir / "promotion_decisions.jsonl") if (final_dir / "promotion_decisions.jsonl").exists() else []
-    graph_nodes = read_jsonl(final_dir / "graph_nodes.jsonl")
-    graph_edges = read_jsonl(final_dir / "graph_edges.jsonl")
-    source_conflicts = read_jsonl(final_dir / "source_conflicts.jsonl")
-    validation_exceptions = read_jsonl(final_dir / "validation_exceptions.jsonl")
-    page_text_spans = read_jsonl(final_dir / "page_text_spans.jsonl") if (final_dir / "page_text_spans.jsonl").exists() else []
-    word_bboxes = read_jsonl(final_dir / "word_bboxes.jsonl") if (final_dir / "word_bboxes.jsonl").exists() else []
-    pages = read_jsonl(final_dir / "pages.jsonl") if (final_dir / "pages.jsonl").exists() else []
-    pdf_health_report = read_json(final_dir / "pdf_health_report.json") if (final_dir / "pdf_health_report.json").exists() else {}
+    artifacts: dict[str, object] = {}
+    for rel, record in manifest.get("files", {}).items():
+        logical_key = record.get("logical_key", rel)
+        path = final_dir / rel
+        if path.exists():
+            artifacts[logical_key] = read_json(path) if record.get("format") == "json" else read_jsonl(path)
+    return validate_uud_artifacts(final_dir, artifacts)
+
+
+def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> tuple[str, ...]:
+    def rows(key: str, *, optional: bool = False) -> list[dict]:
+        value = artifacts.get(key)
+        if value is None and optional:
+            return []
+        return cast(list[dict], value or [])
+
+    def obj(key: str, *, optional: bool = False) -> dict:
+        value = artifacts.get(key)
+        if value is None and optional:
+            return {}
+        return cast(dict, value or {})
+
+    legal_units = rows("legal_units")
+    chunks = rows("chunks")
+    evidence = rows("evidence_registry")
+    bbox_rows = rows("bbox_registry")
+    retrieval_units = rows("retrieval_units")
+    metadata_grounding = rows("metadata_grounding")
+    metadata_grounding_registry = rows("metadata_grounding_registry")
+    document_relations = rows("document_relations", optional=True)
+    article_amendment_relations = rows("article_amendment_relations", optional=True)
+    promotion_decisions = rows("promotion_decisions", optional=True)
+    graph_nodes = rows("graph_nodes")
+    graph_edges = rows("graph_edges")
+    source_conflicts = rows("source_conflicts")
+    validation_exceptions = rows("validation_exceptions")
+    page_text_spans = rows("page_text_spans", optional=True)
+    word_bboxes = rows("word_bboxes", optional=True)
+    pages = rows("pages", optional=True)
+    pdf_health_report = obj("pdf_health_report", optional=True)
 
     errors: list[str] = []
     seen_ids: dict[str, set[str]] = defaultdict(set)
@@ -430,7 +452,7 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     graph_node_ids = {row["node_id"] for row in graph_nodes}
     source_conflict_ids = {row["source_conflict_id"] for row in source_conflicts}
     validation_exception_ids = {row["exception_id"] for row in validation_exceptions}
-    source_documents = read_jsonl(final_dir / "source_documents.jsonl")
+    source_documents = rows("source_documents")
     source_document_ids = {row["source_document_id"] for row in source_documents}
     page_keys = {(row["source_document_id"], row["page_number"]) for row in pages}
     metadata_grounding_ids = {row["metadata_grounding_id"] for row in metadata_grounding}

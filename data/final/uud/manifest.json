@@ -68,8 +68,8 @@
         "source_support_exact",
         "viewer_highlightable"
       ],
-      "bytes": 458704,
-      "sha256": "d74654cdcd3c37bfcde5266efc15bcd43d06f5be144e02a96a5255a485504613"
+      "bytes": 461625,
+      "sha256": "8da159693f667fecc6aeb15acfa01766f60933190e61ebeebf5eea421cbed00a"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -126,8 +126,8 @@
         "authority_kind",
         "evidence_exists"
       ],
-      "bytes": 1548061,
-      "sha256": "b19997e01ac3fe117edc00f77ac441be73e055887285ff2040fbacf3a42c92c5"
+      "bytes": 1548062,
+      "sha256": "23f1dcfe1d6cf32fb4b516822c9d3e6dd6585f179b004c9ee7838a772226f58b"
     },
     "document_metadata.jsonl": {
       "origin": "generated",
@@ -188,8 +188,8 @@
         "runtime_loadable",
         "evidence_owner_kind"
       ],
-      "bytes": 971021,
-      "sha256": "7f6e39179c6f80356ec78b174c5983df91c4c181d1ab29e3883bd3f5e840f642"
+      "bytes": 971002,
+      "sha256": "902c8ee1b77754eabed8a82ec1dfb33f40b79e1b0304aa52be79e76db9e4a10d"
     },
     "excluded_records.jsonl": {
       "origin": "generated",
@@ -266,8 +266,8 @@
         "citation_finality_reason",
         "evidence_exists"
       ],
-      "bytes": 1769245,
-      "sha256": "06f34500d9925f59f8c1f05037fe5938747d99edff1a82bdf44b34a84a597366"
+      "bytes": 1769246,
+      "sha256": "339917f545facdaa51744061fae74a2be09f427b9ab59526d8b5600c4c0543ba"
     },
     "metadata.jsonl": {
       "origin": "generated",
@@ -380,8 +380,8 @@
         "promotion_outcome",
         "failure_reason"
       ],
-      "bytes": 256823,
-      "sha256": "47b8c141bb2383d40f34dc6be7bab7a69242a36bcd8998e2b46fe056ed22eb54"
+      "bytes": 257613,
+      "sha256": "27019e01e3a3f751008c46d38ef4a6f45020a075ab8b58ed69f71f14c8f88fb4"
     },
     "retrieval_units.jsonl": {
       "origin": "generated",
@@ -519,8 +519,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 5,
-      "bytes": 69727,
-      "sha256": "c3b19f011b02526bbb4e79c907dbfa71ec7fe727b464ba0a06d68da6a4980ac4"
+      "bytes": 69685,
+      "sha256": "aa34d9f1b527f16194adb33484a9bf6e147d8e8f3efa408d4865321dce2f9273"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

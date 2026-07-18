@@ -22,6 +22,7 @@ from tjipto.corpora.uud.metadata_builder import (
     build_metadata_block_grounding,
     build_metadata_graph_edges,
     rebuild_metadata_grounding,
+    ensure_metadata_source_evidence,
 )
 from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.retrieval_builder import build_retrieval_units
@@ -258,13 +259,15 @@ class UudBuilderContractTest(unittest.TestCase):
             for row in read_jsonl(FINAL / "metadata_grounding.jsonl")
             if not row["metadata_grounding_id"].startswith("uud_metadata_field_grounding::")
         ]
+        built = build_metadata_block_grounding(
+            pages_by_source=pages_by_source,
+            source_documents=source_documents,
+        )
+        ensure_metadata_source_evidence(evidence=read_jsonl(FINAL / "evidence_registry.jsonl"), metadata_grounding=built)
         self.assertEqual(
             [
                 _raw_metadata_block_contract(row)
-                for row in build_metadata_block_grounding(
-                    pages_by_source=pages_by_source,
-                    source_documents=source_documents,
-                )
+                for row in built
             ],
             [_raw_metadata_block_contract(row) for row in expected],
         )

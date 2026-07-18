@@ -137,7 +137,7 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         pasal_i = self.service.ask("uud", "Aturan Tambahan Pasal I Perubahan Keempat")
         self.assertEqual(pasal_i["status"], "answer_ready")
         self.assertEqual(pasal_i["citations"][0]["citation"], "Pasal I")
-        self.assertEqual(pasal_i["citations"][0]["authority_kind"], "source_anomaly")
+        self.assertEqual(pasal_i["citations"][0]["authority_kind"], "legal_citation")
         self.assertFalse(pasal_i["citations"][0]["citation_final"])
         self.assertTrue(pasal_i["viewer_refs"][0]["can_resolve"])
 

@@ -449,13 +449,15 @@ def _isolates_reference(text: str, citation: str) -> bool:
 
 
 def _reference_pattern(citation: str) -> re.Pattern:
-    parts = re.findall(r"Pasal\s+([0-9]+)\s*([A-Za-z]?)(?:\s+ayat\s+\((\d+)\))?", citation, re.IGNORECASE)
+    # The suffix is adjacent to the article number.  Do not let the optional
+    # suffix consume the leading ``a`` of ``ayat``.
+    parts = re.findall(r"Pasal\s+([0-9]+)([A-Za-z]?)(?:\s+ayat\s+\((\d+)\))?", citation, re.IGNORECASE)
     if not parts:
         return re.compile(r"(?!x)x")
     number, suffix, ayat = parts[0]
     pasal = rf"{number}\s*{suffix}" if suffix else number
     suffix = rf"\s*ayat\s*\(\s*{re.escape(ayat)}\s*\)" if ayat else ""
-    return re.compile(rf"(?i)\bpasal\s*{pasal}{suffix}\b")
+    return re.compile(rf"(?i)\bpasal\s*{pasal}{suffix}(?!\w)")
 
 
 def _ayat_count(text: str) -> int:

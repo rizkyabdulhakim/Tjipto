@@ -113,19 +113,17 @@ def apply_authority_contract(
         }
         row.update(
             _decision(
-                "source_anomaly_trace"
-                if historical_pasali
-                else "structural_context"
+                "structural_context"
                 if structural_provenance
                 else "source_anomaly_trace"
                 if historical_anomaly
                 else ("instrument_provenance" if instrument_trace else ("normative_legal_text" if exact else "page_only")),
-                exact and not historical_pasali and not structural_provenance and not instrument_trace and not historical_anomaly,
+                exact and not structural_provenance and not instrument_trace and not historical_anomaly,
                 exact and not historical_pasali and not structural_provenance and not instrument_trace and not historical_anomaly,
                 "historical_source_anomaly_not_final"
-                if historical_pasali
-                else "historical_source_anomaly_not_final"
                 if historical_anomaly
+                else "historical_exact_nonfinal"
+                if historical_pasali
                 else "structural_source_provenance_not_final"
                 if structural_provenance
                 else "instrument_trace_only_not_public_citation"

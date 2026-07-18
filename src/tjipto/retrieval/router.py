@@ -180,6 +180,31 @@ def route_retrieval(
 
     structured = filter_evidence(structured_all, filters)
     if structured:
+        # A dedicated structural heading is already the authoritative owner.
+        # Do not expand it through page/graph neighbors and replace the heading
+        # with a child provision in a structured lookup response.
+        heading = tuple(
+            row
+            for row in structured
+            if row.get("authority_kind") == "structural_context"
+            and str(row.get("citation") or "").casefold() == normalized["normalized_query"].casefold()
+        )
+        if heading:
+            heading = tuple(
+                row
+                | {
+                    "route_sources": ("structured",),
+                    "candidate_type": row.get("candidate_type") or "legal_unit_candidate",
+                }
+                for row in heading
+            )
+            return envelope | {
+                "status": "found",
+                "route": "structured",
+                "intent": "structured_lookup",
+                "matches": heading[:limit],
+                "expansion_trace": (),
+            }
         ranked, trace = merge_ranked(store, {"structured": structured}, filters)
         structural_navigation = any(row.get("candidate_type") == "structural_navigation_candidate" for row in structured)
         return envelope | {

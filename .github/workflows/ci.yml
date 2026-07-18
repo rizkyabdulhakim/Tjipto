@@ -12,7 +12,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install -e ".[test]"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[test,static,security]"
       - run: python -m compileall -q src tests scripts
       - run: python -m unittest discover -s tests -v
         env:
@@ -39,6 +40,35 @@ jobs:
           cd tjipto-clean
           python -m compileall -q src tests scripts
           PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m unittest discover -s tests -v
+
+  runtime-dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip pip-audit
+      - run: python -m venv .venv-runtime-audit
+      - run: .venv-runtime-audit/bin/python -m pip install --upgrade pip
+      - run: .venv-runtime-audit/bin/python -m pip install "PyMuPDF>=1.27.2,<1.28"
+      - run: .venv-runtime-audit/bin/python -m pip check
+      - run: python -m pip_audit --path .venv-runtime-audit/lib/python3.12/site-packages --strict -f json -o runtime-pip-audit.json
+      - run: .venv-runtime-audit/bin/python -m pip inspect > runtime-pip-inspect.json
+
+  ci-dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[test,static,security]"
+      - run: python -m pip uninstall -y tjipto-legal-evidence-engine
+      - run: python -m pip check
+      - run: python -m pip_audit --local --skip-editable --strict -f json -o ci-pip-audit.json
+      - run: python -m pip inspect > ci-pip-inspect.json
 
   web:
     runs-on: ubuntu-latest

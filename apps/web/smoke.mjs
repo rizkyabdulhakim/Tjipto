@@ -192,12 +192,16 @@ async function runEvidenceContractSmoke(browser) {
 
   const traceRelationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(traceRelationPage, "Pasal 3 ayat (3) menjadi Pasal 3 ayat (2)");
-  await traceRelationPage.locator('[data-runtime-status="limited_answer"]').waitFor();
+  await traceRelationPage.locator('[data-runtime-status="answer_ready"]').waitFor();
   const traceRelationSupport = traceRelationPage.locator('[data-support-kind="article-relations"]');
   await traceRelationSupport.waitFor();
-  await traceRelationSupport.getByText(/Source-backed trace-only/).waitFor();
-  assert((await traceRelationPage.locator('[data-citation-footer="true"]').count()) === 0, "Trace relation became a final citation.");
-  assert((await traceRelationPage.locator('[data-relation-layer="target-emphasis"]').count()) === 0, "Trace relation exposed target emphasis.");
+  await traceRelationSupport.getByText(/Source proof exact/).waitFor();
+  await traceRelationSupport.getByText(/target target_local/).waitFor();
+  await traceRelationPage.locator('[data-citation-footer="true"] button').first().click();
+  await traceRelationPage.locator('[data-evidence-panel="normal"]').waitFor();
+  await traceRelationPage.locator('[data-relation-layer="source-proof"]').first().waitFor();
+  await traceRelationPage.locator('[data-relation-layer="target-emphasis"]').first().waitFor();
+  await assertHighlightGeometry(traceRelationPage);
   await traceRelationPage.close();
 
   const insufficientPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });

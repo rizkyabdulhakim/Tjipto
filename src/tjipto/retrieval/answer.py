@@ -210,6 +210,14 @@ def _retrieval_unit(store, evidence_id: str | None) -> dict | None:
 
 
 def _noncanonical_trace(legal_unit: dict | None, chunk: dict | None, row: dict) -> bool:
+    historical_exact = (
+        row.get("authority_kind") == "normative_legal_text"
+        and row.get("exactness") == "exact"
+        and row.get("citation_final") is False
+        and str(row.get("source_role") or "").endswith("_historical")
+    )
+    if historical_exact:
+        return any(item and item.get("provenance_exception_category") == "accepted_noncanonical_source_conflict_trace_only" for item in (legal_unit, chunk, row))
     return any(
         item
         and (

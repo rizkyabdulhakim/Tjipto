@@ -543,6 +543,11 @@ def _answer_templates(store) -> dict[str, str]:
 
 def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> dict:
     authority_kind = _authority_kind(store, row, can_resolve=can_resolve, conflict=conflict)
+    conflict_row = conflict or _source_conflict_by_evidence(store, row.get("evidence_id"))
+    non_final_conflict = conflict_row is not None or row.get("source_conflict_id")
+    citation_final = row.get("citation_final") if isinstance(row.get("citation_final"), bool) else authority_kind == "legal_citation"
+    if non_final_conflict and authority_kind in {"source_anomaly", "source_conflict_provenance"}:
+        citation_final = False
     payload = {
         "authority_kind": authority_kind,
         "authority_label": {
@@ -554,11 +559,10 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
             "structural_context": "Provenance struktural",
             "instrument_provenance": "Instrument provenance",
         }[authority_kind],
-        "citation_final": authority_kind == "legal_citation",
+        "citation_final": citation_final,
         "support_kind": _support_kind_for_authority(authority_kind),
         "source_url": row.get("source_url") or _source_url(store, row),
     }
-    conflict_row = conflict or _source_conflict_by_evidence(store, row.get("evidence_id"))
     if conflict_row is not None or row.get("source_conflict_id"):
         payload |= _source_conflict_taxonomy_fields(conflict_row or row)
     return payload

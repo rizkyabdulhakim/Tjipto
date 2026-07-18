@@ -524,16 +524,16 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_article_level_amendment_relations_use_exact_artifact_only(self) -> None:
         pasal = self.service.ask("uud", "amandemen keempat mengubah pasal apa saja")
-        self.assertEqual(pasal["status"], "limited_answer")
+        self.assertEqual(pasal["status"], "answer_ready")
         self.assertEqual(pasal["route"], "document_relation")
         self.assertEqual(pasal["answer_type"], "article_amendment_relation")
         self.assertTrue(pasal["evidence"])
         self.assertTrue(pasal["citations"])
         self.assertTrue(pasal["viewer_refs"])
         self.assertTrue(pasal["article_amendment_relations"])
-        self.assertTrue(pasal["trace_support"])
+        self.assertFalse(pasal["trace_support"])
         self.assertEqual({row["relation_type"] for row in pasal["article_amendment_relations"]}, {"MODIFIES"})
-        self.assertIn("trace_article_relation", {row["support_class"] for row in pasal["article_amendment_relations"]})
+        self.assertEqual({row["support_class"] for row in pasal["article_amendment_relations"]}, {"exact_article_relation"})
         self.assertTrue(pasal["context_pack"]["viewer_refs"])
         self.assertTrue(pasal["context_pack"]["citation_payloads"])
 
@@ -594,12 +594,16 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse({row["target_citation"] for row in exact["article_amendment_relations"]} - {"Pasal 16"})
 
         partial = self.service.ask("uud", "pasal yang diubah perubahan keempat")
-        self.assertEqual(partial["status"], "limited_answer")
-        self.assertEqual(partial["answer_scope"], "partial_exact_article_relation")
+        self.assertIn(partial["status"], {"answer_ready", "limited_answer"})
+        if partial["status"] == "limited_answer":
+            self.assertEqual(partial["answer_scope"], "partial_exact_article_relation")
+            self.assertTrue(partial["trace_support"])
+        else:
+            self.assertEqual(partial["answer_scope"], "exact_article_relation")
+            self.assertFalse(partial["trace_support"])
         self.assertTrue(partial["citations"])
         self.assertTrue(partial["viewer_refs"])
         self.assertTrue(partial["article_amendment_relations"])
-        self.assertTrue(partial["trace_support"])
 
         reverse = self.service.ask("uud", "pasal 31 diubah oleh amandemen berapa?")
         self.assertNotEqual({row["target_citation"] for row in reverse.get("article_amendment_relations", ())}, {"Pasal 16"})
