@@ -162,6 +162,7 @@ def route_retrieval(
             "intent": "metadata_lookup",
             "matches": ranked[:limit],
             "expansion_trace": trace,
+            "metadata_source_roles": tuple(sorted({row.get("source_role") for row in metadata if row.get("source_role")})),
         }
     if metadata_all:
         return envelope | {
@@ -231,6 +232,11 @@ def route_retrieval(
 
     matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))
     filtered = filter_evidence(matches, filters)
+    if "source_role" not in filters:
+        preferred_role = getattr(config, "preferred_source_role", None)
+        preferred = tuple(row for row in filtered if row.get("source_role") == preferred_role)
+        if preferred:
+            filtered = preferred
     if filtered:
         ranked, trace = merge_ranked(store, {"bm25": filtered}, filters)
         return envelope | {

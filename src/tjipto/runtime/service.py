@@ -15,6 +15,7 @@ from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, v
 from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters, source_role_for_query
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent
+from tjipto.runtime.gemini import GeminiAnswerProvider
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
 
@@ -24,6 +25,7 @@ _BOOKMARK_LOCK = threading.RLock()
 
 _ANSWER_TEMPLATES = {
     "insufficient": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
+    "clarification": "Naskah sumber mana yang dimaksud? Pilih salah satu konteks berikut: {options}.",
     "metadata": "{answer} (from grounded document metadata).",
     "legal_relation": "Dukungan relasi hukum berbasis bukti tersedia; sistem tidak menghasilkan kesimpulan hukum.",
     "citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum.",
@@ -65,6 +67,7 @@ class LegalRuntimeService:
         self.repository = VerifiedCorpusRepository(self.registry)
         self._integrity_error: str | None = None
         self._store_cache: dict[str, EvidenceStore] = {}
+        self._answer_provider = GeminiAnswerProvider.from_environment()
 
     def _store(self, corpus_id: str):
         cached = self._store_cache.get(corpus_id)
@@ -473,6 +476,9 @@ class LegalRuntimeService:
             }
         context_pack = assemble_context_pack(store, routed["matches"])
         evidence = context_pack["answer_evidence"]
+        clarification = _metadata_scope_clarification(store, routed)
+        if clarification:
+            return routed | clarification
         if not evidence:
             return routed | {
                 "status": "insufficient_evidence",
@@ -502,11 +508,13 @@ class LegalRuntimeService:
         else:
             citations = tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"])
             viewer_refs = context_pack["viewer_refs"]
+        deterministic_answer = self._answer_text(status, evidence, templates)
+        answer = self._agent_answer(query, evidence, deterministic_answer)
         return routed | {
             "status": status,
             "route": ask_route,
             "answer_type": _answer_type(ask_route, status),
-            "answer": self._answer_text(status, evidence, templates),
+            "answer": answer,
             "context_pack": context_pack,
             "evidence": evidence,
             "citations": citations,
@@ -520,6 +528,11 @@ class LegalRuntimeService:
             else (),
             "insufficient_reasons": (),
         }
+
+    def _agent_answer(self, query: str, evidence: tuple[dict, ...], fallback: str) -> str:
+        if self._answer_provider is None:
+            return fallback
+        return self._answer_provider.answer(query, evidence) or fallback
 
     def _answer_text(self, status: str, evidence: tuple[dict, ...], templates: dict[str, str]) -> str:
         if evidence[0].get("metadata_answer"):
@@ -539,6 +552,47 @@ def _empty_citation_fields() -> dict:
 def _answer_templates(store) -> dict[str, str]:
     configured: dict = getattr(getattr(store, "config", None), "setting", lambda *args: {})("answer_templates", {})
     return _ANSWER_TEMPLATES | dict(configured or {})
+
+
+def _metadata_scope_clarification(store, routed: dict) -> dict | None:
+    if routed.get("route") != "metadata" or "source_role" in routed.get("applied_filters", {}):
+        return None
+    roles = tuple(routed.get("metadata_source_roles") or ())
+    if not roles:
+        roles = tuple(
+            sorted(
+                {
+                    row.get("source_role")
+                    for row in routed.get("matches", ())
+                    if row.get("metadata_field") and row.get("source_role")
+                }
+            )
+        )
+    if len(roles) < 2:
+        return None
+    intent = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
+    labels = intent.get("source_role_labels", {})
+    titles = (store.config.setting("document_catalog", {}) or {}).get("titles", {})
+    options = tuple({"source_role": role, "label": titles.get(role, labels.get(role, role))} for role in roles)
+    answer = _answer_templates(store)["clarification"].format(options=", ".join(item["label"] for item in options))
+    return {
+        "status": "clarification_required",
+        "route": "metadata_fact",
+        "intent": "metadata_lookup",
+        "answer_type": "clarification",
+        "answer": answer,
+        "answer_scope": "clarification",
+        "clarification_options": options,
+        "context_pack": empty_context_pack("ambiguous_source_scope"),
+        "evidence": (),
+        "citations": (),
+        "viewer_refs": (),
+        "metadata_facts": (),
+        "metadata_support": (),
+        "legal_relations": (),
+        "warnings": ("source_scope_required",),
+        "insufficient_reasons": ("ambiguous_source_scope",),
+    }
 
 
 def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> dict:
@@ -1490,23 +1544,14 @@ def _matched_source_conflict(store, query: str) -> dict | None:
 
 def _is_source_anomaly_query(store, query: str) -> bool:
     folded = (query or "").casefold()
-    # Pasal III in Aturan Peralihan is an ordinary historical provision.  The
-    # source-marker anomaly is scoped to the separate Aturan Tambahan section.
-    if "pasal iii" in folded and "aturan peralihan" in folded:
+    intent = _source_conflict_intent(store)
+    terms = tuple(str(term).casefold() for term in intent.get("query_terms") or ())
+    if not any(_query_contains_term(folded, term) for term in terms):
         return False
-    if "pasal iii" in folded and "aturan tambahan" not in folded and not any(
-        marker in folded for marker in ("konflik", "anomali", "source anomaly", "sumber anomali")
-    ):
-        return False
-    if "pasal ii" in folded and any(term in folded for term in ("perubahan keempat", "perubahan 4", "amendment 4")):
+    if any(_source_conflict_match_score(store, row, folded, intent) > 0 for row in store.source_conflicts):
         return True
-    relation_intent = classify_relation_intent(store, query)
-    if relation_intent.relation_type == "RENAME_PROVISION" and not any(
-        marker in folded for marker in ("konflik", "anomali", "pasal iii", "source anomaly", "sumber anomali")
-    ):
-        return False
-    terms = _source_conflict_intent(store).get("query_terms") or ()
-    return any(str(term).casefold() in folded for term in terms)
+    unresolved_terms = tuple(str(term).casefold() for term in intent.get("unresolved_query_terms") or ())
+    return any(_query_contains_term(folded, term) for term in unresolved_terms)
 
 
 def _source_anomaly_fallback() -> dict:
@@ -1535,7 +1580,7 @@ def _source_conflict_reasons(store, query: str) -> list[str]:
     reasons = ["source_anomaly", "canonical_conflict"]
     for rule in intent.get("reason_rules") or ():
         terms = tuple(str(term).casefold() for term in rule.get("query_terms") or ())
-        if any(term in folded for term in terms):
+        if any(_query_contains_term(folded, term) for term in terms):
             reasons.extend(str(reason) for reason in rule.get("reasons") or ())
             return reasons
     reasons.extend(str(reason) for reason in intent.get("default_reasons") or ())
@@ -1543,13 +1588,19 @@ def _source_conflict_reasons(store, query: str) -> list[str]:
 
 
 def _source_conflict_match_score(store, conflict: dict, folded_query: str, intent: dict) -> int:
+    exclusions = tuple(str(term).casefold() for term in conflict.get("query_exclusion_terms") or ())
+    if any(_query_contains_term(folded_query, term) for term in exclusions):
+        return 0
+    required = tuple(str(term).casefold() for term in conflict.get("query_required_terms") or ())
+    if required and not any(_query_contains_term(folded_query, term) for term in required):
+        return 0
     source_role = str(_source_document_meta(store, conflict.get("source_document_id")).get("source_role") or "")
     score = 0
     role_label = str((intent.get("role_labels") or {}).get(source_role) or source_role).casefold()
-    if role_label and role_label in folded_query:
+    if _query_contains_term(folded_query, role_label):
         score += 4
     for token in (str(value).casefold() for value in (conflict.get("query_anchor_terms") or conflict.get("anchor_terms") or ())):
-        if token and token in folded_query:
+        if _query_contains_term(folded_query, token):
             score += 3
     if score:
         return score
@@ -1573,6 +1624,13 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
     conflict_tokens = {token for token in re.findall(r"[a-z0-9]+", haystack) if len(token) > 2}
     overlap = query_tokens & conflict_tokens
     return len(overlap) if len(overlap) >= 2 else 0
+
+
+def _query_contains_term(query: str, term: str) -> bool:
+    """Match policy terms on token boundaries so Pasal suffixes cannot alias."""
+    if not term:
+        return False
+    return re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", query) is not None
 
 
 def _source_document_meta(store, source_document_id: object) -> dict:

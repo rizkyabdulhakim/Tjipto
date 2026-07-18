@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from typing import Any
 
 import pytest
@@ -22,6 +23,7 @@ from tjipto.retrieval.router import route_retrieval
 from tjipto.retrieval.structured import structured_lookup
 from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candidate
 from tjipto.runtime.api import _public_bbox, handle_request
+from tjipto.runtime.gemini import GeminiAnswerProvider
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.viewer import viewer_payload
 from tests.test_source_conflict_runtime_contract import _source_conflict_cases
@@ -477,6 +479,59 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(result["citations"])
         self.assertEqual(result["citations"][0]["authority_kind"], "metadata_source")
         self.assertFalse(result["citations"][0]["citation_final"])
+
+    def test_unscoped_metadata_requests_clarification_without_combined_citations(self) -> None:
+        for query in ("penandatangan UUD", "kapan UUD ditetapkan"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "clarification_required", query)
+            self.assertEqual(result["route"], "metadata_fact", query)
+            self.assertEqual(result["answer_scope"], "clarification", query)
+            self.assertFalse(result["citations"], query)
+            self.assertFalse(result["viewer_refs"], query)
+            self.assertFalse(result["metadata_facts"], query)
+            self.assertEqual(
+                {row["source_role"] for row in result["clarification_options"]},
+                {
+                    "amendment_1_historical",
+                    "amendment_2_historical",
+                    "amendment_3_historical",
+                    "amendment_4_historical",
+                },
+                query,
+            )
+
+    def test_unrecognized_wording_fails_closed_without_vocabulary_fallback(self) -> None:
+        result = self.service.ask("uud", "siapa yang menandatangani UUD")
+        self.assertEqual(result["status"], "insufficient_evidence")
+        self.assertFalse(result["citations"])
+        self.assertFalse(result["viewer_refs"])
+
+    def test_gemini_provider_uses_secret_header_and_verified_context_only(self) -> None:
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self):
+                return b'{"candidates":[{"content":{"parts":[{"text":"Jawaban terverifikasi."}]}}]}'
+
+        with patch.dict(
+            os.environ,
+            {"GEMINI_API_KEY": "test-secret", "GEMINI_MODEL": "test-model"},
+            clear=False,
+        ), patch("tjipto.runtime.gemini.urlopen", return_value=Response()) as request:
+            provider = GeminiAnswerProvider.from_environment()
+            self.assertIsNotNone(provider)
+            answer = provider.answer(
+                "Apa isi pertanyaan?",
+                ({"quoted_text": "Bukti resmi", "source_role": "current_consolidated"},),
+            )
+        self.assertEqual(answer, "Jawaban terverifikasi.")
+        payload = request.call_args.args[0].data.decode("utf-8")
+        self.assertIn("Bukti resmi", payload)
+        self.assertNotIn("test-secret", payload)
 
     def test_original_metadata_role_does_not_fall_back_to_amendments(self) -> None:
         for query in ("kapan UUD asli ditetapkan", "kapan naskah asli ditetapkan"):

@@ -47,6 +47,7 @@ export interface ChatMessage {
   traceSupport?: SupportItem[];
   documentRelations?: SupportItem[];
   articleRelations?: SupportItem[];
+  clarificationOptions?: { sourceRole?: string; label: string }[];
   status?: "streaming" | "complete";
   runtimeStatus?: string;
 }

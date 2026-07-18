@@ -28,6 +28,12 @@ export interface TjiptoAskResponse {
   document_relations?: DocumentRelationPayload[];
   article_amendment_relations?: ArticleAmendmentRelationPayload[];
   trace_support?: TraceSupportPayload[];
+  clarification_options?: ClarificationOptionPayload[];
+}
+
+export interface ClarificationOptionPayload {
+  source_role?: string;
+  label?: string;
 }
 
 export interface MetadataSupportPayload {

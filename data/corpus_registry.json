@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "9f762c9d7354e399f5426ad0ccf5ac4f2f6f9dbb1f885d64fe8fa8c56b293b60",
+    "manifest_sha256": "1b06c6059ddf81eac827a5a4c4e6e9fbaf8ebfa5d873688412dc3a361f35b004",
     "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
     "runtime_required_artifacts": [
       "evidence_registry",
@@ -931,8 +931,11 @@
         "renumbering",
         "penomoran",
         "pasal iii",
-        "pasal 25e"
+        "pasal 25e",
+        "aturan tambahan",
+        "pasal ii"
       ],
+      "unresolved_query_terms": ["konflik", "anomali", "tidak dipromosikan", "promosikan", "renumbering", "penomoran"],
       "generic_tokens": [
         "apa",
         "yang",

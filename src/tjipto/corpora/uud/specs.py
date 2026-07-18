@@ -333,6 +333,8 @@ SOURCE_CONFLICT_SPECS = (
             "pasal iii",
             "pasal ii",
         ],
+        "query_exclusion_terms": ["aturan peralihan", "pasal i"],
+        "query_required_terms": ["konflik", "anomali", "aturan tambahan", "pasal ii", "pasal iii"],
         "resolution_decision": {
             "canonical_reference_for_current_uud": "uud_1945_current_consolidated_text_aturan_tambahan_pasal_ii",
             "decision_scope": "pipeline_policy_not_final_legal_authority",
@@ -382,6 +384,7 @@ SOURCE_CONFLICT_SPECS = (
         "provenance_summary": "renumbering historis dari Pasal 25E ke rujukan kanonik Pasal 25A",
         "final_authority_policy": "Sistem menampilkannya sebagai historical-to-canonical mapping untuk jejak audit, bukan otoritas hukum final untuk penggunaan saat ini.",
         "query_anchor_terms": ["pasal 25e", "pasal 25a", "25e", "25a"],
+        "query_required_terms": ["konflik", "anomali", "pasal 25e", "pasal 25a", "renumbering", "penomoran"],
         "resolution_decision": {
             "canonical_reference_for_current_uud": "uud_current_consolidated_final_citation_evidence_00401",
             "historical_source_reference": "uud_source_role_historical_final_citation_evidence_00050",

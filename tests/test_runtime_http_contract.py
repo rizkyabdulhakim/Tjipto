@@ -203,6 +203,15 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(result["citations"][0]["authority_label"], "Metadata sumber")
         self.assertFalse(result["citations"][0]["citation_final"])
 
+    def test_unscoped_metadata_public_contract_requires_clarification(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "penandatangan UUD"})
+        self.assertEqual(result["status"], "clarification_required")
+        self.assertEqual(result["route"], "metadata_fact")
+        self.assertTrue(result["clarification_options"])
+        self.assertFalse(result["citations"])
+        self.assertFalse(result["viewer_refs"])
+        self.assertFalse(result["metadata_facts"])
+
     def test_local_dev_cors_only(self) -> None:
         request = Request(
             self.base_url + "/legal/uud/ask",

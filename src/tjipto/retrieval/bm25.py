@@ -99,7 +99,10 @@ def _with_relevance(row: dict, query: str, aliases: dict[str, str]) -> dict:
     query_terms = meaningful_tokens(query, aliases=aliases)
     doc_terms = meaningful_tokens(_document_text(row), aliases=aliases)
     supported = query_terms & doc_terms
-    required = len(query_terms) if len(query_terms) <= 2 else max(2, (len(query_terms) + 1) // 2)
+    # A lexical hit is answerable only when every meaningful query term is
+    # present in the same evidence row. Partial overlap is a candidate signal,
+    # not proof for the answer.
+    required = len(query_terms)
     ok = bool(query_terms) and len(supported) >= required
     return dict(
         row,

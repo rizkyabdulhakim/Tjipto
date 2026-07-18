@@ -110,6 +110,8 @@ def _public_ask(result: dict) -> dict:
     for key in ("requested_function", "target_reference", "legal_domain"):
         if result.get(key) is not None:
             public[key] = result[key]
+    if result.get("clarification_options"):
+        public["clarification_options"] = tuple(result["clarification_options"])
     return public
 
 
