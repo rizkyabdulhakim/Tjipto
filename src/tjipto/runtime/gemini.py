@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
@@ -24,6 +25,9 @@ class GeminiAnswerProvider:
             "GEMINI_API_ENDPOINT",
             "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         ).strip()
+        parsed_endpoint = urlparse(endpoint)
+        if parsed_endpoint.scheme != "https" or not parsed_endpoint.netloc:
+            return None
         try:
             timeout = float(os.environ.get("GEMINI_TIMEOUT_SECONDS", "12"))
         except ValueError:
@@ -55,7 +59,7 @@ class GeminiAnswerProvider:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=self._timeout) as response:
+            with urlopen(request, timeout=self._timeout) as response:  # nosec B310 - endpoint is restricted to HTTPS above.
                 result = json.load(response)
             parts = result["candidates"][0]["content"]["parts"]
             text = "".join(str(part.get("text") or "") for part in parts).strip()
