@@ -39,28 +39,28 @@
     "chunks": 651,
     "legal_units": 651,
     "excluded_records": 0,
-    "evidence_records": 584,
-    "bbox_records": 2529,
-    "retrieval_units": 584,
+    "evidence_records": 648,
+    "bbox_records": 4111,
+    "retrieval_units": 648,
     "promotion_decisions": 124,
-    "graph_nodes": 3841,
-    "graph_edges": 6031,
+    "graph_nodes": 5487,
+    "graph_edges": 7920,
     "page_text_spans": 2193,
     "word_bboxes": 11336
   },
   "bbox_precision_counts": {
-    "exact": 2529,
+    "exact": 4111,
     "coarse": 0,
     "page_grounded_only": 0
   },
   "bbox_highlightability_counts": {
-    "viewer_highlightable": 2529,
+    "viewer_highlightable": 4111,
     "non_highlightable": 0
   },
   "chunk_self_contained_health": {
     "chunk_rows": 651,
-    "chunk_runtime_loadable_true": 581,
-    "chunk_runtime_loadable_false": 70,
+    "chunk_runtime_loadable_true": 644,
+    "chunk_runtime_loadable_false": 7,
     "chunk_source_document_id_count": 651,
     "chunk_source_role_count": 651,
     "chunk_temporal_context_count": 651,
@@ -78,513 +78,9 @@
   "evidence_admission_audit": {
     "status": "complete",
     "unit_count": 651,
-    "direct_evidence_unit_count": 584,
-    "no_direct_evidence_unit_count": 67,
+    "direct_evidence_unit_count": 648,
+    "no_direct_evidence_unit_count": 3,
     "decisions": [
-      {
-        "legal_unit_id": "uud_legal_unit_00002",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00007",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00012",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00016",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00026",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00034",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00047",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00066",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00072",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00073",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00087",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00098",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00115",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00127",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00128",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00146",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00151",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00162",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00171",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00215",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00219",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00220",
-        "source_role": "current_consolidated",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00226",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00236",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00248",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00254",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00261",
-        "source_role": "current_consolidated",
-        "unit_type": "aturan_peralihan_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00265",
-        "source_role": "current_consolidated",
-        "unit_type": "aturan_tambahan_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00269",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00273",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00279",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00300",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00304",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00309",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00311",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00325",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00332",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00337",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00345",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00349",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00353",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00358",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00364",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00367",
-        "source_role": "original_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00371",
-        "source_role": "original_historical",
-        "unit_type": "aturan_peralihan_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00376",
-        "source_role": "original_historical",
-        "unit_type": "aturan_tambahan_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00382",
-        "source_role": "amendment_1_historical",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00421",
-        "source_role": "amendment_2_historical",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00429",
-        "source_role": "amendment_2_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00469",
-        "source_role": "amendment_2_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00470",
-        "source_role": "amendment_2_historical",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00476",
-        "source_role": "amendment_2_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00496",
-        "source_role": "amendment_3_historical",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00523",
-        "source_role": "amendment_3_historical",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00581",
-        "source_role": "amendment_4_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00591",
-        "source_role": "amendment_4_historical",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00600",
-        "source_role": "amendment_4_historical",
-        "unit_type": "pasal_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00606",
-        "source_role": "amendment_4_historical",
-        "unit_type": "aturan_peralihan_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00610",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00611",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00612",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00613",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
-        "legal_unit_id": "uud_legal_unit_00614",
-        "source_role": "current_consolidated",
-        "unit_type": "bab_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
       {
         "legal_unit_id": "uud_legal_unit_00624",
         "source_role": "amendment_1_historical",
@@ -602,14 +98,6 @@
         "decision": "non_runtime_without_exact_evidence"
       },
       {
-        "legal_unit_id": "uud_legal_unit_00645",
-        "source_role": "amendment_4_historical",
-        "unit_type": "aturan_tambahan_record",
-        "runtime_loadable": false,
-        "has_descendant_evidence": true,
-        "decision": "descendant_evidence_context"
-      },
-      {
         "legal_unit_id": "uud_legal_unit_00649",
         "source_role": "amendment_4_historical",
         "unit_type": "effective_clause_record",
@@ -622,8 +110,8 @@
   "legal_unit_chunk_span_closure_health": {
     "legal_unit_count": 651,
     "chunk_count": 651,
-    "legal_unit_exact_span_link_count": 647,
-    "chunk_exact_span_link_count": 647,
+    "legal_unit_exact_span_link_count": 473,
+    "chunk_exact_span_link_count": 648,
     "legal_unit_containing_span_link_count": 3,
     "chunk_containing_span_link_count": 3,
     "legal_unit_chunk_mismatch_count": 0,
@@ -691,23 +179,23 @@
   },
   "viewer_provenance_coverage_health": {
     "page_text_span_count": 2193,
-    "bbox_registry_row_count": 2529,
-    "bbox_key_present_span_count": 1719,
-    "bbox_key_absent_span_count": 474,
-    "legal_citation_candidate_count": 17,
+    "bbox_registry_row_count": 4111,
+    "bbox_key_present_span_count": 1836,
+    "bbox_key_absent_span_count": 357,
+    "legal_citation_candidate_count": 0,
     "metadata_provenance_candidate_count": 8,
-    "nonlegal_excluded_provenance_count": 352,
+    "nonlegal_excluded_provenance_count": 349,
     "raw_span_only_with_reason_count": 0,
-    "source_anomaly_provenance_candidate_count": 1,
-    "structural_provenance_only_count": 96,
+    "source_anomaly_provenance_candidate_count": 0,
+    "structural_provenance_only_count": 0,
     "already_covered_by_final_evidence_bbox_count": 0,
     "blocked_by_layout_count": 0,
     "blocked_by_missing_exact_bbox_count": 0,
     "blocked_by_no_word_level_bbox_artifact_count": 0,
     "blocked_by_text_mismatch_count": 0,
-    "exact_word_bbox_available_count": 27,
+    "exact_word_bbox_available_count": 8,
     "metadata_page_grounded_only_by_policy_count": 0,
-    "nonlegal_excluded_from_public_highlight_count": 351,
+    "nonlegal_excluded_from_public_highlight_count": 349,
     "source_anomaly_anchor_only_until_exact_span_available_count": 0,
     "missing_bucket_count": 0,
     "missing_reason_count": 0,
@@ -723,7 +211,7 @@
     "span_disposition_present_count": 2193,
     "span_disposition_missing_count": 0,
     "semantic_classification_present_count": 2193,
-    "known_unreferenced_span_count": 355,
+    "known_unreferenced_span_count": 354,
     "promotion_status_present_count": 2193,
     "legal_force_present_count": 2193,
     "missing_source_ref_count": 0,
@@ -770,9 +258,9 @@
     "viewer_resolvable_nonhighlightable_count": 0,
     "needs_review_count": 0,
     "inventory": {
-      "exact_runtime": 581,
+      "exact_runtime": 644,
       "trace_only": 0,
-      "excluded_with_reason": 3,
+      "excluded_with_reason": 4,
       "needs_review": 0
     },
     "status": "complete"
@@ -942,7 +430,7 @@
   "highlight_registry_contract": {
     "status": "complete",
     "architecture": "bbox_registry_union_word_bboxes",
-    "bbox_registry_rows": 2529,
+    "bbox_registry_rows": 4111,
     "word_bbox_rows": 11336,
     "official_viewer_highlight_ref_sources": [
       "bbox_registry",
@@ -951,9 +439,9 @@
     "bbox_registry_layer": "materialized_final_and_provenance_bboxes",
     "word_bbox_layer": "word_bbox_exact_highlight",
     "viewer_highlightable_union": "bbox_registry_union_word_bboxes",
-    "bbox_key_absent_span_count": 474,
-    "exact_safe_word_highlight_count": 1530,
-    "non_citable_absent_span_count": 636,
+    "bbox_key_absent_span_count": 357,
+    "exact_safe_word_highlight_count": 1535,
+    "non_citable_absent_span_count": 650,
     "false_highlight_count": 0
   },
   "span_sequence_grounding_health": {
@@ -970,10 +458,10 @@
     "untracked_grounding_exception_count": 0
   },
   "promotion_engine_health": {
-    "evidence_exact_count": 584,
+    "evidence_exact_count": 648,
     "evidence_page_grounded_only_count": 0,
     "evidence_trace_only_count": 3,
-    "bbox_exact_count": 2529,
+    "bbox_exact_count": 4111,
     "bbox_page_grounded_only_count": 0,
     "bbox_non_highlightable_count": 0,
     "metadata_grounding_exact_count": 37,
@@ -1050,23 +538,23 @@
   "legal_graph_baseline": {
     "status": "authority_aware_evidence_gated",
     "actual_edge_type_counts": {
-      "BELONGS_TO_SOURCE_ROLE": 584,
+      "BELONGS_TO_SOURCE_ROLE": 648,
       "CONTAINS": 528,
       "DELETES": 1,
       "FOLLOWS": 7,
-      "HAS_BBOX": 2529,
+      "HAS_BBOX": 4111,
       "HAS_DECISION_SESSION": 3,
       "HAS_EFFECTIVE_RULE": 3,
-      "HAS_FINAL_EVIDENCE": 584,
+      "HAS_FINAL_EVIDENCE": 648,
       "HAS_SIGNATORY": 4,
       "HAS_SOURCE_ANOMALY": 2,
       "INSERTED_AFTER": 7,
       "MODIFIES": 68,
-      "PAGE_GROUNDED_AT": 589,
+      "PAGE_GROUNDED_AT": 704,
       "PART_OF": 528,
       "PRECEDES": 7,
       "RENAMES": 3,
-      "USES_SOURCE_PDF": 584
+      "USES_SOURCE_PDF": 648
     },
     "actual_promoted_legal_edge_type_counts": {
       "CONTAINS": 528,
@@ -1083,10 +571,10 @@
       "RENAMES": 3
     },
     "runtime_loadable_legal_edge_type_counts": {
-      "CONTAINS": 515,
+      "CONTAINS": 528,
       "HAS_DECISION_SESSION": 3,
       "HAS_SIGNATORY": 4,
-      "PART_OF": 515
+      "PART_OF": 528
     },
     "schema_edge_types": [
       "ADDS",
@@ -1112,16 +600,16 @@
       "AMENDS",
       "SUPPLEMENTS"
     ],
-    "runtime_loadable_legal_edges": 1037
+    "runtime_loadable_legal_edges": 1063
   },
   "legal_graph_authority_health": {
     "status": "complete",
-    "graph_edge_count": 6031,
+    "graph_edge_count": 7920,
     "article_relation_count": 72,
     "article_relation_graph_ref_count": 72,
     "evidence_backed_relation_edge_count": 72,
     "trace_only_relation_edge_count": 0,
-    "non_citable_edge_count": 6031,
+    "non_citable_edge_count": 7920,
     "authority_without_evidence_count": 0,
     "authority_without_bbox_count": 0,
     "trace_promoted_count": 0,
@@ -1130,14 +618,14 @@
     "missing_authority_field_count": 0,
     "authority_kind_counts": {
       "deterministic_structure": 1077,
-      "endpoint_provenance": 4870,
+      "endpoint_provenance": 6759,
       "instrument_provenance": 10,
       "relation_reference": 72,
       "source_anomaly_trace": 2
     },
     "support_kind_counts": {
       "deterministic_structure": 1077,
-      "endpoint_provenance": 4870,
+      "endpoint_provenance": 6759,
       "instrument_provenance": 10,
       "relation_reference": 72,
       "source_anomaly_trace": 2

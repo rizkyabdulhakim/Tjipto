@@ -1316,10 +1316,11 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(len(child["citations"]), 1)
         self.assertEqual(child["citations"][0]["citation"], "(1)")
 
-        unavailable = self.service.ask("uud", "Pasal 3", limit=20)
-        self.assertEqual(unavailable["status"], "insufficient_evidence")
-        self.assertEqual(unavailable["citations"], ())
-        self.assertIn("pasal_aggregate_geometry_unavailable", unavailable["insufficient_reasons"])
+        recovered = self.service.ask("uud", "Pasal 3", limit=20)
+        self.assertEqual(recovered["status"], "answer_ready")
+        self.assertEqual(len(recovered["citations"]), 1)
+        self.assertEqual(recovered["citations"][0]["citation"], "Pasal 3")
+        self.assertGreater(recovered["citations"][0]["bbox_count"], 1)
 
         incomplete = self.service.ask("uud", "Pasal", limit=20)
         self.assertEqual(incomplete["status"], "insufficient_evidence")

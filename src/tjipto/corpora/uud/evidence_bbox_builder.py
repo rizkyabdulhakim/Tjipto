@@ -3,23 +3,22 @@ from __future__ import annotations
 import re
 
 from tjipto.contracts.coordinates import coordinate_metadata
-from tjipto.corpora.uud.bbox_builder import aggregate_bbox_precision, apply_inserted_bab_heading_bbox_policy, build_bbox_rows
+from tjipto.corpora.uud.bbox_builder import aggregate_bbox_precision, build_bbox_rows
 from tjipto.corpora.uud.provenance_exceptions import RECOVERABLE_GROUNDING_LABELS, SEGMENTATION_BOUNDARY_LABELS
-from tjipto.corpora.uud.specs import INSERTED_BAB_SPECS
 from tjipto.corpora.uud.structure_builder import compact, slug
-from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, word_rows_by_page
+from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, compact_text, word_rows_by_page
 
 
-def _admit_evidence(unit: dict, chunk: dict) -> bool:
+def _admit_evidence(unit: dict, chunk: dict, *, has_descendants: bool = False) -> bool:
     if unit.get("unit_type") == "effective_clause_record":
         return False
-    if unit.get("unit_type") == "bab_record":
+    if unit.get("unit_type") == "bab_record" and not has_descendants:
         return "dihapus" in compact(unit.get("text")) and unit.get("source_role") in {
             "current_consolidated",
             "original_historical",
             "amendment_4_historical",
         }
-    if unit.get("unit_type") == "pasal_record" and _has_ayat(unit.get("text")):
+    if has_descendants or unit.get("unit_type") == "pasal_record" and _has_ayat(unit.get("text")):
         return True
     return chunk.get("status") in {"active_canonical_record", "active_historical_record"}
 
@@ -33,32 +32,65 @@ def build_evidence_and_bboxes(
     word_bboxes: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    descendants_by_parent = _descendants_by_parent(legal_units)
     evidence: list[dict] = []
     bbox_rows: list[dict] = []
     next_instrument_id = 1
     for chunk in sorted(chunks, key=lambda row: row["chunk_id"]):
         unit = units_by_id[chunk["legal_unit_id"]]
-        if not _admit_evidence(unit, chunk):
+        descendants = _descendants(unit["legal_unit_id"], descendants_by_parent)
+        is_aggregate = bool(descendants)
+        if not _admit_evidence(unit, chunk, has_descendants=is_aggregate):
             continue
         source_id = unit["source_document_id"]
         source_meta = source_documents[source_id]
         source_role = source_meta["source_role"]
         evidence_id, next_instrument_id = _evidence_id(chunk, unit, source_role, next_instrument_id)
+        aggregate_text = _aggregate_text(unit, descendants)
+        aggregate_parts = _aggregate_recovery_parts(unit, descendants)
+        if is_aggregate:
+            page_start = min(
+                [
+                    chunk["page_range"]["start_page_number"],
+                    *(child.get("page_start") or chunk["page_range"]["start_page_number"] for child in descendants),
+                ]
+            )
+            page_end = max(
+                [
+                    chunk["page_range"]["end_page_number"],
+                    *(child.get("page_end") or chunk["page_range"]["end_page_number"] for child in descendants),
+                ]
+            )
+            chunk["page_range"] = {"start_page_number": page_start, "end_page_number": page_end}
+            unit["page_start"], unit["page_end"] = page_start, page_end
         bbox_records = build_bbox_rows(
             evidence_id=evidence_id,
             source_meta=source_meta,
             source_id=source_id,
-            text=chunk["text"] if _has_ayat(unit.get("text")) else _bbox_text(chunk["text"], unit),
+            text=aggregate_text if is_aggregate else _bbox_text(chunk["text"], unit),
             page_start=chunk["page_range"]["start_page_number"],
             page_end=chunk["page_range"]["end_page_number"],
             line_entries=pdf_lines_by_source[source_id],
         )
-        if unit.get("unit_type") == "pasal_record" and _has_ayat(unit.get("text")):
-            failure = _aggregate_failure_reason(bbox_records, source_id)
+        if is_aggregate:
+            failure = _aggregate_failure_reason(bbox_records, source_id, aggregate_text)
             if failure:
-                unit["aggregate_failure_reason"] = failure
-                chunk["aggregate_failure_reason"] = failure
-                continue
+                recovered = _recover_aggregate_word_bboxes(
+                    evidence_id=evidence_id,
+                    text=aggregate_text,
+                    text_parts=aggregate_parts,
+                    source_meta=source_meta,
+                    source_id=source_id,
+                    page_numbers=list(range(chunk["page_range"]["start_page_number"], chunk["page_range"]["end_page_number"] + 1)),
+                    word_bboxes=word_bboxes or [],
+                )
+                if recovered:
+                    bbox_records = recovered
+                    failure = _aggregate_failure_reason(bbox_records, source_id, aggregate_text)
+                if failure:
+                    unit["aggregate_failure_reason"] = failure
+                    chunk["aggregate_failure_reason"] = failure
+                    continue
             unit["canonical_use_allowed"] = True
             chunk["canonical_use_allowed"] = True
             chunk["status"] = (
@@ -107,15 +139,6 @@ def build_evidence_and_bboxes(
             | ({"promotion_candidate": True} if recoverable else {})
         )
         bbox_rows.extend(bbox_records)
-    _append_inserted_bab_bbox_refs(
-        evidence=evidence,
-        bbox_rows=bbox_rows,
-        chunks=chunks,
-        legal_units=legal_units,
-        source_documents=source_documents,
-        pdf_lines_by_source=pdf_lines_by_source,
-    )
-    apply_inserted_bab_heading_bbox_policy(bbox_rows, evidence)
     for bbox in bbox_rows:
         if any(row.get("evidence_id") == bbox.get("evidence_id") and row.get("promotion_candidate") is True for row in evidence):
             bbox["promotion_candidate"] = True
@@ -174,6 +197,79 @@ def _recover_word_bbox(
     ]
 
 
+def _recover_aggregate_word_bboxes(
+    *,
+    evidence_id: str,
+    text: str,
+    text_parts: list[str] | None = None,
+    source_meta: dict,
+    source_id: str,
+    page_numbers: list[int],
+    word_bboxes: list[dict],
+) -> list[dict]:
+    words_by_page = word_rows_by_page(word_bboxes)
+    matches = []
+    for part in text_parts or [text]:
+        match = align_text_to_word_bboxes(
+            text=part,
+            source_document_id=source_id,
+            page_numbers=page_numbers,
+            words_by_page=words_by_page,
+            allow_cross_page=True,
+        )
+        if not match:
+            prefix = next((line.strip() for line in part.splitlines() if line.strip()), "")
+            if prefix and prefix != part:
+                match = align_text_to_word_bboxes(
+                    text=prefix,
+                    source_document_id=source_id,
+                    page_numbers=page_numbers,
+                    words_by_page=words_by_page,
+                    allow_cross_page=True,
+                )
+            if not match:
+                continue
+        matches.extend(match.get("matched_word_bboxes") or ())
+    matched = list(dict.fromkeys(word.get("word_bbox_id") for word in matches))
+    if not matched:
+        return []
+    matches = sorted(
+        {word["word_bbox_id"]: word for word in matches}.values(),
+        key=lambda word: (word["page_number"], word.get("y0", 0), word.get("x0", 0), word.get("word_index", 0)),
+    )
+    rows: list[dict] = []
+    for index, page_number in enumerate(dict.fromkeys(word["page_number"] for word in matches)):
+        words = [word for word in matches if word["word_bbox_id"] in matched and word["page_number"] == page_number]
+        if not words:
+            continue
+        first = words[0]
+        rows.append(
+            {
+                "bbox_id": f"uud_unified_bbox::{evidence_id}::recovered::{index:04d}",
+                "bbox_precision": "exact",
+                "corpus_id": "uud",
+                "evidence_id": evidence_id,
+                "page_number": page_number,
+                "source_document_id": source_id,
+                "source_pdf": source_meta["filename"],
+                "source_pdf_path": source_meta["path"],
+                "source_sha256": source_meta["sha256"],
+                "status": "accepted",
+                "text": " ".join(word["text"] for word in words),
+                "viewer_highlightable": True,
+                "x0": min(word["x0"] for word in words),
+                "x1": max(word["x1"] for word in words),
+                "y0": min(word["y0"] for word in words),
+                "y1": max(word["y1"] for word in words),
+                **coordinate_metadata(
+                    {"width": first.get("page_width"), "height": first.get("page_height")},
+                    highlightable=True,
+                ),
+            }
+        )
+    return rows
+
+
 def _evidence_id(chunk: dict, unit: dict, source_role: str, next_instrument_id: int) -> tuple[str, int]:
     if unit["unit_type"] in {
         "amendment_recital_record",
@@ -209,7 +305,7 @@ def _has_ayat(text: object) -> bool:
     return bool(re.search(r"(?m)^\([0-9]+\)", str(text or "")))
 
 
-def _aggregate_failure_reason(bbox_records: list[dict], source_id: str) -> str | None:
+def _aggregate_failure_reason(bbox_records: list[dict], source_id: str, expected_text: str) -> str | None:
     if not bbox_records:
         return "pasal_aggregate_source_missing"
     if any(
@@ -220,150 +316,71 @@ def _aggregate_failure_reason(bbox_records: list[dict], source_id: str) -> str |
         for row in bbox_records
     ):
         return "pasal_aggregate_geometry_unavailable"
-    if len({row.get("page_number") for row in bbox_records}) != 1:
+    if _aggregate_compare_text(" ".join(row.get("text") or "" for row in bbox_records)) != _aggregate_compare_text(expected_text):
         return "pasal_aggregate_geometry_unavailable"
     return None
 
 
-def _append_inserted_bab_bbox_refs(
-    *,
-    evidence: list[dict],
-    bbox_rows: list[dict],
-    chunks: list[dict],
-    legal_units: list[dict],
-    source_documents: dict[str, dict],
-    pdf_lines_by_source: dict[str, dict[int, list[dict]]],
-) -> None:
-    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
-    for spec in INSERTED_BAB_SPECS:
-        source_id = spec["source_document_id"]
-        if source_id == "uud::current_consolidated":
-            continue
-        bab = next((unit for unit in legal_units if unit.get("source_document_id") == source_id and unit.get("unit_label") == spec["label"]), None)
-        if not bab:
-            continue
-        evidence_id = f"uud_inserted_bab_heading_evidence::{source_id}::{slug(spec['label'])}"
-        heading_row = _inserted_bab_row(
-            evidence_id=evidence_id,
-            bbox_id=f"uud_unified_bbox::{evidence_id}",
-            text=spec["label"],
-            page_number=spec["page_number"],
-            source_id=source_id,
-            source_meta=source_documents[source_id],
-            pdf_lines_by_source=pdf_lines_by_source,
-            viewer_highlightable=True,
-        )
-        bbox_rows.append(heading_row)
-        evidence.append(
-            {
-                "bbox_refs": [heading_row["bbox_id"]],
-                "bbox_precision": "exact",
-                "citation": spec["label"],
-                "corpus_id": "uud",
-                "evidence_id": evidence_id,
-                "hierarchy": [spec["label"]],
-                "legal_unit_id": bab["legal_unit_id"],
-                "page_numbers": [spec["page_number"]],
-                "quoted_text": spec["label"],
-                "source_document_id": source_id,
-                "source_url": source_documents[source_id]["source_page_url"],
-                "source_pdf": source_documents[source_id]["filename"],
-                "source_pdf_path": source_documents[source_id]["path"],
-                "source_role": source_documents[source_id]["source_role"],
-                "source_sha256": source_documents[source_id]["sha256"],
-                "status": "final",
-                "authority_kind": "structural_context",
-                "citable_status": "structural_provenance",
-                "citable": False,
-                "exactness": "exact",
-                "evidence_exists": True,
-                "reason_code": "inserted_bab_heading_source_provenance",
-                "citation_finality_reason": "inserted_bab_heading_is_historical_structure",
-                "temporal_context": source_documents[source_id].get("temporal_context", source_documents[source_id]["source_role"]),
-                "runtime_loadable": True,
-                "evidence_owner_kind": "legal_unit_source",
-                "viewer_highlightable": True,
-                "citation_final": False,
-            }
-        )
-    by_evidence: dict[str, list[dict]] = {row["evidence_id"]: [] for row in evidence}
-    for row in bbox_rows:
-        by_evidence.setdefault(row["evidence_id"], []).append(row)
-    for row in evidence:
-        rows = by_evidence.get(row["evidence_id"], [])
-        row["bbox_precision"] = aggregate_bbox_precision(rows)
-        row["viewer_highlightable"] = any(item["viewer_highlightable"] for item in rows)
-        row["page_numbers"] = sorted({item["page_number"] for item in rows})
-        unit = units_by_id[row["legal_unit_id"]]
-        if unit["unit_label"] in SEGMENTATION_BOUNDARY_LABELS:
-            # Historical instrument records retain exact source geometry. Their
-            # non-final authority is applied by the UUD authority policy.
-            row.setdefault("failure_reason", "instrument_trace_only_not_public_citation")
+def _aggregate_compare_text(text: str) -> str:
+    return compact_text(re.sub(r"\*+\)", "", text))
 
 
-def _first_evidence_at_or_after_child(
-    spec: dict, source_evidence: list[dict], chunks_by_unit: dict[str, dict], units_by_id: dict[str, dict]
-) -> dict | None:
-    child_ids = [
-        row["legal_unit_id"]
-        for row in units_by_id.values()
-        if row["source_document_id"] == spec["source_document_id"] and row.get("unit_label") == spec["child_labels"][0]
+def _descendants_by_parent(legal_units: list[dict]) -> dict[str, list[dict]]:
+    rows: dict[str, list[dict]] = {}
+    for unit in legal_units:
+        for parent_id in unit.get("parent_legal_unit_ids") or ():
+            rows.setdefault(parent_id, []).append(unit)
+    return rows
+
+
+def _descendants(unit_id: str, descendants_by_parent: dict[str, list[dict]]) -> list[dict]:
+    found: list[dict] = []
+    pending = list(descendants_by_parent.get(unit_id, ()))
+    while pending:
+        current = pending.pop(0)
+        found.append(current)
+        pending.extend(descendants_by_parent.get(current["legal_unit_id"], ()))
+    return found
+
+
+def _aggregate_text(unit: dict, descendants: list[dict]) -> str:
+    return "\n".join(_aggregate_parts(unit, descendants)).strip()
+
+
+def _aggregate_parts(unit: dict, descendants: list[dict]) -> list[str]:
+    text = str(unit.get("text") or "")
+    parts = [text]
+    accumulated = compact(text)
+    for child in sorted(
+        _direct_descendants(unit, descendants),
+        key=lambda row: (row.get("page_start", 0), row.get("sibling_order", 0), row["legal_unit_id"]),
+    ):
+        child_text = str(child.get("text") or "")
+        child_compact = compact(child_text)
+        if not child_compact or child_compact in accumulated:
+            continue
+        parts.append(child_text)
+        accumulated = compact(f"{accumulated} {child_compact}")
+    return parts
+
+
+def _aggregate_recovery_parts(unit: dict, descendants: list[dict]) -> list[str]:
+    return [
+        text
+        for row in [
+            unit,
+            *sorted(
+                descendants,
+                key=lambda item: (item.get("page_start", 0), item.get("sibling_order", 0), item["legal_unit_id"]),
+            ),
+        ]
+        if (text := str(row.get("text") or "").strip())
     ]
-    if not child_ids:
-        return None
-    child_chunk = min(chunks_by_unit[unit_id]["chunk_id"] for unit_id in child_ids if unit_id in chunks_by_unit)
-    return next(
-        (
-            row
-            for row in source_evidence
-            if row["source_document_id"] == spec["source_document_id"] and chunks_by_unit[row["legal_unit_id"]]["chunk_id"] >= child_chunk
-        ),
-        None,
-    )
 
 
-def _previous_source_evidence(child: dict, source_evidence: list[dict]) -> dict | None:
-    previous = None
-    for row in source_evidence:
-        if row["source_document_id"] != child["source_document_id"]:
-            continue
-        if row["evidence_id"] == child["evidence_id"]:
-            return previous
-        previous = row
-    return None
-
-
-def _inserted_bab_row(
-    *,
-    evidence_id: str,
-    bbox_id: str,
-    text: str,
-    page_number: int,
-    source_id: str,
-    source_meta: dict,
-    pdf_lines_by_source: dict[str, dict[int, list[dict]]],
-    viewer_highlightable: bool,
-) -> dict:
-    line = next(row for row in pdf_lines_by_source[source_id][page_number] if compact(row["text"]) == compact(text))
-    return {
-        "bbox_id": bbox_id,
-        "bbox_precision": "exact",
-        "corpus_id": "uud",
-        "evidence_id": evidence_id,
-        "page_number": page_number,
-        "source_document_id": source_id,
-        "source_pdf": source_meta["filename"],
-        "source_pdf_path": source_meta["path"],
-        "source_sha256": source_meta["sha256"],
-        "status": "accepted",
-        "text": line["text"],
-        "viewer_highlightable": viewer_highlightable,
-        "x0": line["x0"],
-        "x1": line["x1"],
-        "y0": line["y0"],
-        "y1": line["y1"],
-        **coordinate_metadata(line, highlightable=viewer_highlightable),
-    }
+def _direct_descendants(unit: dict, descendants: list[dict]) -> list[dict]:
+    unit_id = unit.get("legal_unit_id")
+    return [row for row in descendants if unit_id in (row.get("parent_legal_unit_ids") or ())]
 
 
 def _evidence_prefix(source_role: str) -> str:

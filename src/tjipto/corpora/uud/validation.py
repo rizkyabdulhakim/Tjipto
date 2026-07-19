@@ -517,7 +517,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         word_bboxes=word_bboxes,
     )
     errors.extend(f"{violation.code}:{violation.artifact}:{violation.row_id}:{violation.field}" for violation in trust_violations)
-    errors.extend(_pasal_aggregate_errors(legal_units, chunks, evidence, bbox_by_id))
+    errors.extend(_aggregate_evidence_errors(legal_units, chunks, evidence, bbox_by_id, page_text_spans))
     for row in validation_exceptions:
         for field in ("chunk_id", "unresolved_chunk_reference"):
             chunk_id = row.get(field)
@@ -1405,31 +1405,42 @@ def _recovery_state_errors(promotion_decisions: list[dict]) -> tuple[str, ...]:
     return tuple(errors)
 
 
-def _pasal_aggregate_errors(
+def _aggregate_evidence_errors(
     legal_units: list[dict],
     chunks: list[dict],
     evidence: list[dict],
     bbox_by_id: dict[str, dict],
+    page_text_spans: list[dict],
 ) -> tuple[str, ...]:
     chunks_by_unit = {row.get("legal_unit_id"): row for row in chunks}
     evidence_by_unit = {row.get("legal_unit_id"): row for row in evidence}
+    spans_by_id = {row.get("text_span_id"): row for row in page_text_spans}
+    descendants_by_parent: dict[str, list[dict]] = {}
+    for unit in legal_units:
+        for parent_id in unit.get("parent_legal_unit_ids") or ():
+            descendants_by_parent.setdefault(parent_id, []).append(unit)
     errors: list[str] = []
     for parent in legal_units:
-        if parent.get("unit_type") != "pasal_record" or not re.search(r"(?m)^\([0-9]+\)", parent.get("text") or ""):
+        descendants = _all_descendants(parent.get("legal_unit_id"), descendants_by_parent)
+        if not descendants:
             continue
         parent_id = parent.get("legal_unit_id")
         aggregate = evidence_by_unit.get(parent_id)
         if aggregate is None:
             if not parent.get("aggregate_failure_reason") and not chunks_by_unit.get(parent_id, {}).get("aggregate_failure_reason"):
-                errors.append(f"pasal_aggregate_missing_failure_reason:{parent_id}")
+                errors.append(f"aggregate_missing_failure_reason:{parent_id}")
             continue
-        if normalize_source_text(aggregate.get("quoted_text")) != normalize_source_text(parent.get("text")):
-            errors.append(f"pasal_aggregate_text_span_sequence_incomplete:{aggregate.get('evidence_id')}")
-        if list(aggregate.get("text_span_ids") or ()) != list(parent.get("text_span_ids") or ()):
-            errors.append(f"pasal_aggregate_text_span_sequence_incomplete:{aggregate.get('evidence_id')}")
+        expected_span_ids = _ordered_aggregate_span_ids(parent, descendants, spans_by_id)
+        actual_span_ids = list(aggregate.get("text_span_ids") or ())
+        if len(actual_span_ids) != len(set(actual_span_ids)) or actual_span_ids != expected_span_ids:
+            errors.append(f"aggregate_text_span_sequence_incomplete:{aggregate.get('evidence_id')}")
+        expected_text = normalize_source_text(" ".join(str(spans_by_id[span_id].get("text") or "") for span_id in expected_span_ids if span_id in spans_by_id))
+        if expected_text and _aggregate_compare_text(aggregate.get("quoted_text")) != _aggregate_compare_text(expected_text):
+            errors.append(f"aggregate_text_reconstruction_failed:{aggregate.get('evidence_id')}")
         bboxes = [bbox_by_id[bbox_id] for bbox_id in aggregate.get("bbox_refs") or () if bbox_id in bbox_by_id]
-        if not bboxes or len({row.get("page_number") for row in bboxes}) != 1:
-            errors.append(f"pasal_aggregate_geometry_unavailable:{aggregate.get('evidence_id')}")
+        if not bboxes:
+            if aggregate.get("citable_status") != "trace_text_only":
+                errors.append(f"aggregate_geometry_unavailable:{aggregate.get('evidence_id')}")
         elif any(
             row.get("source_document_id") != parent.get("source_document_id")
             or row.get("bbox_precision") != "exact"
@@ -1437,14 +1448,58 @@ def _pasal_aggregate_errors(
             or not all(row.get(field) is not None for field in ("x0", "y0", "x1", "y1"))
             for row in bboxes
         ):
-            errors.append(f"pasal_aggregate_geometry_unavailable:{aggregate.get('evidence_id')}")
-        parent_spans = set(parent.get("text_span_ids") or ())
-        for child in legal_units:
-            if child.get("unit_type") != "ayat_record" or parent_id not in (child.get("ancestor_legal_unit_ids") or ()):
-                continue
-            if not set(child.get("text_span_ids") or ()) <= parent_spans:
-                errors.append(f"pasal_aggregate_child_span_outside_parent:{parent_id}:{child.get('legal_unit_id')}")
+            errors.append(f"aggregate_geometry_unavailable:{aggregate.get('evidence_id')}")
+        if any(
+            spans_by_id.get(span_id, {}).get("source_document_id") != parent.get("source_document_id")
+            or spans_by_id.get(span_id, {}).get("source_role") not in {None, parent.get("source_role")}
+            for span_id in actual_span_ids
+        ):
+            errors.append(f"aggregate_source_ownership_mismatch:{aggregate.get('evidence_id')}")
+        aggregate_spans = set(actual_span_ids)
+        for child in descendants:
+            if not set(child.get("text_span_ids") or ()) <= aggregate_spans:
+                errors.append(f"aggregate_child_span_outside_parent:{parent_id}:{child.get('legal_unit_id')}")
+            if child.get("source_document_id") != parent.get("source_document_id") or child.get("source_role") not in {
+                None,
+                parent.get("source_role"),
+            }:
+                errors.append(f"aggregate_child_source_ownership_mismatch:{parent_id}:{child.get('legal_unit_id')}")
     return tuple(dict.fromkeys(errors))
+
+
+def _all_descendants(parent_id: str | None, descendants_by_parent: dict[str, list[dict]]) -> list[dict]:
+    if not parent_id:
+        return []
+    descendants: list[dict] = []
+    pending = list(descendants_by_parent.get(parent_id, ()))
+    while pending:
+        child = pending.pop(0)
+        descendants.append(child)
+        pending.extend(descendants_by_parent.get(child.get("legal_unit_id"), ()))
+    return descendants
+
+
+def _ordered_aggregate_span_ids(parent: dict, descendants: list[dict], spans_by_id: dict[str, dict]) -> list[str]:
+    span_ids = list(dict.fromkeys(
+        span_id
+        for unit in (parent, *descendants)
+        for span_id in unit.get("text_span_ids") or ()
+        if span_id in spans_by_id
+    ))
+    return sorted(
+        span_ids,
+        key=lambda span_id: (
+            spans_by_id[span_id].get("page_number", 0),
+            spans_by_id[span_id].get("y0", 0),
+            spans_by_id[span_id].get("x0", 0),
+            span_id,
+        ),
+    )
+
+
+def _aggregate_compare_text(text: object) -> str:
+    normalized = normalize_source_text(re.sub(r"\*+\)", "", str(text or "")))
+    return re.sub(r"\W+", "", normalized)
 
 
 def _reference_belongs_to_unit(reference: object, unit: dict) -> bool:

@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from tjipto.contracts.authority import authority_decision
 from tjipto.contracts.evidence import EVIDENCE_DECISION_FIELDS
+from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit
 
 
 NODE_AUTHORITY = {
@@ -97,9 +98,9 @@ def apply_authority_contract(
             raise ValueError("incomplete_span_decision")
     for row in evidence:
         exact = row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True
-        structural_provenance = row.get("evidence_owner_kind") == "metadata_source" or str(row.get("evidence_id") or "").startswith(
-            "uud_inserted_bab_heading_evidence::"
-        )
+        structural_provenance = row.get("evidence_owner_kind") == "metadata_source" or role_for_legal_unit(
+            units_by_id.get(row.get("legal_unit_id"), {})
+        ) == "structural_heading"
         historical_anomaly = bool(units_by_id.get(row.get("legal_unit_id"), {}).get("exclusion_ref"))
         historical_pasali = row.get("hierarchy") == ["ATURAN TAMBAHAN", "Pasal I"] and row.get("source_role") == "amendment_4_historical"
         instrument_trace = units_by_id.get(row.get("legal_unit_id"), {}).get("unit_type") in {

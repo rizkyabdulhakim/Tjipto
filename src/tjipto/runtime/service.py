@@ -1599,8 +1599,16 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
     role_anchor_match = _query_contains_term(folded_query, role_label) and any(
         _query_contains_term(folded_query, anchor) for anchor in anchors
     )
+    explicit_anchor_match = any(
+        len(anchor.split()) > 1 and _query_contains_term(folded_query, anchor) for anchor in anchors
+    )
     semantic_required = tuple(term for term in required if term not in anchors or "pasal" not in term)
-    if semantic_required and not any(_query_contains_term(folded_query, term) for term in semantic_required) and not role_anchor_match:
+    if (
+        semantic_required
+        and not any(_query_contains_term(folded_query, term) for term in semantic_required)
+        and not role_anchor_match
+        and not (explicit_anchor_match and conflict.get("source_anomaly_kind") == "source_marker_sequence_anomaly")
+    ):
         return 0
     score = 0
     if _query_contains_term(folded_query, role_label):

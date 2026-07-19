@@ -138,13 +138,28 @@ def align_text_to_word_bboxes(
     page_numbers: list[int] | tuple[int, ...],
     words_by_page: dict[tuple[str, int], list[dict]],
     reference_bbox: dict | None = None,
+    allow_cross_page: bool = False,
 ) -> dict | None:
     target = compact_text(text)
     if not target:
         return None
     candidates: list[dict] = []
-    for page_number in page_numbers:
-        page_words = [row for row in words_by_page.get((source_document_id, page_number), []) if row.get("normalized_text")]
+    sequences = (
+        [
+            row
+            for page_number in page_numbers
+            for row in words_by_page.get((source_document_id, page_number), [])
+            if row.get("normalized_text")
+        ],
+    ) if allow_cross_page else tuple(
+        [
+            row
+            for row in words_by_page.get((source_document_id, page_number), [])
+            if row.get("normalized_text")
+        ]
+        for page_number in page_numbers
+    )
+    for page_words in sequences:
         for start in range(len(page_words)):
             joined = ""
             matched: list[dict] = []
@@ -152,13 +167,14 @@ def align_text_to_word_bboxes(
                 matched.append(row)
                 joined = compact_text(f"{joined} {row.get('text', '')}")
                 if joined == target:
-                    union_bbox = union_word_bbox(matched)
+                    union_bbox = union_word_bbox(matched) if len({item.get("page_number") for item in matched}) == 1 else None
                     candidates.append(
                         {
-                            "page_number": page_number,
+                            "page_number": row.get("page_number"),
                             "matched_word_bbox_ids": [item["word_bbox_id"] for item in matched],
+                            "matched_word_bboxes": matched,
                             "union_bbox": union_bbox,
-                            "distance_to_existing_span_bbox": bbox_center_distance(union_bbox, reference_bbox),
+                            "distance_to_existing_span_bbox": bbox_center_distance(union_bbox or {}, reference_bbox),
                         }
                     )
                     break
@@ -177,6 +193,7 @@ def align_text_to_word_bboxes(
     return {
         "text_span_id": None,
         "matched_word_bbox_ids": chosen["matched_word_bbox_ids"],
+        "matched_word_bboxes": chosen.get("matched_word_bboxes", []),
         "match_method": "contiguous_compact_word_sequence",
         "match_confidence": "exact_compact_sequence" if len(candidates) == 1 else "exact_compact_sequence_nearest_reference_bbox",
         "normalized_text_match": True,

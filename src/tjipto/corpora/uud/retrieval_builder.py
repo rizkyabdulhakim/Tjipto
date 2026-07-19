@@ -143,6 +143,7 @@ def apply_chunk_grounding(
         chunk["validation_status"], chunk["validation_basis"] = _chunk_validation(chunk)
         apply_review_category(chunk)
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
+    descendants_by_parent = _descendants_by_parent(legal_units)
     for unit in legal_units:
         unit_chunk = chunks_by_unit.get(unit["legal_unit_id"])
         unit_evidence = evidence_by_unit.get(unit["legal_unit_id"], [])
@@ -165,6 +166,14 @@ def apply_chunk_grounding(
             text_span_ids = list(dict.fromkeys(span_id for row in unit_evidence for span_id in row.get("text_span_ids") or ()))
             unit["text_span_ids"] = text_span_ids
             grounding_status = "text_span_exact_from_evidence"
+        if descendants_by_parent.get(unit["legal_unit_id"]):
+            aggregate_span_ids = list(
+                dict.fromkeys(span_id for row in unit_evidence for span_id in row.get("text_span_ids") or ())
+            )
+            if aggregate_span_ids:
+                text_span_ids = aggregate_span_ids
+                unit["text_span_ids"] = aggregate_span_ids
+                grounding_status = "text_span_aggregate_from_evidence"
         unit["grounding_status"] = grounding_status
         unit["validation_status"] = "accepted_grounding" if text_span_ids else "grounding_unavailable"
         if not text_span_ids:
@@ -175,6 +184,24 @@ def apply_chunk_grounding(
             and bool(unit_evidence or (unit_chunk and unit_chunk.get("runtime_loadable")))
         )
         apply_review_category(unit)
+    for parent_id in descendants_by_parent:
+        parent = units_by_id.get(parent_id)
+        aggregate_span_ids = list(
+            dict.fromkeys(span_id for row in evidence_by_unit.get(parent_id, ()) for span_id in row.get("text_span_ids") or ())
+        )
+        if parent is not None and aggregate_span_ids:
+            parent["text_span_ids"] = aggregate_span_ids
+            parent["grounding_status"] = "text_span_aggregate_from_evidence"
+            parent["validation_status"] = "accepted_grounding"
+            parent.pop("failure_reason", None)
+
+
+def _descendants_by_parent(legal_units: list[dict]) -> dict[str, list[dict]]:
+    descendants: dict[str, list[dict]] = defaultdict(list)
+    for unit in legal_units:
+        for parent_id in unit.get("parent_legal_unit_ids") or ():
+            descendants[parent_id].append(unit)
+    return descendants
 
 
 def _text_span_ids_for_text(

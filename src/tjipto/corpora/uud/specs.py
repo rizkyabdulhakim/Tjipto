@@ -329,12 +329,11 @@ SOURCE_CONFLICT_SPECS = (
             "pasal iii aturan tambahan",
             "aturan tambahan pasal ii",
             "pasal ii aturan tambahan",
-            "aturan tambahan",
             "pasal iii",
             "pasal ii",
         ],
         "query_exclusion_terms": ["aturan peralihan", "pasal i"],
-        "query_required_terms": ["konflik", "anomali", "aturan tambahan", "pasal ii", "pasal iii"],
+        "query_required_terms": ["konflik", "anomali", "pasal ii", "pasal iii"],
         "resolution_decision": {
             "canonical_reference_for_current_uud": "uud_1945_current_consolidated_text_aturan_tambahan_pasal_ii",
             "decision_scope": "pipeline_policy_not_final_legal_authority",

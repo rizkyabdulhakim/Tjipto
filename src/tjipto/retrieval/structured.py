@@ -39,7 +39,6 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
     requested_role = source_role_for_query(query, strategy=strategy, config=config) or getattr(
         config, "preferred_source_role", None
     )
-    parent_only = _is_parent_reference(query, corpus_id)
     bab = parse_bab_reference(_corpus_id(config), query)
     if bab:
         dedicated_unit_ids = {
@@ -67,31 +66,19 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
             ]
         if dedicated:
             return tuple(dedicated[:limit])
-    if parent_only:
-        pasal = targets[0]
-        parent_ids = {
-            row["legal_unit_id"]
-            for row in store.legal_units
-            if row.get("unit_type") == "pasal_record"
-            and row.get("unit_label", "").casefold() == pasal.casefold()
-            and (requested_role is None or row.get("source_role") == requested_role)
-        }
-        rows = [
-            row
-            for row in store.evidence
-            if row.get("status") == "final"
-            and store.bboxes_for(row["evidence_id"])
-            and row.get("legal_unit_id") in parent_ids
-        ]
-    else:
-        rows = [
-            row
-            for row in store.evidence
-            if row.get("status") == "final"
-            and store.bboxes_for(row["evidence_id"])
-            and (requested_role is None or row.get("source_role") == requested_role)
-            and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets))
-        ]
+    preferred_unit_ids = _preferred_unit_ids(store, targets, requested_role)
+    rows = [
+        row
+        for row in store.evidence
+        if row.get("status") == "final"
+        and store.bboxes_for(row["evidence_id"])
+        and (requested_role is None or not row.get("source_role") or row.get("source_role") == requested_role)
+        and (
+            row.get("legal_unit_id") in preferred_unit_ids
+            if preferred_unit_ids
+            else row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets)
+        )
+    ]
     return tuple(rows[:limit])
 
 
@@ -280,6 +267,19 @@ def _matches_unit(row: dict, targets: tuple[str, ...]) -> bool:
     values = [row.get("unit_label", ""), *(row.get("hierarchy") or ())]
     haystack = {key for value in values for key in _label_keys(value)}
     return all(target in haystack for target in targets)
+
+
+def _preferred_unit_ids(store: EvidenceStore, targets: tuple[str, ...], requested_role: str | None) -> set[str]:
+    if not targets:
+        return set()
+    leaf = targets[-1]
+    return {
+        row["legal_unit_id"]
+        for row in getattr(store, "legal_units", ())
+        if leaf in _label_keys(row.get("unit_label"))
+        and _matches_unit(row, targets)
+        and (requested_role is None or not row.get("source_role") or row.get("source_role") == requested_role)
+    }
 
 
 def _label_keys(value: object) -> set[str]:

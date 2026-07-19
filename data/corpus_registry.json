@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "530cf363b3af2407a5ff938055e2e5d08a068c41864e875098b6210afa981451",
+    "manifest_sha256": "b1b1580470aba99f400561192e3fa25bc0e7e4c4da9e39c280de367bafd393f1",
     "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
     "runtime_required_artifacts": [
       "evidence_registry",
@@ -461,13 +461,17 @@
           "mode": "pasal_children",
           "parent_unit_type": "pasal_record",
           "child_unit_type": "ayat_record",
-          "required_terms": ["ayat"]
+          "required_terms": [
+            "ayat"
+          ]
         },
         "bab_pasal_children": {
           "mode": "bab_children",
           "parent_unit_type": "bab_record",
           "child_unit_type": "pasal_record",
-          "required_terms": ["pasal"]
+          "required_terms": [
+            "pasal"
+          ]
         },
         "unsupported_amendment_relation": {
           "mode": "unsupported"
@@ -754,16 +758,16 @@
         "hal"
       ],
       "instrument_change_signals": [
-          "ubah",
-          "berubah",
-          "diubah",
-          "dirubah",
-          "mengubah",
-          "menambah",
-          "menambahkan",
-          "diganti",
-          "terdampak",
-          "hasil perubahan"
+        "ubah",
+        "berubah",
+        "diubah",
+        "dirubah",
+        "mengubah",
+        "menambah",
+        "menambahkan",
+        "diganti",
+        "terdampak",
+        "hasil perubahan"
       ],
       "metadata_candidate_signals": [
         "tanggal",
@@ -897,16 +901,22 @@
       "structured_sections": [
         {
           "target": "pembukaan/preambule",
-          "aliases": ["pembukaan"]
+          "aliases": [
+            "pembukaan"
+          ]
         },
         {
           "target": "aturan peralihan",
-          "aliases": ["aturan peralihan"],
+          "aliases": [
+            "aturan peralihan"
+          ],
           "with_pasal": true
         },
         {
           "target": "aturan tambahan",
-          "aliases": ["aturan tambahan"],
+          "aliases": [
+            "aturan tambahan"
+          ],
           "with_pasal": true
         }
       ],
@@ -935,7 +945,14 @@
         "aturan tambahan",
         "pasal ii"
       ],
-      "unresolved_query_terms": ["konflik", "anomali", "tidak dipromosikan", "promosikan", "renumbering", "penomoran"],
+      "unresolved_query_terms": [
+        "konflik",
+        "anomali",
+        "tidak dipromosikan",
+        "promosikan",
+        "renumbering",
+        "penomoran"
+      ],
       "generic_tokens": [
         "apa",
         "yang",
@@ -953,22 +970,35 @@
       },
       "reason_rules": [
         {
-          "query_terms": ["pasal iii"],
-          "reasons": ["historical_source_typo", "not_runtime_loadable"]
+          "query_terms": [
+            "pasal iii"
+          ],
+          "reasons": [
+            "historical_source_typo",
+            "not_runtime_loadable"
+          ]
         }
       ],
-      "default_reasons": ["insufficient_promotion_evidence"],
+      "default_reasons": [
+        "insufficient_promotion_evidence"
+      ],
       "answer_rules": [
         {
-          "query_terms": ["pasal iii"],
+          "query_terms": [
+            "pasal iii"
+          ],
           "template": "Bukti tidak cukup untuk mempromosikan Pasal III Aturan Tambahan Perubahan Keempat sebagai jawaban hukum final. Catatan konflik sumber menyimpannya sebagai {classification} with reviewer decision {reviewer_decision}."
         },
         {
-          "query_terms": ["konflik sumber"],
+          "query_terms": [
+            "konflik sumber"
+          ],
           "template": "Catatan konflik sumber mencatat {classification}. Reviewer decision: {reviewer_decision}."
         },
         {
-          "conflict_types": ["article_renumbering_conflict"],
+          "conflict_types": [
+            "article_renumbering_conflict"
+          ],
           "template": "Catatan konflik sumber mencatat {classification}. Sistem menyimpan ini sebagai jejak perbedaan sumber, bukan kesimpulan hukum final."
         }
       ],
