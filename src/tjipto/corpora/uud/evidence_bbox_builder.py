@@ -19,6 +19,8 @@ def _admit_evidence(unit: dict, chunk: dict) -> bool:
             "original_historical",
             "amendment_4_historical",
         }
+    if unit.get("unit_type") == "pasal_record" and _has_ayat(unit.get("text")):
+        return True
     return chunk.get("status") in {"active_canonical_record", "active_historical_record"}
 
 
@@ -46,11 +48,24 @@ def build_evidence_and_bboxes(
             evidence_id=evidence_id,
             source_meta=source_meta,
             source_id=source_id,
-            text=_bbox_text(chunk["text"], unit),
+            text=chunk["text"] if _has_ayat(unit.get("text")) else _bbox_text(chunk["text"], unit),
             page_start=chunk["page_range"]["start_page_number"],
             page_end=chunk["page_range"]["end_page_number"],
             line_entries=pdf_lines_by_source[source_id],
         )
+        if unit.get("unit_type") == "pasal_record" and _has_ayat(unit.get("text")):
+            failure = _aggregate_failure_reason(bbox_records, source_id)
+            if failure:
+                unit["aggregate_failure_reason"] = failure
+                chunk["aggregate_failure_reason"] = failure
+                continue
+            unit["canonical_use_allowed"] = True
+            chunk["canonical_use_allowed"] = True
+            chunk["status"] = (
+                "active_canonical_record"
+                if unit.get("source_role") == "current_consolidated"
+                else "active_historical_record"
+            )
         recoverable = unit["unit_label"] in RECOVERABLE_GROUNDING_LABELS
         if recoverable and aggregate_bbox_precision(bbox_records) != "exact" and word_bboxes:
             recovered = _recover_word_bbox(
@@ -174,7 +189,7 @@ def _evidence_id(chunk: dict, unit: dict, source_role: str, next_instrument_id: 
             next_instrument_id + 1,
         )
     chunk_number = int(chunk["chunk_id"].rsplit("_", 1)[1])
-    prefix = _evidence_prefix(source_role, chunk_number)
+    prefix = _evidence_prefix(source_role)
     return f"{prefix}_{chunk_number:05d}", next_instrument_id
 
 
@@ -188,6 +203,26 @@ def _bbox_text(text: str, unit: dict) -> str:
             continue
         lines.append(line)
     return "\n".join(lines)
+
+
+def _has_ayat(text: object) -> bool:
+    return bool(re.search(r"(?m)^\([0-9]+\)", str(text or "")))
+
+
+def _aggregate_failure_reason(bbox_records: list[dict], source_id: str) -> str | None:
+    if not bbox_records:
+        return "pasal_aggregate_source_missing"
+    if any(
+        row.get("source_document_id") != source_id
+        or row.get("bbox_precision") != "exact"
+        or row.get("viewer_highlightable") is not True
+        or not all(row.get(field) is not None for field in ("x0", "y0", "x1", "y1"))
+        for row in bbox_records
+    ):
+        return "pasal_aggregate_geometry_unavailable"
+    if len({row.get("page_number") for row in bbox_records}) != 1:
+        return "pasal_aggregate_geometry_unavailable"
+    return None
 
 
 def _append_inserted_bab_bbox_refs(
@@ -331,11 +366,9 @@ def _inserted_bab_row(
     }
 
 
-def _evidence_prefix(source_role: str, chunk_number: int) -> str:
+def _evidence_prefix(source_role: str) -> str:
     if source_role == "current_consolidated":
         return "uud_current_consolidated_final_citation_evidence"
-    if source_role == "original_historical" and chunk_number in {499, 522}:
-        return "uud_source_role_additional_final_citation_evidence"
     if source_role in {"amendment_1_historical", "amendment_4_historical"}:
         return "uud_source_role_final_citation_evidence"
     return "uud_source_role_historical_final_citation_evidence"

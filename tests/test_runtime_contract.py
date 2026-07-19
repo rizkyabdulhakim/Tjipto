@@ -1278,9 +1278,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertGreater(viewer_ref["bbox_count"], 0)
         self.assertTrue(viewer_ref["page_numbers"])
         self.assertTrue(self.service.viewer("uud", viewer_ref["evidence_id"])["bbox_rectangles"])
-        self.assertTrue(any(row["route_sources"] == ("graph",) for row in exact["matches"]))
-        self.assertTrue(any(row["route_sources"] == ("graph",) for row in exact["context_pack"]["supporting_context"]))
-        self.assertTrue(any(row["reason"] == "graph_only" for row in exact["context_pack"]["excluded_results"]))
+        self.assertFalse(any(row["route_sources"] == ("graph",) for row in exact["matches"]))
+        self.assertFalse(exact["context_pack"]["supporting_context"])
         self.assertTrue(
             all(
                 direct_routes & set(row["route_sources"])
@@ -1294,7 +1293,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(structured["status"], "answer_ready")
         self.assertEqual(structured["route"], "legal_reference")
         self.assertEqual(structured["answer_type"], "quoted_evidence")
-        self.assertTrue(any(row["route_sources"] == ("graph",) for row in structured["matches"]))
+        self.assertFalse(any(row["route_sources"] == ("graph",) for row in structured["matches"]))
         evidence_ids = {evidence["evidence_id"] for evidence in structured["evidence"]}
         self.assertTrue(
             all(direct_routes & set(row["route_sources"]) for row in structured["matches"] if row["evidence_id"] in evidence_ids)
@@ -1303,6 +1302,29 @@ class RuntimeContractTest(unittest.TestCase):
         search = self.service.search("uud", "Pasal 1 ayat (3)", limit=5)
         self.assertEqual(search["route"], "document_catalog")
         self.assertTrue(all(row["status"] == "document" for row in search["results"]))
+
+    def test_pasal_parent_aggregate_is_single_citation_and_fails_closed_without_geometry(self) -> None:
+        parent = self.service.ask("uud", "Pasal 31", limit=20)
+        self.assertEqual(parent["status"], "answer_ready")
+        self.assertEqual(len(parent["citations"]), 1)
+        self.assertEqual(parent["citations"][0]["citation"], "Pasal 31")
+        self.assertEqual(parent["citations"][0]["source_role"], "current_consolidated")
+        self.assertGreater(parent["citations"][0]["bbox_count"], 1)
+
+        child = self.service.ask("uud", "Pasal 31 ayat (1)", limit=20)
+        self.assertEqual(child["status"], "answer_ready")
+        self.assertEqual(len(child["citations"]), 1)
+        self.assertEqual(child["citations"][0]["citation"], "(1)")
+
+        unavailable = self.service.ask("uud", "Pasal 3", limit=20)
+        self.assertEqual(unavailable["status"], "insufficient_evidence")
+        self.assertEqual(unavailable["citations"], ())
+        self.assertIn("pasal_aggregate_geometry_unavailable", unavailable["insufficient_reasons"])
+
+        incomplete = self.service.ask("uud", "Pasal", limit=20)
+        self.assertEqual(incomplete["status"], "insufficient_evidence")
+        self.assertEqual(incomplete["citations"], ())
+        self.assertIn("incomplete_legal_reference", incomplete["insufficient_reasons"])
 
     def test_citation_response_exposes_public_payloads(self) -> None:
         result = self.service.citation("uud", "Pasal 1 ayat (3)")
@@ -1573,7 +1595,8 @@ class RuntimeContractTest(unittest.TestCase):
     def test_partial_signal_boundary_does_not_overblock_noninstrument_routes(self) -> None:
         education = self.service.ask("uud", "pasal apa yang mengatur pendidikan", limit=10)
         self.assertNotIn(education["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"})
-        self.assertNotEqual(education["status"], "insufficient_evidence")
+        self.assertEqual(education["status"], "insufficient_evidence")
+        self.assertIn("insufficient_query_support", education["insufficient_reasons"])
 
         pasal = self.service.ask("uud", "apa isi Pasal 31", limit=10)
         self.assertEqual(pasal["route"], "legal_reference")

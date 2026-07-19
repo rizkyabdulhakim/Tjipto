@@ -517,6 +517,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         word_bboxes=word_bboxes,
     )
     errors.extend(f"{violation.code}:{violation.artifact}:{violation.row_id}:{violation.field}" for violation in trust_violations)
+    errors.extend(_pasal_aggregate_errors(legal_units, chunks, evidence, bbox_by_id))
     for row in validation_exceptions:
         for field in ("chunk_id", "unresolved_chunk_reference"):
             chunk_id = row.get(field)
@@ -1402,6 +1403,48 @@ def _recovery_state_errors(promotion_decisions: list[dict]) -> tuple[str, ...]:
         if status in {"not_attempted", "attempted"} and row.get("promotion_outcome") == "promoted":
             errors.append(f"recovery_unattempted_promoted:{row_id}")
     return tuple(errors)
+
+
+def _pasal_aggregate_errors(
+    legal_units: list[dict],
+    chunks: list[dict],
+    evidence: list[dict],
+    bbox_by_id: dict[str, dict],
+) -> tuple[str, ...]:
+    chunks_by_unit = {row.get("legal_unit_id"): row for row in chunks}
+    evidence_by_unit = {row.get("legal_unit_id"): row for row in evidence}
+    errors: list[str] = []
+    for parent in legal_units:
+        if parent.get("unit_type") != "pasal_record" or not re.search(r"(?m)^\([0-9]+\)", parent.get("text") or ""):
+            continue
+        parent_id = parent.get("legal_unit_id")
+        aggregate = evidence_by_unit.get(parent_id)
+        if aggregate is None:
+            if not parent.get("aggregate_failure_reason") and not chunks_by_unit.get(parent_id, {}).get("aggregate_failure_reason"):
+                errors.append(f"pasal_aggregate_missing_failure_reason:{parent_id}")
+            continue
+        if normalize_source_text(aggregate.get("quoted_text")) != normalize_source_text(parent.get("text")):
+            errors.append(f"pasal_aggregate_text_span_sequence_incomplete:{aggregate.get('evidence_id')}")
+        if list(aggregate.get("text_span_ids") or ()) != list(parent.get("text_span_ids") or ()):
+            errors.append(f"pasal_aggregate_text_span_sequence_incomplete:{aggregate.get('evidence_id')}")
+        bboxes = [bbox_by_id[bbox_id] for bbox_id in aggregate.get("bbox_refs") or () if bbox_id in bbox_by_id]
+        if not bboxes or len({row.get("page_number") for row in bboxes}) != 1:
+            errors.append(f"pasal_aggregate_geometry_unavailable:{aggregate.get('evidence_id')}")
+        elif any(
+            row.get("source_document_id") != parent.get("source_document_id")
+            or row.get("bbox_precision") != "exact"
+            or row.get("viewer_highlightable") is not True
+            or not all(row.get(field) is not None for field in ("x0", "y0", "x1", "y1"))
+            for row in bboxes
+        ):
+            errors.append(f"pasal_aggregate_geometry_unavailable:{aggregate.get('evidence_id')}")
+        parent_spans = set(parent.get("text_span_ids") or ())
+        for child in legal_units:
+            if child.get("unit_type") != "ayat_record" or parent_id not in (child.get("ancestor_legal_unit_ids") or ()):
+                continue
+            if not set(child.get("text_span_ids") or ()) <= parent_spans:
+                errors.append(f"pasal_aggregate_child_span_outside_parent:{parent_id}:{child.get('legal_unit_id')}")
+    return tuple(dict.fromkeys(errors))
 
 
 def _reference_belongs_to_unit(reference: object, unit: dict) -> bool:

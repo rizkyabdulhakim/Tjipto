@@ -68,6 +68,26 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             self.assertEqual(result["reason_code"], "evidence_quote_source_mismatch")
             self.assertFalse(result["citations"])
 
+    def test_parent_aggregate_span_mutation_fails_offline_and_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "data", root / "data")
+            final = root / "data/final/uud"
+            artifact = final / "evidence_registry.jsonl"
+            rows = [json.loads(line) for line in artifact.read_text(encoding="utf-8").splitlines() if line]
+            row = next(item for item in rows if item.get("citation") == "Pasal 31" and item.get("source_role") == "current_consolidated")
+            row["text_span_ids"] = row["text_span_ids"][:-1]
+            data = ("\n".join(json.dumps(item, ensure_ascii=False) for item in rows) + "\n").encode("utf-8")
+            artifact.write_bytes(data)
+            manifest = json.loads((final / "manifest.json").read_text(encoding="utf-8"))
+            manifest["files"]["evidence_registry.jsonl"].update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
+            _write_trusted_manifest(root, manifest)
+            errors = validate_uud_artifact_dir(final)
+            self.assertTrue(any(error.startswith("pasal_aggregate_text_span_sequence_incomplete") for error in errors))
+            result = LegalRuntimeService(root).ask("uud", "Pasal 31")
+            self.assertEqual(result["status"], "corpus_not_ready")
+            self.assertFalse(result["citations"])
+
     def test_source_sha_mutation_fails_lineage_before_answer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

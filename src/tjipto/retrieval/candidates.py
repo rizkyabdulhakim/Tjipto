@@ -18,12 +18,18 @@ CANDIDATE_TYPE = {
 }
 
 
-def merge_ranked(store, route_rows: dict[str, tuple[dict, ...]], filters: dict) -> tuple[tuple[dict, ...], tuple[dict, ...]]:
+def merge_ranked(
+    store,
+    route_rows: dict[str, tuple[dict, ...]],
+    filters: dict,
+    *,
+    expand_graph: bool = True,
+) -> tuple[tuple[dict, ...], tuple[dict, ...]]:
     rows_by_id: dict[str, dict] = {}
     for route, rows in route_rows.items():
         for order, row in enumerate(rows):
             _add(rows_by_id, store, row, route, order, None)
-    trace = graph_expand(store, tuple(rows_by_id.values()), filters)
+    trace = graph_expand(store, tuple(rows_by_id.values()), filters) if expand_graph else ()
     for order, item in enumerate(trace):
         row = store.get(item["evidence_id"])
         if row is not None:

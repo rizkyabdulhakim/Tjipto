@@ -456,7 +456,9 @@ class LegalRuntimeService:
         templates = _answer_templates(store)
         if routed["status"] != "found":
             public_status = (
-                "insufficient_evidence" if routed.get("route") in {"metadata_not_found", "relation_not_found"} else routed["status"]
+                "insufficient_evidence"
+                if routed.get("route") in {"metadata_not_found", "relation_not_found", "structured_not_found"}
+                else routed["status"]
             )
             context_pack = empty_context_pack(routed.get("reason") or routed["status"])
             return routed | {
@@ -1548,10 +1550,7 @@ def _is_source_anomaly_query(store, query: str) -> bool:
     terms = tuple(str(term).casefold() for term in intent.get("query_terms") or ())
     if not any(_query_contains_term(folded, term) for term in terms):
         return False
-    if any(_source_conflict_match_score(store, row, folded, intent) > 0 for row in store.source_conflicts):
-        return True
-    unresolved_terms = tuple(str(term).casefold() for term in intent.get("unresolved_query_terms") or ())
-    return any(_query_contains_term(folded, term) for term in unresolved_terms)
+    return any(_source_conflict_match_score(store, row, folded, intent) > 0 for row in store.source_conflicts)
 
 
 def _source_anomaly_fallback() -> dict:
@@ -1594,9 +1593,16 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
     required = tuple(str(term).casefold() for term in conflict.get("query_required_terms") or ())
     if required and not any(_query_contains_term(folded_query, term) for term in required):
         return 0
+    anchors = {str(term).casefold() for term in conflict.get("query_anchor_terms") or ()}
     source_role = str(_source_document_meta(store, conflict.get("source_document_id")).get("source_role") or "")
-    score = 0
     role_label = str((intent.get("role_labels") or {}).get(source_role) or source_role).casefold()
+    role_anchor_match = _query_contains_term(folded_query, role_label) and any(
+        _query_contains_term(folded_query, anchor) for anchor in anchors
+    )
+    semantic_required = tuple(term for term in required if term not in anchors or "pasal" not in term)
+    if semantic_required and not any(_query_contains_term(folded_query, term) for term in semantic_required) and not role_anchor_match:
+        return 0
+    score = 0
     if _query_contains_term(folded_query, role_label):
         score += 4
     for token in (str(value).casefold() for value in (conflict.get("query_anchor_terms") or conflict.get("anchor_terms") or ())):

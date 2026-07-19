@@ -14,7 +14,7 @@ from tjipto.retrieval.metadata import (
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.relations import has_relation_target, relation_lookup
 from tjipto.retrieval.service import RetrievalService
-from tjipto.retrieval.structured import has_structured_target, structured_lookup
+from tjipto.retrieval.structured import has_structured_target, structured_failure_reason, structured_lookup
 
 
 def route_retrieval(
@@ -128,11 +128,13 @@ def route_retrieval(
             "reason": "filters_removed_all",
         }
 
-    if intent["intent"] == "exact_citation":
+    if intent["intent"] == "exact_citation" and not structured_all and not has_structured_target(
+        normalized["normalized_query"], strategy=structured_strategy, config=config
+    ):
         matches = tuple(service.citation(normalized["normalized_query"]))
         filtered = filter_evidence(matches, filters)
         if filtered:
-            ranked, trace = merge_ranked(store, {"exact": filtered}, filters)
+            ranked, trace = merge_ranked(store, {"exact": filtered}, filters, expand_graph=False)
             return envelope | {
                 "status": "found",
                 "route": "exact",
@@ -206,12 +208,17 @@ def route_retrieval(
                 "matches": heading[:limit],
                 "expansion_trace": (),
             }
-        ranked, trace = merge_ranked(store, {"structured": structured}, filters)
+        ranked, trace = merge_ranked(store, {"structured": structured}, filters, expand_graph=False)
         structural_navigation = any(row.get("candidate_type") == "structural_navigation_candidate" for row in structured)
+        structured_route = "exact" if intent["intent"] == "exact_citation" else "structured"
         return envelope | {
             "status": "found",
-            "route": "structural_navigation" if structural_navigation else "structured",
-            "intent": "structural_navigation" if structural_navigation else "structured_lookup",
+            "route": "structural_navigation" if structural_navigation else structured_route,
+            "intent": "structural_navigation"
+            if structural_navigation
+            else "exact_citation"
+            if intent["intent"] == "exact_citation"
+            else "structured_lookup",
             "matches": ranked[:limit],
             "expansion_trace": trace,
         }
@@ -227,7 +234,8 @@ def route_retrieval(
             "status": "no_results",
             "route": "structured_not_found",
             "intent": "structured_lookup",
-            "reason": "structured_not_found",
+            "reason": structured_failure_reason(store, normalized["normalized_query"], strategy=structured_strategy)
+            or "structured_not_found",
         }
 
     matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))

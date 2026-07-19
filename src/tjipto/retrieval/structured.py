@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import re
+
 from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
 from tjipto.corpora.parser_dispatch import (
     DEFAULT_CORPUS_ID,
     label_keys,
     parse_ayat_reference,
     parse_bab_reference,
+    parse_legal_references,
     parse_pasal_reference,
     resolve_navigation,
 )
@@ -16,15 +19,16 @@ from tjipto.retrieval.metadata import source_role_for_query
 def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, strategy: str = "uud_1945") -> tuple[dict, ...]:
     config = getattr(store, "config", None)
     intent = intent_config_for(strategy, config)
+    corpus_id = _corpus_id(config)
     if not intent["structured_lookup_enabled"]:
         return ()
     instrument = _instrument_rows(store, query, limit, strategy=strategy, config=config)
     if instrument:
         return instrument
-    navigation = _navigation_rows(store, query, limit, _corpus_id(config))
+    navigation = _navigation_rows(store, query, limit, corpus_id)
     if navigation:
         return navigation
-    targets = _targets(query, intent, _corpus_id(config))
+    targets = _targets(query, intent, corpus_id)
     if not targets:
         return ()
     legal_unit_ids = {
@@ -32,7 +36,10 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
         for row in (*getattr(store, "legal_units", ()), *getattr(store, "chunks", ()))
         if row.get("legal_unit_id") and _matches_unit(row, targets)
     }
-    requested_role = source_role_for_query(query, strategy=strategy, config=config)
+    requested_role = source_role_for_query(query, strategy=strategy, config=config) or getattr(
+        config, "preferred_source_role", None
+    )
+    parent_only = _is_parent_reference(query, corpus_id)
     bab = parse_bab_reference(_corpus_id(config), query)
     if bab:
         dedicated_unit_ids = {
@@ -60,14 +67,31 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
             ]
         if dedicated:
             return tuple(dedicated[:limit])
-    rows = [
-        row
-        for row in store.evidence
-        if row.get("status") == "final"
-        and store.bboxes_for(row["evidence_id"])
-        and (requested_role is None or row.get("source_role") == requested_role)
-        and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets))
-    ]
+    if parent_only:
+        pasal = targets[0]
+        parent_ids = {
+            row["legal_unit_id"]
+            for row in store.legal_units
+            if row.get("unit_type") == "pasal_record"
+            and row.get("unit_label", "").casefold() == pasal.casefold()
+            and (requested_role is None or row.get("source_role") == requested_role)
+        }
+        rows = [
+            row
+            for row in store.evidence
+            if row.get("status") == "final"
+            and store.bboxes_for(row["evidence_id"])
+            and row.get("legal_unit_id") in parent_ids
+        ]
+    else:
+        rows = [
+            row
+            for row in store.evidence
+            if row.get("status") == "final"
+            and store.bboxes_for(row["evidence_id"])
+            and (requested_role is None or row.get("source_role") == requested_role)
+            and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets))
+        ]
     return tuple(rows[:limit])
 
 
@@ -77,7 +101,37 @@ def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None
         return False
     if _instrument_target(query, strategy=strategy, config=config):
         return True
-    return bool(_targets(query, intent, _corpus_id(config)))
+    return bool(_targets(query, intent, _corpus_id(config))) or _has_incomplete_pasal(query)
+
+
+def structured_failure_reason(store: EvidenceStore, query: str, *, strategy: str = "uud_1945") -> str | None:
+    corpus_id = _corpus_id(getattr(store, "config", None))
+    if _has_incomplete_pasal(query):
+        return "incomplete_legal_reference"
+    if not _is_parent_reference(query, corpus_id):
+        return None
+    pasal = parse_pasal_reference(corpus_id, query, allow_roman=True)
+    role = source_role_for_query(query, strategy=strategy, config=getattr(store, "config", None)) or getattr(
+        getattr(store, "config", None), "preferred_source_role", None
+    )
+    parents = [
+        row
+        for row in store.legal_units
+        if row.get("unit_type") == "pasal_record"
+        and row.get("unit_label", "").casefold() == str(pasal).casefold()
+        and (role is None or row.get("source_role") == role)
+    ]
+    if not parents:
+        return "pasal_aggregate_source_missing"
+    return next(
+        (
+            row.get("aggregate_failure_reason")
+            for parent in parents
+            for row in (parent, _chunk_for_unit(store, parent.get("legal_unit_id")))
+            if row and row.get("aggregate_failure_reason")
+        ),
+        "pasal_aggregate_geometry_unavailable",
+    )
 
 
 def _instrument_target(query: str, *, strategy: str, config=None) -> bool:
@@ -147,6 +201,22 @@ def _targets(query: str, intent: dict, corpus_id: str) -> tuple[str, ...]:
             targets.append(ayat)
         return tuple(targets)
     return ()
+
+
+def _is_parent_reference(query: str, corpus_id: str) -> bool:
+    return (
+        len(parse_legal_references(corpus_id, query)) == 1
+        and parse_pasal_reference(corpus_id, query, allow_roman=True) is not None
+        and not parse_ayat_reference(corpus_id, query)
+    )
+
+
+def _has_incomplete_pasal(query: str) -> bool:
+    return bool(re.fullmatch(r"\s*pasal(?:\s*[?!.]+)?\s*", query or "", flags=re.IGNORECASE))
+
+
+def _chunk_for_unit(store: EvidenceStore, legal_unit_id: str | None) -> dict | None:
+    return next((row for row in store.chunks if row.get("legal_unit_id") == legal_unit_id), None)
 
 
 def _navigation_rows(
