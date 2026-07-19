@@ -9,7 +9,7 @@ from tjipto.retrieval.metadata import (
     metadata_lookup,
     normalize_filters,
     public_filters,
-    source_role_for_query,
+    resolve_source_scope,
 )
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.relations import has_relation_target, relation_lookup
@@ -31,11 +31,11 @@ def route_retrieval(
     query_strategy = getattr(config, "query_strategy", "generic")
     structured_strategy = getattr(config, "structured_strategy", "generic")
     normalized = normalize_query(query, strategy=query_strategy, config=config)
+    scope = resolve_source_scope(normalized["normalized_query"], strategy=query_strategy, config=config)
     filters = normalize_filters(metadata_filters, config=config)
     if "source_role" not in filters:
-        role = source_role_for_query(normalized["normalized_query"], strategy=query_strategy, config=config)
-        if role:
-            filters = dict(filters) | {"source_role": role}
+        if scope.explicit:
+            filters = dict(filters) | {"source_role": scope.role}
     applied_filters = public_filters(filters)
     corpus_supported = store is not None
     intent = classify_intent(
@@ -70,6 +70,25 @@ def route_retrieval(
             "route": "no_results",
             "reason": filters["_error"],
             "invalid_filters": filters.get("_invalid_filters", ()),
+        }
+    if scope.unresolved and "source_role" not in filters and not has_relation_target(
+        normalized["normalized_query"], strategy=structured_strategy, config=config
+    ):
+        if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config):
+            source_roles = tuple(
+                sorted({row.get("source_role") for row in store.document_metadata if row.get("source_role")})
+            )
+            return envelope | {
+                "status": "no_results",
+                "route": "metadata_scope_unresolved",
+                "intent": "metadata_lookup",
+                "reason": "unresolved_source_scope",
+                "metadata_source_roles": source_roles,
+            }
+        return envelope | {
+            "status": "no_results",
+            "route": "scope_unresolved",
+            "reason": "unresolved_source_scope",
         }
     if route == "dense":
         return envelope | dense_search(store, normalized["normalized_query"], limit)
@@ -241,8 +260,7 @@ def route_retrieval(
     matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))
     filtered = filter_evidence(matches, filters)
     if "source_role" not in filters:
-        preferred_role = getattr(config, "preferred_source_role", None)
-        preferred = tuple(row for row in filtered if row.get("source_role") == preferred_role)
+        preferred = tuple(row for row in filtered if row.get("source_role") == scope.role)
         if preferred:
             filtered = preferred
     if filtered:

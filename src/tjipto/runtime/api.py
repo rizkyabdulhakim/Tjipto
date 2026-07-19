@@ -244,6 +244,7 @@ def _public_reason(reason):
             "current_fact_unsupported",
             "unsupported_scope",
             "document_not_found",
+            "unresolved_source_scope",
         }
         else None
     )

@@ -506,6 +506,19 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(result["citations"])
         self.assertFalse(result["viewer_refs"])
 
+    def test_unresolved_temporal_scope_never_uses_preferred_source(self) -> None:
+        metadata = self.service.ask("uud", "tanggal ditetapkan perubahan ke-5 UUD")
+        self.assertEqual(metadata["status"], "clarification_required")
+        self.assertEqual(metadata["reason"], "unresolved_source_scope")
+        self.assertFalse(metadata["citations"])
+        self.assertFalse(metadata["viewer_refs"])
+        self.assertFalse(metadata["metadata_facts"])
+        legal = self.service.ask("uud", "Pasal 31 perubahan ke-5")
+        self.assertEqual(legal["status"], "insufficient_evidence")
+        self.assertEqual(legal["reason"], "unresolved_source_scope")
+        self.assertFalse(legal["citations"])
+        self.assertFalse(legal["viewer_refs"])
+
     def test_gemini_provider_uses_secret_header_and_verified_context_only(self) -> None:
         class Response:
             def __enter__(self):

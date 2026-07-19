@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tjipto.corpora.intent_config import intent_config_for
+from tjipto.retrieval.metadata import resolve_source_scope
 from tjipto.corpora.parser_dispatch import (
     DEFAULT_CORPUS_ID,
     parse_bab_reference,
@@ -151,7 +152,8 @@ def _unit(store, query: str, unit_type: str) -> dict | None:
         label = parse_bab_reference(corpus_id, query)
     if label is None:
         return None
-    preferred = getattr(store.config, "preferred_source_role", None)
+    scope = resolve_source_scope(query, strategy=getattr(store.config, "query_strategy", "generic"), config=store.config)
+    preferred = None if scope.unresolved else scope.role
     matches = [row for row in store.legal_units if row.get("unit_label") == label and row.get("unit_type") == unit_type]
     return next((row for row in matches if _source_role(row) == preferred), None) or (matches[0] if matches else None)
 
@@ -160,9 +162,11 @@ def _hierarchy_parent(store, unit: dict, unit_type: str) -> dict | None:
     parent_ids = set(unit.get("parent_legal_unit_ids") or ())
     if not parent_ids:
         return None
-    preferred = getattr(store.config, "preferred_source_role", None)
     matches = [row for row in store.legal_units if row.get("legal_unit_id") in parent_ids and row.get("unit_type") == unit_type]
-    return next((row for row in matches if _source_role(row) == preferred), None) or (matches[0] if matches else None)
+    source_role = unit.get("source_role")
+    if source_role is not None:
+        return next((row for row in matches if _source_role(row) == source_role), None)
+    return matches[0] if matches else None
 
 
 def _relation_indexes(store) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:

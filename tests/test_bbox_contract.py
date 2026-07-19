@@ -27,6 +27,25 @@ class BBoxContractTest(unittest.TestCase):
             self.assertTrue(row["text"])
             self.assertTrue((ROOT / row["source_pdf_path"]).exists())
 
+    def test_parent_aggregate_owns_complete_child_span_closure(self) -> None:
+        units = read_jsonl(FINAL / "legal_units.jsonl")
+        evidence = {row["evidence_id"]: row for row in read_jsonl(FINAL / "evidence_registry.jsonl")}
+        children: dict[str, list[dict]] = {}
+        for unit in units:
+            for parent_id in unit.get("parent_legal_unit_ids") or ():
+                children.setdefault(parent_id, []).append(unit)
+        for parent in (unit for unit in units if unit["legal_unit_id"] in children):
+            owners = [evidence[evidence_id] for evidence_id in parent.get("evidence_ids") or () if evidence_id in evidence]
+            self.assertEqual(len(owners), 1, parent["legal_unit_id"])
+            owner = owners[0]
+            self.assertTrue(owner.get("text_span_ids"), parent["legal_unit_id"])
+            self.assertTrue(owner.get("bbox_refs"), parent["legal_unit_id"])
+            self.assertEqual(owner.get("source_document_id"), parent.get("source_document_id"))
+            self.assertEqual(owner.get("source_role"), parent.get("source_role"))
+            parent_spans = set(owner["text_span_ids"])
+            for child in children[parent["legal_unit_id"]]:
+                self.assertTrue(set(child.get("text_span_ids") or ()) <= parent_spans, child["legal_unit_id"])
+
     def test_metadata_grounding_is_non_normative_and_bbox_linked(self) -> None:
         exact_bbox_ids = {row["bbox_id"] for row in read_jsonl(FINAL / "bbox_registry.jsonl")} | {
             row["word_bbox_id"] for row in read_jsonl(FINAL / "word_bboxes.jsonl")
@@ -76,7 +95,7 @@ class BBoxContractTest(unittest.TestCase):
             self.assertFalse(target["citation_final"], row["bbox_id"])
             self.assertTrue(target["viewer_highlightable"], row["bbox_id"])
             self.assertEqual(target["evidence_owner_kind"], "legal_unit_source", row["bbox_id"])
-            self.assertEqual(len(target["bbox_refs"]), 1, row["bbox_id"])
+            self.assertGreaterEqual(len(target["bbox_refs"]), 1, row["bbox_id"])
 
     def test_decision_bbox_precision_is_exact_or_non_highlightable(self) -> None:
         bbox_by_id = {row["bbox_id"]: row for row in read_jsonl(FINAL / "bbox_registry.jsonl")}

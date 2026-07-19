@@ -1,8 +1,23 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
-from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
+
+
+@dataclass(frozen=True)
+class SourceScopeDecision:
+    role: str | None
+    state: str
+
+    @property
+    def explicit(self) -> bool:
+        return self.state == "explicit_resolved"
+
+    @property
+    def unresolved(self) -> bool:
+        return self.state == "unresolved"
 
 
 def normalize_filters(filters: dict | None = None, *, config=None, **kwargs) -> dict:
@@ -56,7 +71,18 @@ def filter_evidence(rows: tuple[dict, ...], filters: dict) -> tuple[dict, ...]:
 
 
 def source_role_for_query(query: str, *, strategy: str = "generic", config=None) -> str | None:
-    return _source_role(query, strategy=strategy, config=config)
+    decision = resolve_source_scope(query, strategy=strategy, config=config)
+    return decision.role if decision.explicit else None
+
+
+def resolve_source_scope(query: str, *, strategy: str = "generic", config=None) -> SourceScopeDecision:
+    explicit_role = _source_role(query, strategy=strategy, config=config)
+    if explicit_role is not None:
+        return SourceScopeDecision(explicit_role, "explicit_resolved")
+    intent = intent_config_for(strategy, config)
+    if contains_intent_phrase(query, intent.get("instrument_source_signals", ())):
+        return SourceScopeDecision(None, "unresolved")
+    return SourceScopeDecision(getattr(config, "preferred_source_role", None), "unscoped")
 
 
 def public_filters(filters: dict) -> dict:
@@ -70,7 +96,8 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     field = _metadata_field(query, strategy=strategy, config=config)
     if field is None:
         return ()
-    role = _source_role(query, strategy=strategy, config=config)
+    scope = resolve_source_scope(query, strategy=strategy, config=config)
+    role = scope.role if scope.explicit else None
     requires_penetapan = _asks_enactment_context((query or "").casefold(), intent)
     rows = []
     grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}

@@ -13,7 +13,7 @@ from tjipto.corpora.parser_dispatch import (
     resolve_navigation,
 )
 from tjipto.evidence.store import EvidenceStore
-from tjipto.retrieval.metadata import source_role_for_query
+from tjipto.retrieval.metadata import resolve_source_scope
 
 
 def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, strategy: str = "uud_1945") -> tuple[dict, ...]:
@@ -36,9 +36,8 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
         for row in (*getattr(store, "legal_units", ()), *getattr(store, "chunks", ()))
         if row.get("legal_unit_id") and _matches_unit(row, targets)
     }
-    requested_role = source_role_for_query(query, strategy=strategy, config=config) or getattr(
-        config, "preferred_source_role", None
-    )
+    scope = resolve_source_scope(query, strategy=strategy, config=config)
+    requested_role = None if scope.unresolved else scope.role
     bab = parse_bab_reference(_corpus_id(config), query)
     if bab:
         dedicated_unit_ids = {
@@ -98,9 +97,8 @@ def structured_failure_reason(store: EvidenceStore, query: str, *, strategy: str
     if not _is_parent_reference(query, corpus_id):
         return None
     pasal = parse_pasal_reference(corpus_id, query, allow_roman=True)
-    role = source_role_for_query(query, strategy=strategy, config=getattr(store, "config", None)) or getattr(
-        getattr(store, "config", None), "preferred_source_role", None
-    )
+    scope = resolve_source_scope(query, strategy=strategy, config=getattr(store, "config", None))
+    role = None if scope.unresolved else scope.role
     parents = [
         row
         for row in store.legal_units
@@ -216,7 +214,8 @@ def _navigation_rows(
     if navigation is None:
         return ()
     label, direction = navigation
-    preferred_role = getattr(store.config, "preferred_source_role", None)
+    scope = resolve_source_scope(query, strategy=getattr(store.config, "query_strategy", "generic"), config=store.config)
+    preferred_role = None if scope.unresolved else scope.role
     source = next(
         (
             row

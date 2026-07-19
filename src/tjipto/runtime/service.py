@@ -12,7 +12,7 @@ from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
-from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters, source_role_for_query
+from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters, resolve_source_scope
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.gemini import GeminiAnswerProvider
@@ -134,11 +134,8 @@ class LegalRuntimeService:
                 **_empty_citation_fields(),
             }
         metadata_filters = dict(filters or {})
-        requested_role = source_role or source_role_for_query(
-            query,
-            strategy=getattr(store.config, "query_strategy", "generic"),
-            config=store.config,
-        )
+        scope = resolve_source_scope(query, strategy=getattr(store.config, "query_strategy", "generic"), config=store.config)
+        requested_role = source_role or (scope.role if scope.explicit else None)
         if requested_role is not None:
             metadata_filters["source_role"] = requested_role
         routed = route_retrieval(corpus_id, query, store, metadata_filters=metadata_filters)
@@ -454,10 +451,14 @@ class LegalRuntimeService:
         routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
+        clarification = _metadata_scope_clarification(store, routed)
+        if clarification:
+            return routed | clarification
         if routed["status"] != "found":
             public_status = (
                 "insufficient_evidence"
-                if routed.get("route") in {"metadata_not_found", "relation_not_found", "structured_not_found"}
+                if routed.get("route")
+                in {"metadata_not_found", "relation_not_found", "structured_not_found", "scope_unresolved"}
                 else routed["status"]
             )
             context_pack = empty_context_pack(routed.get("reason") or routed["status"])
@@ -478,9 +479,6 @@ class LegalRuntimeService:
             }
         context_pack = assemble_context_pack(store, routed["matches"])
         evidence = context_pack["answer_evidence"]
-        clarification = _metadata_scope_clarification(store, routed)
-        if clarification:
-            return routed | clarification
         if not evidence:
             return routed | {
                 "status": "insufficient_evidence",
@@ -557,7 +555,7 @@ def _answer_templates(store) -> dict[str, str]:
 
 
 def _metadata_scope_clarification(store, routed: dict) -> dict | None:
-    if routed.get("route") != "metadata" or "source_role" in routed.get("applied_filters", {}):
+    if routed.get("route") not in {"metadata", "metadata_scope_unresolved"} or "source_role" in routed.get("applied_filters", {}):
         return None
     roles = tuple(routed.get("metadata_source_roles") or ())
     if not roles:
@@ -734,7 +732,7 @@ def _row_is_historical_anomaly(store, row: dict) -> bool:
         units = store.legal_units
     except (KeyError, OSError, ValueError):
         return False
-    unit = next((item for item in units if item.get("legal_unit_id") == row.get("legal_unit_id")), {})
+    unit: dict = next((item for item in units if item.get("legal_unit_id") == row.get("legal_unit_id")), {})
     return unit.get("status") == "active_historical_record" and bool(unit.get("exclusion_ref"))
 
 
@@ -876,10 +874,12 @@ def _ask_route(route: str) -> str:
         "structural_navigation": "structural_navigation",
         "metadata": "metadata_fact",
         "metadata_not_found": "metadata_fact",
+        "metadata_scope_unresolved": "metadata_fact",
         "relation": "legal_relation",
         "relation_not_found": "legal_relation",
         "citation_not_found": "legal_reference",
         "structured_not_found": "legal_reference",
+        "scope_unresolved": "legal_reference",
         "bm25": "lexical_fallback",
     }.get(route, route)
 

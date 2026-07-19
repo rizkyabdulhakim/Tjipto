@@ -212,6 +212,13 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertFalse(result["viewer_refs"])
         self.assertFalse(result["metadata_facts"])
 
+    def test_unresolved_temporal_scope_public_contract_is_fail_closed(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "Pasal 31 perubahan ke-5"})
+        self.assertEqual(result["status"], "insufficient_evidence")
+        self.assertIn("unresolved_source_scope", result["insufficient_reasons"])
+        self.assertFalse(result["citations"])
+        self.assertFalse(result["viewer_refs"])
+
     def test_local_dev_cors_only(self) -> None:
         request = Request(
             self.base_url + "/legal/uud/ask",
