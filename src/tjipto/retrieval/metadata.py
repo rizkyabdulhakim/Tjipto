@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
+from tjipto.corpora.parser_dispatch import DEFAULT_CORPUS_ID, normalize_metadata_intent, parse_legal_reference
 
 
 @dataclass(frozen=True)
@@ -75,11 +76,22 @@ def source_role_for_query(query: str, *, strategy: str = "generic", config=None)
     return decision.role if decision.explicit else None
 
 
+def source_roles_for_query(query: str, *, strategy: str = "generic", config=None) -> tuple[str, ...]:
+    """Return every artifact-declared temporal role mentioned in the query."""
+    return tuple(
+        role
+        for role, pattern in intent_config_for(strategy, config)["metadata_roles"]
+        if pattern.search(query or "")
+    )
+
+
 def resolve_source_scope(query: str, *, strategy: str = "generic", config=None) -> SourceScopeDecision:
-    explicit_role = _source_role(query, strategy=strategy, config=config)
+    explicit_role = next(iter(source_roles_for_query(query, strategy=strategy, config=config)), None)
     if explicit_role is not None:
         return SourceScopeDecision(explicit_role, "explicit_resolved")
     intent = intent_config_for(strategy, config)
+    if any(pattern.search(query or "") for pattern in intent["unresolved_source_scope_patterns"]):
+        return SourceScopeDecision(None, "unresolved")
     if contains_intent_phrase(query, intent.get("instrument_source_signals", ())):
         return SourceScopeDecision(None, "unresolved")
     return SourceScopeDecision(getattr(config, "preferred_source_role", None), "unscoped")
@@ -92,9 +104,11 @@ def public_filters(filters: dict) -> dict:
 def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     config = getattr(store, "config", None)
     strategy = getattr(config, "query_strategy", "generic")
+    if _has_legal_reference(query, config):
+        return ()
     intent = intent_config_for(strategy, config)
     field = _metadata_field(query, strategy=strategy, config=config)
-    if field is None:
+    if field is None and not _matching_signatories(store, query):
         return ()
     scope = resolve_source_scope(query, strategy=strategy, config=config)
     role = scope.role if scope.explicit else None
@@ -106,27 +120,53 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
             continue
         if requires_penetapan and row.get("field_statuses", {}).get("penetapan") != "grounded":
             continue
-        if row.get("field_statuses", {}).get(field) != "grounded":
+        selected_signatories = _matching_signatories(store, query, row)
+        selected_field = "signatories" if selected_signatories else field
+        if row.get("field_statuses", {}).get(selected_field) != "grounded":
             continue
-        refs = tuple(row.get("grounded_fields", {}).get(field) or ())
+        refs = tuple(row.get("grounded_fields", {}).get(selected_field) or ())
         if not refs:
             continue
-        grounding = grounding_by_id.get(refs[0])
+        signatory = selected_signatories[0] if selected_signatories else None
+        grounding = _signatory_grounding(grounding_by_id, refs, signatory) if signatory else grounding_by_id.get(refs[0])
         if grounding is None:
             continue
-        result = _metadata_result(store, row, grounding, field)
+        result = _metadata_result(store, row, grounding, selected_field, value=signatory.get("name_text") if signatory else None)
         if result:
             rows.append(result)
     return tuple(rows[:limit])
 
 
-def has_metadata_target(query: str, *, strategy: str = "generic", config=None) -> bool:
-    return _metadata_field(query, strategy=strategy, config=config) is not None
+def has_metadata_target(query: str, *, strategy: str = "generic", config=None, store=None) -> bool:
+    if _has_legal_reference(query, config):
+        return False
+    return _metadata_field(query, strategy=strategy, config=config) is not None or bool(
+        store is not None and _matching_signatories(store, query)
+    )
+
+
+def _has_legal_reference(query: str, config) -> bool:
+    try:
+        return any(parse_legal_reference(getattr(config, "corpus_id", DEFAULT_CORPUS_ID), query).values())
+    except ValueError:
+        return False
 
 
 def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
-    folded = (query or "").casefold()
+    corpus_id = getattr(config, "corpus_id", DEFAULT_CORPUS_ID)
+    folded = normalize_metadata_intent(corpus_id, query)
     intent = intent_config_for(strategy, config)
+    intent = intent | {
+        "document_target_words": tuple(normalize_metadata_intent(corpus_id, value) for value in intent["document_target_words"]),
+        "metadata_fields": {
+            field: tuple(normalize_metadata_intent(corpus_id, value) for value in values)
+            for field, values in intent["metadata_fields"].items()
+        },
+        "metadata_rules": {
+            rule: tuple(normalize_metadata_intent(corpus_id, value) for value in values)
+            for rule, values in intent["metadata_rules"].items()
+        },
+    }
     patterns = intent["metadata_fields"]
     if not patterns:
         return None
@@ -154,6 +194,46 @@ def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
         if any(pattern in folded for pattern in field_patterns):
             return field
     return None
+
+
+def _matching_signatories(store, query: str, row: dict | None = None) -> tuple[dict, ...]:
+    """Find source-declared signatory names without treating BM25 as proof."""
+    query_tokens = normalize_intent_text(query).split()
+    if not query_tokens:
+        return ()
+    rows = (row,) if row is not None else store.document_metadata
+    matches = []
+    for metadata in rows:
+        for signatory in metadata.get("signatories") or ():
+            name_tokens = normalize_intent_text(signatory.get("name_text")).split()
+            if _contains_name_tokens(query_tokens, name_tokens):
+                matches.append(signatory)
+    return tuple(matches)
+
+
+def _contains_name_tokens(query_tokens: list[str], name_tokens: list[str]) -> bool:
+    if not name_tokens:
+        return False
+    for start in range(len(name_tokens)):
+        candidate = name_tokens[start:]
+        if len(candidate) > len(query_tokens):
+            continue
+        if any(query_tokens[index : index + len(candidate)] == candidate for index in range(len(query_tokens) - len(candidate) + 1)):
+            return True
+    return False
+
+
+def _signatory_grounding(grounding_by_id: dict[str, dict], refs: tuple[str, ...], signatory: dict) -> dict | None:
+    expected = normalize_intent_text(signatory.get("name_text"))
+    return next(
+        (
+            grounding
+            for grounding_id in refs
+            if (grounding := grounding_by_id.get(grounding_id)) is not None
+            and normalize_intent_text(grounding.get("quoted_text")) == expected
+        ),
+        None,
+    )
 
 
 def _asks_any(folded: str, intent: dict, rule: str) -> bool:
@@ -213,15 +293,8 @@ def _asks_enactment_context(folded: str, intent: dict) -> bool:
     return _asks_any(folded, intent, "enactment_context") or _asks_token(folded, intent, "institution_tokens")
 
 
-def _source_role(query: str, *, strategy: str, config=None) -> str | None:
-    for role, pattern in intent_config_for(strategy, config)["metadata_roles"]:
-        if pattern.search(query or ""):
-            return role
-    return None
-
-
-def _metadata_result(store, row: dict, grounding: dict, field: str) -> dict | None:
-    value = _field_value(row, field)
+def _metadata_result(store, row: dict, grounding: dict, field: str, *, value: str | None = None) -> dict | None:
+    value = value or _field_value(row, field)
     if not value:
         return None
     bboxes = store.metadata_bboxes_for(grounding["metadata_grounding_id"])

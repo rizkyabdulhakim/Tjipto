@@ -83,8 +83,28 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             manifest["files"]["evidence_registry.jsonl"].update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
             _write_trusted_manifest(root, manifest)
             errors = validate_uud_artifact_dir(final)
-            self.assertTrue(any(error.startswith("pasal_aggregate_text_span_sequence_incomplete") for error in errors))
+            self.assertTrue(any(error.startswith("aggregate_text_span_sequence_incomplete") for error in errors))
             result = LegalRuntimeService(root).ask("uud", "Pasal 31")
+            self.assertEqual(result["status"], "corpus_not_ready")
+            self.assertFalse(result["citations"])
+
+    def test_individual_signatory_grounding_mutation_fails_offline_and_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "data", root / "data")
+            final = root / "data/final/uud"
+            artifact = final / "metadata_grounding.jsonl"
+            rows = [json.loads(line) for line in artifact.read_text(encoding="utf-8").splitlines() if line]
+            row = next(item for item in rows if "::signatories::person_" in item["metadata_grounding_id"])
+            row["quoted_text"] = "wrong signatory"
+            data = ("\n".join(json.dumps(item, ensure_ascii=False) for item in rows) + "\n").encode("utf-8")
+            artifact.write_bytes(data)
+            manifest = json.loads((final / "manifest.json").read_text(encoding="utf-8"))
+            manifest["files"]["metadata_grounding.jsonl"].update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
+            _write_trusted_manifest(root, manifest)
+            errors = validate_uud_artifact_dir(final)
+            self.assertTrue(any(error.startswith("signatory_grounding_unknown_name:") for error in errors))
+            result = LegalRuntimeService(root).ask("uud", "Amien Rais Perubahan Pertama UUD")
             self.assertEqual(result["status"], "corpus_not_ready")
             self.assertFalse(result["citations"])
 
@@ -177,11 +197,22 @@ class VerifiedCorpusContractTest(unittest.TestCase):
         service.search("uud", "Pasal 7")
         with ThreadPoolExecutor(max_workers=8) as pool:
             self.assertTrue(all(snapshot is first for snapshot in pool.map(service.repository.load, ["uud"] * 16)))
-        self.assertEqual(service.repository.load_count, 1)
+        self.assertLessEqual(service.repository.load_count, 1)
         with self.assertRaises(TypeError):
             first.artifacts["evidence_registry.jsonl"][0]["quoted_text"] = "tampered"
         with self.assertRaises(TypeError):
             first.artifacts["evidence_registry.jsonl"][0]["page_numbers"][0] = 999
+
+    def test_process_publication_cache_is_manifest_path_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "data", root / "data")
+            first_service = LegalRuntimeService(root)
+            second_service = LegalRuntimeService(root)
+            first = first_service.repository.load("uud")
+            second = second_service.repository.load("uud")
+            self.assertIs(first, second)
+            self.assertEqual(first_service.repository.load_count + second_service.repository.load_count, 1)
 
     def test_duplicate_primary_id_fails_before_publication(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

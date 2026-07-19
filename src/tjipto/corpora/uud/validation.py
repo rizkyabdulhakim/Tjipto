@@ -430,6 +430,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
     retrieval_units = rows("retrieval_units")
     metadata_grounding = rows("metadata_grounding")
     metadata_grounding_registry = rows("metadata_grounding_registry")
+    document_metadata = rows("document_metadata", optional=True)
     document_relations = rows("document_relations", optional=True)
     article_amendment_relations = rows("article_amendment_relations", optional=True)
     promotion_decisions = rows("promotion_decisions", optional=True)
@@ -991,6 +992,25 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
             errors.append(f"page_grounded_metadata_missing_failure_reason:{row['metadata_grounding_id']}")
         if row.get("bbox_precision") != "exact" and row.get("viewer_highlightable") is not False:
             errors.append(f"non_exact_metadata_highlightable:{row['metadata_grounding_id']}")
+        if "::signatories::person_" in str(row.get("metadata_grounding_id") or ""):
+            metadata = next(
+                (item for item in document_metadata if item.get("source_role") == row.get("source_role")),
+                {},
+            )
+            quote = _source_quote_normalize(row.get("quoted_text"))
+            names = {_source_quote_normalize(item.get("name_text")) for item in metadata.get("signatories") or ()}
+            if quote not in names:
+                errors.append(f"signatory_grounding_unknown_name:{row['metadata_grounding_id']}")
+            boxes = [bbox_by_id.get(bbox_id) for bbox_id in row.get("bbox_ids") or ()]
+            if not boxes or any(
+                box is None
+                or box.get("source_document_id") != row.get("source_document_id")
+                or box.get("page_number") not in set(row.get("page_numbers") or ())
+                for box in boxes
+            ):
+                errors.append(f"signatory_grounding_cross_source:{row['metadata_grounding_id']}")
+            elif _source_quote_normalize(" ".join(str(box.get("text") or "") for box in boxes)) != quote:
+                errors.append(f"signatory_grounding_geometry_mismatch:{row['metadata_grounding_id']}")
     for row in metadata_grounding_registry:
         ref_id = row.get("metadata_grounding_ref_id")
         if not ref_id:

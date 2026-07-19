@@ -92,27 +92,29 @@ class CorpusPublicationService:
 class VerifiedCorpusRepository:
     """Publishes a corpus only after trusted, semantic, read-once verification."""
 
+    # ponytail: process-local immutable snapshots; use an external cache only if
+    # publication must be shared across processes.
+    _published_snapshots: dict[tuple[str, str, str], ValidatedCorpusSnapshot] = {}
+    _published_lock = RLock()
+
     def __init__(self, registry):
         self.registry = registry
         self.publication = CorpusPublicationService()
-        self._snapshots: dict[tuple[str, str], ValidatedCorpusSnapshot] = {}
-        self._lock = RLock()
         self.load_count = 0
 
     def load(self, corpus_id: str) -> VerifiedCorpusSnapshot:
-        with self._lock:
-            config = self.registry.resolve(corpus_id)
-            if config is None:
-                raise CorpusIntegrityError(self.registry.error_code or "corpus_load_failure")
-            manifest_digest = _manifest_digest(config)
-            cache_key = (corpus_id, manifest_digest)
-            cached = self._snapshots.get(cache_key)
+        config = self.registry.resolve(corpus_id)
+        if config is None:
+            raise CorpusIntegrityError(self.registry.error_code or "corpus_load_failure")
+        manifest, manifest_digest = _read_trusted_manifest(config)
+        _verify_artifact_integrity(config.manifest_path.parent.resolve(), manifest)
+        cache_key = (str(config.manifest_path.resolve()), corpus_id, manifest_digest)
+        with self._published_lock:
+            cached = self._published_snapshots.get(cache_key)
             if cached is not None:
-                manifest, _ = _read_trusted_manifest(config)
-                _verify_artifact_integrity(config.manifest_path.parent.resolve(), manifest)
                 return cached
             snapshot = self.publication.verify_and_publish(config)
-            self._snapshots[cache_key] = snapshot
+            self._published_snapshots[cache_key] = snapshot
             self.load_count += 1
             return snapshot
 

@@ -12,7 +12,13 @@ from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
-from tjipto.retrieval.metadata import metadata_lookup, normalize_filters, public_filters, resolve_source_scope
+from tjipto.retrieval.metadata import (
+    metadata_lookup,
+    normalize_filters,
+    public_filters,
+    resolve_source_scope,
+    source_roles_for_query,
+)
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.gemini import GeminiAnswerProvider
@@ -477,7 +483,18 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": (routed.get("reason") or routed["status"],),
             }
-        context_pack = assemble_context_pack(store, routed["matches"])
+        answer_matches = routed["matches"]
+        if ask_route == "lexical_fallback":
+            # BM25 may rank several independently relevant rows, but one
+            # answer may claim only one complete source-backed proposition.
+            answer_matches = next(
+                (row for row in answer_matches if validate_answer_candidate(store, row)[0]),
+                None,
+            )
+            # Keep rejected lexical candidates in the diagnostic pack so a
+            # fail-closed response still states why no answer was published.
+            answer_matches = (answer_matches,) if answer_matches else routed["matches"]
+        context_pack = assemble_context_pack(store, answer_matches)
         evidence = context_pack["answer_evidence"]
         if not evidence:
             return routed | {
@@ -579,11 +596,12 @@ def _metadata_scope_clarification(store, routed: dict) -> dict | None:
         "status": "clarification_required",
         "route": "metadata_fact",
         "intent": "metadata_lookup",
+        "reason": routed.get("reason") or "ambiguous_source_scope",
         "answer_type": "clarification",
         "answer": answer,
         "answer_scope": "clarification",
         "clarification_options": options,
-        "context_pack": empty_context_pack("ambiguous_source_scope"),
+        "context_pack": empty_context_pack(routed.get("reason") or "ambiguous_source_scope"),
         "evidence": (),
         "citations": (),
         "viewer_refs": (),
@@ -1118,9 +1136,14 @@ def _document_relation_target(store, query: str) -> dict:
     relation_intent = classify_relation_intent(store, query)
     relation_family = (relation_config.get("relation_families") or {}).get(relation_intent.relation_type, {})
     relation_types = tuple(relation_family.get("relation_types") or ())
+    source_scope = resolve_source_scope(query, strategy=getattr(config, "query_strategy", "generic"), config=config)
+    references = parse_legal_references(getattr(config, "corpus_id", ""), query)
     relation_signal = bool(relation_family) or contains_intent_phrase(query, relation_config.get("change_terms", ()))
     add_signal = contains_intent_phrase(query, relation_config.get("add_terms", ()))
-    amendment_role = next((role for role, pattern in intent.get("metadata_roles", ()) if pattern.search(query or "")), None)
+    if source_scope.explicit and len(references) == 1 and not relation_signal and not add_signal:
+        return {"mode": None}
+    mentioned_roles = source_roles_for_query(query, strategy=getattr(config, "query_strategy", "generic"), config=config)
+    amendment_role = next((role for role in mentioned_roles if role.startswith("amendment_")), None)
     amendment_signal = amendment_role in set(getattr(config, "source_roles", ()) or ()) or contains_intent_phrase(
         query, relation_config.get("source_terms", ())
     )
@@ -1131,6 +1154,8 @@ def _document_relation_target(store, query: str) -> dict:
     source_less_delete = relation_intent.relation_type == "DELETE_OR_REMOVE_PROVISION" and article_detail
     if relation_intent.relation_type == "DELETE_OR_REMOVE_PROVISION" and not article_detail:
         return {"mode": None}
+    if not references and amendment_role and "original_historical" in mentioned_roles:
+        return {"mode": "document", "role": amendment_role}
     if not (relation_signal or add_signal) or (not amendment_signal and not source_less_delete):
         return {"mode": None}
     target_citation = _article_relation_target_citation(

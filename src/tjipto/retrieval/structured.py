@@ -16,7 +16,9 @@ from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.metadata import resolve_source_scope
 
 
-def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, strategy: str = "uud_1945") -> tuple[dict, ...]:
+def structured_lookup(
+    store: EvidenceStore, query: str, limit: int = 10, *, strategy: str = "uud_1945", source_role: str | None = None
+) -> tuple[dict, ...]:
     config = getattr(store, "config", None)
     intent = intent_config_for(strategy, config)
     corpus_id = _corpus_id(config)
@@ -37,7 +39,7 @@ def structured_lookup(store: EvidenceStore, query: str, limit: int = 10, *, stra
         if row.get("legal_unit_id") and _matches_unit(row, targets)
     }
     scope = resolve_source_scope(query, strategy=strategy, config=config)
-    requested_role = None if scope.unresolved else scope.role
+    requested_role = source_role if source_role is not None else None if scope.unresolved else scope.role
     bab = parse_bab_reference(_corpus_id(config), query)
     if bab:
         dedicated_unit_ids = {

@@ -21,8 +21,8 @@
     "source_anomaly_kinds": ["renumbering_provenance", "source_marker_sequence_anomaly"],
     "source_mapping_kinds": ["historical_to_canonical_mapping"],
     "policy_fields": ["provenance_summary", "final_authority_policy"],
-    "anchor_terms": ["Pasal 25E", "ATURAN TAMBAHAN"],
-    "query_anchor_terms": ["pasal 25e", "aturan tambahan"]
+    "anchor_terms": ["Pasal III", "Pasal 25E"],
+    "query_anchor_terms": ["pasal iii", "pasal 25e"]
   },
   "normalization_aliases": [{"replacement": "UUD 1945"}],
   "query_normalization_enabled": true,

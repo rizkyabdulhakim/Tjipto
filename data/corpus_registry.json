@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "41f6a90ca193fe22353aa38267dda804ba8fe6ce922ab98036e5e3402477721e",
+    "manifest_sha256": "1ae0c35130919423454154423b3869472b12cf58446d630b08c909c8dfa8c987",
     "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
     "runtime_required_artifacts": [
       "evidence_registry",
@@ -698,8 +698,6 @@
         ]
       },
       "instrument_source_signals": [
-        "amandemen",
-        "perubahan",
         "pertama",
         "kedua",
         "ketiga",
@@ -708,6 +706,9 @@
         "ke 2",
         "ke 3",
         "ke 4"
+      ],
+      "unresolved_source_scope_patterns": [
+        "\\b(?:perubahan|amandemen)\\s*(?:ke[-\\s]*)?\\d+\\b"
       ],
       "instrument_content_signals": [
         "muatan",
@@ -938,8 +939,6 @@
         "anomali",
         "tidak dipromosikan",
         "promosikan",
-        "renumbering",
-        "penomoran",
         "pasal iii",
         "pasal 25e",
         "aturan tambahan",
@@ -949,9 +948,7 @@
         "konflik",
         "anomali",
         "tidak dipromosikan",
-        "promosikan",
-        "renumbering",
-        "penomoran"
+        "promosikan"
       ],
       "generic_tokens": [
         "apa",

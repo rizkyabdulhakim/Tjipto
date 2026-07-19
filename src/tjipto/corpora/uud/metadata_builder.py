@@ -322,6 +322,7 @@ def rebuild_metadata_grounding(
         page_numbers: list[int] | tuple[int, ...],
         source_pdf_path: str,
         source_sha256: str,
+        item_key: str | None = None,
     ) -> str:
         donor_id = _resolve_metadata_donor_id(
             donor_id,
@@ -331,7 +332,8 @@ def rebuild_metadata_grounding(
             quoted_text=quoted_text,
             evidence=evidence,
         )
-        field_id = f"uud_metadata_field_grounding::{source_role}::{metadata_field}"
+        suffix = f"::{item_key}" if item_key is not None else ""
+        field_id = f"uud_metadata_field_grounding::{source_role}::{metadata_field}{suffix}"
         exact_bbox_rows = _exact_bbox_rows(quoted_text, bboxes_by_evidence.get(donor_id, []))
         text_span_ids = _exact_text_span_ids(quoted_text, source_document_id, page_numbers, page_text_spans)
         if not exact_bbox_rows and text_span_ids and _allow_global_exact_bbox_reuse(source_role, metadata_field):
@@ -503,6 +505,21 @@ def rebuild_metadata_grounding(
                         source_sha256=signatories["source_sha256"],
                     )
                 ]
+                grounded_fields["signatories"].extend(
+                    append_grounding(
+                        source_role=role,
+                        source_document_id=source_document_id,
+                        metadata_field="signatories",
+                        quoted_text=signatory["name_text"],
+                        donor_id=signatories["evidence_id"],
+                        page_numbers=signatories["page_numbers"],
+                        source_pdf_path=signatories["source_pdf_path"],
+                        source_sha256=signatories["source_sha256"],
+                        item_key=f"person_{index:04d}",
+                    )
+                    for index, signatory in enumerate(row.get("signatories") or ())
+                    if signatory.get("name_text")
+                )
                 field_statuses["institution"] = "grounded"
                 field_statuses["signatories"] = "grounded"
             if decision:

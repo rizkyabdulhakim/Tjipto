@@ -30,7 +30,11 @@ class LegalUnitGroundingContractTest(unittest.TestCase):
                 "validation_status",
             ):
                 self.assertIn(field, row, row["legal_unit_id"])
-            self.assertEqual(row["grounding_status"], "text_span_exact", row["legal_unit_id"])
+            self.assertIn(
+                row["grounding_status"],
+                {"text_span_exact", "text_span_aggregate_from_evidence"},
+                row["legal_unit_id"],
+            )
             self.assertTrue(set(row["text_span_ids"]) <= text_span_ids, row["legal_unit_id"])
             self.assertTrue(set(row["bbox_ids"]) <= bbox_ids, row["legal_unit_id"])
             self.assertTrue(row["text_span_ids"], row["legal_unit_id"])

@@ -82,11 +82,7 @@ def classify_relation_intent(store, query: str) -> LegalIntent:
 
 def _explicit_renumbering_mapping(query: str, corpus_id: str) -> bool:
     folded = (query or "").casefold()
-    if "menjadi" not in folded or any(term in folded for term in ("konflik", "anomali", "pasal iii", "sumber anomaly")):
-        return False
-    return len(parse_legal_references(corpus_id, query)) >= 2 and any(
-        term in folded for term in ("pasal", "amandemen", "perubahan", "penomoran", "nomor")
-    )
+    return "menjadi" in folded and len(parse_legal_references(corpus_id, query)) >= 2
 
 
 def _target_reference(store, query: str) -> str | None:

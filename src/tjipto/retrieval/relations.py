@@ -116,6 +116,10 @@ def _route_terms_match(intent: dict, mode: str, folded: str) -> bool:
 
 def _unsupported_relation_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
     intent = intent_config_for(strategy, config)
+    # A resolved source marker scopes a legal lookup; it is not, by itself, a
+    # request to traverse a document relation.
+    if resolve_source_scope(query, strategy=strategy, config=config).explicit:
+        return False
     corpus_id = _corpus_id(config)
     has_pasal = _has_pasal(query, corpus_id)
     has_bab = _has_bab(query, corpus_id)
@@ -153,8 +157,12 @@ def _unit(store, query: str, unit_type: str) -> dict | None:
     if label is None:
         return None
     scope = resolve_source_scope(query, strategy=getattr(store.config, "query_strategy", "generic"), config=store.config)
-    preferred = None if scope.unresolved else scope.role
+    if scope.unresolved:
+        return None
+    preferred = scope.role
     matches = [row for row in store.legal_units if row.get("unit_label") == label and row.get("unit_type") == unit_type]
+    if scope.explicit:
+        return next((row for row in matches if _source_role(row) == preferred), None)
     return next((row for row in matches if _source_role(row) == preferred), None) or (matches[0] if matches else None)
 
 

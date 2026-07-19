@@ -18,8 +18,8 @@
     "legal_units": 651,
     "metadata_assertions": 1871,
     "metadata_graph_edges": 633,
-    "metadata_grounding": 37,
-    "metadata_grounding_records": 256,
+    "metadata_grounding": 68,
+    "metadata_grounding_records": 288,
     "not_promoted_amends_edges": 8,
     "pages": 63,
     "promotion_decisions": 124,
@@ -139,8 +139,8 @@
       "format": "jsonl",
       "artifact_schema": 5,
       "primary_id": "document_metadata_id",
-      "bytes": 17657,
-      "sha256": "f20f5b0e1b7f907f91f22c18df768a613c9c1be4343bfecc9e91e02271e845ba"
+      "bytes": 22741,
+      "sha256": "e4a009be3013e8b4b648be10112a59c2033fb9ca4e68f02a4bebdc657bd6aef9"
     },
     "document_relations.jsonl": {
       "origin": "generated",
@@ -311,8 +311,8 @@
         "grounding_status",
         "supporting_evidence_id"
       ],
-      "bytes": 113366,
-      "sha256": "61e28120ad41f46fbd40cb50b197ac196ea369226898915fc6de00a0415abfe9"
+      "bytes": 154917,
+      "sha256": "3e1984fa333e7913f1d8dd27c066b92a444657c269648fde34c1cd48984886d2"
     },
     "metadata_grounding_registry.jsonl": {
       "origin": "generated",
@@ -324,8 +324,8 @@
       "format": "jsonl",
       "artifact_schema": 5,
       "primary_id": "metadata_grounding_ref_id",
-      "bytes": 490712,
-      "sha256": "4e85315802967554d93d81d1f843c47d2f9a0185d3097a236896c08b33d70efc"
+      "bytes": 523891,
+      "sha256": "787a4027b3e369c70eef892de57eefbb1b39c89027e23dbda8f2000dab695532"
     },
     "pages.jsonl": {
       "origin": "generated",
@@ -520,7 +520,7 @@
       "format": "json",
       "artifact_schema": 5,
       "bytes": 22973,
-      "sha256": "a59e216f24cfe6a0181ad7da6fa02411e76a87dbcc225e9d3551d115db7733a3"
+      "sha256": "aa20823164dd40ec8a4143f9089842e626f11145fba64b7dc76f018d007c4b54"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

@@ -40,6 +40,7 @@ _GENERIC = {
     "instrument_like_boundary_matrix": {},
     "instrument_intent_invariant_matrix": {},
     "instrument_source_signals": (),
+    "unresolved_source_scope_patterns": (),
     "instrument_content_signals": (),
     "instrument_effect_signals": (),
     "instrument_analysis_signals": (),
@@ -80,6 +81,9 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "instrument_like_boundary_matrix": dict(raw.get("instrument_like_boundary_matrix") or {}),
         "instrument_intent_invariant_matrix": dict(raw.get("instrument_intent_invariant_matrix") or {}),
         "instrument_source_signals": tuple(raw.get("instrument_source_signals") or ()),
+        "unresolved_source_scope_patterns": tuple(
+            re.compile(pattern, re.IGNORECASE) for pattern in raw.get("unresolved_source_scope_patterns", ())
+        ),
         "instrument_content_signals": tuple(raw.get("instrument_content_signals") or ()),
         "instrument_effect_signals": tuple(raw.get("instrument_effect_signals") or ()),
         "instrument_analysis_signals": tuple(raw.get("instrument_analysis_signals") or ()),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from hashlib import sha256
 import json
 import sys
 
@@ -52,7 +53,16 @@ def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
         build,
         validate_uud_artifact_dir,
     )
+    _refresh_trusted_manifest_digest(repo_root, final_dir)
     return result
+
+
+def _refresh_trusted_manifest_digest(repo_root: Path, final_dir: Path) -> None:
+    """Keep the runtime trust anchor aligned with a successful staged build."""
+    registry_path = repo_root / "data" / "corpus_registry.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry["uud"]["manifest_sha256"] = sha256((final_dir / "manifest.json").read_bytes()).hexdigest()
+    write_json(registry_path, registry)
 
 
 def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:

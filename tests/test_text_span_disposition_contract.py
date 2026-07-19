@@ -93,7 +93,17 @@ class TextSpanDispositionContractTest(unittest.TestCase):
             if unit_types & {"ayat_record"}:
                 self.assertEqual(self.units[span["promotion_target_id"]]["unit_type"], "ayat_record", span["text_span_id"])
             elif unit_types & {"pasal_record"}:
-                self.assertIn(self.units[span["promotion_target_id"]]["unit_type"], {"pasal_record", "ayat_record"}, span["text_span_id"])
+                target_id = span["promotion_target_id"]
+                target_type = self.units[target_id]["unit_type"]
+                if target_type not in {"pasal_record", "ayat_record"}:
+                    self.assertTrue(
+                        any(
+                            target_id in unit.get("ancestor_legal_unit_ids", ())
+                            for unit in self.refs_by_span[span["text_span_id"]]
+                            if unit["unit_type"] == "pasal_record"
+                        ),
+                        span["text_span_id"],
+                    )
 
     def test_representative_semantic_precedence_examples(self) -> None:
         self.assert_span("Negara Indonesia ialah Negara Kesatuan", "normative_text", "promoted_legal_unit", "ayat_record")

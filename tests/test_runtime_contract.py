@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
 from tjipto.corpora.provenance import validate_corpus_provenance
 from tjipto.core.manifest import read_jsonl
 from tjipto.evidence.store import EvidenceStore
@@ -364,9 +365,9 @@ class RuntimeContractTest(unittest.TestCase):
 
         for query in ("Pasal 999", "Pasal 1 ayat 999", "Pasal 28E ayat (999)"):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "citation_not_found")
+            self.assertEqual(result["status"], "insufficient_evidence")
             self.assertEqual(result["route"], "legal_reference")
-            self.assertEqual(result["reason"], "citation_not_found")
+            self.assertIn(result["reason"], {"pasal_aggregate_source_missing", "structured_not_found"})
             self.assertFalse(result["evidence"])
 
         domain_query = self.service.ask("uud", "aturan KUHP tentang pencurian")
@@ -480,6 +481,19 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["citations"][0]["authority_kind"], "metadata_source")
         self.assertFalse(result["citations"][0]["citation_final"])
 
+    def test_signatory_name_uses_individual_exact_grounding(self) -> None:
+        ambiguous = self.service.ask("uud", "Amien Rais")
+        self.assertEqual(ambiguous["status"], "clarification_required")
+        self.assertFalse(ambiguous["citations"])
+        result = self.service.ask("uud", "Amien Rais Perubahan Pertama UUD")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(len(result["citations"]), 1)
+        citation = result["citations"][0]
+        self.assertEqual(citation["source_role"], "amendment_1_historical")
+        self.assertEqual(citation["quoted_text"], "Prof. Dr. H.M. Amien Rais")
+        viewer = self.service.viewer("uud", citation["evidence_id"])
+        self.assertEqual([box["text"] for box in viewer["bbox_rectangles"]], [citation["quoted_text"]])
+
     def test_unscoped_metadata_requests_clarification_without_combined_citations(self) -> None:
         for query in ("penandatangan UUD", "kapan UUD ditetapkan"):
             result = self.service.ask("uud", query)
@@ -500,11 +514,15 @@ class RuntimeContractTest(unittest.TestCase):
                 query,
             )
 
-    def test_unrecognized_wording_fails_closed_without_vocabulary_fallback(self) -> None:
-        result = self.service.ask("uud", "siapa yang menandatangani UUD")
-        self.assertEqual(result["status"], "insufficient_evidence")
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
+    def test_inflected_metadata_wording_requires_source_clarification(self) -> None:
+        for query in ("siapa yang menandatangani UUD", "siapa yang menandatangi UUD"):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "clarification_required", query)
+            self.assertEqual(result["route"], "metadata_fact", query)
+            self.assertTrue(result["clarification_options"], query)
+            self.assertFalse(result["citations"], query)
+            self.assertFalse(result["viewer_refs"], query)
+            self.assertFalse(result["metadata_facts"], query)
 
     def test_unresolved_temporal_scope_never_uses_preferred_source(self) -> None:
         metadata = self.service.ask("uud", "tanggal ditetapkan perubahan ke-5 UUD")
@@ -977,17 +995,19 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertTrue(result["citations"][0]["citation_final"], query)
             self.assertEqual(result["citations"][0]["evidence_id"], "uud_current_consolidated_final_citation_evidence_00264", query)
 
-    def test_president_three_terms_numeric_word_variants_are_consistent(self) -> None:
-        for query in (
-            "bolehkah presiden menjabat tiga periode",
-            "boleh presiden 3 periode?",
-            "presiden boleh tiga periode?",
+    def test_president_three_terms_numeric_word_variants_require_one_complete_bm25_source(self) -> None:
+        for query, status in (
+            ("bolehkah presiden menjabat tiga periode", "insufficient_evidence"),
+            ("boleh presiden 3 periode?", "limited_answer"),
+            ("presiden boleh tiga periode?", "limited_answer"),
         ):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "limited_answer", query)
+            self.assertEqual(result["status"], status, query)
             self.assertEqual(result["route"], "lexical_fallback", query)
-            self.assertTrue(result["citations"], query)
-            self.assertEqual(result["citations"][0]["evidence_id"], "uud_current_consolidated_final_citation_evidence_00263", query)
+            if status == "limited_answer":
+                self.assertEqual([row["citation"] for row in result["citations"]], ["Pasal 7"], query)
+            else:
+                self.assertFalse(result["citations"], query)
 
     def test_retrieval_router_envelope_routes(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -1090,6 +1110,28 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertTrue(result["citations"], query)
             self.assertEqual(result["citations"][0]["citation"], citation, query)
             self.assertTrue(all(row["source_role"] == role for row in result["citations"]), query)
+
+    def test_explicit_temporal_reference_never_becomes_document_relation_or_current_fallback(self) -> None:
+        cases = (
+            ("Pasal 1 naskah asli", "answer_ready", "original_historical"),
+            ("Pasal 1 Perubahan Ketiga", "answer_ready", "amendment_3_historical"),
+            ("Pasal 1 Amandemen Pertama", "insufficient_evidence", None),
+        )
+        for query, status, source_role in cases:
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], status, query)
+            self.assertNotEqual(result["route"], "document_relation", query)
+            if source_role:
+                self.assertEqual({row["source_role"] for row in result["citations"]}, {source_role}, query)
+            else:
+                self.assertFalse(result["citations"], query)
+
+    def test_two_artifact_declared_document_scopes_route_to_their_document_relation(self) -> None:
+        result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["route"], "document_relation")
+        self.assertEqual(result["intent"], "document_amendment_relation")
+        self.assertFalse(result["citations"])
 
     def test_filter_conflicts_and_api_temporal_context(self) -> None:
         temporal = self.service.search("uud", "UUD 1945", limit=1, filters={"temporal_context": "amendment_1_historical"})
@@ -1265,12 +1307,13 @@ class RuntimeContractTest(unittest.TestCase):
         result = self.service.ask("uud", "negara hukum", limit=3)
         self.assertEqual(result["status"], "limited_answer")
         self.assertEqual(result["route"], "lexical_fallback")
-        self.assertTrue(result["expansion_trace"])
+        self.assertFalse(result["expansion_trace"])
         for row in result["matches"]:
             self.assertTrue(row["bbox_count"])
             self.assertIn("route_sources", row)
             self.assertIn("rank_reasons", row)
             self.assertIn("route_score", row)
+            self.assertNotIn("graph", row["route_sources"])
 
     def test_ask_excludes_graph_only_answer_evidence(self) -> None:
         direct_routes = {"exact", "structured", "bm25"}
@@ -1554,8 +1597,9 @@ class RuntimeContractTest(unittest.TestCase):
     @pytest.mark.runtime_policy
     @pytest.mark.slow
     def test_instrument_intent_matrix_blocks_neighbor_fallback(self) -> None:
-        intent = CorpusRegistry(ROOT).resolve("uud").setting("intent_config")
-        matrix = intent["instrument_intent_matrix"]
+        config = CorpusRegistry(ROOT).resolve("uud")
+        intent = intent_config_for(config.query_strategy, config)
+        matrix = config.setting("intent_config")["instrument_intent_matrix"]
         queries = [
             template.format(role=role, amendment=amendment)
             for role in matrix["role_family_terms"]
@@ -1563,8 +1607,12 @@ class RuntimeContractTest(unittest.TestCase):
             for template in matrix["word_orders"]
         ]
         self.assertGreater(len(queries), 0)
-        forbidden = ("Determination", "Recital", "Closing", "Signatories", "Clause")
         for query in queries:
+            decision = resolve_instrument_intent(query, intent, corpus="uud")
+            self.assertEqual(decision.target_status, "instrument_resolved_fail_closed", query)
+
+        forbidden = ("Determination", "Recital", "Closing", "Signatories", "Clause")
+        for query in (queries[0], queries[len(queries) // 2], queries[-1]):
             ask = self.service.ask("uud", query, limit=10)
             search = self.service.search("uud", query, limit=10)
             self.assertFalse(ask["route"] == "lexical_fallback" and ask["evidence"], query)

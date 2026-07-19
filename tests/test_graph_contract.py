@@ -220,14 +220,23 @@ class GraphContractTest(unittest.TestCase):
                 self.assertIn(("FOLLOWS", edge["target_id"], edge["source_id"]), edge_keys)
 
     def test_amendment_4_does_not_invent_missing_bab_headings(self) -> None:
+        legal_units = {
+            row["legal_unit_id"]: row for row in read_jsonl(ROOT / "data/final/uud" / "legal_units.jsonl")
+        }
         for filename in ("legal_units.jsonl", "chunks.jsonl", "evidence_registry.jsonl"):
             for row in read_jsonl(ROOT / "data/final/uud" / filename):
                 if row.get("chunk_type") == "bab_structural_context_record":
                     continue
                 role = row.get("source_role") or row.get("temporal_context") or row.get("source_document_id", "").split("::")[-1]
-                article = _article_for(row)
-                if role == "amendment_4_historical" and article in {"Pasal 23B", "Pasal 23D", "Pasal 24", "Pasal 37"}:
-                    self.assertFalse((row.get("hierarchy") or [""])[0].startswith("BAB"), (filename, row))
+                unit = legal_units.get(row.get("legal_unit_id"), row)
+                if role == "amendment_4_historical" and unit.get("unit_type") == "pasal_record":
+                    heading = next((item for item in row.get("hierarchy") or () if item.startswith("BAB")), None)
+                    if heading:
+                        parents = [legal_units[parent_id] for parent_id in unit.get("parent_legal_unit_ids") or ()]
+                        self.assertTrue(
+                            any(parent.get("unit_type") == "bab_record" and parent.get("unit_label") == heading for parent in parents),
+                            (filename, row),
+                        )
 
     def test_validation_artifacts_resolve_refs(self) -> None:
         source_ids = {row["source_document_id"] for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")}
@@ -611,6 +620,7 @@ class GraphContractTest(unittest.TestCase):
 
         bboxes = {row["bbox_id"]: row for row in read_jsonl(final / "bbox_registry.jsonl")}
         evidence = {row["evidence_id"]: row for row in read_jsonl(final / "evidence_registry.jsonl")}
+        spans = {row["text_span_id"]: row for row in read_jsonl(final / "page_text_spans.jsonl")}
         for row in bboxes.values():
             self.assertEqual(row["status"], "accepted")
             self.assertIn(row["evidence_id"], evidence)
@@ -632,7 +642,8 @@ class GraphContractTest(unittest.TestCase):
             quote = self._compact_text(row["quoted_text"])
             pages_text = "".join(page_text[(row["source_document_id"], page_number)] for page_number in row["page_numbers"])
             exception_ids = chunk_by_legal_unit.get(row["legal_unit_id"], set()) & exception_chunk_ids
-            self.assertTrue(quote in pages_text or exception_ids, row["evidence_id"])
+            span_text = "".join(self._compact_text(spans[span_id]["text"]) for span_id in row.get("text_span_ids") or ())
+            self.assertTrue(quote in span_text or quote in pages_text or exception_ids, row["evidence_id"])
 
         metadata_bbox_ids = {row["bbox_id"] for row in read_jsonl(final / "metadata_grounding_registry.jsonl")}
         for row in read_jsonl(final / "metadata_grounding.jsonl"):

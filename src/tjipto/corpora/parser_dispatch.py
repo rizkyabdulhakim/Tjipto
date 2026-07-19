@@ -12,6 +12,7 @@ DEFAULT_CORPUS_ID = "uud"
 @dataclass(frozen=True)
 class CorpusParser:
     normalize_query_reference: Callable[[str], str]
+    normalize_metadata_intent: Callable[[str], str]
     parse_legal_reference: Callable[..., dict[str, str | None]]
     parse_legal_references: Callable[[str], list[dict[str, object]]]
     parse_bab_reference: Callable[[str], str | None]
@@ -35,6 +36,14 @@ def get_parser(corpus_id: str) -> CorpusParser:
 
 def normalize_query_reference(corpus_id: str, text: str) -> str:
     return get_parser(corpus_id).normalize_query_reference(text)
+
+
+def normalize_metadata_intent(corpus_id: str, text: str) -> str:
+    """Return corpus-aware tokens used only for metadata-intent matching."""
+    try:
+        return get_parser(corpus_id).normalize_metadata_intent(text)
+    except ValueError:
+        return " ".join(str(text or "").casefold().split())
 
 
 def parse_legal_reference(corpus_id: str, text: str, *, allow_roman_pasal: bool = False) -> dict[str, str | None]:

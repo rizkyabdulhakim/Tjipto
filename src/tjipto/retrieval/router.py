@@ -74,7 +74,7 @@ def route_retrieval(
     if scope.unresolved and "source_role" not in filters and not has_relation_target(
         normalized["normalized_query"], strategy=structured_strategy, config=config
     ):
-        if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config):
+        if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config, store=store):
             source_roles = tuple(
                 sorted({row.get("source_role") for row in store.document_metadata if row.get("source_role")})
             )
@@ -126,6 +126,7 @@ def route_retrieval(
             normalized["normalized_query"],
             len(store.evidence),
             strategy=structured_strategy,
+            source_role=filters.get("source_role"),
         )
     )
     navigation_all = tuple(row for row in structured_all if row.get("candidate_type") == "structural_navigation_candidate")
@@ -192,7 +193,7 @@ def route_retrieval(
             "intent": "metadata_lookup",
             "reason": "filters_removed_all",
         }
-    if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config):
+    if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config, store=store):
         return envelope | {
             "status": "no_results",
             "route": "metadata_not_found",
@@ -264,7 +265,9 @@ def route_retrieval(
         if preferred:
             filtered = preferred
     if filtered:
-        ranked, trace = merge_ranked(store, {"bm25": filtered}, filters)
+        # Lexical rows are candidates only; graph proximity cannot turn a
+        # neighbouring provision into answer support.
+        ranked, trace = merge_ranked(store, {"bm25": filtered}, filters, expand_graph=False)
         return envelope | {
             "status": "found",
             "route": "bm25",

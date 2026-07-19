@@ -14,6 +14,7 @@ UUD_PASAL_LETTER_RE = re.compile(r"\bpasal\s+([0-9]+)\s+([a-z])\b", re.IGNORECAS
 UUD_PASAL_SHORTHAND_AYAT_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\s*\(\s*([0-9]+)\s*\)", re.IGNORECASE)
 UUD_AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
 UUD_COMPACT_BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s+([a-z])\b", re.IGNORECASE)
+UUD_METADATA_TOKEN_RE = re.compile(r"[0-9a-z]+", re.IGNORECASE)
 
 
 def normalize_uud_query_reference(text: str) -> str:
@@ -28,6 +29,31 @@ def normalize_uud_query_reference(text: str) -> str:
     normalized = UUD_PASAL_RE.sub(lambda match: f"Pasal {match.group(1)}{(match.group(2) or '').upper()}", normalized)
     normalized = UUD_AYAT_RE.sub(lambda match: f"ayat ({match.group(1)})", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def normalize_uud_metadata_intent(text: str) -> str:
+    """Normalize Indonesian inflection for configured metadata signals only.
+
+    This deliberately leaves retrieval text and legal references unchanged.  The
+    small stemmer is enough to put passive/active spelling variants of a
+    metadata verb in the same matching bucket without a synonym table.
+    """
+
+    def stem(token: str) -> str:
+        token = token.casefold()
+        if "andatang" not in token:
+            return token
+        if token.startswith(("men", "pen")) and len(token) > 5 and token[3:4] in "aiueo":
+            token = "t" + token[3:]
+        elif token.startswith("di") and len(token) > 4:
+            token = token[2:]
+        if token.endswith("i") and len(token) > 4:
+            token = token[:-1]
+        if token.endswith("an") and len(token) > 5:
+            token = token[:-2]
+        return token
+
+    return " ".join(stem(match.group(0)) for match in UUD_METADATA_TOKEN_RE.finditer(text or ""))
 
 
 def parse_uud_bab_reference(text: str) -> str | None:
@@ -104,6 +130,7 @@ def parser_adapter():
 
     return CorpusParser(
         normalize_query_reference=normalize_uud_query_reference,
+        normalize_metadata_intent=normalize_uud_metadata_intent,
         parse_legal_reference=parse_uud_legal_reference,
         parse_legal_references=parse_uud_legal_references,
         parse_bab_reference=parse_uud_bab_reference,
