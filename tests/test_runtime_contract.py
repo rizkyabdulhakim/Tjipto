@@ -727,6 +727,19 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(public["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00428")
         self.assertEqual(public["article_amendment_relations"][0]["source_document_id"], "uud::amendment_4_historical")
 
+    def test_current_and_historical_reference_routing_is_source_safe(self) -> None:
+        current = self.service.ask("uud", "Aturan Tambahan Pasal II")
+        self.assertEqual(current["status"], "answer_ready")
+        self.assertEqual(len(current["citations"]), 1)
+        self.assertEqual(current["citations"][0]["source_role"], "current_consolidated")
+        self.assertFalse(current.get("source_conflict"))
+
+        historical = self.service.ask("uud", "Pasal 25E")
+        self.assertEqual(historical["status"], "answer_ready")
+        self.assertEqual(len(historical["citations"]), 1)
+        self.assertEqual(historical["citations"][0]["source_role"], "amendment_2_historical")
+        self.assertFalse(historical["citations"][0]["citation_final"])
+
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
         for case in _relation_cases():
             result = self.service.ask("uud", case["query"], limit=5)

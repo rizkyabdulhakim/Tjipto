@@ -58,6 +58,7 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertFalse(citation["citation_final"])
         self.assertEqual(citation["evidence_id"], "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict")
         self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "exact_raw_provenance_bbox_available")
+
         self.assertEqual(result["source_conflict"]["provenance_highlight_scope"], "all_relevant_spans")
         self.assertEqual(result["source_conflict"]["source_anomaly_kind"], "source_marker_sequence_anomaly")
         self.assertEqual(result["source_conflict"]["blocked_raw_provenance_text_span_count"], 0)
@@ -81,6 +82,21 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["viewer_refs"][0]["support_kind"], "source_anomaly_provenance")
         self.assertEqual(result["viewer_refs"][0]["source_anomaly_kind"], "source_marker_sequence_anomaly")
         self.assertEqual(result["viewer_refs"][0]["provenance_highlight_scope"], "all_relevant_spans")
+
+    def test_canonical_pasal_ii_does_not_use_printed_label_provenance(self) -> None:
+        result = self.service.ask("uud", "Aturan Tambahan Pasal II")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["route"], "legal_reference")
+        self.assertEqual(result["citations"][0]["source_role"], "current_consolidated")
+        self.assertFalse(result.get("source_conflict"))
+
+    def test_renumbering_provenance_is_not_a_substantive_conflict(self) -> None:
+        result = self.service.ask("uud", "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?")
+        provenance = result["source_conflict"]
+        self.assertEqual(provenance["relation_type"], "renumbered_to")
+        self.assertFalse(provenance["substantive_change"])
+        self.assertFalse(provenance["anomaly"])
+        self.assertFalse(provenance["source_conflict"])
 
     def test_exact_source_conflict_provenance_can_resolve_existing_viewer_policy(self) -> None:
         result = self.service.ask("uud", "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?")

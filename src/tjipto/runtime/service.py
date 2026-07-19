@@ -660,6 +660,7 @@ def _source_conflict_taxonomy_fields(conflict: dict | None) -> dict:
     fields = {key: value for key, value in fields.items() if value is not None}
     if fields.get("finality_policy"):
         fields["support_kind"] = fields["finality_policy"]
+    fields.update(_source_mapping_semantics(conflict))
     return fields
 
 
@@ -1550,6 +1551,9 @@ def _is_source_anomaly_query(store, query: str) -> bool:
     terms = tuple(str(term).casefold() for term in intent.get("query_terms") or ())
     if not any(_query_contains_term(folded, term) for term in terms):
         return False
+    unresolved_terms = tuple(str(term).casefold() for term in intent.get("unresolved_query_terms") or ())
+    if any(_query_contains_term(folded, term) for term in unresolved_terms):
+        return True
     return any(_source_conflict_match_score(store, row, folded, intent) > 0 for row in store.source_conflicts)
 
 
@@ -1591,24 +1595,31 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
     if any(_query_contains_term(folded_query, term) for term in exclusions):
         return 0
     required = tuple(str(term).casefold() for term in conflict.get("query_required_terms") or ())
-    if required and not any(_query_contains_term(folded_query, term) for term in required):
-        return 0
     anchors = {str(term).casefold() for term in conflict.get("query_anchor_terms") or ()}
     source_role = str(_source_document_meta(store, conflict.get("source_document_id")).get("source_role") or "")
     role_label = str((intent.get("role_labels") or {}).get(source_role) or source_role).casefold()
     role_anchor_match = _query_contains_term(folded_query, role_label) and any(
         _query_contains_term(folded_query, anchor) for anchor in anchors
     )
+    source_marker_context = conflict.get("source_anomaly_kind") == "source_marker_sequence_anomaly" and role_anchor_match
+    if required and not any(_query_contains_term(folded_query, term) for term in required) and not source_marker_context:
+        return 0
     explicit_anchor_match = any(
         len(anchor.split()) > 1 and _query_contains_term(folded_query, anchor) for anchor in anchors
     )
     semantic_required = tuple(term for term in required if term not in anchors or "pasal" not in term)
+    marker_context = role_anchor_match or any(_query_contains_term(folded_query, term) for term in semantic_required)
     if (
         semantic_required
         and not any(_query_contains_term(folded_query, term) for term in semantic_required)
         and not role_anchor_match
-        and not (explicit_anchor_match and conflict.get("source_anomaly_kind") == "source_marker_sequence_anomaly")
+        and not (
+            conflict.get("source_anomaly_kind") == "source_marker_sequence_anomaly"
+            and (explicit_anchor_match or role_anchor_match)
+        )
     ):
+        return 0
+    if conflict.get("source_anomaly_kind") == "source_marker_sequence_anomaly" and not marker_context:
         return 0
     score = 0
     if _query_contains_term(folded_query, role_label):
@@ -1841,7 +1852,7 @@ def _source_conflict_contract_fields(conflict: dict) -> dict:
     raw_bbox_ids = tuple(conflict.get("raw_provenance_bbox_ids") or ())
     raw_text_span_ids = tuple(conflict.get("raw_provenance_text_span_ids") or ())
     blocked_text_span_ids = tuple(conflict.get("blocked_raw_provenance_text_span_ids") or ())
-    return {
+    fields = {
         "final_evidence_available": bool(conflict.get("final_evidence_available")),
         "source_anomaly_kind": conflict.get("source_anomaly_kind"),
         "source_mapping_kind": conflict.get("source_mapping_kind"),
@@ -1851,6 +1862,19 @@ def _source_conflict_contract_fields(conflict: dict) -> dict:
         "raw_provenance_text_span_count": len(raw_text_span_ids),
         "blocked_raw_provenance_text_span_count": len(blocked_text_span_ids),
         "blocked_raw_provenance_reason": conflict.get("blocked_raw_provenance_reason"),
+    }
+    fields.update(_source_mapping_semantics(conflict))
+    return fields
+
+
+def _source_mapping_semantics(conflict: dict) -> dict:
+    if conflict.get("source_anomaly_kind") != "renumbering_provenance":
+        return {}
+    return {
+        "relation_type": "renumbered_to",
+        "substantive_change": False,
+        "anomaly": False,
+        "source_conflict": False,
     }
 
 

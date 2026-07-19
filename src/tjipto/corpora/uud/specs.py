@@ -325,6 +325,7 @@ SOURCE_CONFLICT_SPECS = (
         "provenance_summary": "source_pdf_contains_pasal_iii_anomaly",
         "final_authority_policy": "Sistem menampilkan provenance sumber ini sebagai jejak audit, bukan kesimpulan hukum final.",
         "query_anchor_terms": [
+            "aturan tambahan",
             "aturan tambahan pasal iii",
             "pasal iii aturan tambahan",
             "aturan tambahan pasal ii",
