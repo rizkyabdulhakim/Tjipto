@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 
+CURRENT_ARTIFACT_SCHEMA = 6
+
+
 MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
     "bbox_registry": (
         "bbox_id",
         "evidence_id",
+        "evidence_exists",
+        "object_role",
         "source_document_id",
         "page_number",
         "x0",
         "y0",
         "x1",
         "y1",
+        "viewer_highlightable",
     ),
-    "chunks": ("chunk_id", "legal_unit_id", "source_document_id", "evidence_ids", "text_span_ids", "authority_kind", "evidence_exists"),
+    "chunks": ("chunk_id", "legal_unit_id", "source_document_id", "evidence_ids", "text_span_ids"),
     "evidence_registry": (
         "evidence_id",
         "legal_unit_id",
@@ -24,7 +30,7 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "quoted_text",
         "source_sha256",
         "source_role",
-        "status",
+        "artifact_status",
         "authority_kind",
         "citable_status",
         "citable",
@@ -35,6 +41,8 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "reason_code",
         "runtime_loadable",
         "evidence_owner_kind",
+        "object_role",
+        "is_citation_object",
     ),
     "article_amendment_relations": (
         "relation_id",
@@ -62,18 +70,30 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "source_id",
         "target_id",
         "relation_type",
+        "object_role",
+        "support_relation_ids",
+        "support_evidence_ids",
+        "support_exception_ids",
+        "support_kind",
     ),
-    "graph_nodes": ("node_id", "node_type", "authority_kind", "citable_status", "citable", "citation_final", "citation_finality_reason"),
+    "graph_nodes": ("node_id", "node_type", "object_role"),
+    "document_relations": (
+        "relation_id",
+        "source_document_id",
+        "source_role",
+        "target_document_id",
+        "target_source_role",
+        "relation_type",
+        "object_role",
+        "support_relation_ids",
+        "support_evidence_ids",
+        "support_exception_ids",
+        "support_kind",
+    ),
     "legal_units": (
         "legal_unit_id",
         "source_document_id",
         "text_span_ids",
-        "authority_kind",
-        "citable_status",
-        "citable",
-        "citation_final",
-        "citation_finality_reason",
-        "evidence_exists",
     ),
     "page_text_spans": (
         "text_span_id",
@@ -82,16 +102,16 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "text",
         "classification",
         "legal_force",
-        "authority_kind",
-        "citable_status",
-        "citable",
-        "citation_final",
-        "highlightable",
-        "exactness",
+        "object_role",
+        "linked_authority",
+        "viewer_highlightable",
         "evidence_ids",
         "span_bbox_ids",
-        "evidence_bbox_ids",
-        "context_bbox_ids",
+        "metadata_grounding_ids",
+        "artifact_status",
+        "page_text_hash",
+        "text_start",
+        "text_end",
         "reason_code",
         "reason",
     ),
@@ -101,13 +121,9 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "evidence_id",
         "legal_unit_id",
         "chunk_id",
-        "authority_kind",
-        "citable_status",
-        "citable",
-        "citation_final",
-        "citation_finality_reason",
-        "evidence_exists",
-        "retrieval_trace",
+        "object_role",
+        "artifact_status",
+        "page_locator",
     ),
     "source_documents": ("source_document_id", "sha256", "path", "source_page_url", "download_url"),
     "word_bboxes": (
@@ -142,11 +158,22 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "metadata_grounding_id",
         "source_document_id",
         "grounding_status",
-        "supporting_evidence_id",
+        "supporting_evidence_ids",
+        "authority_kind",
+        "citable",
+        "citation_final",
+        "exactness",
+        "evidence_exists",
+        "reason_code",
+        "artifact_status",
+        "object_role",
     ),
     "source_conflicts": (
         "source_conflict_id",
         "source_document_id",
+        "provenance_summary",
+        "object_role",
+        "is_citation_object",
         "authority_kind",
         "citation_final",
         "target_precision",
@@ -161,4 +188,38 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "resolving_commit",
         "runtime_loadable",
     ),
+}
+
+COMMON_ARTIFACT_FIELDS = frozenset(
+    "authority_kind bbox_precision bbox_refs citation citation_available citation_final corpus_id evidence_id grounding_level relation_id relation_type runtime_loadable source_document_id source_role text_span_ids recovery_capability recovery_status page_number page_range quoted_text quote source_pdf_sha256 target_bbox_refs target_citation target_legal_unit_id target_precision target_source_role source_legal_unit_role source_label target_label old_reference new_reference old_reference_range new_reference_range old_reference_range_kind new_reference_range_kind bbox_id bbox_ids citable citable_status citation_finality_reason coordinate_origin coordinate_space evidence_exists exactness page_box_basis page_height page_rotation page_width promotion_candidate reason_code source_pdf source_pdf_path source_sha256 status artifact_status text transform_version viewer_highlightable x0 x1 y0 y1 ancestor_legal_unit_ids canonical_label canonical_unit_ref canonical_use_allowed chunk_id chunk_type contributing_child_legal_unit_ids current_resolution_state evidence_ids evidence_summary exclusion_ref failure_reason grounding_status hierarchy historical_label sibling_order stable_unit_id structural_depth structural_role temporal_context validation_basis validation_status date decision_date decision_session document_metadata_id document_type effective_rule enactment evidence_refs field_statuses grounded_fields grounding_refs institution ln_tln official_title officials penetapan pengesahan pengundangan place promulgation source_anomaly_status source_publication signatories article_level reason support_refs support_type target_document_id target_source_role classification exclusion_reason field_bbox_feasibility legal_force metadata_field promotion_status promotion_target_id promotion_target_type review_status semantic_classification span_bbox_ids text_span_id span_role bbox_registry_coverage_status bbox_registry_coverage_reason bbox_registry_coverage_bucket word_bbox_candidate_count word_bbox_distance_to_existing_span_bbox word_bbox_match_confidence word_bbox_match_method bbox_sample_refs bbox_total_count parent_legal_unit_id rejection_reason retrieval_trace content_fingerprint file_size file_size_match filename final_download_url http_content_type http_last_modified http_status page_count page_count_match path redownload_sha256 reproducibility_status source_authority source_integrity_status affected_pages anchor_terms authoritative_evidence_id blocked_raw_provenance_reason blocked_raw_provenance_text_span_ids blocked_raw_provenance_text_span_reasons final_authority_policy final_evidence_available page_numbers provenance provenance_bbox_status provenance_exception_category provenance_highlight_scope provenance_review_status provenance_summary query_anchor_terms query_exclusion_terms query_required_terms resolution_decision raw_provenance_bbox_ids raw_provenance_text_span_ids source_anomaly_kind source_anomaly_policy source_conflict_id source_mapping_kind type edge_type derivation_method derivation_reason derivation_basis confidence_policy object_role linked_authority is_citation_object metadata_grounding_ids support_relation_ids support_evidence_ids support_exception_ids support_kind page_locator retrieval_terms metadata_grounding_ref_id char_start char_end page_text_hash text_start text_end unresolved_chunk_reference source_id target_id sha256_match word_index block_index line_index word_no normalized_text bbox_source extractor extractor_version characters recovery_method failure_code promotion_attempted decision candidate_status current_grounding_status exact_bbox_available exact_quote_available exact_span_available can_be_exact_citation can_be_exact_highlight highlightable matched_page_numbers matched_span_ids matched_text_excerpt quote_match_status span_match_status subspan_match_status bbox_union_status blocker_evidence metadata_exact_promotion_feasibility policy_reason".split()
+)
+COMMON_ARTIFACT_FIELDS = COMMON_ARTIFACT_FIELDS | {"page_start", "page_end", "parent_legal_unit_ids", "unit_label", "unit_type", "source_text_span_ids", "source_bbox_refs", "source_node_type", "target_node_type", "bbox_status", "final_evidence_id", "rectangle_index", "hierarchy_path", "orphan_policy", "conflict_type", "target_text_span_ids", "trace_only_reason", "validator_status", "provenance_ref", "provenance_ref_kind", "provenance_support", "legal_unit_id"}
+
+# Schema 6 is intentionally closed.  These fields are legacy truth owners or
+# ambiguous aliases and must never reappear in a published snapshot.
+FORBIDDEN_ARTIFACT_FIELDS: dict[str, frozenset[str]] = {
+    "page_text_spans": frozenset({"evidence_bbox_ids", "context_bbox_ids", "highlightable", "citable", "citation_final"}),
+    "bbox_registry": frozenset({"authority_kind", "citable", "citable_status", "citation_final", "citation_finality_reason", "exactness"}),
+    "retrieval_units": frozenset({"authority_kind", "citable", "citable_status", "citation_final", "citation_finality_reason", "exactness"}),
+    "graph_edges": frozenset({"authority_kind", "citable", "citable_status", "citation_final", "citation_finality_reason", "exactness", "support_refs"}),
+    "document_relations": frozenset({"support_refs"}),
+}
+
+# The builder has a few artifact-specific optional projections.  Keeping the
+# allow-list here makes unknown-field rejection deterministic without copying
+# builder decisions into the runtime loader.
+ARTIFACT_OPTIONAL_FIELDS: dict[str, frozenset[str]] = {
+    "page_text_spans": frozenset({
+        "object_role", "linked_authority", "metadata_grounding_ids", "text_start", "text_end", "page_text_hash",
+    }),
+    "bbox_registry": frozenset({"object_role"}),
+    "retrieval_units": frozenset({"object_role", "retrieval_terms", "page_locator"}),
+    "graph_edges": frozenset({"object_role", "support_relation_ids", "support_evidence_ids", "support_exception_ids"}),
+    "document_relations": frozenset({"object_role", "support_relation_ids", "support_evidence_ids", "support_exception_ids", "support_kind"}),
+    "metadata_grounding": frozenset({
+        "object_role", "authority_kind", "citable", "citation_final", "exactness", "evidence_exists", "reason_code",
+        "artifact_status", "metadata_grounding_ids", "supporting_evidence_ids",
+    }),
+    "metadata_grounding_registry": frozenset({"object_role", "metadata_grounding_ids"}),
+    "word_bboxes": frozenset({"char_start", "char_end", "page_text_hash"}),
 }

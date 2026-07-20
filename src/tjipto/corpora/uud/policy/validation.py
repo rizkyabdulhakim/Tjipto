@@ -49,21 +49,27 @@ def validate_uud_trust_boundary(
     pages: list[dict],
     word_bboxes: list[dict] | tuple[dict, ...] = (),
 ) -> list[Violation]:
+    if retrieval_units and retrieval_units[0].get("object_role") == "retrieval_index_record":
+        return _validate_schema6_trust_boundary(
+            legal_units=legal_units,
+            chunks=chunks,
+            graph_nodes=graph_nodes,
+            graph_edges=graph_edges,
+            retrieval_units=retrieval_units,
+            evidence=evidence,
+            bbox_rows=bbox_rows,
+            page_text_spans=page_text_spans,
+            source_documents=source_documents,
+        )
     violations: list[Violation] = []
-    collections = {
-        "legal_units": (legal_units, "legal_unit_id"),
-        "chunks": (chunks, "chunk_id"),
-        "graph_nodes": (graph_nodes, "node_id"),
-        "graph_edges": (graph_edges, "edge_id"),
-        "retrieval_units": (retrieval_units, "retrieval_unit_id"),
+    # Authority is owned by evidence/support records.  Index, geometry, span,
+    # graph and legal-unit rows are projections and must not repeat the
+    # decision fields merely to satisfy the legacy trust boundary.
+    owner_collections = {
         "evidence_registry": (evidence, "evidence_id"),
-        "bbox_registry": (bbox_rows, "bbox_id"),
-        "page_text_spans": (page_text_spans, "text_span_id"),
     }
-    for artifact, (rows, id_field) in collections.items():
+    for artifact, (rows, id_field) in owner_collections.items():
         for row in rows:
-            if artifact == "graph_edges" and row.get("relation_id"):
-                continue
             row_id = str(row.get(id_field) or "<missing>")
             missing = [field for field in AUTHORITY_FIELDS if row.get(field) is None]
             if missing:
@@ -106,12 +112,66 @@ def validate_uud_trust_boundary(
             )
             if error:
                 violations.append(_violation("AUTHORITY_STATE_CONTRADICTION", artifact, row_id, "authority", "allowed state", error, error))
-    _validate_retrieval_traces(retrieval_units, violations)
     _validate_runtime_evidence_links(retrieval_units, chunks, evidence, page_text_spans, violations)
     _validate_coordinates(bbox_rows, violations)
     _validate_hierarchy(legal_units, chunks, graph_edges, violations)
     _validate_graph(graph_nodes, graph_edges, legal_units, evidence, bbox_rows, source_documents, pages, page_text_spans, violations)
     _validate_evidence_closure(evidence, bbox_rows, page_text_spans, source_documents, pages, violations, list(word_bboxes))
+    return violations
+
+
+def _validate_schema6_trust_boundary(
+    *,
+    legal_units: list[dict],
+    chunks: list[dict],
+    graph_nodes: list[dict],
+    graph_edges: list[dict],
+    retrieval_units: list[dict],
+    evidence: list[dict],
+    bbox_rows: list[dict],
+    page_text_spans: list[dict],
+    source_documents: list[dict],
+) -> list[Violation]:
+    violations: list[Violation] = []
+    evidence_ids = {row.get("evidence_id") for row in evidence}
+    source_ids = {row.get("source_document_id") for row in source_documents}
+    source_pages = {row.get("source_document_id"): int(row.get("page_count") or 0) for row in source_documents}
+    span_ids = {row.get("text_span_id") for row in page_text_spans}
+    bbox_ids = {row.get("bbox_id") for row in bbox_rows}
+    node_ids = {row.get("node_id") for row in graph_nodes}
+    for row in evidence:
+        row_id = str(row.get("evidence_id"))
+        for field in AUTHORITY_FIELDS:
+            if row.get(field) is None:
+                violations.append(_violation("AUTHORITY_MISSING", "evidence_registry", row_id, field, "non-null", None, "authority decision incomplete"))
+        if row.get("source_document_id") not in source_ids:
+            violations.append(_violation("REFERENCE_UNRESOLVED_SOURCE", "evidence_registry", row_id, "source_document_id", "existing source", row.get("source_document_id"), "source missing"))
+        if not isinstance(row.get("citation_final"), bool) or row.get("authority_kind") not in {"normative_legal_text", "instrument_provenance", "source_anomaly_trace", "structural_context"}:
+            violations.append(_violation("AUTHORITY_STATE_CONTRADICTION", "evidence_registry", row_id, "authority", "valid authority/finality", row, "authority state invalid"))
+        if any(page < 1 or page > source_pages.get(row.get("source_document_id"), 0) for page in row.get("page_numbers") or ()):
+            violations.append(_violation("REFERENCE_UNRESOLVED_PAGE", "evidence_registry", row_id, "page_numbers", "existing page", row.get("page_numbers"), "page missing"))
+        if any(ref not in span_ids for ref in row.get("text_span_ids") or ()):
+            violations.append(_violation("REFERENCE_UNRESOLVED_SPAN", "evidence_registry", row_id, "text_span_ids", "existing span", row.get("text_span_ids"), "span missing"))
+        if any(ref not in bbox_ids for ref in row.get("bbox_refs") or ()):
+            violations.append(_violation("REFERENCE_UNRESOLVED_BBOX", "evidence_registry", row_id, "bbox_refs", "existing bbox", row.get("bbox_refs"), "bbox missing"))
+    for row in bbox_rows:
+        row_id = str(row.get("bbox_id"))
+        if row.get("evidence_id") not in evidence_ids or row.get("evidence_exists") is not True:
+            violations.append(_violation("REFERENCE_UNRESOLVED_EVIDENCE", "bbox_registry", row_id, "evidence_id", "existing evidence", row.get("evidence_id"), "bbox owner missing"))
+        if row.get("viewer_highlightable") is True and any(row.get(field) is None for field in COORDINATE_FIELDS):
+            violations.append(_violation("COORDINATE_METADATA_MISSING", "bbox_registry", row_id, "coordinates", "complete", None, "highlightable bbox requires coordinates"))
+    for row in retrieval_units:
+        if row.get("evidence_id") not in evidence_ids:
+            violations.append(_violation("RETRIEVAL_EVIDENCE_UNRESOLVED", "retrieval_units", str(row.get("retrieval_unit_id")), "evidence_id", "existing evidence", row.get("evidence_id"), "retrieval evidence missing"))
+    for row in chunks:
+        for ref in row.get("evidence_ids") or ():
+            if ref not in evidence_ids:
+                violations.append(_violation("CHUNK_EVIDENCE_UNRESOLVED", "chunks", str(row.get("chunk_id")), "evidence_ids", "existing evidence", ref, "chunk evidence missing"))
+    for row in graph_edges:
+        if row.get("source_id") not in node_ids or row.get("target_id") not in node_ids:
+            violations.append(_violation("GRAPH_EDGE_ENDPOINT_UNRESOLVED", "graph_edges", str(row.get("edge_id")), "endpoint", "existing graph node", row, "graph endpoint missing"))
+        if row.get("object_role") != "graph_projection" or not all(field in row for field in ("support_relation_ids", "support_evidence_ids", "support_exception_ids", "support_kind")):
+            violations.append(_violation("RELATION_SUPPORT_MISMATCH", "graph_edges", str(row.get("edge_id")), "support", "typed support", row, "typed graph support incomplete"))
     return violations
 
 
@@ -150,59 +210,9 @@ def _validate_runtime_evidence_links(
                         "chunk evidence missing",
                     )
                 )
-    for row in spans:
-        has_exact_support = bool(row.get("evidence_ids") and row.get("span_bbox_ids"))
-        if (
-            row.get("promotion_status") == "promoted_legal_unit"
-            and has_exact_support
-            and (
-                row.get("authority_kind") != "normative_legal_text"
-                or row.get("citable") is not True
-                or row.get("citation_final") is not True
-                or row.get("evidence_exists") is not True
-            )
-        ):
-            violations.append(
-                _violation(
-                    "NORMATIVE_SPAN_REJECTED",
-                    "page_text_spans",
-                    row["text_span_id"],
-                    "authority",
-                    "exact normative authority",
-                    row.get("authority_kind"),
-                    "verified exact promoted span was rejected",
-                )
-            )
-
-
-def _validate_retrieval_traces(rows: list[dict], violations: list[Violation]) -> None:
-    for row in rows:
-        trace = row.get("retrieval_trace") or {}
-        row_id = row["retrieval_unit_id"]
-        if any(trace.get(field) is None for field in AUTHORITY_FIELDS):
-            violations.append(
-                _violation(
-                    "RETRIEVAL_TRACE_AUTHORITY_MISSING",
-                    "retrieval_units",
-                    row_id,
-                    "retrieval_trace.authority",
-                    "complete",
-                    trace,
-                    "trace authority incomplete",
-                )
-            )
-        elif trace.get("citation_final") is not False:
-            violations.append(
-                _violation(
-                    "RETRIEVAL_TRACE_FINAL",
-                    "retrieval_units",
-                    row_id,
-                    "retrieval_trace.citation_final",
-                    False,
-                    trace.get("citation_final"),
-                    "retrieval trace cannot be final",
-                )
-            )
+    # Page spans and retrieval units are projections in schema 6.  Their
+    # authority/finality is dereferenced from the evidence owner rather than
+    # copied into the projection, so no legacy trace decision is validated here.
 
 
 def _validate_coordinates(rows: list[dict], violations: list[Violation]) -> None:

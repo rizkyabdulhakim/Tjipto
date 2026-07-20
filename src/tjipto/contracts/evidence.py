@@ -7,14 +7,11 @@ from collections.abc import Mapping, Sequence
 EVIDENCE_DECISION_FIELDS = (
     "classification",
     "legal_force",
-    "citable",
-    "citation_final",
-    "highlightable",
-    "exactness",
     "evidence_ids",
     "span_bbox_ids",
-    "evidence_bbox_ids",
-    "context_bbox_ids",
+    "object_role",
+    "linked_authority",
+    "viewer_highlightable",
     "reason_code",
     "reason",
 )

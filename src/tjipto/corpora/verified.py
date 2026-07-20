@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from threading import RLock
 
-from tjipto.contracts.artifacts import MINIMUM_ARTIFACT_FIELDS
+from tjipto.contracts.artifacts import ARTIFACT_OPTIONAL_FIELDS, COMMON_ARTIFACT_FIELDS, CURRENT_ARTIFACT_SCHEMA, FORBIDDEN_ARTIFACT_FIELDS, MINIMUM_ARTIFACT_FIELDS
 from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage_reason
 from tjipto.core.manifest import ALLOWED_ARTIFACT_ORIGINS, verified_file_bytes
 
@@ -142,7 +142,7 @@ def _read_trusted_manifest(config) -> tuple[dict, str]:
     manifest, manifest_digest = _read_manifest(config)
     if not isinstance(manifest, dict) or manifest.get("corpus_id") != config.corpus_id:
         raise CorpusIntegrityError("manifest_identity_mismatch")
-    if manifest.get("schema_version") != 5:
+    if manifest.get("schema_version") != CURRENT_ARTIFACT_SCHEMA and config.corpus_id == "uud":
         raise CorpusIntegrityError("unsupported_schema")
     return manifest, manifest_digest
 
@@ -186,7 +186,7 @@ def _verify_artifacts(final_dir: Path, manifest: dict, required_value: object) -
         logical_key = record.get("logical_key")
         if not isinstance(logical_key, str) or manifest.get(logical_key) != rel:
             raise CorpusIntegrityError("semantic_artifact_identity_mismatch")
-        _validate_record_identity(logical_key, rel, record)
+        _validate_record_identity(logical_key, rel, record, expected_schema=manifest.get("schema_version"))
         path = _contained_path(final_dir, rel)
         data, integrity_error = verified_file_bytes(path, record)
         if integrity_error:
@@ -208,20 +208,17 @@ def _verify_artifact_integrity(final_dir: Path, manifest: dict) -> None:
         logical_key = record.get("logical_key")
         if not isinstance(logical_key, str) or manifest.get(logical_key) != rel:
             raise CorpusIntegrityError("semantic_artifact_identity_mismatch")
-        _validate_record_identity(logical_key, rel, record)
+        _validate_record_identity(logical_key, rel, record, expected_schema=manifest.get("schema_version"))
         _, integrity_error = verified_file_bytes(_contained_path(final_dir, rel), record)
         if integrity_error:
             raise CorpusIntegrityError(integrity_error)
 
 
-def _validate_record_identity(logical_key: str, rel: str, record: dict) -> None:
+def _validate_record_identity(logical_key: str, rel: str, record: dict, *, expected_schema: int | None = None) -> None:
     expected_format = "json" if rel.endswith(".json") else "jsonl"
-    if (
-        record.get("logical_key") != logical_key
-        or record.get("artifact_kind") != logical_key
-        or record.get("artifact_schema") != 5
-        or record.get("format") != expected_format
-    ):
+    if record.get("artifact_schema") != (expected_schema or CURRENT_ARTIFACT_SCHEMA):
+        raise CorpusIntegrityError("artifact_schema_mismatch")
+    if record.get("logical_key") != logical_key or record.get("artifact_kind") != logical_key or record.get("format") != expected_format:
         raise CorpusIntegrityError("semantic_artifact_identity_mismatch")
     if record.get("origin") not in ALLOWED_ARTIFACT_ORIGINS or not all(
         isinstance(record.get(field), str) and record[field].strip() for field in ("producer", "build_stage")
@@ -286,6 +283,12 @@ def _parse_and_validate(data: bytes, record: dict, logical_key: str) -> object:
         ):
             raise CorpusIntegrityError("artifact_contract_malformed")
         minimum_fields = MINIMUM_ARTIFACT_FIELDS.get(logical_key, ())
+        forbidden = FORBIDDEN_ARTIFACT_FIELDS.get(logical_key, frozenset())
+        if any(forbidden.intersection(row) for row in value):
+            raise CorpusIntegrityError("mixed_schema_contract")
+        allowed = set(minimum_fields) | set(declared_fields or ()) | set(ARTIFACT_OPTIONAL_FIELDS.get(logical_key, ())) | set(COMMON_ARTIFACT_FIELDS)
+        if logical_key in MINIMUM_ARTIFACT_FIELDS and any(field not in allowed for row in value for field in row):
+            raise CorpusIntegrityError("artifact_unknown_field")
         if declared_fields is not None and not set(minimum_fields).issubset(declared_fields):
             raise CorpusIntegrityError("artifact_contract_weakened")
         required_fields = tuple(minimum_fields) + tuple(declared_fields or ())

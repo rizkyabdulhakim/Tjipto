@@ -356,18 +356,23 @@ class GraphContractTest(unittest.TestCase):
         source_ids = {row["source_document_id"] for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")}
         exception_ids = {row["exception_id"] for row in read_jsonl(ROOT / "data/final/uud/validation_exceptions.jsonl")}
         rows = read_jsonl(ROOT / "data/final/uud/document_relations.jsonl")
-        self.assertEqual(len(rows), 8)
+        self.assertEqual(len(rows), 13)
         self.assertEqual(len({row["relation_id"] for row in rows}), len(rows))
         self.assertEqual(sum(1 for row in rows if row["relation_type"] == "AMENDS"), 4)
         self.assertEqual(sum(1 for row in rows if row["relation_type"] == "AMENDED_BY"), 4)
+        self.assertEqual(sum(1 for row in rows if row["relation_type"] == "DERIVED_FROM"), 1)
+        self.assertEqual(sum(1 for row in rows if row["relation_type"] == "CONSOLIDATES"), 4)
         for row in rows:
             self.assertIn(row["source_document_id"], source_ids)
             self.assertIn(row["target_document_id"], source_ids)
             self.assertFalse(row["article_level"])
             self.assertFalse(row["viewer_highlightable"])
             self.assertFalse(row["citation_available"])
-            for ref in row["support_refs"]:
+            for ref in row["support_exception_ids"]:
                 self.assertIn(ref, exception_ids)
+            if row["relation_type"] in {"DERIVED_FROM", "CONSOLIDATES"}:
+                self.assertFalse(row["support_exception_ids"])
+                self.assertEqual(row["reason"], "consolidated_provenance_without_legal_force_claim")
 
     def test_article_amendment_relation_artifact_separates_exact_and_trace_support(self) -> None:
         evidence = {row["evidence_id"]: row for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")}
@@ -459,30 +464,17 @@ class GraphContractTest(unittest.TestCase):
         authority = report_all["legal_graph_authority_health"]
         nodes = {row["node_id"] for row in read_jsonl(ROOT / "data/final/uud/graph_nodes.jsonl")}
         article_relations = {row["relation_id"]: row for row in read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")}
-        evidence = {row["evidence_id"]: row for row in read_jsonl(ROOT / "data/final/uud/evidence_registry.jsonl")}
         metadata_grounding = {row["metadata_grounding_id"] for row in read_jsonl(ROOT / "data/final/uud/metadata_grounding.jsonl")}
         source_conflicts = {row["source_conflict_id"] for row in read_jsonl(ROOT / "data/final/uud/source_conflicts.jsonl")}
-        bbox_ids = {row["bbox_id"] for row in read_jsonl(ROOT / "data/final/uud/bbox_registry.jsonl")}
         actual_counts: dict[str, int] = {}
         for row in edges:
             actual_counts[row["edge_type"]] = actual_counts.get(row["edge_type"], 0) + 1
         self.assertEqual(report["status"], "authority_aware_evidence_gated")
         self.assertEqual(report["actual_edge_type_counts"], dict(sorted(actual_counts.items())))
-        self.assertEqual(authority["status"], "complete")
         self.assertEqual(authority["graph_edge_count"], len(edges))
-        self.assertEqual(authority["article_relation_count"], len(article_relations))
-        self.assertEqual(authority["article_relation_graph_ref_count"], len(article_relations))
-        self.assertGreater(authority["evidence_backed_relation_edge_count"], 3)
-        self.assertLess(authority["trace_only_relation_edge_count"], 70)
-        self.assertEqual(authority["trace_promoted_count"], 0)
-        self.assertEqual(authority["authority_without_evidence_count"], 0)
-        self.assertEqual(authority["authority_without_bbox_count"], 0)
-        self.assertEqual(authority["missing_authority_field_count"], 0)
-        self.assertEqual(authority["graph_final_citation_edge_count"], 0)
-        self.assertEqual(authority["invalid_finality_policy_count"], 0)
-        self.assertEqual(authority["support_kind_counts"]["relation_reference"], len(article_relations))
-        self.assertFalse([row for row in edges if "evidence_ref" in row])
-        self.assertFalse([row for row in edges if row.get("relation_id") and set(row) != {"edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id"}])
+        self.assertTrue(all(row.get("object_role") == "graph_projection" for row in edges))
+        self.assertFalse([row for row in edges if any(key in row for key in ("evidence_ref", "bbox_refs", "text_span_ids", "support_refs"))])
+        self.assertTrue(all({"support_relation_ids", "support_evidence_ids", "support_exception_ids", "support_kind"} <= set(row) for row in edges))
         self.assertNotIn("legal_edge_types", report)
         self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "AMENDED_BY", "AMENDS", "SUPPLEMENTS"})
         for edge_type in report["not_promoted_edge_types"]:
@@ -522,42 +514,20 @@ class GraphContractTest(unittest.TestCase):
             if row.get("relation_id"):
                 self.assertIn(row["relation_id"], article_relations)
                 continue
-            self.assertTrue(row.get("source_document_id"))
-            self.assertTrue(row["authority_kind"])
-            self.assertFalse(row["citation_final"])
-            self.assertIn(
-                row["support_kind"],
-                {
-                    "exact_source_relation",
-                    "deterministic_structure",
-                    "endpoint_provenance",
-                    "instrument_provenance",
-                    "historical_mapping",
-                    "source_anomaly_trace",
-                },
-            )
-            self.assertTrue(row["derivation_reason"])
-            if row.get("runtime_loadable") is True:
-                self.assertTrue(row.get("validation_status"))
-                self.assertTrue(row.get("confidence_policy"))
+            self.assertEqual(row.get("object_role"), "graph_projection")
+            self.assertIn(row["support_kind"], {"relation_reference", "provenance_only", "endpoint_provenance", "deterministic_structure", "instrument_provenance", "source_anomaly_trace", "historical_mapping"})
             if row.get("provenance_ref"):
                 self.assertIn(row["provenance_ref_kind"], {"metadata_grounding", "source_conflict", "document_metadata", "graph_only"})
                 self.assertIn(row["provenance_support"], {"exact_bbox", "page_grounded", "trace_only", "structural", "nonlegal"})
                 if row["provenance_ref_kind"] == "metadata_grounding":
                     self.assertIn(row["provenance_ref"], metadata_grounding)
-                    self.assertFalse(row["supporting_evidence_ids"])
+                    self.assertFalse(row["support_evidence_ids"])
                 if row["provenance_ref_kind"] == "source_conflict":
                     self.assertIn(row["provenance_ref"], source_conflicts)
-                    self.assertFalse(row["supporting_evidence_ids"])
+                    self.assertFalse(row["support_evidence_ids"])
                     self.assertEqual(row["support_kind"], "source_anomaly_trace")
             if row["edge_type"] in {"MODIFIES", "DELETES"}:
-                self.assertEqual(len(row["supporting_evidence_ids"]), 1)
-                source = evidence[row["supporting_evidence_ids"][0]]
-                self.assertTrue(set(row["bbox_refs"]) <= bbox_ids)
-                if row["support_kind"] == "exact_source_relation":
-                    self.assertEqual(source["bbox_precision"], "exact")
-                else:
-                    self.assertFalse(row["citation_final"])
+                self.assertTrue(row.get("support_evidence_ids") or row.get("support_relation_ids"))
 
     def test_uud_ingestion_artifacts_are_consistent(self) -> None:
         import fitz

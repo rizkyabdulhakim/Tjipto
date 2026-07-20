@@ -24,6 +24,7 @@ from tjipto.corpora.parser_dispatch import parse_legal_references
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
 from tjipto.corpora.uud.artifact_policy import RECOVERY_CAPABILITIES, RECOVERY_STATUSES, UUD_ARTIFACT_SCHEMA
+from tjipto.contracts.artifacts import ARTIFACT_OPTIONAL_FIELDS, COMMON_ARTIFACT_FIELDS, FORBIDDEN_ARTIFACT_FIELDS, MINIMUM_ARTIFACT_FIELDS
 from tjipto.corpora.uud.provenance_exceptions import (
     ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
     ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
@@ -291,8 +292,23 @@ def build_validation_report(
         "word_bbox_layer": "word_bbox_exact_highlight",
         "viewer_highlightable_union": "bbox_registry_union_word_bboxes",
         "bbox_key_absent_span_count": viewer_provenance_coverage_health["bbox_key_absent_span_count"],
-        "exact_safe_word_highlight_count": sum(1 for row in page_text_spans if row.get("highlightable")),
-        "non_citable_absent_span_count": sum(1 for row in page_text_spans if not row.get("citable") and not row.get("span_bbox_ids")),
+        "exact_safe_word_highlight_count": sum(
+            1
+            for row in page_text_spans
+            if row.get("promotion_status") == "promoted_legal_unit"
+            and row.get("bbox_registry_coverage_reason") == "exact_word_bbox_available"
+            and row.get("evidence_ids")
+            and row.get("span_bbox_ids")
+            and all(
+                any(word.get("word_bbox_id") == ref for word in word_bboxes)
+                for ref in row.get("span_bbox_ids") or ()
+            )
+            and all(
+                next((item for item in evidence if item.get("evidence_id") == evidence_id), {}).get("exactness") == "exact"
+                for evidence_id in row.get("evidence_ids") or ()
+            )
+        ),
+        "non_citable_absent_span_count": sum(1 for row in page_text_spans if row.get("viewer_highlightable") is not True and not row.get("span_bbox_ids")),
         "false_highlight_count": viewer_provenance_coverage_health["highlight_without_span_bbox_count"],
     }
     validation_report["span_sequence_grounding_health"] = _span_sequence_grounding_health(
@@ -410,7 +426,219 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     return validate_uud_artifacts(final_dir, artifacts)
 
 
+def _validate_schema6_contract(artifacts: Mapping[str, object]) -> tuple[str, ...]:
+    """Small, corpus-owned publication contract for schema 6.
+
+    The older report builder deliberately remains available for historical
+    reports, but publication must be gated by this owner/lineage contract.
+    """
+    errors: list[str] = []
+
+    def rows(key: str) -> list[dict]:
+        value = artifacts.get(key) or []
+        return list(value) if isinstance(value, list) else []
+
+    by_artifact = {key: rows(key) for key in MINIMUM_ARTIFACT_FIELDS}
+    for artifact, required in MINIMUM_ARTIFACT_FIELDS.items():
+        for row in by_artifact[artifact]:
+            row_id = str(row.get(_schema6_id_field(artifact)) or "<missing>")
+            for field in required:
+                if field not in row:
+                    errors.append(f"artifact_required_field_missing:{artifact}:{row_id}:{field}")
+            forbidden = FORBIDDEN_ARTIFACT_FIELDS.get(artifact, frozenset())
+            for field in forbidden:
+                if field in row:
+                    errors.append(f"mixed_schema_contract:{artifact}:{row_id}:{field}")
+            allowed = set(required) | set(ARTIFACT_OPTIONAL_FIELDS.get(artifact, ())) | set(COMMON_ARTIFACT_FIELDS)
+            for field in row:
+                if artifact in MINIMUM_ARTIFACT_FIELDS and field not in allowed:
+                    errors.append(f"artifact_unknown_field:{artifact}:{row_id}:{field}")
+
+    evidence = by_artifact.get("evidence_registry", [])
+    evidence_ids = {row.get("evidence_id") for row in evidence}
+    bbox = by_artifact.get("bbox_registry", [])
+    bbox_ids = {row.get("bbox_id") for row in bbox}
+    bbox_ids.update(row.get("word_bbox_id") for row in by_artifact.get("word_bboxes", []))
+    span_ids = {row.get("text_span_id") for row in by_artifact.get("page_text_spans", [])}
+    spans_by_id = {row.get("text_span_id"): row for row in by_artifact.get("page_text_spans", [])}
+    source_docs = {row.get("source_document_id"): row for row in by_artifact.get("source_documents", [])}
+    for row in evidence:
+        row_id = str(row.get("evidence_id"))
+        if row.get("object_role") != "evidence":
+            errors.append(f"artifact_field_invalid:evidence_registry:{row_id}:object_role")
+        if row.get("authority_kind") is None or not isinstance(row.get("citation_final"), bool):
+            errors.append(f"artifact_field_invalid:evidence_registry:{row_id}:authority_or_finality")
+        for ref in row.get("bbox_refs") or ():
+            if ref not in bbox_ids:
+                errors.append(f"evidence_bbox_unresolved:{row_id}:{ref}")
+        for ref in row.get("text_span_ids") or ():
+            if ref not in span_ids:
+                errors.append(f"evidence_span_unresolved:{row_id}:{ref}")
+        source = source_docs.get(row.get("source_document_id"))
+        if source and row.get("source_sha256") != source.get("sha256"):
+            errors.append(f"EVIDENCE_SOURCE_LINEAGE_INVALID:{row_id}")
+        span_text = " ".join(str(spans_by_id.get(ref, {}).get("text") or "") for ref in row.get("text_span_ids") or ())
+        if row.get("quoted_text") and _schema6_normalize(row.get("quoted_text")) not in _schema6_normalize(span_text):
+            errors.append(f"EVIDENCE_QUOTE_SOURCE_MISMATCH:{row_id}")
+    for row in bbox:
+        row_id = str(row.get("bbox_id"))
+        if row.get("evidence_id") not in evidence_ids or row.get("evidence_exists") is not True:
+            errors.append(f"bbox_evidence_unresolved:{row_id}")
+        if row.get("object_role") != "geometry":
+            errors.append(f"artifact_field_invalid:bbox_registry:{row_id}:object_role")
+    for row in by_artifact.get("page_text_spans", []):
+        row_id = str(row.get("text_span_id"))
+        if row.get("object_role") != "source_span":
+            errors.append(f"artifact_field_invalid:page_text_spans:{row_id}:object_role")
+        if row.get("text_start") is not None and row.get("text_end") is not None and row.get("text_start") > row.get("text_end"):
+            errors.append(f"artifact_field_invalid:page_text_spans:{row_id}:text_range")
+        for ref in row.get("evidence_ids") or ():
+            if ref not in evidence_ids:
+                errors.append(f"span_evidence_unresolved:{row_id}:{ref}")
+        for ref in row.get("span_bbox_ids") or ():
+            if ref not in bbox_ids:
+                errors.append(f"span_bbox_unresolved:{row_id}:{ref}")
+    for row in by_artifact.get("retrieval_units", []):
+        row_id = str(row.get("retrieval_unit_id"))
+        if row.get("evidence_id") not in evidence_ids:
+            errors.append(f"retrieval_evidence_unresolved:{row_id}")
+        if row.get("object_role") != "retrieval_index_record":
+            errors.append(f"artifact_field_invalid:retrieval_units:{row_id}:object_role")
+    for row in by_artifact.get("metadata_grounding", []):
+        row_id = str(row.get("metadata_grounding_id"))
+        for ref in row.get("supporting_evidence_ids") or ():
+            if ref not in evidence_ids:
+                errors.append(f"metadata_evidence_unresolved:{row_id}:{ref}")
+        if row.get("object_role") != "metadata_support":
+            errors.append(f"artifact_field_invalid:metadata_grounding:{row_id}:object_role")
+        if "signatories" in str(row.get("metadata_grounding_id")) and row.get("quoted_text"):
+            donor_text = " ".join(
+                str(next((item.get("quoted_text") for item in evidence if item.get("evidence_id") == ref), ""))
+                for ref in row.get("supporting_evidence_ids") or ()
+            )
+            if donor_text and _schema6_normalize(row.get("quoted_text")) not in _schema6_normalize(donor_text):
+                errors.append(f"signatory_grounding_unknown_name:{row_id}")
+    for row in by_artifact.get("source_conflicts", []):
+        row_id = str(row.get("source_conflict_id"))
+        if not str(row.get("provenance_summary") or "").strip():
+            errors.append(f"source_conflict_missing_provenance_summary:{row_id}")
+        if row.get("object_role") != "trace_support" or row.get("is_citation_object") is not False:
+            errors.append(f"source_conflict_invalid_object_role:{row_id}")
+    units = by_artifact.get("legal_units", [])
+    spans_by_unit = {row.get("legal_unit_id"): set(row.get("text_span_ids") or ()) for row in evidence}
+    for unit in units:
+        unit_id = unit.get("legal_unit_id")
+        children = {
+            child.get("legal_unit_id")
+            for child in units
+            if unit_id in (child.get("ancestor_legal_unit_ids") or ())
+        }
+        if not children or unit_id not in spans_by_unit:
+            continue
+        expected = set().union(*(spans_by_unit.get(child, set()) for child in children))
+        if expected and not expected <= spans_by_unit[unit_id]:
+            errors.append(f"aggregate_text_span_sequence_incomplete:{unit_id}")
+    for row in by_artifact.get("article_amendment_relations", []):
+        row_id = str(row.get("relation_id"))
+        if row.get("authority_kind") is None or not isinstance(row.get("citation_final"), bool):
+            errors.append(f"artifact_field_invalid:article_amendment_relations:{row_id}:authority_or_finality")
+        source_unit = next((u for u in units if u.get("legal_unit_id") == row.get("source_legal_unit_id")), None)
+        target_unit = next((u for u in units if u.get("legal_unit_id") == row.get("target_legal_unit_id")), None)
+        relation_evidence = next((e for e in evidence if e.get("evidence_id") == row.get("evidence_id")), None)
+        if source_unit is None:
+            errors.append(f"article_relation_source_label_mismatch:{row_id}")
+        elif row.get("source_label") and row.get("source_label") != source_unit.get("unit_label"):
+            errors.append(f"article_relation_source_label_mismatch:{row_id}")
+        if target_unit is None:
+            errors.append(f"article_relation_unknown_target:{row_id}")
+        if relation_evidence is None:
+            errors.append(f"article_relation_bbox_source_mismatch:{row_id}")
+        else:
+            if row.get("source_document_id") != relation_evidence.get("source_document_id") or row.get("source_role") != relation_evidence.get("source_role"):
+                errors.append(f"article_relation_bbox_source_mismatch:{row_id}")
+            if row.get("source_pdf_sha256") != relation_evidence.get("source_sha256"):
+                errors.append(f"article_relation_source_sha_mismatch:{row_id}")
+            if row.get("bbox_precision") != relation_evidence.get("bbox_precision"):
+                errors.append(f"article_relation_bbox_precision_mismatch:{row_id}")
+        if target_unit is not None and row.get("target_source_role") != target_unit.get("source_role"):
+            errors.append(f"article_relation_target_role_mismatch:{row_id}")
+        if row.get("target_precision") not in {"target_local", "shared_span", "unresolved", "not_applicable"} or (
+            row.get("support_class") == "exact_article_relation" and row.get("target_precision") != "target_local"
+        ):
+            errors.append(f"article_relation_exact_precision_mismatch:{row_id}")
+        if row.get("relation_type") == "RENAMES" and row.get("old_reference_range") and row.get("new_reference_range"):
+            if any(not isinstance(value, (int, float)) for value in (*row["old_reference_range"], *row["new_reference_range"])):
+                errors.append(f"article_relation_old_range_text_mismatch:{row_id}")
+            elif any(value < 0 or value >= len(str(row.get("quoted_text") or "")) for value in (*row["old_reference_range"], *row["new_reference_range"])):
+                errors.append(f"article_relation_old_range_text_mismatch:{row_id}")
+            elif (
+                row["old_reference_range"][1] - row["old_reference_range"][0] < max(2, len(_schema6_normalize(row.get("old_reference"))) // 2)
+                or row["new_reference_range"][1] - row["new_reference_range"][0] < max(2, len(_schema6_normalize(row.get("new_reference"))) // 2)
+            ):
+                errors.append(f"article_relation_old_range_text_mismatch:{row_id}")
+    source_document_ids = set(source_docs)
+    for row in by_artifact.get("document_relations", []):
+        row_id = str(row.get("relation_id"))
+        if row.get("source_document_id") not in source_document_ids or row.get("target_document_id") not in source_document_ids:
+            errors.append(f"document_relation_source_unresolved:{row_id}")
+        if row.get("relation_type") not in {"AMENDS", "AMENDED_BY", "DERIVED_FROM", "CONSOLIDATES"}:
+            errors.append(f"document_relation_type_invalid:{row_id}")
+        if row.get("object_role") != "relation_proof" or row.get("support_kind") != "provenance_only":
+            errors.append(f"document_relation_support_invalid:{row_id}")
+        if row.get("relation_type") in {"DERIVED_FROM", "CONSOLIDATES"} and row.get("support_exception_ids"):
+            errors.append(f"document_relation_provenance_support_mismatch:{row_id}")
+    relation_by_id = {row.get("relation_id"): row for row in by_artifact.get("article_amendment_relations", [])}
+    relation_by_id.update({row.get("relation_id"): row for row in by_artifact.get("document_relations", [])})
+    exception_ids = {row.get("exception_id") for row in by_artifact.get("validation_exceptions", [])}
+    for edge in by_artifact.get("graph_edges", []):
+        relation_id = edge.get("relation_id")
+        relation = relation_by_id.get(relation_id)
+        if relation and edge.get("source_id") and edge.get("target_id"):
+            expected_source = f"legal_unit::{relation.get('source_legal_unit_id')}"
+            expected_target = f"legal_unit::{relation.get('target_legal_unit_id')}"
+            if edge.get("source_id") != expected_source or edge.get("target_id") != expected_target:
+                errors.append(f"graph_relation_target_mismatch:{edge.get('edge_id')}")
+        for ref in edge.get("support_relation_ids") or ():
+            if ref not in relation_by_id:
+                errors.append(f"graph_support_relation_unresolved:{edge.get('edge_id')}:{ref}")
+        for ref in edge.get("support_evidence_ids") or ():
+            if ref not in evidence_ids:
+                errors.append(f"graph_support_evidence_unresolved:{edge.get('edge_id')}:{ref}")
+        for ref in edge.get("support_exception_ids") or ():
+            if ref not in exception_ids:
+                errors.append(f"graph_support_exception_unresolved:{edge.get('edge_id')}:{ref}")
+    for row in by_artifact.get("graph_edges", []):
+        row_id = str(row.get("edge_id"))
+        if row.get("object_role") != "graph_projection":
+            errors.append(f"artifact_field_invalid:graph_edges:{row_id}:object_role")
+        if "support_refs" in row or "bbox_refs" in row or "text_span_ids" in row:
+            errors.append(f"mixed_schema_contract:graph_edges:{row_id}:proof_projection")
+    return tuple(dict.fromkeys(errors))
+
+
+def _schema6_normalize(value: object) -> str:
+    return "".join(str(value or "").casefold().split())
+
+
+def _schema6_id_field(artifact: str) -> str:
+    return {
+        "bbox_registry": "bbox_id",
+        "evidence_registry": "evidence_id",
+        "page_text_spans": "text_span_id",
+        "retrieval_units": "retrieval_unit_id",
+        "metadata_grounding": "metadata_grounding_id",
+        "article_amendment_relations": "relation_id",
+        "graph_edges": "edge_id",
+        "validation_exceptions": "exception_id",
+        "source_documents": "source_document_id",
+        "word_bboxes": "word_bbox_id",
+        "promotion_decisions": "decision_id",
+    }.get(artifact, "id")
+
+
 def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> tuple[str, ...]:
+    if UUD_ARTIFACT_SCHEMA == 6:
+        return _validate_schema6_contract(artifacts)
     def rows(key: str, *, optional: bool = False) -> list[dict]:
         value = artifacts.get(key)
         if value is None and optional:
@@ -3175,10 +3403,6 @@ def _structural_authority_contract_health(
         "structural_depth",
         "sibling_order",
         "canonical_label",
-        "authority_kind",
-        "citable_status",
-        "citation_final",
-        "citation_finality_reason",
     }
     missing_unit_fields = sum(1 for row in legal_units if any(field not in row for field in unit_fields))
     bad_parent_count = 0
@@ -3201,49 +3425,28 @@ def _structural_authority_contract_health(
             or len(expected) != row.get("structural_depth")
         ):
             bad_ancestor_count += 1
-    chunk_fields = {"canonical_unit_ref", "contributing_child_legal_unit_ids", "authority_kind", "citable_status", "citation_final"}
+    chunk_fields = {"chunk_id", "legal_unit_id", "evidence_ids", "text_span_ids"}
     missing_chunk_fields = sum(1 for row in chunks if any(field not in row for field in chunk_fields))
-    parent_final_count = sum(
-        1 for row in chunks if row.get("authority_kind") == "structural_context" and row.get("citation_final") is not False
-    )
+    parent_final_count = 0
     required_edge_fields = {
-        "source_node_type",
-        "target_node_type",
-        "supporting_evidence_ids",
-        "source_document_ids",
-        "page_numbers",
-        "text_span_ids",
-        "bbox_refs",
-        "authority_kind",
-        "citation_final",
-        "citation_finality_reason",
-        "derivation_method",
+        "source_id", "target_id", "object_role", "support_relation_ids", "support_evidence_ids", "support_exception_ids", "support_kind",
     }
     bad_edge_count = sum(
         1
         for row in graph_edges
-        if (
-            row.get("relation_id")
-            and set(row) != {"edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id"}
-        )
-        or (
-            not row.get("relation_id")
-            and (
-                any(field not in row for field in required_edge_fields)
+        if any(field not in row for field in required_edge_fields)
         or row.get("source_id") not in nodes
         or row.get("target_id") not in nodes
-        or row.get("citation_final") is not False
-        or row.get("derivation_method")
-        not in {"explicit_source_text", "reviewed_corpus_spec", "deterministic_structural_rule", "endpoint_metadata"}
-            )
-        )
+        or row.get("object_role") != "graph_projection"
+        or not row.get("support_kind")
     )
     bad_retrieval_trace_count = sum(
         1
         for row in retrieval_units
-        if not isinstance(row.get("retrieval_trace"), dict)
-        or row["retrieval_trace"].get("legal_unit_id") != row.get("legal_unit_id")
-        or row["retrieval_trace"].get("evidence_ids") != [row.get("evidence_id")]
+        if row.get("object_role") != "retrieval_index_record"
+        or row.get("artifact_status") not in {"published", "accepted"}
+        or not isinstance(row.get("page_locator"), dict)
+        or row.get("evidence_id") is None
     )
     counts = {
         "missing_unit_fields_count": missing_unit_fields,

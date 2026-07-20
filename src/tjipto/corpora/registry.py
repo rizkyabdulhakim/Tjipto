@@ -6,8 +6,9 @@ import os
 
 from tjipto.core.config import CorpusConfig
 from tjipto.core.manifest import read_json
+from tjipto.contracts.artifacts import CURRENT_ARTIFACT_SCHEMA
 
-SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = {5}
+SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = {5, CURRENT_ARTIFACT_SCHEMA}
 
 
 class CorpusRegistry:
@@ -53,7 +54,9 @@ class CorpusRegistry:
         if manifest.get("corpus_id") != corpus_id:
             self.error_code = "corpus_id_mismatch"
             return None
-        if manifest.get("schema_version") not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
+        if manifest.get("schema_version") not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS or (
+            corpus_id == "uud" and manifest.get("schema_version") != CURRENT_ARTIFACT_SCHEMA
+        ):
             self.error_code = "unsupported_schema"
             return None
         settings = {key: value for key, value in entry.items() if key != "manifest"} if isinstance(entry, dict) else {}

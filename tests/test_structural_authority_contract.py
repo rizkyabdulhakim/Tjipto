@@ -29,7 +29,7 @@ class StructuralAuthorityContractTest(unittest.TestCase):
         units = deepcopy(self.units)
         edges = deepcopy(self.edges)
         units[1]["parent_legal_unit_ids"] = ["missing-parent"]
-        edges[0]["citation_final"] = True
+        edges[0]["support_kind"] = None
         health = _structural_authority_contract_health(units, self.chunks, self.nodes, edges, self.retrieval)
         self.assertGreater(health["bad_parent_count"], 0)
         self.assertGreater(health["bad_graph_edge_count"], 0)

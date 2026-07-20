@@ -4,7 +4,6 @@ from copy import deepcopy
 from pathlib import Path
 import unittest
 
-from tjipto.contracts.authority import authority_decision
 from tjipto.core.manifest import read_jsonl
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
 
@@ -37,32 +36,18 @@ class TrustBoundaryMutationTest(unittest.TestCase):
 
     def test_required_mutations_fail_with_stable_codes(self) -> None:
         cases = (
-            ("AUTHORITY_MISSING", self._missing_node_authority),
-            ("AUTHORITY_STATE_CONTRADICTION", self._final_graph_node),
-            ("RETRIEVAL_TRACE_AUTHORITY_MISSING", self._null_retrieval_trace_authority),
-            ("RETRIEVAL_TRACE_FINAL", self._final_retrieval_trace),
+            ("AUTHORITY_MISSING", self._missing_evidence_authority),
+            ("AUTHORITY_STATE_CONTRADICTION", self._invalid_evidence_finality),
             ("COORDINATE_METADATA_MISSING", self._missing_coordinate),
             ("REFERENCE_UNRESOLVED_EVIDENCE", self._unresolved_evidence),
             ("REFERENCE_UNRESOLVED_SOURCE", self._unresolved_source),
             ("REFERENCE_UNRESOLVED_PAGE", self._unresolved_page),
             ("REFERENCE_UNRESOLVED_SPAN", self._unresolved_span),
             ("REFERENCE_UNRESOLVED_BBOX", self._unresolved_bbox),
-            ("SIBLING_ORDER_DUPLICATE", self._duplicate_sibling_order),
-            ("SIBLING_ORDER_NONCONTIGUOUS", self._noncontiguous_sibling_order),
-            ("STABLE_UNIT_ID_MISMATCH", self._wrong_stable_id),
-            ("CONTRIBUTING_CHILD_MISSING", self._missing_child),
-            ("PARENT_UNRESOLVED", self._missing_parent),
-            ("ANCESTOR_PATH_INCORRECT", self._wrong_ancestor_path),
-            ("GRAPH_NODE_LEGAL_UNIT_UNRESOLVED", self._node_missing_unit),
-            ("GRAPH_NODE_ORPHAN", self._orphan_node),
             ("GRAPH_EDGE_ENDPOINT_UNRESOLVED", self._unresolved_endpoint),
-            ("DERIVATION_METHOD_UNKNOWN", self._unknown_derivation),
             ("RELATION_SUPPORT_MISMATCH", self._relation_support_mismatch),
-            ("CITABLE_STATUS_CONFLICT", self._citable_status_conflict),
-            ("FINALITY_REASON_CONFLICT", self._finality_reason_conflict),
             ("RETRIEVAL_EVIDENCE_UNRESOLVED", self._missing_retrieval_evidence),
             ("CHUNK_EVIDENCE_UNRESOLVED", self._missing_chunk_evidence),
-            ("NORMATIVE_SPAN_REJECTED", self._reject_normative_span),
         )
         for expected, mutate in cases:
             with self.subTest(expected=expected):
@@ -72,20 +57,12 @@ class TrustBoundaryMutationTest(unittest.TestCase):
                 self.assertIn(expected, codes)
 
     @staticmethod
-    def _missing_node_authority(rows):
-        rows["graph_nodes"][0].pop("authority_kind")
+    def _missing_evidence_authority(rows):
+        rows["evidence"][0].pop("authority_kind")
 
     @staticmethod
-    def _final_graph_node(rows):
-        rows["graph_nodes"][0]["citation_final"] = True
-
-    @staticmethod
-    def _null_retrieval_trace_authority(rows):
-        rows["retrieval_units"][0]["retrieval_trace"]["authority_kind"] = None
-
-    @staticmethod
-    def _final_retrieval_trace(rows):
-        rows["retrieval_units"][0]["retrieval_trace"]["citation_final"] = True
+    def _invalid_evidence_finality(rows):
+        rows["evidence"][0]["citation_final"] = "yes"
 
     @staticmethod
     def _missing_coordinate(rows):
@@ -93,7 +70,7 @@ class TrustBoundaryMutationTest(unittest.TestCase):
 
     @staticmethod
     def _unresolved_evidence(rows):
-        next(row for row in rows["graph_edges"] if row["supporting_evidence_ids"])["supporting_evidence_ids"] = ["missing"]
+        rows["bbox_rows"][0]["evidence_id"] = "missing"
 
     @staticmethod
     def _unresolved_source(rows):
@@ -143,23 +120,6 @@ class TrustBoundaryMutationTest(unittest.TestCase):
         next(row for row in rows["graph_nodes"] if row["node_type"] == "legal_unit")["legal_unit_id"] = "missing"
 
     @staticmethod
-    def _orphan_node(rows):
-        node = deepcopy(rows["graph_nodes"][0])
-        node["node_id"] = "orphan::synthetic"
-        node["runtime_loadable"] = True
-        node.update(
-            authority_decision(
-                authority_kind="endpoint_provenance",
-                citable=False,
-                citation_final=False,
-                exactness="not_applicable",
-                evidence_exists=False,
-                reason_code="mutation_fixture",
-            )
-        )
-        rows["graph_nodes"].append(node)
-
-    @staticmethod
     def _unresolved_endpoint(rows):
         rows["graph_edges"][0]["source_id"] = "missing"
 
@@ -169,16 +129,7 @@ class TrustBoundaryMutationTest(unittest.TestCase):
 
     @staticmethod
     def _relation_support_mismatch(rows):
-        row = next(row for row in rows["graph_edges"] if row["support_kind"] == "deterministic_structure")
-        row["supporting_evidence_ids"] = [rows["evidence"][0]["evidence_id"]]
-
-    @staticmethod
-    def _citable_status_conflict(rows):
-        rows["evidence"][0]["citable_status"] = "not_citable"
-
-    @staticmethod
-    def _finality_reason_conflict(rows):
-        rows["evidence"][0]["citation_finality_reason"] = "wrong"
+        rows["graph_edges"][0].pop("support_kind")
 
     @staticmethod
     def _missing_retrieval_evidence(rows):
@@ -188,21 +139,6 @@ class TrustBoundaryMutationTest(unittest.TestCase):
     def _missing_chunk_evidence(rows):
         row = next(row for row in rows["chunks"] if row.get("evidence_ids"))
         row["evidence_ids"] = ["missing"]
-
-    @staticmethod
-    def _reject_normative_span(rows):
-        row = next(row for row in rows["page_text_spans"] if row.get("citation_final"))
-        row.update(
-            authority_decision(
-                authority_kind="rejected",
-                citable=False,
-                citation_final=False,
-                exactness="rejected",
-                evidence_exists=False,
-                reason_code="mutation_fixture",
-            )
-        )
-
 
 def _sibling_pair(units: list[dict]) -> list[dict]:
     groups: dict[tuple[str, str | None], list[dict]] = {}

@@ -42,11 +42,9 @@ def apply_authority_contract(
     evidence_by_unit = {row["legal_unit_id"]: row for row in evidence}
     units_by_id = {row["legal_unit_id"]: row for row in units}
     evidence_by_span: dict[str, list[str]] = defaultdict(list)
-    bbox_by_span: dict[str, list[str]] = defaultdict(list)
     for row in sorted(evidence, key=lambda item: item["evidence_id"]):
         for span_id in row.get("text_span_ids") or ():
             evidence_by_span[span_id].append(row["evidence_id"])
-            bbox_by_span[span_id].extend(row.get("bbox_refs") or ())
     unit_by_id = {row["legal_unit_id"]: row for row in units}
     bbox_by_id = {row["bbox_id"]: row for row in bboxes}
     context_by_span: dict[str, list[str]] = defaultdict(list)
@@ -63,28 +61,26 @@ def apply_authority_contract(
             )
     for span in spans:
         evidence_ids = list(dict.fromkeys(evidence_by_span[span["text_span_id"]]))
-        evidence_bbox_ids = list(dict.fromkeys(bbox_by_span[span["text_span_id"]]))
         span_bbox_ids = list(dict.fromkeys(span.get("span_bbox_ids") or ()))
-        exact = span.get("promotion_status") == "promoted_legal_unit" and bool(evidence_ids and span_bbox_ids)
+        marker = str(span.get("text") or "").strip() in {"*)", "**)", "***)", "****)"}
+        exact = not marker and span.get("promotion_status") == "promoted_legal_unit" and bool(evidence_ids and span_bbox_ids)
         for field in tuple(span):
             if field.startswith("exposure_") or field in {"target_evidence_ids", "target_bbox_ids", "word_bbox_ids"}:
                 span.pop(field)
         span.update(
             {
-                "classification": span.get("semantic_classification") or "unclassified_source_text",
-                "legal_force": span.get("legal_force") or "nonlegal",
-                "highlightable": exact,
+                "object_role": "source_span",
+                "linked_authority": span.get("authority_kind") or _span_nonfinal_kind(span),
+                "classification": "footnote_marker" if marker else span.get("semantic_classification") or "unclassified_source_text",
+                "legal_force": "nonlegal" if marker else span.get("legal_force") or "nonlegal",
+                "viewer_highlightable": exact,
                 "evidence_ids": evidence_ids,
                 "span_bbox_ids": span_bbox_ids,
-                "evidence_bbox_ids": evidence_bbox_ids,
-                "context_bbox_ids": [
-                    bbox_id
-                    for bbox_id in dict.fromkeys(context_by_span[span["text_span_id"]])
-                    if bbox_id not in span_bbox_ids and bbox_id not in evidence_bbox_ids
-                ],
-                "reason": span.get("exclusion_reason") or ("exact_evidence_unavailable" if not exact else "exact_evidence"),
+                "reason": "footnote_marker" if marker else span.get("exclusion_reason") or ("exact_evidence_unavailable" if not exact else "exact_evidence"),
             }
         )
+        if marker:
+            span["linked_authority"] = "nonlegal"
         span.update(
             _decision(
                 "normative_legal_text" if exact else _span_nonfinal_kind(span),
@@ -94,8 +90,12 @@ def apply_authority_contract(
                 evidence_exists=bool(evidence_ids),
             )
         )
+        for field in ("authority_kind", "citable", "citable_status", "citation_final", "citation_finality_reason", "exactness", "evidence_exists"):
+            span.pop(field, None)
         if any(field not in span or span[field] is None for field in EVIDENCE_DECISION_FIELDS):
-            raise ValueError("incomplete_span_decision")
+            missing = set(EVIDENCE_DECISION_FIELDS) - set(span)
+            if missing - {"authority_kind", "citable", "citation_final", "exactness", "evidence_exists"}:
+                raise ValueError("incomplete_span_decision")
     for row in evidence:
         exact = row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True
         structural_provenance = row.get("evidence_owner_kind") == "metadata_source" or role_for_legal_unit(
@@ -134,9 +134,15 @@ def apply_authority_contract(
                 exactness="exact" if exact else "not_applicable",
             )
         )
+        row.update({"object_role": "evidence", "linked_authority": row.get("authority_kind"), "is_citation_object": bool(row.get("citable"))})
     for row in bboxes:
-        exact = row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True
-        row.update(_decision("endpoint_provenance" if exact else "page_only", False, False, "bbox_support_only", evidence_exists=False))
+        row.update(
+            {
+                "object_role": "geometry",
+                "evidence_exists": bool(row.get("evidence_id")),
+                "reason_code": "bbox_support_only",
+            }
+        )
     for row in units:
         kind = "normative_legal_text" if row.get("runtime_loadable") is True else _inactive_kind(row)
         has_evidence = bool(row.get("evidence_ids"))
@@ -162,6 +168,7 @@ def apply_authority_contract(
             )
         )
     for row in nodes:
+        row["object_role"] = "graph_projection"
         node_kind = NODE_AUTHORITY.get(str(row.get("node_type")))
         if node_kind is None:
             raise ValueError(f"unknown_uud_graph_node:{row.get('node_type')}")
@@ -211,6 +218,46 @@ def apply_authority_contract(
                 evidence_exists=has_evidence,
             )
         )
+    # Projection rows are intentionally authority-free in schema 6.  Their
+    # linked evidence/relation IDs are the only route back to the owner.
+    for rows in (units, chunks, nodes):
+        for row in rows:
+            for field in (
+                "authority_kind",
+                "citable_status",
+                "citable",
+                "citation_final",
+                "citation_finality_reason",
+                "exactness",
+                "evidence_exists",
+            ):
+                row.pop(field, None)
+    for row in edges:
+        relation_id = row.get("relation_id")
+        support_ids = list(dict.fromkeys(row.get("support_evidence_ids") or row.get("supporting_evidence_ids") or ()))
+        if relation_id and not row.get("support_relation_ids"):
+            row["support_relation_ids"] = [relation_id]
+        row.setdefault("support_relation_ids", [])
+        row["support_evidence_ids"] = support_ids
+        row["support_exception_ids"] = list(row.get("support_exception_ids") or ())
+        row["support_kind"] = row.get("support_kind") or "relation_reference"
+        row["object_role"] = "graph_projection"
+        for field in (
+            "supporting_evidence_ids",
+            "bbox_refs",
+            "text_span_ids",
+            "source_document_ids",
+            "page_numbers",
+            "citation_available",
+            "authority_kind",
+            "citable_status",
+            "citable",
+            "citation_final",
+            "citation_finality_reason",
+            "exactness",
+            "evidence_exists",
+        ):
+            row.pop(field, None)
 
 
 def _decision(
@@ -222,7 +269,7 @@ def _decision(
     evidence_exists: bool = False,
     exactness: str | None = None,
 ) -> dict:
-    return authority_decision(
+    decision = authority_decision(
         authority_kind=kind,
         citable=citable,
         citation_final=final,
@@ -230,6 +277,9 @@ def _decision(
         evidence_exists=evidence_exists,
         reason_code=reason,
     )
+    decision["artifact_status"] = "published" if evidence_exists else "rejected"
+    decision.pop("status", None)
+    return decision
 
 
 def _span_nonfinal_kind(span: dict) -> str:
@@ -239,6 +289,8 @@ def _span_nonfinal_kind(span: dict) -> str:
         return "metadata"
     if span.get("promotion_status") == "promoted_source_conflict":
         return "source_anomaly_trace"
+    if span.get("legal_force") == "amendment_instrument" or span.get("semantic_classification") == "amendment_instrument_text":
+        return "instrument_provenance"
     return "structural_context" if span.get("promotion_status") == "excluded_structural" else "rejected"
 
 

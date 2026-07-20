@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-UUD_ARTIFACT_SCHEMA = 5
+from tjipto.contracts.artifacts import CURRENT_ARTIFACT_SCHEMA
+
+
+UUD_ARTIFACT_SCHEMA = CURRENT_ARTIFACT_SCHEMA
 
 RECOVERY_CAPABILITIES = {
     "exact_materialized",

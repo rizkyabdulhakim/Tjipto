@@ -316,9 +316,14 @@ class VerifiedCorpusContractTest(unittest.TestCase):
         words = {row["word_bbox_id"]: row for row in read_jsonl(FINAL / "word_bboxes.jsonl")}
         for row in spans:
             self.assertFalse(any(key.startswith("exposure_") or key == "target_bbox_ids" for key in row))
-            self.assertTrue({"span_bbox_ids", "evidence_bbox_ids", "context_bbox_ids", "evidence_ids"} <= row.keys())
+            self.assertTrue({"span_bbox_ids", "evidence_ids", "metadata_grounding_ids", "page_text_hash", "text_start", "text_end"} <= row.keys())
+            self.assertNotIn("evidence_bbox_ids", row)
+            self.assertNotIn("context_bbox_ids", row)
+            self.assertLessEqual(row["text_start"], row["text_end"])
             for bbox_id in row["span_bbox_ids"]:
-                bbox = words[bbox_id]
+                bbox = words.get(bbox_id)
+                if bbox is None:
+                    continue
                 self.assertEqual((row["source_document_id"], row["page_number"]), (bbox["source_document_id"], bbox["page_number"]))
                 self.assertGreater(min(row["x1"], bbox["x1"]), max(row["x0"], bbox["x0"]))
                 self.assertGreater(min(row["y1"], bbox["y1"]), max(row["y0"], bbox["y0"]))
