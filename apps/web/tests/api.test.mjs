@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { answerTextOrFallback, mapAskResponseToCitations, mapAskResponseToSupportItems, mapSearchResultToCitation } from "../src/lib/api.ts";
+import {
+  answerTextOrFallback,
+  mapAskResponseToCitations,
+  mapAskResponseToDocumentSource,
+  mapAskResponseToSupportItems,
+  mapSearchResultToCitation,
+} from "../src/lib/api.ts";
 
 test("document search result opens document viewer mode", () => {
   const citation = mapSearchResultToCitation({
@@ -35,6 +41,27 @@ test("evidence search result keeps evidence viewer mode", () => {
   assert.equal(citation?.viewerMode, "evidence");
   assert.equal(citation?.documentId, "evidence_1");
   assert.equal(citation?.pageNumber, 3);
+});
+
+test("scoped source answer opens the full document without citation geometry", () => {
+  const citation = mapAskResponseToDocumentSource({
+    status: "answer_ready",
+    answer_type: "source_document",
+    document_source: {
+      source_document_id: "uud::amendment_1_historical",
+      source_role: "amendment_1_historical",
+      temporal_context: "amendment_1_historical",
+      document_title: "Perubahan Pertama UUD 1945",
+      viewer_target: { action: "open_document", source_document_id: "uud::amendment_1_historical" },
+    },
+    citations: [],
+    viewer_refs: [],
+  });
+
+  assert.equal(citation?.viewerMode, "document");
+  assert.equal(citation?.sourceDocumentId, "uud::amendment_1_historical");
+  assert.equal(citation?.excerpt, "");
+  assert.deepEqual(mapAskResponseToCitations({ status: "answer_ready", answer_type: "source_document" }), []);
 });
 
 test("metadata and trace support are not mapped as exact citations", () => {

@@ -20,6 +20,7 @@ export interface TjiptoAskResponse {
   answer_type?: string;
   answer?: string;
   answer_scope?: string;
+  document_source?: DocumentSourcePayload;
   warnings?: string[];
   insufficient_reasons?: string[];
   citations?: CitationPayload[];
@@ -29,6 +30,17 @@ export interface TjiptoAskResponse {
   article_amendment_relations?: ArticleAmendmentRelationPayload[];
   trace_support?: TraceSupportPayload[];
   clarification_options?: ClarificationOptionPayload[];
+}
+
+export interface DocumentSourcePayload {
+  source_document_id?: string;
+  source_role?: string;
+  temporal_context?: string;
+  document_title?: string;
+  viewer_target?: {
+    action?: "open_document";
+    source_document_id?: string;
+  };
 }
 
 export interface ClarificationOptionPayload {
@@ -360,6 +372,26 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       relationProof: Array.isArray(viewer?.source_proof_bbox_refs) && viewer.source_proof_bbox_refs.length > 0,
     };
   });
+}
+
+export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Citation | null {
+  const source = response.document_source;
+  const sourceDocumentId = source?.source_document_id;
+  if (response.answer_type !== "source_document" || !sourceDocumentId) return null;
+  return {
+    id: 1,
+    documentId: sourceDocumentId,
+    documentTitle: source.document_title ?? fallbackDocumentTitle("uud"),
+    regulationType: "UUD",
+    viewerMode: "document",
+    sourceDocumentId,
+    pageNumber: 1,
+    excerpt: "",
+    sourceUrl: "",
+    sourceRole: source.source_role,
+    temporalContext: source.temporal_context,
+    sourceStatusLabel: sourceStatusLabel(source.source_role, source.temporal_context),
+  };
 }
 
 export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {

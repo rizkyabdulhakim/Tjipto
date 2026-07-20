@@ -4,9 +4,11 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import time
 from typing import Any
 
 from tjipto.runtime.api import handle_request
+from tjipto.runtime.service import LegalRuntimeService
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--strict-known-gaps", action="store_true")
+    parser.add_argument("--scope-performance", action="store_true")
     args = parser.parse_args(argv)
 
     cases = _read_jsonl(args.cases)
@@ -32,13 +35,85 @@ def main(argv: list[str] | None = None) -> int:
         "counts": counts,
         "results": results,
     }
+    if args.scope_performance:
+        report["scope_performance"] = _scope_performance()
+        if report["scope_performance"].get("status") != "pass":
+            report["status"] = "fail"
     if args.report:
         args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"retrieval_eval: PASS={counts['pass']} FAIL={counts['fail']} KNOWN_GAP={counts['known_gap']}")
+    if args.scope_performance:
+        performance = report["scope_performance"]
+        print(f"scope_performance: {json.dumps(performance, ensure_ascii=False, sort_keys=True)}")
     for row in results:
         if row["outcome"] != "PASS":
             print(f"{row['outcome']}: {row['id']} :: {'; '.join(row['errors'])}")
     return 1 if report["status"] == "fail" else 0
+
+
+def _scope_performance() -> dict[str, Any]:
+    service = LegalRuntimeService(ROOT)
+    store = service._store("uud")
+    if store is None:
+        return {"status": "unavailable", "reason": "corpus_not_ready"}
+    config = store.config
+    labels = config.setting("intent_config", {}).get("source_role_labels", {})
+    markers = {
+        role: ("naskah asli" if role == "original_historical" else "saat ini" if role == "current_consolidated" else f"Perubahan {label}")
+        for role, label in labels.items()
+    }
+    cases = []
+    for role in config.source_roles:
+        evidence = next(
+            (
+                row
+                for row in store.evidence
+                if row.get("source_role") == role
+                and row.get("status") == "final"
+                and row.get("citation")
+                and row.get("viewer_highlightable") is True
+            ),
+            None,
+        )
+        if evidence is not None and role in markers:
+            cases.append((f"Apa isi {evidence['citation']} {markers[role]}?", role))
+    if not cases:
+        return {"status": "unavailable", "reason": "no_scoped_exact_cases"}
+    cold_start = time.perf_counter()
+    cold = [service.ask("uud", query) for query, _ in cases]
+    cold_seconds = time.perf_counter() - cold_start
+    warm_samples = []
+    warm_responses = []
+    for _ in range(4):
+        for query, _ in cases:
+            started = time.perf_counter()
+            warm_responses.append(service.ask("uud", query))
+            warm_samples.append((time.perf_counter() - started) * 1000)
+    expected_roles = [role for _, role in cases]
+    responses = cold + warm_responses
+    correct = 0
+    leakage = 0
+    for response, expected in zip(responses[: len(cases)], expected_roles):
+        roles = {row.get("source_role") for row in response.get("citations", ())}
+        correct += roles == {expected}
+        leakage += bool(roles - {expected})
+    warm_samples.sort()
+    return {
+        "status": "pass" if correct == len(cases) and leakage == 0 else "fail",
+        "case_count": len(cases),
+        "cold_seconds": round(cold_seconds, 3),
+        "warm_p50_ms": round(_percentile(warm_samples, 0.50), 2),
+        "warm_p95_ms": round(_percentile(warm_samples, 0.95), 2),
+        "source_role_precision": round(correct / len(cases), 4),
+        "cross_source_leakage": leakage,
+    }
+
+
+def _percentile(values: list[float], fraction: float) -> float:
+    if not values:
+        return 0.0
+    index = min(len(values) - 1, max(0, round((len(values) - 1) * fraction)))
+    return values[index]
 
 
 def _evaluate(case: dict[str, Any]) -> dict[str, Any]:

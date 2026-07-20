@@ -6,7 +6,13 @@ import { ChatView } from "./components/tjipto/ChatView";
 import { SearchRoute, LibraryRoute } from "./components/tjipto/SecondaryRoutes";
 import type { Citation, ChatMessage as TMessage } from "./lib/types";
 import { conversation } from "./components/tjipto/data";
-import { answerTextOrFallback, askLegal, mapAskResponseToCitations, mapAskResponseToSupportItems } from "./lib/api";
+import {
+  answerTextOrFallback,
+  askLegal,
+  mapAskResponseToCitations,
+  mapAskResponseToDocumentSource,
+  mapAskResponseToSupportItems,
+} from "./lib/api";
 import { Menu, SquarePen } from "lucide-react";
 
 type Route = "chat" | "search" | "library";
@@ -81,8 +87,10 @@ export default function App() {
     try {
       const response = await askLegal(value);
       const citations = mapAskResponseToCitations(response);
+      const documentSource = mapAskResponseToDocumentSource(response);
       const support = mapAskResponseToSupportItems(response);
       const content = answerTextOrFallback(response);
+      setActiveCitation(documentSource);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === asstId

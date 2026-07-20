@@ -753,10 +753,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(current.get("source_conflict"))
 
         historical = self.service.ask("uud", "Pasal 25E")
-        self.assertEqual(historical["status"], "answer_ready")
-        self.assertEqual(len(historical["citations"]), 1)
-        self.assertEqual(historical["citations"][0]["source_role"], "amendment_2_historical")
-        self.assertFalse(historical["citations"][0]["citation_final"])
+        self.assertEqual(historical["status"], "insufficient_evidence")
+        self.assertFalse(historical["citations"])
 
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
         for case in _relation_cases():
@@ -1062,8 +1060,8 @@ class RuntimeContractTest(unittest.TestCase):
             "Pasal 1 ayat (3)",
             filters={"source_role": "amendment_1_historical"},
         )
-        self.assertEqual(removed["status"], "no_results")
-        self.assertEqual(removed["reason"], "filters_removed_all")
+        self.assertEqual(removed["status"], "insufficient_evidence")
+        self.assertEqual(removed["reason"], "structured_not_found")
         self.assertFalse(removed["matches"])
         self.assertFalse(removed["evidence"])
 
@@ -1125,6 +1123,40 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertEqual({row["source_role"] for row in result["citations"]}, {source_role}, query)
             else:
                 self.assertFalse(result["citations"], query)
+
+    def test_scoped_document_query_opens_full_source_without_legal_citation(self) -> None:
+        for query, role in (
+            ("Apa isi Perubahan Pertama UUD?", "amendment_1_historical"),
+            ("Apa isi Perubahan Keempat UUD?", "amendment_4_historical"),
+            ("Apa isi naskah asli UUD?", "original_historical"),
+        ):
+            result = self.service.ask("uud", query)
+            self.assertEqual(result["status"], "answer_ready", query)
+            self.assertEqual(result["route"], "source_document", query)
+            self.assertEqual(result["answer_type"], "source_document", query)
+            self.assertEqual(result["document_source"]["source_role"], role, query)
+            self.assertEqual(result["document_source"]["viewer_target"]["action"], "open_document", query)
+            self.assertFalse(result["citations"], query)
+            self.assertFalse(result["viewer_refs"], query)
+
+    def test_unresolved_scoped_document_never_falls_back_to_consolidated(self) -> None:
+        result = self.service.ask("uud", "Apa isi amandement pertama UUD?")
+        self.assertEqual(result["status"], "insufficient_evidence")
+        self.assertEqual(result["reason"], "unresolved_source_scope")
+        self.assertFalse(result["citations"])
+        self.assertFalse(result["viewer_refs"])
+
+    def test_source_role_marker_does_not_create_document_relation(self) -> None:
+        result = self.service.ask("uud", "Apa isi Perubahan Pertama UUD?")
+        self.assertNotEqual(result["route"], "document_relation")
+
+    def test_document_source_api_exposes_verified_document_target_only(self) -> None:
+        result = handle_request("uud", "ask", {"query": "Apa isi Perubahan Pertama UUD?"}, service=self.service)
+        self.assertEqual(result["answer_type"], "source_document")
+        self.assertEqual(result["document_source"]["source_role"], "amendment_1_historical")
+        self.assertEqual(result["document_source"]["viewer_target"]["action"], "open_document")
+        self.assertFalse(result["citations"])
+        self.assertFalse(result["viewer_refs"])
 
     def test_two_artifact_declared_document_scopes_route_to_their_document_relation(self) -> None:
         result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")

@@ -63,8 +63,8 @@ export function EvidencePanel({
   };
 
   useEffect(() => {
+    setPdfOnly(false);
     if (!citation) {
-      setPdfOnly(false);
       setIsResizing(false);
     }
   }, [citation]);
@@ -129,6 +129,7 @@ function EvidenceContent({
   pdfOnly: boolean;
   onTogglePdfOnly: () => void;
 }) {
+  const documentMode = citation.viewerMode === "document";
   const [zoom, setZoom] = useState(100);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -161,7 +162,7 @@ function EvidenceContent({
     return () => {
       stale = true;
     };
-  }, [citation.documentId]);
+  }, [citation.documentId, citation.viewerMode, citation.relationId]);
 
   const copyExcerpt = () => {
     try {
@@ -277,7 +278,7 @@ function EvidenceContent({
         >
           {pdfOnly ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </ToolbarBtn>
-        {!pdfOnly && <ToolbarBtn
+        {!pdfOnly && !documentMode && <ToolbarBtn
           onClick={savePointer}
           className="w-9 h-9 rounded-xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] shadow-sm"
           aria-label="Simpan bookmark sementara"
@@ -291,8 +292,8 @@ function EvidenceContent({
         {/* PDF VIEW */}
         <div
           ref={pdfScrollRef}
-          className={`min-h-0 overflow-auto tj-scroll ${PDF_AREA_PADDING_CLASS} ${pdfOnly ? "flex-1" : "basis-[54%] border-b border-[var(--tj-border-subtle)]"}`}
-          data-evidence-pdf-area={pdfOnly ? "expanded" : "normal"}
+          className={`min-h-0 overflow-auto tj-scroll ${PDF_AREA_PADDING_CLASS} ${pdfOnly || documentMode ? "flex-1" : "basis-[54%] border-b border-[var(--tj-border-subtle)]"}`}
+          data-evidence-pdf-area={pdfOnly ? "expanded" : documentMode ? "document" : "normal"}
         >
           <div
             className={`relative mx-auto rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm ${pdfOnly ? "max-w-[min(1180px,100%)]" : ""}`}
@@ -325,7 +326,7 @@ function EvidenceContent({
           </div>
         </div>
 
-        {!pdfOnly && <div className="flex-1 min-h-0 overflow-y-auto tj-scroll px-6 py-6" data-evidence-detail-area="normal">
+        {!pdfOnly && !documentMode && <div className="flex-1 min-h-0 overflow-y-auto tj-scroll px-6 py-6" data-evidence-detail-area="normal">
           {/* EXCERPT CARD */}
           <section className="mb-6">
             <div className="flex items-center justify-between mb-3 px-1">

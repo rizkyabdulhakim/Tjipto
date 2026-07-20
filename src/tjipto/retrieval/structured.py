@@ -80,31 +80,7 @@ def structured_lookup(
             else row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets)
         )
     ]
-    if not rows and scope.state == "unscoped":
-        return _historical_only_rows(store, legal_unit_ids, targets, limit)
     return tuple(rows[:limit])
-
-
-def _historical_only_rows(
-    store: EvidenceStore,
-    legal_unit_ids: set[str],
-    targets: tuple[str, ...],
-    limit: int,
-) -> tuple[dict, ...]:
-    candidates = [
-        row
-        for row in store.evidence
-        if row.get("status") == "final"
-        and row.get("exactness") == "exact"
-        and row.get("runtime_loadable") is not False
-        and str(row.get("source_role") or "").endswith("_historical")
-        and store.bboxes_for(row["evidence_id"])
-        and (row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets))
-    ]
-    roles = {row.get("source_role") for row in candidates}
-    if len(roles) != 1 or len(candidates) != 1:
-        return ()
-    return tuple(row | {"source_scope_fallback": "historical_only"} for row in candidates[:limit])
 
 
 def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None) -> bool:

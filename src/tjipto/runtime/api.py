@@ -107,6 +107,19 @@ def _public_ask(result: dict) -> dict:
         "warnings": tuple(result.get("warnings", ())),
         "insufficient_reasons": tuple(_public_reason(row) or row for row in result.get("insufficient_reasons", ())),
     }
+    if result.get("document_source") is not None:
+        source = result["document_source"]
+        public["answer_type"] = "source_document"
+        public["document_source"] = {
+            "source_document_id": source.get("source_document_id"),
+            "source_role": source.get("source_role"),
+            "temporal_context": source.get("temporal_context"),
+            "document_title": source.get("document_title"),
+            "viewer_target": {
+                "action": "open_document",
+                "source_document_id": source.get("source_document_id"),
+            },
+        }
     for key in ("requested_function", "target_reference", "legal_domain"):
         if result.get(key) is not None:
             public[key] = result[key]

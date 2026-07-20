@@ -190,6 +190,16 @@ async function runEvidenceContractSmoke(browser) {
   await assertHighlightGeometry(articleRelationPage);
   await articleRelationPage.close();
 
+  const sourceDocumentPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await ask(sourceDocumentPage, "Apa isi Perubahan Pertama UUD?");
+  await sourceDocumentPage.locator('[data-runtime-status="answer_ready"]').waitFor();
+  await sourceDocumentPage.locator('[data-evidence-panel]').waitFor();
+  await sourceDocumentPage.locator('[data-evidence-pdf-area="document"]').waitFor();
+  await sourceDocumentPage.locator('[data-pdf-document="full"]').waitFor();
+  assert((await sourceDocumentPage.locator('[data-bbox-highlight]').count()) === 0, "Full source document rendered a legal highlight.");
+  assert((await sourceDocumentPage.locator('[data-citation-footer="true"]').count()) === 0, "Full source document rendered a citation footer.");
+  await sourceDocumentPage.close();
+
   const traceRelationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(traceRelationPage, "Pasal 3 ayat (3) menjadi Pasal 3 ayat (2)");
   await traceRelationPage.locator('[data-runtime-status="answer_ready"]').waitFor();

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
 from tjipto.retrieval.metadata import resolve_source_scope
 from tjipto.corpora.parser_dispatch import (
     DEFAULT_CORPUS_ID,
@@ -111,7 +111,7 @@ def _route_name(intent: dict, requested: str) -> str | None:
 def _route_terms_match(intent: dict, mode: str, folded: str) -> bool:
     route: dict = next((row for row in intent["relation_routes"].values() if row.get("mode") == mode), {})
     terms = route.get("required_terms") or ()
-    return any(term in folded for term in terms)
+    return contains_intent_phrase(folded, terms)
 
 
 def _unsupported_relation_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
@@ -123,21 +123,21 @@ def _unsupported_relation_requested(query: str, folded: str, *, strategy: str, c
     corpus_id = _corpus_id(config)
     has_pasal = _has_pasal(query, corpus_id)
     has_bab = _has_bab(query, corpus_id)
-    direct_relation = any(pattern in folded for pattern in intent["direct_relation_words"])
-    relation_words = any(pattern in folded for pattern in intent["relation_words"])
-    unsupported_context = any(pattern in folded for pattern in intent["unsupported_relation_context_words"])
+    direct_relation = contains_intent_phrase(folded, intent["direct_relation_words"])
+    relation_words = contains_intent_phrase(folded, intent["relation_words"])
+    unsupported_context = contains_intent_phrase(folded, intent["unsupported_relation_context_words"])
     return (direct_relation and (has_pasal or has_bab or relation_words)) or (
         relation_words and (has_pasal or has_bab or unsupported_context)
     )
 
 
 def _child_relation_requested(folded: str, intent: dict) -> bool:
-    return any(word in folded for word in intent["relation_child_words"])
+    return contains_intent_phrase(folded, intent["relation_child_words"])
 
 
 def _pasal_parent_requested(query: str, folded: str, *, strategy: str, config=None) -> bool:
-    return _has_pasal(query, _corpus_id(config)) and any(
-        pattern in folded for pattern in intent_config_for(strategy, config)["pasal_parent_words"]
+    return _has_pasal(query, _corpus_id(config)) and contains_intent_phrase(
+        folded, intent_config_for(strategy, config)["pasal_parent_words"]
     )
 
 

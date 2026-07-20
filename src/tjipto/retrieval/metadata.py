@@ -94,7 +94,34 @@ def resolve_source_scope(query: str, *, strategy: str = "generic", config=None) 
         return SourceScopeDecision(None, "unresolved")
     if contains_intent_phrase(query, intent.get("instrument_source_signals", ())):
         return SourceScopeDecision(None, "unresolved")
+    if _near_source_scope_match(query, intent):
+        return SourceScopeDecision(None, "unresolved")
     return SourceScopeDecision(getattr(config, "preferred_source_role", None), "unscoped")
+
+
+def _near_source_scope_match(query: str, intent: dict) -> bool:
+    """Detect a bounded typo against existing source-role matchers only."""
+    tokens = normalize_intent_text(query).split()
+    for index, token in enumerate(tokens):
+        for candidate in _one_edit_candidates(token):
+            mutated = tokens[:]
+            mutated[index] = candidate
+            candidate_query = " ".join(mutated)
+            if any(pattern.search(candidate_query) for _, pattern in intent.get("metadata_roles", ())):
+                return True
+    return False
+
+
+def _one_edit_candidates(token: str) -> tuple[str, ...]:
+    if len(token) < 3:
+        return ()
+    deletion = tuple(token[:index] + token[index + 1 :] for index in range(len(token)))
+    transposition = tuple(
+        token[:index] + token[index + 1] + token[index] + token[index + 2 :]
+        for index in range(len(token) - 1)
+        if token[index] != token[index + 1]
+    )
+    return tuple(dict.fromkeys((*deletion, *transposition)))
 
 
 def public_filters(filters: dict) -> dict:

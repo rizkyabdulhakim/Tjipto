@@ -13,12 +13,14 @@ from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusReposito
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.metadata import (
+    has_metadata_target,
     metadata_lookup,
     normalize_filters,
     public_filters,
     resolve_source_scope,
     source_roles_for_query,
 )
+from tjipto.retrieval.relations import has_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.gemini import GeminiAnswerProvider
@@ -358,6 +360,9 @@ class LegalRuntimeService:
         document_relation = _document_relation_response(store, corpus_id, query)
         if document_relation:
             return document_relation
+        source_document = _source_document_response(store, corpus_id, query)
+        if source_document:
+            return source_document
         # A resolved legal target has precedence over the instrument classifier.
         # Amendment wording then scopes the structured lookup to that source role.
         instrument = None if _has_resolved_legal_target(corpus_id, query) else _instrument_intent_context(store, query)
@@ -910,6 +915,91 @@ def _answer_type(route: str, status: str) -> str:
         "metadata_fact": "metadata_fact",
         "legal_relation": "legal_relation",
     }.get(route, "quoted_evidence")
+
+
+def _source_document_response(store, corpus_id: str, query: str) -> dict | None:
+    """Open one explicitly scoped verified source without inventing a citation."""
+    config = getattr(store, "config", None)
+    strategy = getattr(config, "query_strategy", "generic")
+    intent = intent_config_for(strategy, config)
+    instrument_decision = resolve_instrument_intent(query, intent, corpus=corpus_id)
+    scope = resolve_source_scope(query, strategy=strategy, config=config)
+    if not scope.explicit or _has_resolved_legal_target(corpus_id, query):
+        return None
+    if has_relation_target(query, strategy=strategy, config=config):
+        return None
+    if instrument_decision.role_family is not None or instrument_decision.target_status == "instrument_resolved_fail_closed":
+        return None
+    relation_config = intent.get("document_relation", {})
+    if not contains_intent_phrase(query, relation_config.get("target_document_terms", ())):
+        return None
+    if contains_intent_phrase(query, intent.get("instrument_analysis_signals", ())) or contains_intent_phrase(
+        query, intent.get("instrument_effect_signals", ())
+    ):
+        return None
+    if has_metadata_target(query, strategy=strategy, config=config, store=store) and _has_metadata_field_target(query, intent):
+        return None
+    metadata_rows = metadata_lookup(store, query, 1)
+    if metadata_rows and metadata_rows[0].get("metadata_field") != "official_title":
+        return None
+    source = next((row for row in store.source_documents if row.get("source_role") == scope.role), None)
+    templates = _answer_templates(store)
+    if source is None:
+        reason = "source_document_not_found"
+        return {
+            "status": "insufficient_evidence",
+            "route": "source_document",
+            "intent": "source_document_lookup",
+            "corpus_id": corpus_id,
+            "original_query": query,
+            "normalized_query": query.strip(),
+            "reason": reason,
+            "answer_type": "none",
+            "answer": templates["insufficient"],
+            "document_source": None,
+            "citations": (),
+            "viewer_refs": (),
+            "metadata_facts": (),
+            "evidence": (),
+            "warnings": (),
+            "insufficient_reasons": (reason,),
+        }
+    title = _document_title(store, source)
+    document_source = {
+        "source_document_id": source.get("source_document_id"),
+        "source_role": source.get("source_role"),
+        "temporal_context": source.get("temporal_context"),
+        "document_title": title,
+        "viewer_target": {
+            "action": "open_document",
+            "source_document_id": source.get("source_document_id"),
+        },
+    }
+    return {
+        "status": "answer_ready",
+        "route": "source_document",
+        "intent": "source_document_lookup",
+        "corpus_id": corpus_id,
+        "original_query": query,
+        "normalized_query": query.strip(),
+        "reason": None,
+        "answer_type": "source_document",
+        "answer": f"Naskah sumber terverifikasi: {title}.",
+        "document_source": document_source,
+        "citations": (),
+        "viewer_refs": (),
+        "metadata_facts": (),
+        "evidence": (),
+        "warnings": ("document_source_has_no_legal_citation",),
+        "insufficient_reasons": (),
+    }
+
+
+def _has_metadata_field_target(query: str, intent: dict) -> bool:
+    return any(
+        field != "official_title" and contains_intent_phrase(query, aliases)
+        for field, aliases in intent.get("metadata_fields", {}).items()
+    )
 
 
 def _metadata_fact(row: dict) -> dict:
