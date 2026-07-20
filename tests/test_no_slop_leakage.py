@@ -68,7 +68,7 @@ class NoSlopLeakageTest(unittest.TestCase):
     def test_git_archive_handoff_excludes_local_artifacts(self) -> None:
         if (ROOT / ".git").exists():
             archive = subprocess.check_output(  # nosec B603 B607
-                ["git", "archive", "--format=tar", "--worktree-attributes", "HEAD"],
+                ["git", "archive", "--format=tar", "HEAD"],
                 cwd=ROOT,
             )
             names = set(tarfile.open(fileobj=io.BytesIO(archive)).getnames())

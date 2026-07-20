@@ -31,15 +31,7 @@ jobs:
           PYTHONPATH: src
       - run: git diff --exit-code
       - name: Verify clean archive
-        run: |
-          git archive --format=zip --worktree-attributes HEAD -o tjipto-clean.zip
-          python scripts/verify_clean_handoff.py tjipto-clean.zip
-          mkdir tjipto-clean
-          unzip -q tjipto-clean.zip -d tjipto-clean
-          python scripts/verify_clean_handoff.py tjipto-clean
-          cd tjipto-clean
-          python -m compileall -q src tests scripts
-          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m unittest discover -s tests -v
+        run: python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release.zip"
 
   runtime-dependency-audit:
     runs-on: ubuntu-latest

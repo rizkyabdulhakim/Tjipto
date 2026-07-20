@@ -23,7 +23,6 @@ from tjipto.retrieval.metadata import (
 from tjipto.retrieval.relations import has_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent
-from tjipto.runtime.gemini import GeminiAnswerProvider
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
 
@@ -80,7 +79,6 @@ class LegalRuntimeService:
         self.repository = VerifiedCorpusRepository(self.registry)
         self._integrity_error: str | None = None
         self._store_cache: dict[str, EvidenceStore] = {}
-        self._answer_provider = GeminiAnswerProvider.from_environment()
 
     def _store(self, corpus_id: str):
         cached = self._store_cache.get(corpus_id)
@@ -581,9 +579,7 @@ class LegalRuntimeService:
         }
 
     def _agent_answer(self, query: str, evidence: tuple[dict, ...], fallback: str) -> str:
-        if self._answer_provider is None:
-            return fallback
-        return self._answer_provider.answer(query, evidence) or fallback
+        return fallback
 
     def _answer_text(self, status: str, evidence: tuple[dict, ...], templates: dict[str, str]) -> str:
         if evidence[0].get("metadata_answer"):

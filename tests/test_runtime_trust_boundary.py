@@ -3,12 +3,14 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 import json
 from http.server import ThreadingHTTPServer
+import os
 from pathlib import Path
 import shutil
 import socket
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 
 from tjipto.runtime.http import make_server
 from tjipto.runtime.service import LegalRuntimeService
@@ -59,6 +61,54 @@ class RuntimeTrustBoundaryTest(unittest.TestCase):
                 self.assertEqual(result["status"], "corpus_not_ready")
                 self.assertEqual(result["reason_code"], "unsupported_schema")
                 self.assertFalse(result.get("citations"))
+
+    def test_experimental_provider_cannot_override_canonical_publication(self) -> None:
+        class FakeProvider:
+            def __init__(self, response=None, error: Exception | None = None):
+                self.response = response
+                self.error = error
+                self.calls = 0
+
+            def answer(self, _query, evidence):
+                self.calls += 1
+                evidence[0]["quoted_text"] = "99 tahun/hukuman pidana"
+                if self.error:
+                    raise self.error
+                return self.response
+
+        fields = (
+            "answer",
+            "status",
+            "final_citations",
+            "historical_citations",
+            "metadata_support",
+            "structural_support",
+            "trace_support",
+            "viewer_refs",
+        )
+        baseline = LegalRuntimeService(ROOT).ask("uud", "Pasal 7")
+        for provider in (
+            FakeProvider("99 tahun/hukuman pidana"),
+            FakeProvider(""),
+            FakeProvider({"malformed": True}),
+            FakeProvider(error=RuntimeError("provider unavailable")),
+        ):
+            with self.subTest(provider=provider.response or type(provider.error).__name__):
+                service = LegalRuntimeService(ROOT)
+                service._answer_provider = provider
+                actual = service.ask("uud", "Pasal 7")
+                for field in fields:
+                    self.assertEqual(actual[field], baseline[field], field)
+                self.assertEqual(provider.calls, 0)
+
+    def test_default_profile_does_not_call_configured_provider(self) -> None:
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "test-secret", "TJIPTO_EXPERIMENTAL_PROVIDER": ""}, clear=False), patch(
+            "tjipto.runtime.gemini.urlopen"
+        ) as request:
+            result = LegalRuntimeService(ROOT).ask("uud", "Pasal 7")
+        request.assert_not_called()
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertNotIn("99 tahun", result["answer"])
 
     def test_bookmark_read_write_is_concurrency_safe_and_sorted(self) -> None:
         service = LegalRuntimeService(ROOT)
