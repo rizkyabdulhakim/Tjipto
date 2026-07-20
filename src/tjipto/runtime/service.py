@@ -56,6 +56,11 @@ def _integrity_failure(corpus_id: str, query: str, error_code: str | None) -> di
         "readiness": False,
         "evidence": (),
         "citations": (),
+        "final_citations": (),
+        "historical_citations": (),
+        "metadata_support": (),
+        "structural_support": (),
+        "trace_support": (),
         "viewer_refs": (),
         "context_pack": empty_context_pack(error_code),
         "answer_scope": "insufficient_evidence",
@@ -385,6 +390,11 @@ class LegalRuntimeService:
                     "context_pack": context_pack,
                     "evidence": (),
                     "citations": (),
+                    "final_citations": (),
+                    "historical_citations": (),
+                    "metadata_support": (),
+                    "structural_support": (),
+                    "trace_support": (),
                     "viewer_refs": (),
                     "metadata_facts": (),
                     "legal_relations": (),
@@ -409,6 +419,11 @@ class LegalRuntimeService:
                     "context_pack": context_pack,
                     "evidence": (),
                     "citations": (),
+                    "final_citations": (),
+                    "historical_citations": context_pack.get("historical_citations", ()),
+                    "metadata_support": context_pack.get("metadata_support", ()),
+                    "structural_support": context_pack.get("structural_support", ()),
+                    "trace_support": context_pack.get("trace_support", ()),
                     "viewer_refs": (),
                     "metadata_facts": (),
                     "legal_relations": (),
@@ -416,8 +431,9 @@ class LegalRuntimeService:
                     "warnings": (),
                     "insufficient_reasons": (reason,),
                 }
+            instrument_status = "answer_ready" if context_pack["citation_payloads"] else "limited_answer"
             return {
-                "status": "answer_ready",
+                "status": instrument_status,
                 "route": route,
                 "intent": "instrument_unit_lookup",
                 "corpus_id": corpus_id,
@@ -426,14 +442,19 @@ class LegalRuntimeService:
                 "matches": (row,),
                 "reason": None,
                 "answer_type": "quoted_evidence",
-                "answer": self._answer_text("answer_ready", evidence, templates),
+                "answer": self._answer_text(instrument_status, evidence, templates),
                 "context_pack": context_pack,
                 "evidence": evidence,
                 "citations": tuple(_citation_with_authority(store, item) for item in context_pack["citation_payloads"]),
-                "viewer_refs": context_pack["viewer_refs"],
+                "final_citations": tuple(_citation_with_authority(store, item) for item in context_pack["citation_payloads"]),
+                "historical_citations": context_pack.get("historical_citations", ()),
+                "metadata_support": context_pack.get("metadata_support", ()),
+                "structural_support": context_pack.get("structural_support", ()),
+                "trace_support": context_pack.get("trace_support", ()),
+                "viewer_refs": context_pack["viewer_refs"] if context_pack["citation_payloads"] else (),
                 "metadata_facts": (),
                 "legal_relations": (),
-                "answer_scope": "direct_evidence",
+                "answer_scope": "direct_evidence" if instrument_status == "answer_ready" else "limited_evidence",
                 "warnings": (),
                 "insufficient_reasons": (),
             }
@@ -452,6 +473,11 @@ class LegalRuntimeService:
                 "context_pack": context_pack,
                 "evidence": (),
                 "citations": (),
+                "final_citations": (),
+                "historical_citations": context_pack.get("historical_citations", ()),
+                "metadata_support": context_pack.get("metadata_support", ()),
+                "structural_support": context_pack.get("structural_support", ()),
+                "trace_support": context_pack.get("trace_support", ()),
                 "viewer_refs": (),
                 "metadata_facts": (),
                 "legal_relations": (),
@@ -517,16 +543,15 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": tuple(sorted(set(context_pack["validation_reasons"].values()))),
             }
-        status = "limited_answer" if ask_route == "lexical_fallback" else "answer_ready"
+        status = (
+            "limited_answer"
+            if ask_route == "lexical_fallback" or (context_pack["trace_support"] and not context_pack["citation_payloads"])
+            else "answer_ready"
+        )
         metadata_support = tuple(_metadata_support(store, row) for row in evidence if row.get("metadata_field"))
         if metadata_support:
-            exact_metadata = tuple(
-                row
-                for row in context_pack["citation_payloads"]
-                if row.get("metadata_field") and row.get("viewer_ref", {}).get("can_resolve") is True
-            )
-            citations = tuple(_citation_with_authority(store, row) for row in exact_metadata)
-            viewer_refs = tuple(row["viewer_ref"] | _authority_policy(store, row, can_resolve=True) for row in exact_metadata)
+            citations = ()
+            viewer_refs = ()
         else:
             citations = tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"])
             viewer_refs = context_pack["viewer_refs"]
@@ -540,9 +565,13 @@ class LegalRuntimeService:
             "context_pack": context_pack,
             "evidence": evidence,
             "citations": citations,
+            "final_citations": citations,
+            "historical_citations": context_pack.get("historical_citations", ()),
             "viewer_refs": viewer_refs,
             "metadata_facts": tuple(_metadata_fact(row) for row in evidence if row.get("metadata_field")),
             "metadata_support": metadata_support,
+            "structural_support": context_pack.get("structural_support", ()),
+            "trace_support": context_pack.get("trace_support", ()),
             "legal_relations": tuple(row["legal_relation"] for row in evidence if row.get("legal_relation")),
             "answer_scope": "direct_evidence" if status == "answer_ready" else "limited_evidence",
             "warnings": ("metadata_support_not_exact_highlightable",)
@@ -568,7 +597,16 @@ class LegalRuntimeService:
 
 
 def _empty_citation_fields() -> dict:
-    return {"citation_payloads": (), "viewer_refs": (), "validation_reasons": {}}
+    return {
+        "final_citations": (),
+        "historical_citations": (),
+        "metadata_support": (),
+        "structural_support": (),
+        "trace_support": (),
+        "citation_payloads": (),
+        "viewer_refs": (),
+        "validation_reasons": {},
+    }
 
 
 def _answer_templates(store) -> dict[str, str]:
@@ -609,9 +647,13 @@ def _metadata_scope_clarification(store, routed: dict) -> dict | None:
         "context_pack": empty_context_pack(routed.get("reason") or "ambiguous_source_scope"),
         "evidence": (),
         "citations": (),
+        "final_citations": (),
+        "historical_citations": (),
+        "metadata_support": (),
+        "structural_support": (),
+        "trace_support": (),
         "viewer_refs": (),
         "metadata_facts": (),
-        "metadata_support": (),
         "legal_relations": (),
         "warnings": ("source_scope_required",),
         "insufficient_reasons": ("ambiguous_source_scope",),
@@ -958,6 +1000,11 @@ def _source_document_response(store, corpus_id: str, query: str) -> dict | None:
             "answer": templates["insufficient"],
             "document_source": None,
             "citations": (),
+            "final_citations": (),
+            "historical_citations": (),
+            "metadata_support": (),
+            "structural_support": (),
+            "trace_support": (),
             "viewer_refs": (),
             "metadata_facts": (),
             "evidence": (),
@@ -987,6 +1034,11 @@ def _source_document_response(store, corpus_id: str, query: str) -> dict | None:
         "answer": f"Naskah sumber terverifikasi: {title}.",
         "document_source": document_source,
         "citations": (),
+        "final_citations": (),
+        "historical_citations": (),
+        "metadata_support": (),
+        "structural_support": (),
+        "trace_support": (),
         "viewer_refs": (),
         "metadata_facts": (),
         "evidence": (),
@@ -1079,6 +1131,10 @@ def _document_relation_response(store, corpus_id: str, query: str) -> dict | Non
             "context_pack": empty_context_pack(reason),
             "evidence": (),
             "citations": (),
+            "final_citations": (),
+            "historical_citations": (),
+            "metadata_support": (),
+            "structural_support": (),
             "viewer_refs": (),
             "metadata_facts": (),
             "legal_relations": (),
@@ -1140,6 +1196,10 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
             "context_pack": empty_context_pack("relation_trace_only"),
             "evidence": (),
             "citations": (),
+            "final_citations": (),
+            "historical_citations": (),
+            "metadata_support": (),
+            "structural_support": (),
             "viewer_refs": (),
             "metadata_facts": (),
             "legal_relations": (),
@@ -1151,16 +1211,18 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
             "insufficient_reasons": (),
         }
     citations = _deduplicated_article_relation_citations(store, answer_evidence)
-    viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence)
+    final_citations = tuple(row for row in citations if row.get("citation_final") is True)
+    historical_citations = tuple(row for row in citations if row.get("citation_final") is False)
+    viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence if row.get("citation_final") is True)
     partial = bool(trace_support)
     public_evidence = answer_evidence
-    public_citations = citations
     public_viewer_refs = viewer_refs
     context_pack = {
         "answer_evidence": public_evidence,
         "supporting_context": (),
         "excluded_results": (),
-        "citation_payloads": public_citations,
+        "citation_payloads": final_citations,
+        "historical_citations": historical_citations,
         "viewer_refs": public_viewer_refs,
         "validation_reasons": {row["evidence_id"]: "article_amendment_relation_exact_source_text" for row in public_evidence},
     }
@@ -1177,7 +1239,11 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
         "answer": _article_relation_answer(store, exact_support, trace_support),
         "context_pack": context_pack,
         "evidence": public_evidence,
-        "citations": public_citations,
+        "citations": final_citations,
+        "final_citations": final_citations,
+        "historical_citations": historical_citations,
+        "metadata_support": (),
+        "structural_support": (),
         "viewer_refs": public_viewer_refs,
         "metadata_facts": (),
         "legal_relations": (),
@@ -1205,6 +1271,11 @@ def _relation_not_promoted(corpus_id: str, query: str, templates: dict[str, str]
         "context_pack": empty_context_pack(reason),
         "evidence": (),
         "citations": (),
+        "final_citations": (),
+        "historical_citations": (),
+        "metadata_support": (),
+        "structural_support": (),
+        "trace_support": (),
         "viewer_refs": (),
         "metadata_facts": (),
         "legal_relations": (),
@@ -1636,8 +1707,12 @@ def _source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
         "answer": answer,
         "context_pack": support["context_pack"],
         "evidence": support["evidence"],
-        "citations": support["citations"],
-        "viewer_refs": support["viewer_refs"],
+        "citations": (),
+        "final_citations": (),
+        "historical_citations": (),
+        "metadata_support": (),
+        "structural_support": (),
+        "viewer_refs": (),
         "metadata_facts": (),
         "legal_relations": (),
         "trace_support": support["trace_support"],
@@ -1815,8 +1890,10 @@ def _source_conflict_support(store, conflict: dict) -> dict:
     trace_support: tuple[dict, ...] = ()
     answer_scope = "insufficient_evidence"
     if evidence:
+        trace_support = tuple(_citation_with_authority(store, row, conflict=conflict) for row in evidence)
         answer_scope = "source_conflict_exact_provenance"
     elif synthetic_support is not None:
+        trace_support = tuple(synthetic_support["citations"])
         answer_scope = "source_conflict_exact_provenance"
     else:
         trace_support = (_source_conflict_trace_support(store, conflict, context_pack["validation_reasons"]),)
@@ -1831,15 +1908,9 @@ def _source_conflict_support(store, conflict: dict) -> dict:
         if synthetic_support is not None
         else ()
     )
-    citations = (
-        tuple(_citation_with_authority(store, row, conflict=conflict) for row in context_pack["citation_payloads"])
-        if evidence
-        else synthetic_support["citations"]
-        if synthetic_support is not None
-        else ()
-    )
+    citations = ()
     public_context_pack = (
-        context_pack | {"citation_payloads": citations, "viewer_refs": viewer_refs}
+        context_pack | {"citation_payloads": (), "viewer_refs": ()}
         if evidence
         else synthetic_support["context_pack"]
         if synthetic_support is not None

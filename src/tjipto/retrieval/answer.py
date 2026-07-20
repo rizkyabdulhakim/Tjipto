@@ -29,12 +29,14 @@ def assemble_context_pack(store, matches: tuple[dict, ...]) -> dict:
     supporting_context = []
     excluded = []
     reasons = {}
+    groups = {name: [] for name in ("final_citations", "historical_citations", "metadata_support", "structural_support", "trace_support")}
     for row in matches:
         accepted, reason = validate_answer_candidate(store, row)
         payload = _payload(store, row)
         reasons[row["evidence_id"]] = reason
         if accepted:
             answer_evidence.append(payload)
+            groups[_support_group(row)].append(payload)
         else:
             excluded.append(payload | {"reason": reason})
             if row.get("route_sources") == ("graph",):
@@ -43,8 +45,13 @@ def assemble_context_pack(store, matches: tuple[dict, ...]) -> dict:
         "answer_evidence": tuple(answer_evidence),
         "supporting_context": tuple(supporting_context),
         "excluded_results": tuple(excluded),
-        "citation_payloads": tuple(_citation_payload(row) for row in answer_evidence),
-        "viewer_refs": tuple(row["viewer_ref"] for row in answer_evidence),
+        "final_citations": tuple(_citation_payload(row) for row in groups["final_citations"]),
+        "historical_citations": tuple(_citation_payload(row) for row in groups["historical_citations"]),
+        "metadata_support": tuple(_citation_payload(row) for row in groups["metadata_support"]),
+        "structural_support": tuple(_citation_payload(row) for row in groups["structural_support"]),
+        "trace_support": tuple(_citation_payload(row) for row in groups["trace_support"]),
+        "citation_payloads": tuple(_citation_payload(row) for row in groups["final_citations"]),
+        "viewer_refs": tuple(row["viewer_ref"] for row in groups["final_citations"]),
         "validation_reasons": reasons,
     }
 
@@ -54,10 +61,30 @@ def empty_context_pack(reason: str | None) -> dict:
         "answer_evidence": (),
         "supporting_context": (),
         "excluded_results": (),
+        "final_citations": (),
+        "historical_citations": (),
+        "metadata_support": (),
+        "structural_support": (),
+        "trace_support": (),
         "citation_payloads": (),
         "viewer_refs": (),
         "validation_reasons": {"request": reason or "no_final_evidence"},
     }
+
+
+def _support_group(row: dict) -> str:
+    if row.get("metadata_grounding"):
+        return "metadata_support"
+    authority = row.get("authority_kind")
+    if row.get("citation_final") is True and row.get("citable") is True:
+        return "final_citations"
+    if row.get("citation_final") is False and row.get("citable") is True:
+        return "historical_citations"
+    if authority in {"structural_context", "structural_support"}:
+        return "structural_support"
+    if authority in {"source_anomaly_trace", "instrument_provenance", "trace_support"}:
+        return "trace_support"
+    return "trace_support"
 
 
 def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
@@ -94,7 +121,7 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
             return False, "linked_chunk_not_runtime_loadable"
         if (legal_unit or chunk) and not ((legal_unit and legal_unit.get("text_span_ids")) or (chunk and chunk.get("text_span_ids"))):
             return False, "missing_exact_text_span_support"
-        if retrieval_unit and retrieval_unit.get("status") != "accepted" and not historical_instrument:
+        if retrieval_unit and retrieval_unit.get("artifact_status") not in {"published", "accepted"} and not historical_instrument:
             return False, "retrieval_unit_backing_record_not_answerable"
         if _noncanonical_trace(legal_unit, chunk, row):
             return False, "noncanonical_trace_not_answerable"

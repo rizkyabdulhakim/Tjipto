@@ -193,7 +193,7 @@ def ensure_metadata_source_evidence(*, evidence: list[dict], metadata_grounding:
     """Give every metadata block a real source-owned evidence identity."""
     evidence_ids = {row.get("evidence_id") for row in evidence}
     for block in metadata_grounding:
-        evidence_id = block.get("supporting_evidence_id")
+        evidence_id = block.get("supporting_evidence_id") or next(iter(block.get("supporting_evidence_ids") or ()), None)
         if not evidence_id or evidence_id in evidence_ids:
             continue
         role = str(block.get("source_role") or "")
@@ -208,6 +208,7 @@ def ensure_metadata_source_evidence(*, evidence: list[dict], metadata_grounding:
         if resolved == evidence_id:
             continue
         block["supporting_evidence_id"] = resolved
+        block["supporting_evidence_ids"] = [resolved]
         block["provenance"] = {"donor_id": resolved}
         evidence_ids.add(resolved)
 
@@ -628,6 +629,24 @@ def rebuild_metadata_grounding(
         row["grounded_fields"] = {key: tuple(grounded_fields[key]) for key in GROUNDING_FIELD_ORDER if grounded_fields.get(key)}
         row["grounding_refs"] = tuple(dict.fromkeys(ref for refs in row["grounded_fields"].values() for ref in refs))
     all_grounding_rows = block_rows + field_rows
+    for grounding in all_grounding_rows:
+        donor = grounding.get("supporting_evidence_id")
+        grounding["supporting_evidence_ids"] = list(dict.fromkeys(
+            grounding.get("supporting_evidence_ids") or ([donor] if donor else [])
+        ))
+        grounding.pop("supporting_evidence_id", None)
+        grounding.update(
+            {
+                "object_role": "metadata_support",
+                "authority_kind": grounding.get("authority_kind") or "metadata",
+                "citable": False,
+                "citation_final": False,
+                "exactness": "exact" if grounding.get("bbox_precision") == "exact" else "not_applicable",
+                "evidence_exists": bool(grounding["supporting_evidence_ids"]),
+                "reason_code": "exact_metadata_grounding" if grounding.get("bbox_precision") == "exact" else grounding.get("failure_reason") or "metadata_support",
+                "artifact_status": "published",
+            }
+        )
     all_registry_rows = block_registry_rows + field_registry_rows
     return document_metadata, all_grounding_rows, all_registry_rows
 

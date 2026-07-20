@@ -21,7 +21,9 @@ class PdfTextSpanCoverageTest(unittest.TestCase):
             self.assertEqual(row["status"], "accepted_text_span")
             self.assertTrue(row["text"].strip())
             self.assertEqual(row["bbox_precision"], "exact")
-            self.assertFalse(row["viewer_highlightable"])
+            self.assertIsInstance(row["viewer_highlightable"], bool)
+            self.assertEqual(row["object_role"], "source_span")
+            self.assertNotIn("highlightable", row)
 
     def test_text_span_builder_uses_source_metadata_not_id_format(self) -> None:
         rows = build_pdf_text_spans(

@@ -44,6 +44,8 @@ def apply_source_conflict_grounding(
         row["authoritative_evidence_id"] = evidence_ids[0] if evidence_ids else None
         row["authority_kind"] = "source_anomaly_provenance"
         row["citation_final"] = False
+        row["object_role"] = "trace_support"
+        row["is_citation_object"] = False
         row["target_precision"] = "source_provenance"
         row["recovery_capability"] = "exact_materialized" if evidence_ids else "technically_unrecoverable"
         row["recovery_status"] = "materialized" if evidence_ids else "failed"

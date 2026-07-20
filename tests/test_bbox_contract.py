@@ -162,7 +162,7 @@ class BBoxContractTest(unittest.TestCase):
             and all(evidence.get(evidence_id, {}).get("exactness") == "exact" for evidence_id in row["evidence_ids"])
         }
         self.assertEqual(report["exact_safe_word_highlight_count"], len(expected))
-        self.assertEqual(len(expected), sum(1 for row in spans if row.get("highlightable") is True))
+        self.assertEqual(len(expected), sum(1 for row in spans if row.get("viewer_highlightable") is True and row.get("span_bbox_ids")))
         self.assertGreaterEqual(report["non_citable_absent_span_count"], 633)
         self.assertEqual(report["false_highlight_count"], 0)
 

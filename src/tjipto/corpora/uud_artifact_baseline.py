@@ -95,6 +95,20 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         for doc in docs.values():
             doc.close()
     page_text_spans = build_page_text_spans(source_documents=source_documents, pdf_lines=pdf_lines_by_source)
+    page_streams = {
+        (source_id, page_number): str(text or "")
+        for (source_id, page_number), text in pages_by_source.items()
+    }
+    for span in page_text_spans:
+        stream = page_streams.get((span.get("source_document_id"), span.get("page_number")), str(span.get("text") or ""))
+        text = str(span.get("text") or "")
+        start = stream.find(text) if text else 0
+        if start < 0:
+            start = 0
+        span["page_text_hash"] = sha256(stream.encode("utf-8")).hexdigest()
+        span["text_start"] = start
+        span["text_end"] = start + len(text)
+        span.setdefault("metadata_grounding_ids", [])
     legal_units = build_legal_units_from_sources(
         pages_by_source=pages_by_source,
         source_documents=source_documents,
@@ -124,6 +138,13 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
     )
     ensure_metadata_source_evidence(evidence=evidence, metadata_grounding=metadata_grounding)
+    metadata_by_span: dict[str, list[str]] = {}
+    for grounding in metadata_grounding:
+        for span_id in grounding.get("text_span_ids") or ():
+            metadata_by_span.setdefault(span_id, []).append(grounding["metadata_grounding_id"])
+    for span in page_text_spans:
+        span["metadata_grounding_ids"] = list(dict.fromkeys(metadata_by_span.get(span["text_span_id"], ())))
+    ensure_metadata_source_evidence(evidence=evidence, metadata_grounding=metadata_grounding)
     document_metadata, metadata_grounding, metadata_grounding_registry = rebuild_metadata_grounding(
         document_metadata=document_metadata,
         metadata_grounding=metadata_grounding,
@@ -144,6 +165,13 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     apply_chunk_grounding(chunks, legal_units, evidence, page_text_spans)
     apply_chunk_structural_contract(chunks, legal_units)
     retrieval_units = build_retrieval_units(evidence, chunks)
+    for retrieval in retrieval_units:
+        retrieval.setdefault("object_role", "retrieval_index_record")
+        retrieval.setdefault("artifact_status", "published")
+        retrieval.setdefault(
+            "page_locator",
+            {"source_document_id": retrieval.get("source_document_id"), "page_numbers": retrieval.get("page_numbers", [])},
+        )
     retrieval_units.sort(key=lambda row: row["retrieval_unit_id"])
     apply_page_text_span_dispositions(
         page_text_spans=page_text_spans,

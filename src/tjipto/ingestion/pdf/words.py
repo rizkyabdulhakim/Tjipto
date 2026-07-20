@@ -103,6 +103,7 @@ def _match_word_characters(
         return [], cursor
     result = []
     char_index = 0
+    char_offset = 0
     for char in matched:
         value = str(char.get("c") or "")
         if not compact_text(value):
@@ -114,12 +115,15 @@ def _match_word_characters(
             {
                 "character_bbox_id": f"uud_character_bbox::{source_document_id}::{page_number:04d}::{word_index:05d}::{char_index:03d}",
                 "text": value,
+                "char_start": char_offset,
+                "char_end": char_offset + len(value),
                 "x0": x0,
                 "y0": y0,
                 "x1": x1,
                 "y1": y1,
             }
         )
+        char_offset += len(value)
         char_index += 1
     return result, index
 

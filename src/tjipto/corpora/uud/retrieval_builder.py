@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from tjipto.contracts.authority import authority_decision
 from tjipto.corpora.uud.provenance_exceptions import (
     ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
     apply_review_category,
@@ -15,54 +14,20 @@ def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     return [
         {
-            "bbox_sample_refs": _bbox_sample_refs(row),
-            "bbox_total_count": len(row.get("bbox_refs", [])),
             "chunk_id": chunks_by_unit[row["legal_unit_id"]]["chunk_id"],
-            "corpus_id": "uud",
             "evidence_id": row["evidence_id"],
             "legal_unit_id": row["legal_unit_id"],
-            "page_numbers": row["page_numbers"],
             "retrieval_unit_id": f"uud_retrieval_unit::{row['evidence_id']}",
-            "source_pdf_path": row["source_pdf_path"],
             "source_role": row["source_role"],
-            "source_sha256": row["source_sha256"],
-            **_retrieval_authority(row),
-            "parent_legal_unit_id": chunks_by_unit[row["legal_unit_id"]].get("parent_legal_unit_id"),
-            "ancestor_legal_unit_ids": chunks_by_unit[row["legal_unit_id"]].get("ancestor_legal_unit_ids") or [],
-            "structural_role": chunks_by_unit[row["legal_unit_id"]].get("structural_role"),
-            "retrieval_trace": {
-                "retrieval_unit_id": f"uud_retrieval_unit::{row['evidence_id']}",
-                "legal_unit_id": row["legal_unit_id"],
-                "parent_unit_id": chunks_by_unit[row["legal_unit_id"]].get("parent_legal_unit_id"),
-                "ancestor_path": chunks_by_unit[row["legal_unit_id"]].get("ancestor_legal_unit_ids") or [],
-                "evidence_ids": [row["evidence_id"]],
-                **authority_decision(
-                    authority_kind="structural_context",
-                    citable=False,
-                    citation_final=False,
-                    exactness="not_applicable",
-                    evidence_exists=True,
-                    reason_code="retrieval_trace_not_citation",
-                ),
-            },
-            **_retrieval_answerability(row, chunks_by_unit[row["legal_unit_id"]]),
+            "object_role": "retrieval_index_record",
+            "artifact_status": "published",
+            "page_locator": {"source_document_id": row["source_document_id"], "page_numbers": row["page_numbers"]},
+            "retrieval_terms": compact(row.get("quoted_text") or ""),
             "temporal_context": row["temporal_context"],
             "text": _retrieval_unit_text(row),
         }
         for row in sorted(evidence, key=lambda item: item["evidence_id"])
     ]
-
-
-def _retrieval_authority(evidence: dict) -> dict:
-    exact = evidence.get("bbox_precision") == "exact" and evidence.get("viewer_highlightable") is True
-    return authority_decision(
-        authority_kind="structural_context" if exact else "page_only",
-        citable=False,
-        citation_final=False,
-        exactness="exact" if exact else "page_only",
-        evidence_exists=bool(evidence.get("evidence_id")),
-        reason_code=("retrieval_candidate_requires_runtime_evidence_selection" if exact else evidence.get("failure_reason", "not_exact")),
-    )
 
 
 def _retrieval_answerability(evidence: dict, chunk: dict) -> dict:

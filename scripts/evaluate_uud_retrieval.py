@@ -152,11 +152,12 @@ def _validate(case: dict[str, Any], response: dict[str, Any]) -> list[str]:
     _expect_equal(errors, "requested_function", case.get("expected_requested_function"), response.get("requested_function"))
     _expect_equal(errors, "support_type", case.get("expected_support_type"), _support_type(response))
     citations = tuple(response.get("citations", ()))
+    historical = tuple(response.get("historical_citations", ()))
     metadata = tuple(response.get("metadata_support", ()))
     trace = tuple(response.get("trace_support", ()))
     documents = tuple(response.get("document_relations", ()))
-    citation_evidence_ids = set(_ids(citations, "evidence_id"))
-    citation_legal_unit_ids = set(_ids(citations, "legal_unit_id"))
+    citation_evidence_ids = set(_ids(citations, "evidence_id")) | set(_ids(historical, "evidence_id"))
+    citation_legal_unit_ids = set(_ids(citations, "legal_unit_id")) | set(_ids(historical, "legal_unit_id"))
     support_evidence_ids = citation_evidence_ids | set(_ids(metadata, "evidence_id")) | set(_ids(trace, "evidence_id"))
     for evidence_id in case.get("expected_evidence_ids", ()):
         if evidence_id not in support_evidence_ids:
@@ -178,7 +179,7 @@ def _validate(case: dict[str, Any], response: dict[str, Any]) -> list[str]:
             response.get("viewer_refs") and len(tuple(response.get("viewer_refs", ()))) != len(metadata_citations)
         ):
             errors.append("metadata_support_exposed_as_exact_citation")
-    if trace and any(row.get("citation_available") or row.get("viewer_highlightable") for row in trace):
+    if trace and any(row.get("citation_final") is True for row in trace):
         errors.append("trace_support_claims_citation_or_highlight")
     if documents and (citations or response.get("viewer_refs") or any(row.get("highlightable") for row in documents)):
         errors.append("document_relation_exposed_as_exact_citation")
@@ -195,6 +196,8 @@ def _support_type(response: dict[str, Any]) -> str:
     if response.get("metadata_support"):
         return "metadata_support"
     if response.get("citations"):
+        return "citation"
+    if response.get("historical_citations"):
         return "citation"
     if response.get("trace_support"):
         return "trace_support"

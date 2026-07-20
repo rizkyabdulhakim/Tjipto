@@ -84,10 +84,15 @@ def build_document_relations(source_documents: list[dict]) -> list[dict]:
     source_by_role = {row["source_role"]: row for row in source_documents}
     original = source_by_role["original_historical"]
     rows = []
-    for role in sorted(role for role in source_by_role if role.startswith("amendment_")):
+    amendment_roles = sorted(role for role in source_by_role if role.startswith("amendment_"))
+    for role in amendment_roles:
         source = source_by_role[role]
         rows.append(_document_relation("AMENDS", source, original))
         rows.append(_document_relation("AMENDED_BY", original, source, support_role=role))
+    consolidated = source_by_role.get("current_consolidated")
+    if consolidated is not None:
+        rows.append(_document_relation("DERIVED_FROM", consolidated, original))
+        rows.extend(_document_relation("CONSOLIDATES", consolidated, source_by_role[role]) for role in amendment_roles)
     return sorted(rows, key=lambda row: row["relation_id"])
 
 
@@ -541,6 +546,7 @@ def _document_relation(relation_type: str, source: dict, target: dict, *, suppor
     source_role = source["source_role"]
     target_role = target["source_role"]
     support = support_role or source_role
+    provenance_only = relation_type in {"DERIVED_FROM", "CONSOLIDATES"}
     return {
         "relation_id": f"uud_document_relation::{source_role.lower()}::{relation_type.lower()}::{target_role.lower()}",
         "corpus_id": "uud",
@@ -550,12 +556,20 @@ def _document_relation(relation_type: str, source: dict, target: dict, *, suppor
         "target_document_id": target["source_document_id"],
         "target_source_role": target_role,
         "support_type": "source_role_grounded",
-        "support_refs": [_support_ref(relation_type, source_role, target_role, support)],
+        "object_role": "relation_proof",
+        "support_relation_ids": [],
+        "support_evidence_ids": [],
+        "support_exception_ids": [] if provenance_only else [_support_ref(relation_type, source_role, target_role, support)],
+        "support_kind": "provenance_only",
         "runtime_loadable": True,
         "viewer_highlightable": False,
         "citation_available": False,
         "article_level": False,
-        "reason": "source_role_document_level_relation_without_pasal_ayat_evidence_bbox",
+        "reason": (
+            "consolidated_provenance_without_legal_force_claim"
+            if provenance_only
+            else "source_role_document_level_relation_without_pasal_ayat_evidence_bbox"
+        ),
     }
 
 
