@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "1ae0c35130919423454154423b3869472b12cf58446d630b08c909c8dfa8c987",
+    "manifest_sha256": "0fddd0853c7216b511af645f0ade690f8c06cb31fb0f543cfbb6d8f4d0d52a77",
     "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
     "runtime_required_artifacts": [
       "evidence_registry",

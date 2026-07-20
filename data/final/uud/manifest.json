@@ -10,7 +10,7 @@
     "bbox_records": 4111,
     "chunks": 651,
     "document_metadata": 6,
-    "document_relations": 8,
+    "document_relations": 13,
     "evidence_records": 648,
     "excluded_records": 0,
     "graph_edges": 7920,
@@ -45,7 +45,7 @@
       "logical_key": "article_amendment_relations",
       "artifact_kind": "article_amendment_relations",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "relation_id",
       "required_fields": [
         "relation_id",
@@ -79,7 +79,7 @@
       "logical_key": "article_versions",
       "artifact_kind": "article_versions",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "article_version_id",
       "bytes": 286261,
       "sha256": "81323b9524ea53ab2a1d5b52c39e9de7ce374dc6bf5b1daee73bcdc0da833b1d"
@@ -92,20 +92,23 @@
       "logical_key": "bbox_registry",
       "artifact_kind": "bbox_registry",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "bbox_id",
       "required_fields": [
         "bbox_id",
         "evidence_id",
+        "evidence_exists",
+        "object_role",
         "source_document_id",
         "page_number",
         "x0",
         "y0",
         "x1",
-        "y1"
+        "y1",
+        "viewer_highlightable"
       ],
-      "bytes": 4642125,
-      "sha256": "6e2a5f2bd4348fbf07e033044b7822a57db1f284ad74a117e62a8b6cd5b6793e"
+      "bytes": 3939144,
+      "sha256": "32468fc59dde3260c708007794ada1339f136db9ceacadd123a6a0e75cbda3f5"
     },
     "chunks.jsonl": {
       "origin": "generated",
@@ -115,19 +118,17 @@
       "logical_key": "chunks",
       "artifact_kind": "chunks",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "chunk_id",
       "required_fields": [
         "chunk_id",
         "legal_unit_id",
         "source_document_id",
         "evidence_ids",
-        "text_span_ids",
-        "authority_kind",
-        "evidence_exists"
+        "text_span_ids"
       ],
-      "bytes": 1760121,
-      "sha256": "0055af5a356554cea02ee6bda413f51ff505b28c21dab5bf6488422b2580c07c"
+      "bytes": 1627986,
+      "sha256": "c9bc82124bd72cd6734655f63b06b03dbbdafe3e4e2084e2755ef5018858183b"
     },
     "document_metadata.jsonl": {
       "origin": "generated",
@@ -137,7 +138,7 @@
       "logical_key": "document_metadata",
       "artifact_kind": "document_metadata",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "document_metadata_id",
       "bytes": 22741,
       "sha256": "e4a009be3013e8b4b648be10112a59c2033fb9ca4e68f02a4bebdc657bd6aef9"
@@ -150,10 +151,23 @@
       "logical_key": "document_relations",
       "artifact_kind": "document_relations",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "relation_id",
-      "bytes": 5308,
-      "sha256": "073e69b79e05fe641ef2d048c5a2fed8dfe3493c8e2312d2bc3b0516612c3e71"
+      "required_fields": [
+        "relation_id",
+        "source_document_id",
+        "source_role",
+        "target_document_id",
+        "target_source_role",
+        "relation_type",
+        "object_role",
+        "support_relation_ids",
+        "support_evidence_ids",
+        "support_exception_ids",
+        "support_kind"
+      ],
+      "bytes": 9918,
+      "sha256": "006af6bbace1f0de79d010cd1a5a03776f22fb7bcc0ecb38f3701205d1e6a4b9"
     },
     "evidence_registry.jsonl": {
       "origin": "generated",
@@ -163,7 +177,7 @@
       "logical_key": "evidence_registry",
       "artifact_kind": "evidence_registry",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "evidence_id",
       "required_fields": [
         "evidence_id",
@@ -176,7 +190,7 @@
         "quoted_text",
         "source_sha256",
         "source_role",
-        "status",
+        "artifact_status",
         "authority_kind",
         "citable_status",
         "citable",
@@ -186,10 +200,12 @@
         "evidence_exists",
         "reason_code",
         "runtime_loadable",
-        "evidence_owner_kind"
+        "evidence_owner_kind",
+        "object_role",
+        "is_citation_object"
       ],
-      "bytes": 1816657,
-      "sha256": "2880a285c903f5e06ac4cbd397c1f77907c9857a00e7d86753a319df4e28f859"
+      "bytes": 1901546,
+      "sha256": "bef6dab4854c6672ae371a59a6fc8c8215bd8ecc2d73f48ad10a0993e8dba620"
     },
     "excluded_records.jsonl": {
       "origin": "generated",
@@ -199,7 +215,7 @@
       "logical_key": "excluded_records",
       "artifact_kind": "excluded_records",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "excluded_record_id",
       "bytes": 0,
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -212,16 +228,21 @@
       "logical_key": "graph_edges",
       "artifact_kind": "graph_edges",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "edge_id",
       "required_fields": [
         "edge_id",
         "source_id",
         "target_id",
-        "relation_type"
+        "relation_type",
+        "object_role",
+        "support_relation_ids",
+        "support_evidence_ids",
+        "support_exception_ids",
+        "support_kind"
       ],
-      "bytes": 16491041,
-      "sha256": "769d536e1fbae93ce689915c0cb4e3ea42876eb23439bcd7b3287951067f9fcc"
+      "bytes": 6164088,
+      "sha256": "9921d013e6a88f72650a42eb497490fc1c702e8285618e262b22928e887f546c"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -231,19 +252,15 @@
       "logical_key": "graph_nodes",
       "artifact_kind": "graph_nodes",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "node_id",
       "required_fields": [
         "node_id",
         "node_type",
-        "authority_kind",
-        "citable_status",
-        "citable",
-        "citation_final",
-        "citation_finality_reason"
+        "object_role"
       ],
-      "bytes": 4749902,
-      "sha256": "07e1052d7ded974f563f28721ddac3ff64798d5e778eca6afbbfc7787542bdbf"
+      "bytes": 3832658,
+      "sha256": "5e21461f005d9d33bb7962242e90d91831ec4e440684aa460ae2ec58afae00c2"
     },
     "legal_units.jsonl": {
       "origin": "generated",
@@ -253,21 +270,15 @@
       "logical_key": "legal_units",
       "artifact_kind": "legal_units",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "legal_unit_id",
       "required_fields": [
         "legal_unit_id",
         "source_document_id",
-        "text_span_ids",
-        "authority_kind",
-        "citable_status",
-        "citable",
-        "citation_final",
-        "citation_finality_reason",
-        "evidence_exists"
+        "text_span_ids"
       ],
-      "bytes": 2226317,
-      "sha256": "596835a41556218ae1fe40c26a8dcb8100c89bd6aec4eac943458a678f7d8627"
+      "bytes": 2094167,
+      "sha256": "1b4718ca81dac9eb406cf1332a989186e942cedbb937860810faa44d87b6f66e"
     },
     "metadata.jsonl": {
       "origin": "generated",
@@ -277,7 +288,7 @@
       "logical_key": "metadata",
       "artifact_kind": "metadata",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "metadata_id",
       "bytes": 1456924,
       "sha256": "48563a8f1b5512378b83565f7e3e734f7d7bc48cc703706dbb34b9d773456272"
@@ -290,7 +301,7 @@
       "logical_key": "metadata_graph_edges",
       "artifact_kind": "metadata_graph_edges",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "edge_id",
       "bytes": 572494,
       "sha256": "a6157a2d0c158e373034fbb744204d7de322d2cf5ecda56b948bcf4ca717b60f"
@@ -303,16 +314,24 @@
       "logical_key": "metadata_grounding",
       "artifact_kind": "metadata_grounding",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "metadata_grounding_id",
       "required_fields": [
         "metadata_grounding_id",
         "source_document_id",
         "grounding_status",
-        "supporting_evidence_id"
+        "supporting_evidence_ids",
+        "authority_kind",
+        "citable",
+        "citation_final",
+        "exactness",
+        "evidence_exists",
+        "reason_code",
+        "artifact_status",
+        "object_role"
       ],
-      "bytes": 154917,
-      "sha256": "3e1984fa333e7913f1d8dd27c066b92a444657c269648fde34c1cd48984886d2"
+      "bytes": 170761,
+      "sha256": "2a3ebe9f4bc3b9058d0a7b8bac34ea6105ac8191a55a2912b332e4fc37a1abdc"
     },
     "metadata_grounding_registry.jsonl": {
       "origin": "generated",
@@ -322,7 +341,7 @@
       "logical_key": "metadata_grounding_registry",
       "artifact_kind": "metadata_grounding_registry",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "metadata_grounding_ref_id",
       "bytes": 523891,
       "sha256": "787a4027b3e369c70eef892de57eefbb1b39c89027e23dbda8f2000dab695532"
@@ -335,7 +354,7 @@
       "logical_key": "pages",
       "artifact_kind": "pages",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "page_id",
       "required_fields": [
         "page_id",
@@ -354,7 +373,7 @@
       "logical_key": "pdf_health_report",
       "artifact_kind": "pdf_health_report",
       "format": "json",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "bytes": 21421,
       "sha256": "bee505990f8247e225194f132e393e5d78b3a6ceb3c067fd3ca4d6cab4fad0fb"
     },
@@ -366,7 +385,7 @@
       "logical_key": "promotion_decisions",
       "artifact_kind": "promotion_decisions",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "decision_id",
       "required_fields": [
         "decision_id",
@@ -391,23 +410,19 @@
       "logical_key": "retrieval_units",
       "artifact_kind": "retrieval_units",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "retrieval_unit_id",
       "required_fields": [
         "retrieval_unit_id",
         "evidence_id",
         "legal_unit_id",
         "chunk_id",
-        "authority_kind",
-        "citable_status",
-        "citable",
-        "citation_final",
-        "citation_finality_reason",
-        "evidence_exists",
-        "retrieval_trace"
+        "object_role",
+        "artifact_status",
+        "page_locator"
       ],
-      "bytes": 1372299,
-      "sha256": "a4ccf3551fd71b8b5b82e35dcf360e34019af2dc1b566aa982d6260da9df994c"
+      "bytes": 785082,
+      "sha256": "26bc5dc95a5bf5ed6d7ca52586e3f8b5fd8cf000c3cab644913fcdf1c9154d5e"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -417,19 +432,22 @@
       "logical_key": "source_conflicts",
       "artifact_kind": "source_conflicts",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "source_conflict_id",
       "required_fields": [
         "source_conflict_id",
         "source_document_id",
+        "provenance_summary",
+        "object_role",
+        "is_citation_object",
         "authority_kind",
         "citation_final",
         "target_precision",
         "recovery_capability",
         "recovery_status"
       ],
-      "bytes": 7842,
-      "sha256": "6f4188b50db88a257465627d57345c75c78d17ea134a0ea8d5375884e16ead07"
+      "bytes": 7964,
+      "sha256": "7c674ab1842c5ddab283e2822237f8c7ed4c53f48d7fcf89328edcf998ce452d"
     },
     "source_documents.jsonl": {
       "origin": "generated",
@@ -439,7 +457,7 @@
       "logical_key": "source_documents",
       "artifact_kind": "source_documents",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "source_document_id",
       "required_fields": [
         "source_document_id",
@@ -459,7 +477,7 @@
       "logical_key": "source_integrity",
       "artifact_kind": "source_integrity",
       "format": "json",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "bytes": 9739,
       "sha256": "0d84e8cbc8ba64ee1d052bcfc92c6dbf96c088f8a873d301d69e97081e83f319"
     },
@@ -471,7 +489,7 @@
       "logical_key": "validation_alignment_results",
       "artifact_kind": "validation_alignment_results",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "alignment_result_id",
       "bytes": 361336,
       "sha256": "00235a4dd3ae35b42305c462fe7aac7753d697b5016cfae0f6154c75c19ac1bc"
@@ -484,7 +502,7 @@
       "logical_key": "validation_exception_review_labels",
       "artifact_kind": "validation_exception_review_labels",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "exception_review_id",
       "bytes": 5112,
       "sha256": "1291c7f22e727868541eae52d0b447076d8126c9b50498236cf8d32fcaaa2515"
@@ -497,7 +515,7 @@
       "logical_key": "validation_exceptions",
       "artifact_kind": "validation_exceptions",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "exception_id",
       "required_fields": [
         "exception_id",
@@ -518,9 +536,9 @@
       "logical_key": "validation_report",
       "artifact_kind": "validation_report",
       "format": "json",
-      "artifact_schema": 5,
-      "bytes": 22973,
-      "sha256": "aa20823164dd40ec8a4143f9089842e626f11145fba64b7dc76f018d007c4b54"
+      "artifact_schema": 6,
+      "bytes": 22841,
+      "sha256": "394d11b32417118e76b0742eaf096cb8328b08dfc4147302c26a8e8677d02013"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -530,7 +548,7 @@
       "logical_key": "page_text_spans",
       "artifact_kind": "page_text_spans",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "text_span_id",
       "required_fields": [
         "text_span_id",
@@ -539,21 +557,21 @@
         "text",
         "classification",
         "legal_force",
-        "authority_kind",
-        "citable_status",
-        "citable",
-        "citation_final",
-        "highlightable",
-        "exactness",
+        "object_role",
+        "linked_authority",
+        "viewer_highlightable",
         "evidence_ids",
         "span_bbox_ids",
-        "evidence_bbox_ids",
-        "context_bbox_ids",
+        "metadata_grounding_ids",
+        "artifact_status",
+        "page_text_hash",
+        "text_start",
+        "text_end",
         "reason_code",
         "reason"
       ],
-      "bytes": 13656091,
-      "sha256": "948dd4c17ef215f6400c34614d400ba4faff0a5034f4b21a452ec66462fe2d09"
+      "bytes": 4454093,
+      "sha256": "c786b1a5ecbd1bc026e1f963f7a7f15b7a5e0af5de5fc15f476dfc2bc15c804f"
     },
     "word_bboxes.jsonl": {
       "origin": "generated",
@@ -563,7 +581,7 @@
       "logical_key": "word_bboxes",
       "artifact_kind": "word_bboxes",
       "format": "jsonl",
-      "artifact_schema": 5,
+      "artifact_schema": 6,
       "primary_id": "word_bbox_id",
       "required_fields": [
         "word_bbox_id",
@@ -581,8 +599,8 @@
         "page_box_basis",
         "transform_version"
       ],
-      "bytes": 22326270,
-      "sha256": "b962bdabe14ed53a61b750b95cfb5d172efad719648345336f11ded38a2d9c55"
+      "bytes": 24638572,
+      "sha256": "b8d6a5566409b2f5c5ebadcc8b09c48ddba17d86ebdac707448695716678d9b6"
     }
   },
   "fixtures": {
@@ -606,7 +624,7 @@
   "pdf_health_report": "pdf_health_report.json",
   "promotion_decisions": "promotion_decisions.jsonl",
   "retrieval_units": "retrieval_units.jsonl",
-  "schema_version": 5,
+  "schema_version": 6,
   "source_conflicts": "source_conflicts.jsonl",
   "source_documents": "source_documents.jsonl",
   "source_files": {
