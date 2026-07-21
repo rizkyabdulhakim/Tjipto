@@ -58,6 +58,20 @@ class PdfTextSpanCoverageTest(unittest.TestCase):
             for row in rows:
                 self.assertEqual(stream[row["text_start"] : row["text_end"]], row["exact_quote"], row["text_span_id"])
 
+    def test_source_markers_have_raw_disposition_and_never_enter_semantic_text(self) -> None:
+        markers = {"*)", "**)", "***)", "****)", "***/****)"}
+        raw = read_jsonl(FINAL / "raw_source_spans.jsonl")
+        marker_rows = [row for row in raw if row["classification"] == "source_annotation_marker"]
+        self.assertEqual({row["raw_text"] for row in marker_rows}, markers)
+        self.assertTrue(all(row["disposition_reason"] == "source_annotation_marker" for row in marker_rows))
+        self.assertTrue(all(row["legal_text"] is False for row in marker_rows))
+        self.assertTrue(all(row["citation_eligible"] is False for row in marker_rows))
+        self.assertTrue(all(row["relevant_quote_eligible"] is False for row in marker_rows))
+        self.assertTrue(all(row["default_highlight_eligible"] is False for row in marker_rows))
+        for name, field in (("page_text_spans", "text"), ("legal_units", "text"), ("evidence_registry", "quoted_text")):
+            rows = read_jsonl(FINAL / f"{name}.jsonl")
+            self.assertFalse(any(marker in str(row.get(field) or "") for row in rows for marker in markers), name)
+
 
 if __name__ == "__main__":
     unittest.main()

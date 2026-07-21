@@ -119,6 +119,31 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "reason_code",
         "reason",
     ),
+    "raw_source_spans": (
+        "raw_source_span_id",
+        "source_document_id",
+        "source_sha256",
+        "source_role",
+        "page_number",
+        "extraction_order",
+        "raw_text",
+        "raw_quote",
+        "raw_stream_id",
+        "raw_stream_sha256",
+        "raw_text_start",
+        "raw_text_end",
+        "x0",
+        "y0",
+        "x1",
+        "y1",
+        "classification",
+        "legal_text",
+        "citation_eligible",
+        "relevant_quote_eligible",
+        "default_highlight_eligible",
+        "normalization_actions",
+        "disposition_reason",
+    ),
     "pages": ("page_id", "source_document_id", "page_number", "text"),
     "retrieval_units": (
         "retrieval_unit_id",
@@ -200,7 +225,7 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 COMMON_ARTIFACT_FIELDS = frozenset(
-    "authority_kind bbox_precision bbox_refs citation citation_available citation_final corpus_id evidence_id grounding_level relation_id relation_type runtime_loadable source_document_id source_role text_span_ids recovery_capability recovery_status page_number page_range quoted_text quote source_pdf_sha256 target_bbox_refs target_citation target_legal_unit_id target_precision target_source_role source_legal_unit_role source_label target_label old_reference new_reference old_reference_range new_reference_range old_reference_range_kind new_reference_range_kind bbox_id bbox_ids citable citable_status citation_finality_reason coordinate_origin coordinate_space evidence_exists exactness page_box_basis page_height page_rotation page_width promotion_candidate reason_code source_pdf source_pdf_path source_sha256 status artifact_status text transform_version viewer_highlightable x0 x1 y0 y1 ancestor_legal_unit_ids canonical_label canonical_unit_ref canonical_use_allowed chunk_id chunk_type contributing_child_legal_unit_ids current_resolution_state evidence_ids evidence_summary exclusion_ref failure_reason grounding_status hierarchy historical_label sibling_order stable_unit_id structural_depth structural_role temporal_context validation_basis validation_status date decision_date decision_session document_metadata_id document_type effective_rule enactment evidence_refs field_statuses grounded_fields grounding_refs institution ln_tln official_title officials penetapan pengesahan pengundangan place promulgation source_anomaly_status source_publication signatories article_level reason support_refs support_type target_document_id target_source_role classification exclusion_reason field_bbox_feasibility legal_force metadata_field promotion_status promotion_target_id promotion_target_type review_status semantic_classification span_bbox_ids text_span_id span_role bbox_registry_coverage_status bbox_registry_coverage_reason bbox_registry_coverage_bucket word_bbox_candidate_count word_bbox_distance_to_existing_span_bbox word_bbox_match_confidence word_bbox_match_method bbox_sample_refs bbox_total_count parent_legal_unit_id rejection_reason retrieval_trace content_fingerprint file_size file_size_match filename final_download_url http_content_type http_last_modified http_status page_count page_count_match path redownload_sha256 reproducibility_status source_authority source_integrity_status affected_pages anchor_terms authoritative_evidence_id blocked_raw_provenance_reason blocked_raw_provenance_text_span_ids blocked_raw_provenance_text_span_reasons final_authority_policy final_evidence_available page_numbers provenance provenance_bbox_status provenance_exception_category provenance_highlight_scope provenance_review_status provenance_summary query_anchor_terms query_exclusion_terms query_required_terms resolution_decision raw_provenance_bbox_ids raw_provenance_text_span_ids source_anomaly_kind source_anomaly_policy source_conflict_id source_mapping_kind type edge_type derivation_method derivation_reason derivation_basis confidence_policy object_role linked_authority is_citation_object metadata_grounding_ids support_relation_ids support_evidence_ids support_exception_ids support_kind page_locator retrieval_terms metadata_grounding_ref_id char_start char_end page_text_hash text_start text_end unresolved_chunk_reference source_id target_id sha256_match word_index block_index line_index word_no normalized_text bbox_source extractor extractor_version characters recovery_method failure_code promotion_attempted decision candidate_status current_grounding_status exact_bbox_available exact_quote_available exact_span_available can_be_exact_citation can_be_exact_highlight highlightable matched_page_numbers matched_span_ids matched_text_excerpt quote_match_status span_match_status subspan_match_status bbox_union_status blocker_evidence metadata_exact_promotion_feasibility policy_reason".split()
+    "authority_kind bbox_precision bbox_refs citation citation_available citation_final corpus_id evidence_id grounding_level relation_id relation_type runtime_loadable source_document_id source_role text_span_ids recovery_capability recovery_status page_number page_range quoted_text quote source_pdf_sha256 target_bbox_refs target_citation target_legal_unit_id target_precision target_source_role source_legal_unit_role source_label target_label old_reference new_reference old_reference_range new_reference_range old_reference_range_kind new_reference_range_kind bbox_id bbox_ids citable citable_status citation_finality_reason citation_eligibility relevant_quote_eligible coordinate_origin coordinate_space evidence_exists exactness page_box_basis page_height page_rotation page_width promotion_candidate reason_code source_pdf source_pdf_path source_sha256 status artifact_status text transform_version viewer_highlightable x0 x1 y0 y1 ancestor_legal_unit_ids canonical_label canonical_unit_ref canonical_use_allowed chunk_id chunk_type contributing_child_legal_unit_ids current_resolution_state evidence_ids evidence_summary exclusion_ref failure_reason grounding_status hierarchy historical_label sibling_order stable_unit_id structural_depth structural_role temporal_context validation_basis validation_status date decision_date decision_session document_metadata_id document_type effective_rule enactment evidence_refs field_statuses grounded_fields grounding_refs institution ln_tln official_title officials penetapan pengesahan pengundangan place promulgation source_anomaly_status source_publication signatories article_level reason support_refs support_type target_document_id target_source_role classification exclusion_reason field_bbox_feasibility legal_force metadata_field promotion_status promotion_target_id promotion_target_type review_status semantic_classification span_bbox_ids text_span_id span_role bbox_registry_coverage_status bbox_registry_coverage_reason bbox_registry_coverage_bucket word_bbox_candidate_count word_bbox_distance_to_existing_span_bbox word_bbox_match_confidence word_bbox_match_method bbox_sample_refs bbox_total_count parent_legal_unit_id rejection_reason retrieval_trace content_fingerprint file_size file_size_match filename final_download_url http_content_type http_last_modified http_status page_count page_count_match path redownload_sha256 reproducibility_status source_authority source_integrity_status affected_pages anchor_terms authoritative_evidence_id blocked_raw_provenance_reason blocked_raw_provenance_text_span_ids blocked_raw_provenance_text_span_reasons final_authority_policy final_evidence_available page_numbers provenance provenance_bbox_status provenance_exception_category provenance_highlight_scope provenance_review_status provenance_summary query_anchor_terms query_exclusion_terms query_required_terms resolution_decision raw_provenance_bbox_ids raw_provenance_text_span_ids source_anomaly_kind source_anomaly_policy source_conflict_id source_mapping_kind type edge_type derivation_method derivation_reason derivation_basis confidence_policy object_role linked_authority is_citation_object metadata_grounding_ids support_relation_ids support_evidence_ids support_exception_ids support_kind page_locator retrieval_terms metadata_grounding_ref_id char_start char_end page_text_hash text_start text_end unresolved_chunk_reference source_id target_id sha256_match word_index block_index line_index word_no normalized_text bbox_source extractor extractor_version characters recovery_method failure_code promotion_attempted decision candidate_status current_grounding_status exact_bbox_available exact_quote_available exact_span_available can_be_exact_citation can_be_exact_highlight highlightable matched_page_numbers matched_span_ids matched_text_excerpt quote_match_status span_match_status subspan_match_status bbox_union_status blocker_evidence metadata_exact_promotion_feasibility policy_reason raw_source_span_id raw_text raw_quote raw_stream_id raw_stream_sha256 raw_text_start raw_text_end extraction_order legal_text default_highlight_eligible normalization_actions disposition_reason".split()
 )
 COMMON_ARTIFACT_FIELDS = COMMON_ARTIFACT_FIELDS | {"page_start", "page_end", "parent_legal_unit_ids", "unit_label", "unit_type", "source_text_span_ids", "source_bbox_refs", "source_node_type", "target_node_type", "bbox_status", "final_evidence_id", "rectangle_index", "hierarchy_path", "orphan_policy", "conflict_type", "target_text_span_ids", "trace_only_reason", "validator_status", "provenance_ref", "provenance_ref_kind", "provenance_support", "legal_unit_id"}
 
@@ -255,7 +280,7 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "source_sha256", "status", "text", "transform_version", "viewer_highlightable", "failure_reason", "x0", "x1", "y0", "y1",
     }),
     "chunks": frozenset({
-        "ancestor_legal_unit_ids", "artifact_status", "bbox_ids", "canonical_label", "canonical_unit_ref",
+        "aggregate_failure_reason", "ancestor_legal_unit_ids", "artifact_status", "bbox_ids", "canonical_label", "canonical_unit_ref",
         "canonical_use_allowed", "chunk_id", "chunk_type", "contributing_child_legal_unit_ids", "corpus_id",
         "current_resolution_state", "evidence_ids", "exclusion_ref", "failure_reason", "grounding_status",
         "hierarchy", "historical_label", "legal_unit_id", "page_numbers", "page_range", "parent_legal_unit_id",
@@ -265,7 +290,7 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "validation_status",
     }),
     "evidence_registry": frozenset({
-        "artifact_status", "authority_kind", "bbox_ids", "bbox_precision", "bbox_refs", "citation", "citation_eligibility",
+        "artifact_status", "authority_kind", "bbox_ids", "bbox_precision", "bbox_refs", "citation", "citation_eligibility", "relevant_quote_eligible",
         "citation_final", "citation_finality_reason", "corpus_id", "evidence_exists", "evidence_id", "evidence_owner_kind",
         "exactness", "failure_reason", "hierarchy", "is_citation_object", "legal_unit_id", "linked_authority", "object_role",
         "page_numbers", "promotion_candidate", "quoted_text", "reason_code", "runtime_loadable", "source_document_id",
@@ -283,6 +308,12 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "text_suffix", "text_span_id", "unicode_offset_basis", "validation_basis", "viewer_highlightable",
         "word_bbox_candidate_count", "word_bbox_distance_to_existing_span_bbox", "word_bbox_match_confidence",
         "word_bbox_match_method", "x0", "x1", "y0", "y1",
+    }),
+    "raw_source_spans": frozenset({
+        "raw_source_span_id", "source_document_id", "source_sha256", "source_role", "page_number", "extraction_order",
+        "raw_text", "raw_quote", "raw_stream_id", "raw_stream_sha256", "raw_text_start", "raw_text_end",
+        "x0", "y0", "x1", "y1", "classification", "legal_text", "citation_eligible", "relevant_quote_eligible",
+        "default_highlight_eligible", "normalization_actions", "disposition_reason", "raw_geometry_method",
     }),
     "document_metadata": frozenset({
         "corpus_id", "date", "decision_date", "decision_session", "document_metadata_id", "document_type", "effective_rule",
@@ -308,7 +339,7 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "source_sha256", "status", "unit_label", "unit_type", "viewer_highlightable",
     }),
     "legal_units": frozenset({
-        "ancestor_legal_unit_ids", "artifact_status", "bbox_ids", "canonical_label", "canonical_use_allowed", "corpus_id", "current_resolution_state",
+        "aggregate_failure_reason", "ancestor_legal_unit_ids", "artifact_status", "bbox_ids", "canonical_label", "canonical_use_allowed", "corpus_id", "current_resolution_state",
         "evidence_ids", "exclusion_ref", "failure_reason", "grounding_status", "hierarchy", "historical_label", "legal_unit_id", "page_end", "page_numbers",
         "page_start", "parent_legal_unit_id", "parent_legal_unit_ids", "provenance", "provenance_exception_category", "provenance_review_status", "reason_code",
         "runtime_loadable", "sibling_order", "source_bbox_refs", "source_document_id", "source_role", "source_sha256", "source_text_span_ids", "stable_unit_id",

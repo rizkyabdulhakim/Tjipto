@@ -8,6 +8,7 @@ from tjipto.ingestion.pdf.bbox import _geometry_id
 from tjipto.corpora.uud.provenance_exceptions import RECOVERABLE_GROUNDING_LABELS, SEGMENTATION_BOUNDARY_LABELS
 from tjipto.corpora.uud.structure_builder import compact, slug
 from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, compact_text, word_rows_by_page
+from tjipto.ingestion.pdf.text_spans import normalize_semantic_text
 
 
 def _admit_evidence(unit: dict, chunk: dict, *, has_descendants: bool = False) -> bool:
@@ -32,6 +33,7 @@ def build_evidence_and_bboxes(
     pdf_lines_by_source: dict[str, dict[int, list[dict]]],
     word_bboxes: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict]]:
+    pdf_lines_by_source = _semantic_line_entries(pdf_lines_by_source, word_bboxes or [])
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     descendants_by_parent = _descendants_by_parent(legal_units)
     evidence: list[dict] = []
@@ -149,6 +151,48 @@ def build_evidence_and_bboxes(
     bbox_rows = list({row["bbox_id"]: row for row in bbox_rows}.values())
     bbox_rows.sort(key=lambda row: (row["source_document_id"], row["page_number"], row["bbox_id"]))
     return evidence, bbox_rows
+
+
+def _semantic_line_entries(pdf_lines_by_source: dict[str, dict[int, list[dict]]], word_bboxes: list[dict]) -> dict[str, dict[int, list[dict]]]:
+    marker_pattern = re.compile(r"\*{1,4}(?:/\*{1,4})?\)")
+    words_by_page: dict[tuple[str, int], list[dict]] = {}
+    for word in word_bboxes:
+        words_by_page.setdefault((word["source_document_id"], word["page_number"]), []).append(word)
+    result: dict[str, dict[int, list[dict]]] = {}
+    for source_id, pages in pdf_lines_by_source.items():
+        result[source_id] = {}
+        for page_number, lines in pages.items():
+            page_words = words_by_page.get((source_id, page_number), [])
+            semantic_lines = []
+            for line in lines:
+                original_text = str(line.get("text") or "")
+                text = normalize_semantic_text(original_text)
+                if not text:
+                    continue
+                line = {**line, "text": text}
+                candidates = [
+                    _semantic_word_geometry(word)
+                    for word in page_words
+                    if word["y1"] >= line["y0"] and word["y0"] <= line["y1"]
+                    and word["x1"] >= line["x0"] and word["x0"] <= line["x1"]
+                    and not marker_pattern.fullmatch(str(word.get("text") or "").strip())
+                ]
+                if marker_pattern.search(original_text) and candidates:
+                    line["x0"] = min(word["x0"] for word in candidates)
+                    line["x1"] = max(word["x1"] for word in candidates)
+                semantic_lines.append(line)
+            result[source_id][page_number] = semantic_lines
+    return result
+
+
+def _semantic_word_geometry(word: dict) -> dict:
+    match = re.search(r"\*{1,4}(?:/\*{1,4})?\)", str(word.get("text") or ""))
+    if not match or not word.get("characters"):
+        return word
+    chars = [char for char in word["characters"] if int(char.get("char_end", 0)) <= match.start()]
+    if not chars:
+        return word
+    return {**word, "x0": min(char["x0"] for char in chars), "x1": max(char["x1"] for char in chars)}
 
 
 def _recover_word_bbox(

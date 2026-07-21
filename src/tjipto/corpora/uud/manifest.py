@@ -37,6 +37,7 @@ ARTIFACT_FILES = (
     ("validation_exceptions", "validation_exceptions.jsonl"),
     ("validation_report", "validation_report.json"),
     ("page_text_spans", "page_text_spans.jsonl"),
+    ("raw_source_spans", "raw_source_spans.jsonl"),
     ("word_bboxes", "word_bboxes.jsonl"),
 )
 
@@ -66,6 +67,7 @@ COUNT_FILES = (
     ("validation_exception_review_labels", "validation_exception_review_labels.jsonl"),
     ("validation_exceptions", "validation_exceptions.jsonl"),
     ("page_text_spans", "page_text_spans.jsonl"),
+    ("raw_source_spans", "raw_source_spans.jsonl"),
     ("word_bboxes", "word_bboxes.jsonl"),
 )
 
@@ -102,6 +104,7 @@ PRIMARY_IDS = {
     "metadata_grounding_registry": "metadata_grounding_ref_id",
     "pages": "page_id",
     "page_text_spans": "text_span_id",
+    "raw_source_spans": "raw_source_span_id",
     "promotion_decisions": "decision_id",
     "retrieval_units": "retrieval_unit_id",
     "source_documents": "source_document_id",
@@ -165,6 +168,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "validation_exceptions": "validation_exceptions.jsonl",
         "validation_report": "validation_report.json",
         "page_text_spans": "page_text_spans.jsonl",
+        "raw_source_spans": "raw_source_spans.jsonl",
         "word_bboxes": "word_bboxes.jsonl",
     }
     return manifest

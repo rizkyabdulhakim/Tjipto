@@ -138,6 +138,24 @@ def _instrument_rows(
     intent = intent_config_for(strategy, config)
     corpus_id = _corpus_id(config)
     bab = parse_bab_reference(corpus_id, query)
+    if bab and any(pattern in folded for pattern in intent["instrument_deletion_words"]) and not any(
+        pattern in folded for pattern in intent["instrument_change_context_words"]
+    ):
+        if probe_only:
+            return ({"probe": True},)
+        matches = []
+        for row in getattr(store, "evidence", ()):
+            hierarchy = {str(value).casefold() for value in row.get("hierarchy") or ()}
+            text = str(row.get("quoted_text") or "").casefold()
+            if bab.casefold() not in hierarchy or not any(word in text for word in intent["instrument_deletion_evidence_words"]):
+                continue
+            if row.get("authority_kind") != "normative_legal_text" or row.get("citation_eligibility") != "eligible":
+                continue
+            candidate = _candidate(row, "normative_deletion_candidate")
+            if candidate is not None:
+                matches.append(candidate)
+        if matches:
+            return tuple(matches[:limit])
     if (
         bab
         and any(pattern in folded for pattern in intent["instrument_deletion_words"])

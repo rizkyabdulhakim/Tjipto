@@ -97,5 +97,6 @@ UUD_ARTIFACT_ORIGIN_POLICY = {
     },
     "validation_report.json": _generated("validation_pipeline", "validation"),
     "page_text_spans.jsonl": _generated("text_span_builder", "ingestion"),
+    "raw_source_spans.jsonl": _generated("text_span_builder", "ingestion"),
     "word_bboxes.jsonl": _generated("word_bbox_builder", "ingestion"),
 }

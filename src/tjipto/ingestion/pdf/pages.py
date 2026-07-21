@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+from tjipto.ingestion.pdf.text_spans import normalize_semantic_text
+
 
 def build_pdf_pages(
     *,
@@ -41,4 +43,4 @@ def build_pdf_pages(
 
 def pdf_page_text(doc, page_number: int) -> str:
     text = doc[page_number - 1].get_text("text").replace("\xa0", " ").replace("\xad", "")
-    return "\n".join(re.sub(r" {2,}", " ", line) for line in text.split("\n"))
+    return "\n".join(normalize_semantic_text(re.sub(r" {2,}", " ", line)) for line in text.split("\n"))

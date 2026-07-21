@@ -144,6 +144,7 @@ def apply_authority_contract(
             {
                 "temporal_role": row.get("source_role"),
                 "citation_eligibility": "eligible" if row.get("citable") is True else "ineligible",
+                "relevant_quote_eligible": row.get("citable") is True and row.get("authority_kind") == "normative_legal_text" and row.get("evidence_owner_kind") == "legal_unit_source",
                 "support_kind": "direct_evidence" if row.get("text_span_ids") else "page_support",
             }
         )

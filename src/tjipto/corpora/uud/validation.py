@@ -1689,6 +1689,43 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
             for field in ("viewer_highlightable", "citation_final", "citable", "evidence_exists", "runtime_loadable"):
                 if field in row and not isinstance(row[field], bool):
                     errors.append(f"invalid_type:{artifact}:{row_id}:{field}")
+
+    raw_rows = rows("raw_source_spans")
+    raw_streams: dict[str, str] = {}
+    for row in raw_rows:
+        raw_streams.setdefault(str(row.get("raw_stream_id")), "")
+    for stream_id in raw_streams:
+        stream_rows = sorted((row for row in raw_rows if str(row.get("raw_stream_id")) == stream_id), key=lambda item: item.get("raw_text_start", 0))
+        stream = next((str(row.get("raw_text") or "") for row in stream_rows if row.get("raw_text_start") == 0), "")
+        if stream_rows:
+            page_rows = [row for row in stream_rows if row.get("raw_text_start") is not None]
+            max_end = max(int(row.get("raw_text_end") or 0) for row in page_rows)
+            pieces = ["\n"] * max_end
+            for row in page_rows:
+                text = str(row.get("raw_text") or "")
+                start, end = int(row.get("raw_text_start") or 0), int(row.get("raw_text_end") or 0)
+                if end - start == len(text):
+                    pieces[start:end] = text
+            stream = "".join(pieces)
+        if sha256(stream.encode("utf-8")).hexdigest() != str(stream_rows[0].get("raw_stream_sha256")):
+            errors.append(f"invalid_selector:{stream_id}:raw_stream_hash")
+        for row in stream_rows:
+            start, end, quote = row.get("raw_text_start"), row.get("raw_text_end"), row.get("raw_quote")
+            if not isinstance(start, int) or not isinstance(end, int) or not isinstance(quote, str) or stream[start:end] != quote:
+                errors.append(f"invalid_selector:{row.get('raw_source_span_id')}:raw_offset")
+            if row.get("classification") == "source_annotation_marker" and any(row.get(field) is not False for field in ("legal_text", "citation_eligible", "relevant_quote_eligible", "default_highlight_eligible")):
+                errors.append(f"owner_field_violation:raw_source_spans:{row.get('raw_source_span_id')}:marker_policy")
+
+    marker_pattern = re.compile(r"\*{1,4}(?:/\*{1,4})?\)")
+    for row in rows("page_text_spans"):
+        if marker_pattern.search(str(row.get("text") or "")):
+            errors.append(f"invalid_selector:{row.get('text_span_id')}:source_marker")
+    for row in rows("evidence_registry"):
+        if marker_pattern.search(str(row.get("quoted_text") or "")):
+            errors.append(f"owner_field_violation:evidence_registry:{row.get('evidence_id')}:source_marker")
+        expected = row.get("citable") is True and row.get("authority_kind") == "normative_legal_text" and row.get("evidence_owner_kind") == "legal_unit_source"
+        if row.get("relevant_quote_eligible") is not expected:
+            errors.append(f"owner_field_violation:evidence_registry:{row.get('evidence_id')}:relevant_quote_eligible")
             for field in ("page_number", "text_start", "text_end"):
                 if field in row and not isinstance(row[field], int):
                     errors.append(f"invalid_type:{artifact}:{row_id}:{field}")

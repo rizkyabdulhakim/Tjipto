@@ -349,7 +349,7 @@
       "page_number": 1,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 17,
+      "text_span_count": 13,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -359,7 +359,7 @@
       "page_number": 2,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 47,
+      "text_span_count": 43,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -369,7 +369,7 @@
       "page_number": 3,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 44,
+      "text_span_count": 40,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -379,7 +379,7 @@
       "page_number": 4,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 41,
+      "text_span_count": 37,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -389,7 +389,7 @@
       "page_number": 5,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 45,
+      "text_span_count": 41,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -399,7 +399,7 @@
       "page_number": 6,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 44,
+      "text_span_count": 39,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -409,7 +409,7 @@
       "page_number": 7,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 49,
+      "text_span_count": 45,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -419,7 +419,7 @@
       "page_number": 8,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 45,
+      "text_span_count": 41,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -429,7 +429,7 @@
       "page_number": 9,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 43,
+      "text_span_count": 39,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -439,7 +439,7 @@
       "page_number": 10,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 41,
+      "text_span_count": 37,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -449,7 +449,7 @@
       "page_number": 11,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 38,
+      "text_span_count": 34,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -459,7 +459,7 @@
       "page_number": 12,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 41,
+      "text_span_count": 37,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -469,7 +469,7 @@
       "page_number": 13,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 30,
+      "text_span_count": 26,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -479,7 +479,7 @@
       "page_number": 14,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 50,
+      "text_span_count": 45,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -489,7 +489,7 @@
       "page_number": 15,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 40,
+      "text_span_count": 36,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -499,7 +499,7 @@
       "page_number": 16,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 39,
+      "text_span_count": 32,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -509,7 +509,7 @@
       "page_number": 17,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 40,
+      "text_span_count": 36,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -519,7 +519,7 @@
       "page_number": 18,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 49,
+      "text_span_count": 43,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -529,7 +529,7 @@
       "page_number": 19,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 41,
+      "text_span_count": 37,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -539,7 +539,7 @@
       "page_number": 20,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 41,
+      "text_span_count": 37,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -549,7 +549,7 @@
       "page_number": 21,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 55,
+      "text_span_count": 51,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -559,7 +559,7 @@
       "page_number": 22,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 47,
+      "text_span_count": 42,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -569,7 +569,7 @@
       "page_number": 23,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 49,
+      "text_span_count": 45,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -579,7 +579,7 @@
       "page_number": 24,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 34,
+      "text_span_count": 30,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -589,7 +589,7 @@
       "page_number": 25,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 44,
+      "text_span_count": 40,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -599,7 +599,7 @@
       "page_number": 26,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 36,
+      "text_span_count": 32,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -609,7 +609,7 @@
       "page_number": 27,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 42,
+      "text_span_count": 37,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -619,7 +619,7 @@
       "page_number": 28,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 23,
+      "text_span_count": 19,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },

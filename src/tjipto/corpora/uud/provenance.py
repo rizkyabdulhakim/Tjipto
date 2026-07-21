@@ -7,10 +7,10 @@ from tjipto.core.manifest import read_json
 
 
 SATU_NASKAH_HEADER_RE = re.compile(
-    r"\*\)\s*:?\s*Perubahan Pertama\s*"
-    r"\*\*\)\s*:?\s*Perubahan Kedua\s*"
-    r"\*\*\*\)\s*:?\s*Perubahan Ketiga\s*"
-    r"\*\*\*\*\)\s*:?\s*Perubahan Keempat\s*"
+    r"(?:\*\)\s*)?:?\s*Perubahan Pertama\s*"
+    r"(?:\*\*\)\s*)?:?\s*Perubahan Kedua\s*"
+    r"(?:\*\*\*\)\s*)?:?\s*Perubahan Ketiga\s*"
+    r"(?:\*\*\*\*\)\s*)?:?\s*Perubahan Keempat\s*"
     r"(?:MAJELIS PERMUSYAWARATAN RAKYAT\s*"
     r"SEKRETARIAT JENDERAL\s*"
     r"UNDANGUNDANG DASAR\s*"

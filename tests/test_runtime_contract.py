@@ -1107,6 +1107,14 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["citations"][0]["citation"], citation, query)
             self.assertTrue(all(row["source_role"] == role for row in result["citations"]), query)
 
+    def test_bab_deletion_query_uses_normative_deletion_evidence(self) -> None:
+        result = self.service.ask("uud", "Apakah BAB IV dihapus?")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertTrue(result["citations"])
+        self.assertEqual(result["citations"][0]["citation"], "Dihapus.")
+        self.assertEqual(result["evidence"][0]["authority_kind"], "normative_legal_text")
+        self.assertNotIn("BAB IV", result["citations"][0]["quoted_text"])
+
     def test_explicit_temporal_reference_never_becomes_document_relation_or_current_fallback(self) -> None:
         cases = (
             ("Pasal 1 naskah asli", "answer_ready", "original_historical"),

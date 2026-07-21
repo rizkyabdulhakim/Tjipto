@@ -94,7 +94,13 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     finally:
         for doc in docs.values():
             doc.close()
-    page_text_spans = build_page_text_spans(source_documents=source_documents, pdf_lines=pdf_lines_by_source)
+    raw_source_spans: list[dict] = []
+    page_text_spans = build_page_text_spans(
+        source_documents=source_documents,
+        pdf_lines=pdf_lines_by_source,
+        raw_source_spans=raw_source_spans,
+        word_bboxes=word_bboxes,
+    )
     for span in page_text_spans:
         span.setdefault("metadata_grounding_ids", [])
     legal_units = build_legal_units_from_sources(
@@ -251,6 +257,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "document_relations.jsonl", document_relations)
     write_jsonl(final_dir / "article_amendment_relations.jsonl", article_amendment_relations)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
+    write_jsonl(final_dir / "raw_source_spans.jsonl", raw_source_spans)
     write_jsonl(final_dir / "word_bboxes.jsonl", word_bboxes)
     write_jsonl(final_dir / "promotion_decisions.jsonl", promotion_decisions)
     write_jsonl(final_dir / "validation_exceptions.jsonl", validation_exceptions)

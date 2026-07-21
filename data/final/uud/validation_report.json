@@ -40,21 +40,21 @@
     "legal_units": 653,
     "excluded_records": 0,
     "evidence_records": 650,
-    "bbox_records": 1837,
+    "bbox_records": 1828,
     "retrieval_units": 650,
     "promotion_decisions": 77,
-    "graph_nodes": 3216,
-    "graph_edges": 7933,
-    "page_text_spans": 2191,
+    "graph_nodes": 3207,
+    "graph_edges": 7917,
+    "page_text_spans": 2070,
     "word_bboxes": 11336
   },
   "bbox_precision_counts": {
-    "exact": 1837,
+    "exact": 1828,
     "coarse": 0,
     "page_grounded_only": 0
   },
   "bbox_highlightability_counts": {
-    "viewer_highlightable": 1837,
+    "viewer_highlightable": 1828,
     "non_highlightable": 0
   },
   "chunk_self_contained_health": {
@@ -178,24 +178,24 @@
     "status": "complete"
   },
   "viewer_provenance_coverage_health": {
-    "page_text_span_count": 2191,
-    "bbox_registry_row_count": 1837,
-    "bbox_key_present_span_count": 1142,
-    "bbox_key_absent_span_count": 1049,
-    "legal_citation_candidate_count": 648,
+    "page_text_span_count": 2070,
+    "bbox_registry_row_count": 1828,
+    "bbox_key_present_span_count": 1651,
+    "bbox_key_absent_span_count": 419,
+    "legal_citation_candidate_count": 166,
     "metadata_provenance_candidate_count": 8,
-    "nonlegal_excluded_provenance_count": 345,
+    "nonlegal_excluded_provenance_count": 233,
     "raw_span_only_with_reason_count": 0,
     "source_anomaly_provenance_candidate_count": 0,
-    "structural_provenance_only_count": 48,
+    "structural_provenance_only_count": 12,
     "already_covered_by_final_evidence_bbox_count": 0,
     "blocked_by_layout_count": 0,
     "blocked_by_missing_exact_bbox_count": 0,
     "blocked_by_no_word_level_bbox_artifact_count": 0,
     "blocked_by_text_mismatch_count": 0,
-    "exact_word_bbox_available_count": 656,
+    "exact_word_bbox_available_count": 174,
     "metadata_page_grounded_only_by_policy_count": 0,
-    "nonlegal_excluded_from_public_highlight_count": 345,
+    "nonlegal_excluded_from_public_highlight_count": 233,
     "source_anomaly_anchor_only_until_exact_span_available_count": 0,
     "missing_bucket_count": 0,
     "missing_reason_count": 0,
@@ -206,14 +206,14 @@
     "status": "complete"
   },
   "all_text_disposition_health": {
-    "page_text_span_count": 2191,
-    "classified_span_count": 2191,
-    "span_disposition_present_count": 2191,
+    "page_text_span_count": 2070,
+    "classified_span_count": 2070,
+    "span_disposition_present_count": 2070,
     "span_disposition_missing_count": 0,
-    "semantic_classification_present_count": 2191,
-    "known_unreferenced_span_count": 352,
-    "promotion_status_present_count": 2191,
-    "legal_force_present_count": 2191,
+    "semantic_classification_present_count": 2070,
+    "known_unreferenced_span_count": 240,
+    "promotion_status_present_count": 2070,
+    "legal_force_present_count": 2070,
     "missing_source_ref_count": 0,
     "missing_page_ref_count": 0,
     "missing_bbox_coordinate_count": 0,
@@ -349,11 +349,11 @@
     "runtime_check_count": 0
   },
   "artifact_origin_health": {
-    "manifest_file_rows": 28,
-    "files_with_origin": 28,
+    "manifest_file_rows": 29,
+    "files_with_origin": 29,
     "files_missing_origin": 0,
     "invalid_origin_values": 0,
-    "generated_count": 23,
+    "generated_count": 24,
     "carried_forward_count": 3,
     "manual_review_artifact_count": 2,
     "deprecated_count": 0,
@@ -430,7 +430,7 @@
   "highlight_registry_contract": {
     "status": "complete",
     "architecture": "bbox_registry_union_word_bboxes",
-    "bbox_registry_rows": 1837,
+    "bbox_registry_rows": 1828,
     "word_bbox_rows": 11336,
     "official_viewer_highlight_ref_sources": [
       "bbox_registry",
@@ -439,9 +439,9 @@
     "bbox_registry_layer": "materialized_final_and_provenance_bboxes",
     "word_bbox_layer": "word_bbox_exact_highlight",
     "viewer_highlightable_union": "bbox_registry_union_word_bboxes",
-    "bbox_key_absent_span_count": 1049,
+    "bbox_key_absent_span_count": 419,
     "exact_safe_word_highlight_count": 1534,
-    "non_citable_absent_span_count": 649,
+    "non_citable_absent_span_count": 528,
     "false_highlight_count": 0
   },
   "span_sequence_grounding_health": {
@@ -461,7 +461,7 @@
     "evidence_exact_count": 650,
     "evidence_page_grounded_only_count": 0,
     "evidence_trace_only_count": 3,
-    "bbox_exact_count": 1837,
+    "bbox_exact_count": 1828,
     "bbox_page_grounded_only_count": 0,
     "bbox_non_highlightable_count": 0,
     "metadata_grounding_exact_count": 68,
@@ -542,7 +542,7 @@
       "CONTAINS": 530,
       "DELETES": 1,
       "FOLLOWS": 7,
-      "HAS_BBOX": 4113,
+      "HAS_BBOX": 4097,
       "HAS_DECISION_SESSION": 3,
       "HAS_EFFECTIVE_RULE": 3,
       "HAS_FINAL_EVIDENCE": 650,
@@ -607,7 +607,7 @@
   },
   "legal_graph_authority_health": {
     "status": "incomplete",
-    "graph_edge_count": 7933,
+    "graph_edge_count": 7917,
     "article_relation_count": 72,
     "article_relation_graph_ref_count": 72,
     "evidence_backed_relation_edge_count": 72,
@@ -618,13 +618,13 @@
     "trace_promoted_count": 0,
     "graph_final_citation_edge_count": 0,
     "invalid_finality_policy_count": 0,
-    "missing_authority_field_count": 7861,
+    "missing_authority_field_count": 7845,
     "authority_kind_counts": {
-      "relation_reference": 7933
+      "relation_reference": 7917
     },
     "support_kind_counts": {
       "deterministic_structure": 1081,
-      "endpoint_provenance": 6769,
+      "endpoint_provenance": 6753,
       "instrument_provenance": 10,
       "relation_reference": 72,
       "source_anomaly_trace": 1
