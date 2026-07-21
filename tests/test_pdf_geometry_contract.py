@@ -55,6 +55,17 @@ class PdfGeometryContractTest(unittest.TestCase):
         rows = read_jsonl(FINAL / "bbox_registry.jsonl")
         self.assertFalse(any(row.get("bbox_precision") == "page_grounded_only" and row.get("viewer_highlightable") is True for row in rows))
 
+    def test_geometry_rows_are_canonical_physical_regions(self) -> None:
+        rows = read_jsonl(FINAL / "bbox_registry.jsonl")
+        identities = {
+            (
+                row["source_document_id"], row["source_sha256"], row["page_number"], row["coordinate_space"],
+                row["coordinate_origin"], row["x0"], row["y0"], row["x1"], row["y1"], row["transform_version"], row["text"],
+            )
+            for row in rows
+        }
+        self.assertEqual(len(rows), len(identities))
+
 
 def _compact(text: str) -> str:
     return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", text or "").replace("\u00ad", "")).strip().casefold()

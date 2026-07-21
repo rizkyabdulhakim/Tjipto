@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 
-CURRENT_ARTIFACT_SCHEMA = 6
+CURRENT_ARTIFACT_SCHEMA = 7
 
 
 MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
+    "article_versions": ("article_version_id",),
     "bbox_registry": (
         "bbox_id",
-        "evidence_id",
         "evidence_exists",
         "object_role",
         "source_document_id",
@@ -110,6 +110,10 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "metadata_grounding_ids",
         "artifact_status",
         "page_text_hash",
+        "stream_id",
+        "normalization_contract",
+        "unicode_offset_basis",
+        "exact_quote",
         "text_start",
         "text_end",
         "reason_code",
@@ -168,6 +172,9 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "artifact_status",
         "object_role",
     ),
+    "metadata_grounding_registry": ("metadata_grounding_ref_id", "metadata_grounding_id", "bbox_id"),
+    "metadata": ("metadata_id",),
+    "metadata_graph_edges": ("edge_id",),
     "source_conflicts": (
         "source_conflict_id",
         "source_document_id",
@@ -188,6 +195,8 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "resolving_commit",
         "runtime_loadable",
     ),
+    "validation_alignment_results": ("alignment_result_id",),
+    "validation_exception_review_labels": ("exception_review_id",),
 }
 
 COMMON_ARTIFACT_FIELDS = frozenset(
@@ -222,4 +231,128 @@ ARTIFACT_OPTIONAL_FIELDS: dict[str, frozenset[str]] = {
     }),
     "metadata_grounding_registry": frozenset({"object_role", "metadata_grounding_ids"}),
     "word_bboxes": frozenset({"char_start", "char_end", "page_text_hash"}),
+}
+
+# Per-artifact vocabulary.  A manifest may document a contract, but it may
+# not widen it.  Keep this table here so offline validation and the verified
+# loader use the same closed vocabulary.
+ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
+    "article_versions": frozenset({"article_version_id", "corpus_id", "cross_source_equivalence_status", "legal_unit_version_key", "members", "membership_status", "status"}),
+    "article_amendment_relations": frozenset({
+        "authority_kind", "bbox_precision", "bbox_refs", "citation_available", "citation_final", "corpus_id", "evidence_id",
+        "grounding_level", "new_reference", "new_reference_range", "new_reference_range_kind", "old_reference",
+        "old_reference_range", "old_reference_range_kind", "page_number", "quoted_text", "recovery_capability",
+        "recovery_status", "relation_id", "relation_type", "runtime_loadable", "source_document_id", "source_label",
+        "source_legal_unit_id", "source_legal_unit_role", "source_pdf_sha256", "source_role", "source_support_exact", "substantive_change", "source_conflict", "anomaly",
+        "support_class", "target_bbox_refs", "target_citation", "target_geometry_method", "target_geometry_source_ids",
+        "target_label", "target_legal_unit_id", "target_precision", "target_source_role", "target_text_span_ids",
+        "text_span_ids", "trace_only_reason", "validator_status", "viewer_highlightable",
+    }),
+    "bbox_registry": frozenset({
+        "bbox_id", "bbox_precision", "coordinate_origin", "coordinate_space", "corpus_id", "evidence_exists",
+        "object_role", "page_box_basis", "page_height", "page_number", "page_rotation", "page_width",
+        "promotion_candidate", "reason_code", "source_document_id", "source_pdf", "source_pdf_path",
+        "source_sha256", "status", "text", "transform_version", "viewer_highlightable", "failure_reason", "x0", "x1", "y0", "y1",
+    }),
+    "chunks": frozenset({
+        "ancestor_legal_unit_ids", "artifact_status", "bbox_ids", "canonical_label", "canonical_unit_ref",
+        "canonical_use_allowed", "chunk_id", "chunk_type", "contributing_child_legal_unit_ids", "corpus_id",
+        "current_resolution_state", "evidence_ids", "exclusion_ref", "failure_reason", "grounding_status",
+        "hierarchy", "historical_label", "legal_unit_id", "page_numbers", "page_range", "parent_legal_unit_id",
+        "provenance", "provenance_exception_category", "provenance_review_status", "reason_code", "runtime_loadable",
+        "sibling_order", "source_document_id", "source_role", "source_sha256", "stable_unit_id", "status",
+        "structural_depth", "structural_role", "temporal_context", "text", "text_span_ids", "validation_basis",
+        "validation_status",
+    }),
+    "evidence_registry": frozenset({
+        "artifact_status", "authority_kind", "bbox_ids", "bbox_precision", "bbox_refs", "citation", "citation_eligibility",
+        "citation_final", "citation_finality_reason", "corpus_id", "evidence_exists", "evidence_id", "evidence_owner_kind",
+        "exactness", "failure_reason", "hierarchy", "is_citation_object", "legal_unit_id", "linked_authority", "object_role",
+        "page_numbers", "promotion_candidate", "quoted_text", "reason_code", "runtime_loadable", "source_document_id",
+        "source_pdf", "source_pdf_path", "source_role", "source_sha256", "source_url", "status", "support_kind",
+        "temporal_context", "temporal_role", "text_span_ids", "viewer_highlightable", "citable", "citable_status",
+    }),
+    "page_text_spans": frozenset({
+        "artifact_status", "bbox_precision", "bbox_registry_coverage_bucket", "bbox_registry_coverage_reason",
+        "bbox_registry_coverage_status", "classification", "corpus_id", "evidence_ids", "exclusion_reason",
+        "exact_quote", "field_bbox_feasibility", "legal_force", "linked_authority", "metadata_grounding_ids",
+        "normalization_contract", "object_role", "page_number", "page_text_hash", "promotion_status",
+        "promotion_target_id", "promotion_target_type", "reason", "reason_code", "review_status", "semantic_classification",
+        "source_document_id", "source_pdf", "source_pdf_path", "source_role", "source_sha256", "span_bbox_ids",
+        "span_role", "status", "stream_id", "temporal_context", "text", "text_end", "text_prefix", "text_start",
+        "text_suffix", "text_span_id", "unicode_offset_basis", "validation_basis", "viewer_highlightable",
+        "word_bbox_candidate_count", "word_bbox_distance_to_existing_span_bbox", "word_bbox_match_confidence",
+        "word_bbox_match_method", "x0", "x1", "y0", "y1",
+    }),
+    "document_metadata": frozenset({
+        "corpus_id", "date", "decision_date", "decision_session", "document_metadata_id", "document_type", "effective_rule",
+        "enactment", "evidence_refs", "field_statuses", "grounded_fields", "grounding_refs", "institution", "ln_tln",
+        "official_title", "officials", "penetapan", "pengesahan", "pengundangan", "place", "promulgation", "runtime_loadable",
+        "signatories", "source_anomaly_status", "source_document_id", "source_publication", "source_role", "status", "temporal_context",
+    }),
+    "document_relations": frozenset({
+        "article_level", "citation_available", "corpus_id", "object_role", "reason", "relation_id", "relation_type",
+        "runtime_loadable", "source_document_id", "source_role", "support_evidence_ids", "support_exception_ids",
+        "support_kind", "support_relation_ids", "support_type", "target_document_id", "target_source_role", "viewer_highlightable",
+    }),
+    "graph_edges": frozenset({
+        "artifact_status", "confidence_policy", "derivation_basis", "derivation_method", "derivation_reason", "edge_id", "edge_type",
+        "object_role", "provenance_ref", "provenance_ref_kind", "provenance_support", "reason_code", "relation_id", "relation_type",
+        "runtime_loadable", "source_document_id", "source_id", "source_node_type", "source_role", "support_evidence_ids",
+        "support_exception_ids", "support_kind", "support_relation_ids", "target_id", "target_node_type", "temporal_context", "validation_status",
+    }),
+    "graph_nodes": frozenset({
+        "artifact_status", "bbox_id", "bbox_precision", "bbox_status", "citation", "classification", "conflict_type", "final_evidence_id",
+        "hierarchy_path", "legal_unit_id", "node_id", "node_type", "object_role", "orphan_policy", "page_number", "reason_code",
+        "rectangle_index", "runtime_loadable", "source_conflict_id", "source_document_id", "source_pdf", "source_pdf_path", "source_role",
+        "source_sha256", "status", "unit_label", "unit_type", "viewer_highlightable",
+    }),
+    "legal_units": frozenset({
+        "ancestor_legal_unit_ids", "artifact_status", "bbox_ids", "canonical_label", "canonical_use_allowed", "corpus_id", "current_resolution_state",
+        "evidence_ids", "exclusion_ref", "failure_reason", "grounding_status", "hierarchy", "historical_label", "legal_unit_id", "page_end", "page_numbers",
+        "page_start", "parent_legal_unit_id", "parent_legal_unit_ids", "provenance", "provenance_exception_category", "provenance_review_status", "reason_code",
+        "runtime_loadable", "sibling_order", "source_bbox_refs", "source_document_id", "source_role", "source_sha256", "source_text_span_ids", "stable_unit_id",
+        "status", "structural_depth", "structural_role", "temporal_context", "text", "text_span_ids", "unit_label", "unit_type", "validation_status",
+    }),
+    "metadata_grounding": frozenset({
+        "artifact_status", "authority_kind", "bbox_ids", "bbox_precision", "bbox_refs", "citable", "citation_final", "corpus_id", "evidence_exists",
+        "exactness", "failure_reason", "grounding_status", "metadata_field", "metadata_grounding_id", "object_role", "page_numbers", "provenance", "quote",
+        "quoted_text", "reason_code", "runtime_loadable", "source_document_id", "source_pdf_path", "source_role", "source_sha256", "status",
+        "supporting_evidence_ids", "temporal_context", "text_span_ids", "viewer_highlightable",
+    }),
+    "metadata_grounding_registry": frozenset({"bbox_id", "bbox_precision", "corpus_id", "failure_reason", "metadata_field", "metadata_grounding_id", "metadata_grounding_ref_id", "page_number", "quoted_text", "source_document_id", "source_pdf_path", "source_sha256", "status", "text_span_ids", "viewer_highlightable"}),
+    "metadata": frozenset({"corpus_id", "evidence_link", "metadata_id", "predicate", "source_role", "status", "subject_id", "temporal_context", "type", "validator_status", "value"}),
+    "metadata_graph_edges": frozenset({"corpus_id", "edge_id", "edge_type", "evidence_link", "runtime_loadable", "source_id", "source_role", "status", "target_id", "temporal_context", "validator_status"}),
+    "pages": frozenset({"corpus_id", "page_count", "page_id", "page_number", "source_document_id", "source_pdf_path", "source_sha256", "status", "text"}),
+    "promotion_decisions": frozenset({
+        "bbox_union_status", "blocker_evidence", "can_be_exact_citation", "can_be_exact_highlight", "candidate_status", "current_grounding_status",
+        "decision", "decision_id", "exact_bbox_available", "exact_quote_available", "exact_span_available", "failure_code", "failure_reason",
+        "field_bbox_feasibility", "highlightable", "matched_page_numbers", "matched_span_ids", "matched_text_excerpt", "metadata_exact_promotion_feasibility",
+        "page_number", "policy_reason", "promotion_attempt_method", "promotion_attempt_result", "promotion_attempted", "promotion_outcome", "quote_match_status",
+        "record_id", "record_type", "recovery_capability", "recovery_method", "recovery_status", "review_status", "semantic_validation_outcome",
+        "source_document_id", "span_match_status", "subspan_match_status",
+    }),
+    "retrieval_units": frozenset({"artifact_status", "chunk_id", "evidence_id", "legal_unit_id", "object_role", "page_locator", "retrieval_terms", "retrieval_unit_id", "source_role", "temporal_context", "text"}),
+    "source_conflicts": frozenset({
+        "affected_pages", "anchor_terms", "authoritative_evidence_id", "authority_kind", "bbox_ids", "blocked_raw_provenance_reason", "discrepancy_type", "printed_label", "canonical_label", "substantive_conflict",
+        "blocked_raw_provenance_text_span_ids", "blocked_raw_provenance_text_span_reasons", "canonical_use_allowed", "citation_final", "classification", "corpus_id",
+        "evidence_ids", "final_authority_policy", "final_evidence_available", "grounding_status", "is_citation_object", "object_role", "page_numbers", "provenance",
+        "provenance_bbox_status", "provenance_exception_category", "provenance_highlight_scope", "provenance_review_status", "provenance_summary",
+        "query_anchor_terms", "query_exclusion_terms", "query_required_terms", "raw_provenance_bbox_ids", "raw_provenance_text_span_ids", "recovery_capability",
+        "recovery_status", "resolution_decision", "runtime_loadable", "source_anomaly_kind", "source_anomaly_policy", "source_conflict_id",
+        "source_document_id", "source_mapping_kind", "status", "target_precision", "text_span_ids", "type", "validation_status",
+    }),
+    "source_documents": frozenset({
+        "content_fingerprint", "corpus_id", "download_url", "file_size", "file_size_match", "filename", "final_download_url", "http_content_type",
+        "http_last_modified", "http_status", "page_count", "page_count_match", "path", "redownload_sha256", "reproducibility_status", "sha256",
+        "sha256_match", "source_authority", "source_document_id", "source_integrity_status", "source_page_url", "source_role", "temporal_context",
+    }),
+    "validation_exceptions": frozenset({
+        "affected_pages", "authoritative_evidence_id", "canonical_use_allowed", "chunk_id", "corpus_id", "current_resolution_state", "edge_type", "evidence_summary",
+        "exception_id", "provenance", "provenance_exception_category", "provenance_review_status", "reason", "resolving_commit", "runtime_loadable",
+        "source_document_id", "source_id", "source_role", "status", "target_id", "temporal_context", "type", "unresolved_chunk_reference",
+    }),
+    "validation_alignment_results": frozenset({"alignment_result_id", "alignment_status", "answer_use_policy", "canonical_use_allowed", "chunk_id", "chunk_status", "corpus_id", "document_kind", "exception_type", "legal_unit_id", "provenance", "source_alignment_status", "source_document_id", "unit_label"}),
+    "validation_exception_review_labels": frozenset({"chunk_id", "corpus_id", "exception_review_id", "primary_exception_review_label", "review_decision", "runtime_loadable", "secondary_review_flags", "source_document_id", "source_exception_id"}),
+    "word_bboxes": frozenset({"bbox_source", "block_index", "characters", "coordinate_origin", "coordinate_space", "corpus_id", "extractor", "extractor_version", "line_index", "normalized_text", "page_box_basis", "page_height", "page_number", "page_rotation", "page_width", "source_document_id", "source_pdf", "source_pdf_path", "source_sha256", "text", "transform_version", "word_bbox_id", "word_index", "word_no", "x0", "x1", "y0", "y1"}),
 }

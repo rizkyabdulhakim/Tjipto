@@ -95,19 +95,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         for doc in docs.values():
             doc.close()
     page_text_spans = build_page_text_spans(source_documents=source_documents, pdf_lines=pdf_lines_by_source)
-    page_streams = {
-        (source_id, page_number): str(text or "")
-        for (source_id, page_number), text in pages_by_source.items()
-    }
     for span in page_text_spans:
-        stream = page_streams.get((span.get("source_document_id"), span.get("page_number")), str(span.get("text") or ""))
-        text = str(span.get("text") or "")
-        start = stream.find(text) if text else 0
-        if start < 0:
-            start = 0
-        span["page_text_hash"] = sha256(stream.encode("utf-8")).hexdigest()
-        span["text_start"] = start
-        span["text_end"] = start + len(text)
         span.setdefault("metadata_grounding_ids", [])
     legal_units = build_legal_units_from_sources(
         pages_by_source=pages_by_source,

@@ -8,7 +8,10 @@ from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, word_rows_by_p
 
 
 def build_source_conflicts() -> list[dict]:
-    return json.loads(json.dumps(SOURCE_CONFLICT_SPECS))
+    return [
+        row for row in json.loads(json.dumps(SOURCE_CONFLICT_SPECS))
+        if row.get("source_anomaly_kind") != "renumbering_provenance"
+    ]
 
 
 def apply_source_conflict_grounding(
@@ -19,11 +22,11 @@ def apply_source_conflict_grounding(
     page_text_spans: list[dict],
 ) -> None:
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
-    bbox_by_evidence: dict[str, list[str]] = {}
+    bbox_by_evidence: dict[str, list[str]] = {
+        row["evidence_id"]: list(row.get("bbox_refs") or ()) for row in evidence
+    }
     span_by_id = {row["text_span_id"]: row for row in page_text_spans if row.get("text_span_id")}
     words_by_page = word_rows_by_page(word_bboxes)
-    for row in bbox_rows:
-        bbox_by_evidence.setdefault(row["evidence_id"], []).append(row["bbox_id"])
     for row in source_conflicts:
         evidence_ids = [
             ref

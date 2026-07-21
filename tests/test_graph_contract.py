@@ -68,12 +68,9 @@ class GraphContractTest(unittest.TestCase):
     def test_source_conflicts_reference_source_documents(self) -> None:
         source_ids = {row["source_document_id"] for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")}
         rows = read_jsonl(ROOT / "data/final/uud/source_conflicts.jsonl")
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 1)
         conflict_ids = {row["source_conflict_id"] for row in rows}
-        self.assertIn(
-            "uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict",
-            conflict_ids,
-        )
+        self.assertNotIn("uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict", conflict_ids)
         for row in rows:
             self.assertIn(row["source_document_id"], source_ids)
             self.assertNotEqual(row["status"], "unresolved_review_required_required")
@@ -270,7 +267,7 @@ class GraphContractTest(unittest.TestCase):
             shutil.copytree(ROOT / "data/final/uud", target)
             path = target / "article_amendment_relations.jsonl"
             rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
-            row = next(item for item in rows if item["relation_type"] == "RENAMES")
+            row = next(item for item in rows if item["relation_type"] in {"RENAMES", "RENUMBERED_TO"})
             row["target_legal_unit_id"] = "missing-target"
             path.write_text("\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in rows) + "\n", encoding="utf-8")
             errors = validate_uud_artifact_dir(target)
@@ -315,7 +312,11 @@ class GraphContractTest(unittest.TestCase):
                 shutil.copytree(ROOT / "data/final/uud", target)
                 relation_path = target / "article_amendment_relations.jsonl"
                 relations = [json.loads(line) for line in relation_path.read_text(encoding="utf-8").splitlines() if line]
-                row = next(item for item in relations if item["relation_type"] == "RENAMES" and item["old_reference"] == "Pasal 25E")
+                row = next(
+                    item
+                    for item in relations
+                    if item["relation_type"] in {"RENAMES", "RENUMBERED_TO"} and item["old_reference"] == "Pasal 25E"
+                )
                 edge_path = target / "graph_edges.jsonl"
                 edges = [json.loads(line) for line in edge_path.read_text(encoding="utf-8").splitlines() if line]
                 edge = next(item for item in edges if item.get("relation_id") == row["relation_id"])
@@ -387,7 +388,7 @@ class GraphContractTest(unittest.TestCase):
         ]
         self.assertTrue(rows)
         self.assertEqual(len({row["relation_id"] for row in rows}), len(rows))
-        renumber_rows = [row for row in rows if row["relation_type"] == "RENAMES"]
+        renumber_rows = [row for row in rows if row["relation_type"] in {"RENAMES", "RENUMBERED_TO"}]
         self.assertEqual({row["target_citation"] for row in renumber_rows}, {"Pasal 3", "Pasal 25A"})
         self.assertEqual(
             {(row["old_reference"], row["new_reference"]) for row in renumber_rows},
@@ -396,6 +397,10 @@ class GraphContractTest(unittest.TestCase):
                 ("Pasal 3 ayat (4)", "Pasal 3 ayat (3)"),
                 ("Pasal 25E", "Pasal 25A"),
             },
+        )
+        self.assertEqual(
+            [row["relation_type"] for row in renumber_rows if row["old_reference"] == "Pasal 25E"],
+            ["RENUMBERED_TO"],
         )
         pasal3_rows = [row for row in renumber_rows if row["target_citation"] == "Pasal 3"]
         self.assertTrue(all(row["target_precision"] == "target_local" for row in pasal3_rows if row["support_class"] == "exact_article_relation"))
@@ -590,10 +595,11 @@ class GraphContractTest(unittest.TestCase):
 
         bboxes = {row["bbox_id"]: row for row in read_jsonl(final / "bbox_registry.jsonl")}
         evidence = {row["evidence_id"]: row for row in read_jsonl(final / "evidence_registry.jsonl")}
+        referenced_bboxes = {bbox_id for row in evidence.values() for bbox_id in row["bbox_refs"]}
         spans = {row["text_span_id"]: row for row in read_jsonl(final / "page_text_spans.jsonl")}
         for row in bboxes.values():
             self.assertEqual(row["status"], "accepted")
-            self.assertIn(row["evidence_id"], evidence)
+            self.assertIn(row["bbox_id"], referenced_bboxes)
             self.assertIn(row["source_document_id"], source_docs)
             self.assertIn((row["source_document_id"], row["page_number"]), page_keys)
             rect = pdfs[row["source_document_id"]][row["page_number"] - 1].rect

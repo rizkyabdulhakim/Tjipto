@@ -70,7 +70,12 @@ def apply_authority_contract(
         span.update(
             {
                 "object_role": "source_span",
-                "linked_authority": span.get("authority_kind") or _span_nonfinal_kind(span),
+                "linked_authority": (
+                    "normative_legal_text"
+                    if span.get("semantic_classification") == "normative_constitutional_text"
+                    and span.get("linked_authority") == "rejected"
+                    else span.get("authority_kind") or _span_nonfinal_kind(span)
+                ),
                 "classification": "footnote_marker" if marker else span.get("semantic_classification") or "unclassified_source_text",
                 "legal_force": "nonlegal" if marker else span.get("legal_force") or "nonlegal",
                 "viewer_highlightable": exact,
@@ -135,6 +140,13 @@ def apply_authority_contract(
             )
         )
         row.update({"object_role": "evidence", "linked_authority": row.get("authority_kind"), "is_citation_object": bool(row.get("citable"))})
+        row.update(
+            {
+                "temporal_role": row.get("source_role"),
+                "citation_eligibility": "eligible" if row.get("citable") is True else "ineligible",
+                "support_kind": "direct_evidence" if row.get("text_span_ids") else "page_support",
+            }
+        )
     for row in bboxes:
         row.update(
             {
@@ -283,6 +295,8 @@ def _decision(
 
 
 def _span_nonfinal_kind(span: dict) -> str:
+    if span.get("semantic_classification") == "normative_constitutional_text":
+        return "normative_legal_text"
     if span.get("promotion_status") == "excluded_nonlegal":
         return "nonlegal"
     if span.get("promotion_status") == "promoted_metadata":

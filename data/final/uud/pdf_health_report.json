@@ -349,7 +349,7 @@
       "page_number": 1,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 18,
+      "text_span_count": 17,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },
@@ -359,7 +359,7 @@
       "page_number": 2,
       "native_text_available": true,
       "page_text_matches_artifact": true,
-      "text_span_count": 48,
+      "text_span_count": 47,
       "ocr_required": false,
       "health_decision": "native_text_ok"
     },

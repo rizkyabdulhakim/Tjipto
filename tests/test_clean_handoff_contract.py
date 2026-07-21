@@ -76,6 +76,29 @@ class CleanHandoffContractTest(unittest.TestCase):
             self.assertEqual(before, after)
             self.assertEqual(handoff.forbidden_entries(root), [])
 
+    def test_release_sidecar_binds_archive_bytes_without_entering_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git(root)
+            (root / "data/final/uud").mkdir(parents=True)
+            (root / "src").mkdir()
+            (root / "tests").mkdir()
+            (root / "tests/test_candidate.py").write_text("import unittest\n\nclass CandidateTest(unittest.TestCase):\n    def test_ok(self): self.assertTrue(True)\n", encoding="utf-8")
+            (root / "data/final/uud/manifest.json").write_text(
+                '{"contract_id":"uud","contract_version":7,"contract_fingerprint":"f","files":{}}\n', encoding="utf-8"
+            )
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "candidate")
+            archive = root / "candidate.zip"
+            result = handoff.release_candidate(root, self._git(root, "rev-parse", "HEAD"), archive)
+            sidecar = Path(result["sidecar_path"])
+            self.assertTrue(sidecar.is_file())
+            self.assertEqual(result["sidecar_sha256"], hashlib.sha256(sidecar.read_bytes()).hexdigest())
+            payload = __import__("json").loads(sidecar.read_text(encoding="utf-8"))
+            self.assertEqual(payload["archive_sha256"], result["archive_sha256"])
+            with zipfile.ZipFile(archive) as source:
+                self.assertNotIn(sidecar.name, source.namelist())
+
     def test_cli_verifier_rejects_noisy_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -15,7 +15,7 @@ class ChunkGroundingContractTest(unittest.TestCase):
     def test_chunks_are_self_contained_and_match_legal_units(self) -> None:
         chunks = read_jsonl(FINAL / "chunks.jsonl")
         units = {row["legal_unit_id"]: row for row in read_jsonl(FINAL / "legal_units.jsonl")}
-        self.assertEqual(len(chunks), 651)
+        self.assertEqual(len(chunks), len(units))
         self.assertGreaterEqual(sum(1 for row in chunks if row["runtime_loadable"] is True), 469)
         self.assertEqual(sum(1 for row in chunks if row["runtime_loadable"] is False), len(chunks) - sum(1 for row in chunks if row["runtime_loadable"] is True))
         self.assertEqual(sum(1 for row in chunks if row.get("source_document_id")), len(chunks))

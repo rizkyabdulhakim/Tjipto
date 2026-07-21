@@ -108,6 +108,17 @@ async function assertHighlightGeometry(page) {
     const expectedTop = canvasBox.top + (Number.parseFloat(highlight.style.top) / 100) * canvasBox.height;
     const expectedWidth = (Number.parseFloat(highlight.style.width) / 100) * canvasBox.width;
     const expectedHeight = (Number.parseFloat(highlight.style.height) / 100) * canvasBox.height;
+    const scaleX = canvas.width / canvasBox.width;
+    const scaleY = canvas.height / canvasBox.height;
+    const left = Math.max(0, Math.floor((highlightBox.left - canvasBox.left) * scaleX));
+    const top = Math.max(0, Math.floor((highlightBox.top - canvasBox.top) * scaleY));
+    const right = Math.min(canvas.width, Math.ceil((highlightBox.right - canvasBox.left) * scaleX));
+    const bottom = Math.min(canvas.height, Math.ceil((highlightBox.bottom - canvasBox.top) * scaleY));
+    const pixels = canvas.getContext("2d")?.getImageData(left, top, Math.max(1, right - left), Math.max(1, bottom - top)).data ?? [];
+    let darkPixels = 0;
+    for (let index = 0; index < pixels.length; index += 16) {
+      if (pixels[index] < 180 && pixels[index + 1] < 180 && pixels[index + 2] < 180) darkPixels += 1;
+    }
     return {
       page: Number(pageElement?.getAttribute("data-pdf-page")),
       visible: highlightBox.width > 0 && highlightBox.height > 0,
@@ -120,25 +131,25 @@ async function assertHighlightGeometry(page) {
         Math.abs(highlightBox.width - expectedWidth),
         Math.abs(highlightBox.height - expectedHeight),
       ),
+      darkPixels,
     };
   });
   assert(result?.page > 0, "Highlight did not resolve to its declared PDF page.");
   assert(result?.visible, "Highlight rectangle is not visible.");
   assert(result?.overlapsPage, "Highlight rectangle does not overlap its PDF page.");
   assert((result?.error ?? Number.POSITIVE_INFINITY) <= 1, "Rendered highlight geometry exceeds 1 CSS pixel error.");
+  assert((result?.darkPixels ?? 0) > 0, "Highlight does not overlap rendered PDF glyphs.");
 }
 
 async function runEvidenceContractSmoke(browser) {
-  const provenancePage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
-  await ask(provenancePage, "Apa konflik sumber Pasal 25E dan Pasal 25A Perubahan Kedua?");
-  await provenancePage.locator('[data-runtime-status="limited_answer"]').waitFor();
-  await provenancePage.locator('[data-provenance-note="true"]').waitFor();
-  await provenancePage.locator('[data-citation-kind="source_conflict_provenance"]').first().waitFor();
-  await provenancePage.locator('[data-citation-footer="true"] button[data-citation-kind="source_conflict_provenance"]').first().click();
-  await provenancePage.locator('[data-evidence-panel="normal"]').waitFor();
-  await provenancePage.locator('[data-bbox-highlight="active"]').first().waitFor();
-  await assertHighlightGeometry(provenancePage);
-  await provenancePage.close();
+  const deletedPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+  await ask(deletedPage, "Dihapus.");
+  await deletedPage.locator('[data-runtime-status="limited_answer"]').waitFor();
+  await deletedPage.locator('[data-citation-footer="true"] button').first().click();
+  await deletedPage.locator('[data-evidence-panel="normal"]').waitFor();
+  await deletedPage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  await assertHighlightGeometry(deletedPage);
+  await deletedPage.close();
 
   const metadataPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(metadataPage, "kapan perubahan pertama ditetapkan");
@@ -152,16 +163,16 @@ async function runEvidenceContractSmoke(browser) {
   await assertHighlightGeometry(metadataPage);
   await metadataPage.close();
 
-  const tracePage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
-  await ask(tracePage, "Apa konflik sumber Aturan Tambahan Pasal III Perubahan Keempat?");
-  await tracePage.locator('[data-runtime-status="limited_answer"]').waitFor();
-  await tracePage.locator('[data-provenance-note="true"]').waitFor();
-  await tracePage.locator('[data-citation-kind="source_anomaly"]').first().waitFor();
-  await tracePage.locator('[data-citation-footer="true"] button[data-citation-kind="source_anomaly"]').first().click();
-  await tracePage.locator('[data-evidence-panel="normal"]').waitFor();
-  await tracePage.locator('[data-bbox-highlight="active"]').first().waitFor();
-  await assertHighlightGeometry(tracePage);
-  await tracePage.close();
+  for (const query of ["Aturan Tambahan Pasal I", "Aturan Tambahan Pasal I Perubahan Keempat", "Pasal 1 UUD 1945"]) {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+    await ask(page, query);
+    await page.locator('[data-runtime-status="answer_ready"]').waitFor();
+    await page.locator('[data-citation-footer="true"] button').first().click();
+    await page.locator('[data-evidence-panel="normal"]').waitFor();
+    await page.locator('[data-bbox-highlight="active"]').first().waitFor();
+    await assertHighlightGeometry(page);
+    await page.close();
+  }
 
   const relationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(relationPage, "UUD 1945 diubah oleh amandemen berapa");

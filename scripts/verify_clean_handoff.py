@@ -134,10 +134,38 @@ def release_candidate(repo_root: Path, commit_sha: str, archive_path: Path) -> d
     identity = create_archive(repo_root, commit_sha, archive_path)
     archive_forbidden = verify_candidate(archive_path)
     checks = run_candidate_checks(archive_path) if not archive_forbidden else {"compileall": 1, "unittest": 1}
-    return {
+    result = {
         **identity,
         "archive_forbidden_entries": archive_forbidden,
         "candidate_checks": checks,
+    }
+    sidecar = archive_path.with_suffix(archive_path.suffix + ".sidecar.json")
+    sidecar.write_text(json.dumps(_release_sidecar(repo_root, archive_path, result), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    result["sidecar_path"] = str(sidecar)
+    result["sidecar_sha256"] = _sha256(sidecar)
+    return result
+
+
+def _release_sidecar(repo_root: Path, archive_path: Path, result: dict) -> dict:
+    """Describe immutable archive bytes; this deliberately remains outside the archive."""
+    with zipfile.ZipFile(archive_path) as archive:
+        files = {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist() if not name.endswith("/")}
+        manifest_bytes = archive.read("data/final/uud/manifest.json")
+    manifest = json.loads(manifest_bytes)
+    artifact_files = manifest.get("files", {})
+    artifact_set = json.dumps(sorted((name, item["sha256"]) for name, item in artifact_files.items()), separators=(",", ":"))
+    return {
+        "archive_byte_representation": "git archive ZIP entry bytes",
+        "archive_sha256": result["archive_sha256"],
+        "artifact_set_digest": hashlib.sha256(artifact_set.encode()).hexdigest(),
+        "candidate_checks": result["candidate_checks"],
+        "commit_sha": result["commit_sha"],
+        "contract": {key: manifest[key] for key in ("contract_id", "contract_version", "contract_fingerprint")},
+        "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "source_file_digests": files,
+        "tree_sha": result["tree_sha"],
+        "worktree_status": _git(repo_root, "status", "--porcelain").splitlines(),
+        "python_version": sys.version,
     }
 
 

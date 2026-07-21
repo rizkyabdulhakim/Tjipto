@@ -110,9 +110,16 @@ class EvidenceStore:
 
     def bboxes_for(self, evidence_id: str) -> list[dict]:
         if self._bbox_by_evidence is None:
-            grouped: dict[str, list[dict]] = {}
-            for row in self._bbox_rows_all():
-                grouped.setdefault(row["evidence_id"], []).append(row)
+            by_id = self._bbox_rows_by_id()
+            grouped = {}
+            for evidence in self.evidence:
+                refs = tuple(evidence.get("bbox_refs") or ())
+                if refs:
+                    grouped[evidence["evidence_id"]] = [by_id[bbox_id] for bbox_id in refs if bbox_id in by_id]
+                else:
+                    grouped[evidence["evidence_id"]] = [
+                        row for row in self._bbox_rows_all() if row.get("evidence_id") == evidence["evidence_id"]
+                    ]
             self._bbox_by_evidence = grouped
         return self._bbox_by_evidence.get(evidence_id, [])
 

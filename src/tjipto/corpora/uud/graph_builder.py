@@ -130,7 +130,6 @@ def build_graph_artifacts(
             node_type="bbox",
             bbox_status="final_accepted_bbox",
             bbox_id=row["bbox_id"],
-            final_evidence_id=row["evidence_id"],
             page_number=row["page_number"],
             rectangle_index=_numeric_suffix(row["bbox_id"]),
             source_document_id=row["source_document_id"],
@@ -289,10 +288,16 @@ def build_graph_artifacts(
             )
             if source_node and source_unit and target_unit:
                 mapping_key = f"{mapping['old_reference']}->{mapping['new_reference']}"
+                relation_type = (
+                    "RENUMBERED_TO"
+                    if str(mapping.get("old_reference", "")).startswith("Pasal 25E")
+                    and str(mapping.get("new_reference", "")).startswith("Pasal 25A")
+                    else "RENAMES"
+                )
                 add_edge(
                     unit_node_ids[source_unit["legal_unit_id"]],
                     unit_node_ids[target_unit["legal_unit_id"]],
-                    "RENAMES",
+                    relation_type,
                     source_document_id=renumber_clause["source_document_id"],
                     supporting_evidence_ids=[renumber_clause["evidence_id"]],
                     source_legal_unit_id=source_unit["legal_unit_id"],
@@ -301,7 +306,7 @@ def build_graph_artifacts(
                     source_legal_unit_role=source_unit.get("source_role"),
                     reference_mapping=mapping,
                     article_relation_ref=_article_relation_ref(
-                        "RENAMES",
+                        relation_type,
                         renumber_clause["evidence_id"],
                         target_unit["legal_unit_id"],
                         target_unit.get("unit_label"),

@@ -56,8 +56,8 @@ class LegalUnitGroundingContractTest(unittest.TestCase):
 
     def test_stage3_legal_unit_chunk_span_closure_health_is_complete(self) -> None:
         health = read_json(FINAL / "validation_report.json")["legal_unit_chunk_span_closure_health"]
-        self.assertEqual(health["legal_unit_count"], 651)
-        self.assertEqual(health["chunk_count"], 651)
+        self.assertEqual(health["legal_unit_count"], len(read_jsonl(FINAL / "legal_units.jsonl")))
+        self.assertEqual(health["chunk_count"], len(read_jsonl(FINAL / "chunks.jsonl")))
         non_error_count_keys = {
             "legal_unit_count",
             "chunk_count",

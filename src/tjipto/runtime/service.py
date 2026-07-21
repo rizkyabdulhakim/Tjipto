@@ -1323,7 +1323,7 @@ def _document_relation_target(store, query: str) -> dict:
             "mode": "article",
             "role": amendment_role,
             "relation_types": tuple(
-                relation_type for relation_type in relation_config.get("schema_only_relation_types", ()) if relation_type != "RENAMES"
+                relation_type for relation_type in relation_config.get("schema_only_relation_types", ()) if relation_type not in {"RENAMES", "RENUMBERED_TO"}
             ),
             "target_citation": target_citation,
         }
@@ -1331,7 +1331,7 @@ def _document_relation_target(store, query: str) -> dict:
         return {
             "mode": "article",
             "role": amendment_role,
-            "relation_types": ("RENAMES",),
+                "relation_types": ("RENAMES", "RENUMBERED_TO"),
             "target_citation": target_citation,
         }
     if contains_intent_phrase(query, relation_config.get("unsupported_detail_terms", ())):
@@ -1607,7 +1607,7 @@ def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: 
         labels = []
         for target in sorted(by_target, key=_legal_reference_sort_key):
             types = by_target[target]
-            suffix = " / ".join(relation_labels[relation] for relation in ("DELETES", "MODIFIES", "RENAMES") if relation in types)
+            suffix = " / ".join(relation_labels[relation] for relation in ("DELETES", "MODIFIES", "RENAMES", "RENUMBERED_TO") if relation in types)
             labels.append(f"{target} ({suffix})" if suffix else target)
         return labels
 
@@ -1615,6 +1615,7 @@ def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: 
         "DELETES": "dihapus",
         "MODIFIES": "diubah",
         "RENAMES": "dinomori ulang",
+        "RENUMBERED_TO": "dinomori ulang",
     }
     exact_labels = labels_for(tuple(relations))
     trace_labels = labels_for(tuple(trace_support))

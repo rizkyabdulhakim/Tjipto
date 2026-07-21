@@ -7,8 +7,9 @@ from importlib import import_module
 import json
 from pathlib import Path
 from threading import RLock
+from collections import OrderedDict
 
-from tjipto.contracts.artifacts import ARTIFACT_OPTIONAL_FIELDS, COMMON_ARTIFACT_FIELDS, CURRENT_ARTIFACT_SCHEMA, FORBIDDEN_ARTIFACT_FIELDS, MINIMUM_ARTIFACT_FIELDS
+from tjipto.contracts.artifacts import ARTIFACT_ALLOWED_FIELDS, ARTIFACT_OPTIONAL_FIELDS, COMMON_ARTIFACT_FIELDS, CURRENT_ARTIFACT_SCHEMA, FORBIDDEN_ARTIFACT_FIELDS, MINIMUM_ARTIFACT_FIELDS
 from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage_reason
 from tjipto.core.manifest import ALLOWED_ARTIFACT_ORIGINS, verified_file_bytes
 
@@ -94,8 +95,9 @@ class VerifiedCorpusRepository:
 
     # ponytail: process-local immutable snapshots; use an external cache only if
     # publication must be shared across processes.
-    _published_snapshots: dict[tuple[str, str, str], ValidatedCorpusSnapshot] = {}
+    _published_snapshots: OrderedDict[tuple[str, str, str], ValidatedCorpusSnapshot] = OrderedDict()
     _published_lock = RLock()
+    _published_snapshot_limit = 8
 
     def __init__(self, registry):
         self.registry = registry
@@ -112,9 +114,13 @@ class VerifiedCorpusRepository:
         with self._published_lock:
             cached = self._published_snapshots.get(cache_key)
             if cached is not None:
+                self._published_snapshots.move_to_end(cache_key)
                 return cached
             snapshot = self.publication.verify_and_publish(config)
             self._published_snapshots[cache_key] = snapshot
+            self._published_snapshots.move_to_end(cache_key)
+            while len(self._published_snapshots) > self._published_snapshot_limit:
+                self._published_snapshots.popitem(last=False)
             self.load_count += 1
             return snapshot
 
@@ -144,6 +150,14 @@ def _read_trusted_manifest(config) -> tuple[dict, str]:
         raise CorpusIntegrityError("manifest_identity_mismatch")
     if manifest.get("schema_version") != CURRENT_ARTIFACT_SCHEMA and config.corpus_id == "uud":
         raise CorpusIntegrityError("unsupported_schema")
+    if config.corpus_id == "uud":
+        from tjipto.corpora.uud.contract import CONTRACT_FINGERPRINT, CONTRACT_ID, CONTRACT_VERSION
+        if (
+            manifest.get("contract_id") != CONTRACT_ID
+            or manifest.get("contract_version") != CONTRACT_VERSION
+            or manifest.get("contract_fingerprint") != CONTRACT_FINGERPRINT
+        ):
+            raise CorpusIntegrityError("contract_fingerprint_mismatch")
     return manifest, manifest_digest
 
 
@@ -246,7 +260,7 @@ def _validate_cross_artifact_references(manifest: dict, artifacts: dict[str, obj
     for row in rows("graph_edges"):
         if row["source_id"] not in node_ids or row["target_id"] not in node_ids:
             raise CorpusIntegrityError("semantic_cross_reference_unresolved")
-        if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES"} and row.get("relation_id") not in relation_ids:
+        if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"} and row.get("relation_id") not in relation_ids:
             raise CorpusIntegrityError("semantic_cross_reference_unresolved")
     for row in rows("evidence_registry"):
         if (
@@ -286,14 +300,18 @@ def _parse_and_validate(data: bytes, record: dict, logical_key: str) -> object:
         forbidden = FORBIDDEN_ARTIFACT_FIELDS.get(logical_key, frozenset())
         if any(forbidden.intersection(row) for row in value):
             raise CorpusIntegrityError("mixed_schema_contract")
-        allowed = set(minimum_fields) | set(declared_fields or ()) | set(ARTIFACT_OPTIONAL_FIELDS.get(logical_key, ())) | set(COMMON_ARTIFACT_FIELDS)
+        allowed = set(ARTIFACT_ALLOWED_FIELDS.get(logical_key, ())) or (
+            set(minimum_fields) | set(ARTIFACT_OPTIONAL_FIELDS.get(logical_key, ())) | set(COMMON_ARTIFACT_FIELDS)
+        )
+        if declared_fields is not None and not set(declared_fields) <= allowed:
+            raise CorpusIntegrityError("unknown_field")
         if logical_key in MINIMUM_ARTIFACT_FIELDS and any(field not in allowed for row in value for field in row):
-            raise CorpusIntegrityError("artifact_unknown_field")
+            raise CorpusIntegrityError("unknown_field")
         if declared_fields is not None and not set(minimum_fields).issubset(declared_fields):
             raise CorpusIntegrityError("artifact_contract_weakened")
-        required_fields = tuple(minimum_fields) + tuple(declared_fields or ())
+        required_fields = tuple(minimum_fields)
         if any(field not in row for row in value for field in required_fields):
-            raise CorpusIntegrityError("artifact_required_field_missing")
+            raise CorpusIntegrityError("missing_required_field")
     elif not isinstance(value, dict):
         raise CorpusIntegrityError("artifact_shape_invalid")
     return value

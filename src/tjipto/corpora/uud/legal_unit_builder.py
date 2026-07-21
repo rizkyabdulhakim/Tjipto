@@ -38,10 +38,39 @@ def build_legal_units_from_sources(
         _append_source_units(source_id, pages_by_source, source_documents, rows, chunk_by_unit)
     _append_inserted_bab_units(pages_by_source, source_documents, rows)
     _append_instrument_units(pages_by_source, source_documents, rows)
+    _split_deleted_bab_iv(rows)
     apply_uud_parent_policy(rows)
     apply_structural_contract(rows, role_by_unit_type=UUD_STRUCTURAL_ROLE_BY_UNIT_TYPE)
     rows.sort(key=lambda row: row["legal_unit_id"])
     return rows
+
+
+def _split_deleted_bab_iv(rows: list[dict]) -> None:
+    """Keep BAB IV structure separate from its normative deletion provision."""
+    next_id = max((int(str(row["legal_unit_id"]).rsplit("_", 1)[-1]) for row in rows), default=0) + 1
+    additions: list[dict] = []
+    for unit in rows:
+        if unit.get("unit_label") != "BAB IV" or "Dihapus" not in str(unit.get("text") or ""):
+            continue
+        lines = [line.strip() for line in str(unit["text"]).splitlines() if line.strip()]
+        deleted = next((line for line in lines if line.casefold().startswith("dihapus")), "Dihapus.")
+        unit["text"] = "\n".join(line for line in lines if not line.casefold().startswith("dihapus"))
+        addition = dict(unit)
+        addition.update(
+            {
+                "legal_unit_id": f"uud_legal_unit_{next_id:05d}",
+                "unit_label": "Dihapus.",
+                "unit_type": "ayat_record",
+                "text": deleted.split("****", 1)[0].strip(),
+                "hierarchy": ["BAB IV", "Dihapus."],
+                "parent_legal_unit_ids": [unit["legal_unit_id"]],
+                "provenance": {"donor_id": f"uud_legal_unit_{next_id:05d}"},
+                "canonical_use_allowed": True,
+            }
+        )
+        additions.append(addition)
+        next_id += 1
+    rows.extend(additions)
 
 
 def _append_source_units(

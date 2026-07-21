@@ -4,6 +4,7 @@ import re
 
 from tjipto.contracts.coordinates import coordinate_metadata
 from tjipto.corpora.uud.bbox_builder import aggregate_bbox_precision, build_bbox_rows
+from tjipto.ingestion.pdf.bbox import _geometry_id
 from tjipto.corpora.uud.provenance_exceptions import RECOVERABLE_GROUNDING_LABELS, SEGMENTATION_BOUNDARY_LABELS
 from tjipto.corpora.uud.structure_builder import compact, slug
 from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, compact_text, word_rows_by_page
@@ -145,6 +146,7 @@ def build_evidence_and_bboxes(
         if bbox.get("bbox_precision") != "exact" or bbox.get("viewer_highlightable") is not True:
             bbox.setdefault("failure_reason", "bbox_geometry_unavailable")
     evidence.sort(key=lambda row: row["evidence_id"])
+    bbox_rows = list({row["bbox_id"]: row for row in bbox_rows}.values())
     bbox_rows.sort(key=lambda row: (row["source_document_id"], row["page_number"], row["bbox_id"]))
     return evidence, bbox_rows
 
@@ -170,10 +172,15 @@ def _recover_word_bbox(
     union = match["union_bbox"]
     return [
         {
-            "bbox_id": f"uud_unified_bbox::{evidence_id}::recovered",
+            "bbox_id": _geometry_id(
+                source_id=source_id,
+                source_sha256=source_meta["sha256"],
+                page_number=union["page_number"],
+                text=text,
+                coordinates=union,
+            ),
             "bbox_precision": "exact",
             "corpus_id": "uud",
-            "evidence_id": evidence_id,
             "page_number": union["page_number"],
             "source_document_id": source_id,
             "source_pdf": source_meta["filename"],
@@ -245,10 +252,20 @@ def _recover_aggregate_word_bboxes(
         first = words[0]
         rows.append(
             {
-                "bbox_id": f"uud_unified_bbox::{evidence_id}::recovered::{index:04d}",
+                "bbox_id": _geometry_id(
+                    source_id=source_id,
+                    source_sha256=source_meta["sha256"],
+                    page_number=page_number,
+                    text=" ".join(word["text"] for word in words),
+                    coordinates={
+                        "x0": min(word["x0"] for word in words),
+                        "y0": min(word["y0"] for word in words),
+                        "x1": max(word["x1"] for word in words),
+                        "y1": max(word["y1"] for word in words),
+                    },
+                ),
                 "bbox_precision": "exact",
                 "corpus_id": "uud",
-                "evidence_id": evidence_id,
                 "page_number": page_number,
                 "source_document_id": source_id,
                 "source_pdf": source_meta["filename"],

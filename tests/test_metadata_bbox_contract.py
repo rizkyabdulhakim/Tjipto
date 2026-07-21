@@ -152,10 +152,7 @@ class MetadataBBoxContractTest(unittest.TestCase):
         self.assertEqual(len({row["decision_id"] for row in decisions}), len(decisions))
         self.assertTrue({row["decision"] for row in non_relation_decisions} <= {"keep_non_exact", "recovered_exact"})
         self.assertTrue(non_relation_decisions)
-        self.assertEqual(
-            {row["record_type"] for row in non_relation_decisions},
-            {"bbox", "evidence"},
-        )
+        self.assertEqual({row["record_type"] for row in non_relation_decisions}, {"evidence"})
         for row in non_relation_decisions:
             for field in (
                 "record_id",

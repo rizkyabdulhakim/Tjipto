@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from hashlib import sha256
 from pathlib import Path
 import re
 from collections.abc import Mapping
@@ -24,7 +25,8 @@ from tjipto.corpora.parser_dispatch import parse_legal_references
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
 from tjipto.corpora.uud.artifact_policy import RECOVERY_CAPABILITIES, RECOVERY_STATUSES, UUD_ARTIFACT_SCHEMA
-from tjipto.contracts.artifacts import ARTIFACT_OPTIONAL_FIELDS, COMMON_ARTIFACT_FIELDS, FORBIDDEN_ARTIFACT_FIELDS, MINIMUM_ARTIFACT_FIELDS
+from tjipto.contracts.artifacts import ARTIFACT_ALLOWED_FIELDS, ARTIFACT_OPTIONAL_FIELDS, COMMON_ARTIFACT_FIELDS, FORBIDDEN_ARTIFACT_FIELDS, MINIMUM_ARTIFACT_FIELDS
+from tjipto.corpora.uud.contract import CONTRACT_FINGERPRINT, CONTRACT_ID, CONTRACT_VERSION
 from tjipto.corpora.uud.provenance_exceptions import (
     ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
     ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
@@ -69,6 +71,7 @@ LEGAL_EDGE_TYPES = {
     "MODIFIES",
     "DELETES",
     "RENAMES",
+    "RENUMBERED_TO",
     "SUPPLEMENTS",
     *STRUCTURAL_SEQUENCE_EDGE_TYPES,
     "HAS_EFFECTIVE_RULE",
@@ -417,6 +420,13 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
     manifest = read_json(final_dir / "manifest.json")
     if manifest.get("schema_version") != UUD_ARTIFACT_SCHEMA:
         return ("artifact_schema_version_incompatible",)
+    if (
+        manifest.get("corpus_id") != "uud"
+        or manifest.get("contract_id") != CONTRACT_ID
+        or manifest.get("contract_version") != CONTRACT_VERSION
+        or manifest.get("contract_fingerprint") != CONTRACT_FINGERPRINT
+    ):
+        return ("contract_fingerprint_mismatch",)
     artifacts: dict[str, object] = {}
     for rel, record in manifest.get("files", {}).items():
         logical_key = record.get("logical_key", rel)
@@ -478,7 +488,7 @@ def _validate_schema6_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
         if source and row.get("source_sha256") != source.get("sha256"):
             errors.append(f"EVIDENCE_SOURCE_LINEAGE_INVALID:{row_id}")
         span_text = " ".join(str(spans_by_id.get(ref, {}).get("text") or "") for ref in row.get("text_span_ids") or ())
-        if row.get("quoted_text") and _schema6_normalize(row.get("quoted_text")) not in _schema6_normalize(span_text):
+        if row.get("quoted_text") and normalize_source_text(row.get("quoted_text")) not in normalize_source_text(span_text):
             errors.append(f"EVIDENCE_QUOTE_SOURCE_MISMATCH:{row_id}")
     for row in bbox:
         row_id = str(row.get("bbox_id"))
@@ -566,7 +576,7 @@ def _validate_schema6_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
             row.get("support_class") == "exact_article_relation" and row.get("target_precision") != "target_local"
         ):
             errors.append(f"article_relation_exact_precision_mismatch:{row_id}")
-        if row.get("relation_type") == "RENAMES" and row.get("old_reference_range") and row.get("new_reference_range"):
+        if row.get("relation_type") in {"RENAMES", "RENUMBERED_TO"} and row.get("old_reference_range") and row.get("new_reference_range"):
             if any(not isinstance(value, (int, float)) for value in (*row["old_reference_range"], *row["new_reference_range"])):
                 errors.append(f"article_relation_old_range_text_mismatch:{row_id}")
             elif any(value < 0 or value >= len(str(row.get("quoted_text") or "")) for value in (*row["old_reference_range"], *row["new_reference_range"])):
@@ -637,6 +647,8 @@ def _schema6_id_field(artifact: str) -> str:
 
 
 def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> tuple[str, ...]:
+    if UUD_ARTIFACT_SCHEMA == 7:
+        return _validate_schema7_contract(artifacts)
     if UUD_ARTIFACT_SCHEMA == 6:
         return _validate_schema6_contract(artifacts)
     def rows(key: str, *, optional: bool = False) -> list[dict]:
@@ -1277,7 +1289,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         edge_type = row.get("edge_type")
         if edge_type not in PROVENANCE_EDGE_TYPES | LEGAL_EDGE_TYPES:
             errors.append(f"invalid_graph_edge_type:{row['edge_id']}:{edge_type}")
-        if edge_type in {"MODIFIES", "DELETES", "RENAMES"}:
+        if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
             if set(row) != {"edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id"}:
                 errors.append(f"graph_relation_contains_noncanonical_truth:{row['edge_id']}")
             relation = article_relations_by_id.get(row.get("relation_id"))
@@ -1312,7 +1324,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
                 errors.append(f"graph_edge_invalid_bbox_ref:{row['edge_id']}:{bbox_id}")
         if row.get("article_relation_ref") and row["article_relation_ref"] not in article_relation_ids:
             errors.append(f"graph_edge_orphan_article_relation_ref:{row['edge_id']}:{row['article_relation_ref']}")
-        if edge_type == "RENAMES":
+        if edge_type in {"RENAMES", "RENUMBERED_TO"}:
             relation = article_relations_by_id.get(row.get("article_relation_ref"))
             mapping = row.get("reference_mapping") or {}
             if not mapping:
@@ -1338,7 +1350,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
                     errors.append(f"graph_renames_range_kind_mismatch:{row['edge_id']}")
                 if relation.get("source_legal_unit_role") != mapping.get("source_role"):
                     errors.append(f"graph_renames_source_role_mismatch:{row['edge_id']}")
-        if edge_type in {"MODIFIES", "DELETES", "RENAMES"}:
+        if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
             relation = article_relations_by_id.get(row.get("article_relation_ref"))
             if relation is not None:
                 if list(row.get("supporting_evidence_ids") or ()) != [relation.get("evidence_id")]:
@@ -1419,7 +1431,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         if row["relation_id"] in seen_ids["article_amendment_relation_id"]:
             errors.append(f"duplicate_article_amendment_relation_id:{row['relation_id']}")
         seen_ids["article_amendment_relation_id"].add(row["relation_id"])
-        if row.get("relation_type") not in {"MODIFIES", "DELETES", "INSERTS", "ADDS", "RENAMES", "SUPPLEMENTS"}:
+        if row.get("relation_type") not in {"MODIFIES", "DELETES", "INSERTS", "ADDS", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
             errors.append(f"invalid_article_amendment_relation_type:{row['relation_id']}:{row.get('relation_type')}")
         evidence_row = evidence_by_id.get(row.get("evidence_id"))
         if not evidence_row:
@@ -1462,7 +1474,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
             errors.append(f"article_relation_missing_target_unit_role:{row['relation_id']}")
         elif target_unit is not None and row.get("target_source_role") != target_unit.get("source_role"):
             errors.append(f"article_relation_target_role_mismatch:{row['relation_id']}")
-        if row.get("relation_type") == "RENAMES":
+        if row.get("relation_type") in {"RENAMES", "RENUMBERED_TO"}:
             if not row.get("old_reference") or not row.get("new_reference"):
                 errors.append(f"article_relation_missing_renumber_mapping:{row['relation_id']}")
             if not row.get("old_reference_range") or not row.get("new_reference_range"):
@@ -1488,7 +1500,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         if row.get("support_class") == "trace_article_relation":
             if row.get("quoted_text") != evidence_row.get("quoted_text"):
                 errors.append(f"article_relation_quote_mismatch:{row['relation_id']}")
-        elif row.get("relation_type") == "RENAMES" and row.get("quoted_text") != evidence_row.get("quoted_text"):
+        elif row.get("relation_type") in {"RENAMES", "RENUMBERED_TO"} and row.get("quoted_text") != evidence_row.get("quoted_text"):
             errors.append(f"article_relation_mapping_quote_mismatch:{row['relation_id']}")
         elif _compact_reference(row.get("target_citation")) not in _compact_reference(row.get("quoted_text")):
             errors.append(f"article_relation_target_quote_mismatch:{row['relation_id']}")
@@ -1569,7 +1581,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         if target_bbox_refs and not target_bbox_isolated:
             errors.append(f"article_relation_target_bbox_not_isolated:{row['relation_id']}")
         if (
-            row.get("relation_type") == "RENAMES"
+            row.get("relation_type") in {"RENAMES", "RENUMBERED_TO"}
             and row.get("support_class") == "exact_article_relation"
             and set(row.get("bbox_refs") or ()) <= set(target_bbox_refs)
         ):
@@ -1651,6 +1663,183 @@ def _recovery_state_errors(promotion_decisions: list[dict]) -> tuple[str, ...]:
         if status in {"not_attempted", "attempted"} and row.get("promotion_outcome") == "promoted":
             errors.append(f"recovery_unattempted_promoted:{row_id}")
     return tuple(errors)
+
+
+def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ...]:
+    """Closed UUD contract shared by offline rebuild validation and runtime publication."""
+    errors: list[str] = []
+
+    def rows(name: str) -> list[dict]:
+        value = artifacts.get(name) or []
+        return list(value) if isinstance(value, list) else []
+
+    for artifact, required in MINIMUM_ARTIFACT_FIELDS.items():
+        allowed = set(ARTIFACT_ALLOWED_FIELDS.get(artifact, ())) or set(required) | set(ARTIFACT_OPTIONAL_FIELDS.get(artifact, ())) | set(COMMON_ARTIFACT_FIELDS)
+        for row in rows(artifact):
+            row_id = str(row.get(_schema6_id_field(artifact)) or "<missing>")
+            for field in required:
+                if field not in row:
+                    errors.append(f"missing_required_field:{artifact}:{row_id}:{field}")
+            for field in FORBIDDEN_ARTIFACT_FIELDS.get(artifact, ()):
+                if field in row:
+                    errors.append(f"owner_field_violation:{artifact}:{row_id}:{field}")
+            for field in row:
+                if field not in allowed:
+                    errors.append(f"unknown_field:{artifact}:{row_id}:{field}")
+            for field in ("viewer_highlightable", "citation_final", "citable", "evidence_exists", "runtime_loadable"):
+                if field in row and not isinstance(row[field], bool):
+                    errors.append(f"invalid_type:{artifact}:{row_id}:{field}")
+            for field in ("page_number", "text_start", "text_end"):
+                if field in row and not isinstance(row[field], int):
+                    errors.append(f"invalid_type:{artifact}:{row_id}:{field}")
+            for field in ("bbox_refs", "text_span_ids", "evidence_ids", "span_bbox_ids", "page_numbers"):
+                if field in row and not isinstance(row[field], list):
+                    errors.append(f"invalid_type:{artifact}:{row_id}:{field}")
+            for field in ("authority_kind", "citation_eligibility"):
+                if field in row and not isinstance(row[field], str):
+                    errors.append(f"invalid_type:{artifact}:{row_id}:{field}")
+
+    evidence = rows("evidence_registry")
+    evidence_ids = {row.get("evidence_id") for row in evidence}
+    units = rows("legal_units")
+    units_by_id = {row.get("legal_unit_id"): row for row in units}
+    spans = rows("page_text_spans")
+    spans_by_id = {row.get("text_span_id"): row for row in spans}
+    bboxes = rows("bbox_registry")
+    bbox_ids = {row.get("bbox_id") for row in bboxes}
+    for word in rows("word_bboxes"):
+        bbox_ids.add(word.get("word_bbox_id"))
+        bbox_ids.update(character.get("character_bbox_id") for character in word.get("characters") or ())
+    source_rows = rows("source_documents")
+    source_ids = {row.get("source_document_id") for row in source_rows}
+    sources_by_id = {row.get("source_document_id"): row for row in source_rows}
+    geometry_keys: set[tuple[object, ...]] = set()
+    for row in bboxes:
+        identity = tuple(row.get(key) for key in (
+            "source_document_id", "source_sha256", "page_number", "coordinate_space", "coordinate_origin",
+            "x0", "y0", "x1", "y1", "transform_version", "text",
+        ))
+        if identity in geometry_keys:
+            errors.append(f"duplicate_geometry:{row.get('bbox_id')}")
+        geometry_keys.add(identity)
+
+    streams: dict[str, list[dict]] = {}
+    for span in spans:
+        streams.setdefault(str(span.get("stream_id")), []).append(span)
+    stream_values: dict[str, str] = {}
+    for stream_id, stream_rows in streams.items():
+        stream_rows.sort(key=lambda item: item.get("text_start", 0))
+        stream = "\n".join(str(item.get("text") or "") for item in stream_rows)
+        stream_values[stream_id] = stream
+        digest = sha256(stream.encode("utf-8")).hexdigest()
+        if any(item.get("page_text_hash") != digest for item in stream_rows):
+            errors.append(f"invalid_selector:{stream_id}:stream_hash")
+
+    for row in spans:
+        start, end, quote = row.get("text_start"), row.get("text_end"), row.get("exact_quote")
+        if not isinstance(start, int) or not isinstance(end, int) or not isinstance(quote, str) or end < start or end - start != len(quote):
+            errors.append(f"invalid_selector:{row.get('text_span_id')}")
+        if quote != row.get("text"):
+            errors.append(f"invalid_selector:{row.get('text_span_id')}:quote")
+        if isinstance(start, int) and isinstance(end, int) and stream_values.get(str(row.get("stream_id")), "")[start:end] != quote:
+            errors.append(f"invalid_selector:{row.get('text_span_id')}:offset")
+        if row.get("semantic_classification") == "normative_constitutional_text" and row.get("linked_authority") == "rejected":
+            errors.append(f"owner_field_violation:page_text_spans:{row.get('text_span_id')}:linked_authority")
+        for ref in row.get("evidence_ids") or ():
+            if ref not in evidence_ids:
+                errors.append(f"invalid_reference:page_text_spans:{row.get('text_span_id')}:evidence_ids")
+        for ref in row.get("span_bbox_ids") or ():
+            if ref not in bbox_ids:
+                errors.append(f"invalid_reference:page_text_spans:{row.get('text_span_id')}:span_bbox_ids")
+
+    for row in evidence:
+        row_id = row.get("evidence_id")
+        if row.get("legal_unit_id") is None or row.get("source_document_id") not in source_ids:
+            errors.append(f"invalid_reference:evidence_registry:{row_id}")
+        source = sources_by_id.get(row.get("source_document_id"))
+        if source and row.get("source_sha256") != source.get("sha256"):
+            errors.append(f"EVIDENCE_SOURCE_LINEAGE_INVALID:{row_id}")
+        if any(ref not in bbox_ids for ref in row.get("bbox_refs") or ()):
+            errors.append(f"invalid_reference:evidence_registry:{row_id}:bbox_refs")
+        if any(ref not in spans_by_id for ref in row.get("text_span_ids") or ()):
+            errors.append(f"invalid_reference:evidence_registry:{row_id}:text_span_ids")
+        span_text = " ".join(str(spans_by_id.get(ref, {}).get("text") or "") for ref in row.get("text_span_ids") or ())
+        if row.get("quoted_text") and normalize_source_text(row.get("quoted_text")) not in normalize_source_text(span_text):
+            errors.append(f"EVIDENCE_QUOTE_SOURCE_MISMATCH:{row_id}")
+        if row.get("citation_final") is True and row.get("exactness") != "exact":
+            errors.append(f"owner_field_violation:evidence_registry:{row_id}:citation_final")
+        unit = units_by_id.get(row.get("legal_unit_id"), {})
+        if unit.get("unit_type") in {"bab_record", "pasal_record"} and any(
+            unit.get("legal_unit_id") in (candidate.get("parent_legal_unit_ids") or ()) for candidate in units
+        ) and not set(unit.get("text_span_ids") or ()) <= set(row.get("text_span_ids") or ()):
+            errors.append(f"aggregate_text_span_sequence_incomplete:{row_id}")
+
+    referenced_geometry = {ref for row in evidence for ref in row.get("bbox_refs") or ()}
+    if any(row.get("bbox_id") not in referenced_geometry for row in bboxes):
+        errors.append("invalid_reference:orphan_geometry")
+
+    evidence_by_id = {row.get("evidence_id"): row for row in evidence}
+    for row in rows("metadata_grounding"):
+        if "signatories" not in str(row.get("metadata_grounding_id") or "") or not row.get("quoted_text"):
+            continue
+        donor_text = " ".join(
+            str(evidence_by_id.get(ref, {}).get("quoted_text") or "")
+            for ref in row.get("supporting_evidence_ids") or ()
+        )
+        if donor_text and normalize_source_text(row.get("quoted_text")) not in normalize_source_text(donor_text):
+            errors.append(f"signatory_grounding_unknown_name:{row.get('metadata_grounding_id')}")
+
+    relation_rows = rows("article_amendment_relations")
+    relations_by_id = {row.get("relation_id"): row for row in relation_rows}
+    for row in relation_rows:
+        relation_id = str(row.get("relation_id") or "<missing>")
+        relation_type = row.get("relation_type")
+        if relation_type not in {"MODIFIES", "DELETES", "INSERTS", "ADDS", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
+            errors.append(f"invalid_enum:article_amendment_relations:{relation_id}:relation_type")
+        evidence_row = evidence_by_id.get(row.get("evidence_id"))
+        source_unit = units_by_id.get(row.get("source_legal_unit_id"))
+        target_unit = units_by_id.get(row.get("target_legal_unit_id"))
+        if evidence_row is None:
+            errors.append(f"invalid_reference:article_amendment_relations:{relation_id}:evidence_id")
+            continue
+        if row.get("source_pdf_sha256") != evidence_row.get("source_sha256"):
+            errors.append(f"article_relation_source_sha_mismatch:{relation_id}")
+        if row.get("bbox_precision") != evidence_row.get("bbox_precision"):
+            errors.append(f"article_relation_bbox_precision_mismatch:{relation_id}")
+        source_bbox_refs = set(row.get("bbox_refs") or ()) - set(row.get("target_bbox_refs") or ())
+        if source_bbox_refs - set(evidence_row.get("bbox_refs") or ()):
+            errors.append(f"article_relation_bbox_source_mismatch:{relation_id}")
+        if row.get("support_class") == "exact_article_relation" and row.get("target_precision") != "target_local":
+            errors.append(f"article_relation_exact_precision_mismatch:{relation_id}")
+        if source_unit is None:
+            errors.append(f"article_relation_unknown_source:{relation_id}")
+        elif row.get("source_label") != source_unit.get("unit_label"):
+            errors.append(f"article_relation_source_label_mismatch:{relation_id}")
+        if target_unit is None:
+            errors.append(f"article_relation_unknown_target:{relation_id}")
+        elif row.get("target_source_role") != target_unit.get("source_role"):
+            errors.append(f"article_relation_target_role_mismatch:{relation_id}")
+        if relation_type in {"RENAMES", "RENUMBERED_TO"}:
+            quoted = str(evidence_row.get("quoted_text") or "")
+            old_range = _range_value(row.get("old_reference_range"), len(quoted))
+            new_range = _range_value(row.get("new_reference_range"), len(quoted))
+            errors.extend(f"{code}:{relation_id}" for code in _validate_mapping_support(row, evidence_row))
+            if old_range is not None and new_range is not None:
+                if not _validator_range_matches_reference(quoted[old_range[0] : old_range[1]], row.get("old_reference"), row.get("old_reference_range_kind")):
+                    errors.append(f"article_relation_old_range_text_mismatch:{relation_id}")
+                if not _validator_range_matches_reference(quoted[new_range[0] : new_range[1]], row.get("new_reference"), row.get("new_reference_range_kind")):
+                    errors.append(f"article_relation_new_range_text_mismatch:{relation_id}")
+
+    for row in rows("graph_edges"):
+        relation_id = row.get("relation_id") or row.get("article_relation_ref")
+        relation = relations_by_id.get(relation_id)
+        if row.get("edge_type") in {"RENAMES", "RENUMBERED_TO"} and relation is not None:
+            if row.get("source_id") != f"legal_unit::{relation.get('source_legal_unit_id')}":
+                errors.append(f"graph_relation_source_mismatch:{row.get('edge_id')}")
+            if row.get("target_id") != f"legal_unit::{relation.get('target_legal_unit_id')}":
+                errors.append(f"graph_relation_target_mismatch:{row.get('edge_id')}")
+
+    return tuple(dict.fromkeys(errors))
 
 
 def _aggregate_evidence_errors(
@@ -1781,7 +1970,7 @@ def _validate_mapping_support(row: dict, evidence: dict) -> tuple[str, ...]:
 
 
 def _validate_relation_support(row: dict, evidence: dict, span_by_id: dict[str, dict], bbox_by_id: dict[str, dict]) -> tuple[str, ...]:
-    if row.get("relation_type") != "RENAMES":
+    if row.get("relation_type") not in {"RENAMES", "RENUMBERED_TO"}:
         return ()
     quoted = str(evidence.get("quoted_text") or "")
     old_range = _range_value(row.get("old_reference_range"), len(quoted))
@@ -1839,7 +2028,7 @@ def _support_text(ids: tuple[str, ...], rows_by_id: dict[str, dict]) -> str:
 
 
 def _validate_source_support(evidence: dict, row: dict) -> bool:
-    if row.get("relation_type") != "RENAMES":
+    if row.get("relation_type") not in {"RENAMES", "RENUMBERED_TO"}:
         return evidence.get("bbox_precision") == "exact" and evidence.get("viewer_highlightable") is True
     return not bool(_validate_mapping_support(row, evidence))
 
@@ -1914,8 +2103,13 @@ def _source_relation_contract_errors(
             for mapping in _independent_renumbering_mappings(str(row.get("quoted_text") or "")):
                 target = str(mapping["new_reference"]).split(" ayat", 1)[0]
                 if ("uud::current_consolidated", target) in units:
+                    relation_type = (
+                        "RENUMBERED_TO"
+                        if mapping["old_reference"] == "Pasal 25E" and mapping["new_reference"] == "Pasal 25A"
+                        else "RENAMES"
+                    )
                     expected.add(
-                        (str(row.get("source_role") or ""), "RENAMES", str(mapping["old_reference"]), str(mapping["new_reference"]))
+                        (str(row.get("source_role") or ""), relation_type, str(mapping["old_reference"]), str(mapping["new_reference"]))
                     )
         elif is_deletion_provision(row):
             for reference in parse_legal_references("uud", str(row.get("quoted_text") or "")):
@@ -2474,7 +2668,7 @@ def _legal_graph_authority_health(
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_ids = {str(row.get("bbox_id") or row.get("word_bbox_id")) for row in (*bbox_rows, *word_bboxes)}
     bbox_ids |= {character["character_bbox_id"] for word in word_bboxes for character in word.get("characters") or ()}
-    relation_edges = [row for row in graph_edges if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES"}]
+    relation_edges = [row for row in graph_edges if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}]
     article_relation_refs = {row.get("relation_id") for row in relation_edges if row.get("relation_id")}
     relations_by_id = {row.get("relation_id"): row for row in article_amendment_relations}
     exact_edges = [row for row in relation_edges if relations_by_id.get(row.get("relation_id"), {}).get("support_class") == "exact_article_relation"]

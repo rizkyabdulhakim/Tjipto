@@ -130,10 +130,13 @@ def validate_corpus_ingestion_artifacts(corpus_id: str, repo_root: Path) -> dict
         for bbox_id in row.get("bbox_refs") or []:
             if bbox_id not in bboxes:
                 errors.append(f"evidence_unknown_bbox:{row['evidence_id']}:{bbox_id}")
+    referenced_bbox_ids = {ref for item in evidence.values() for ref in item.get("bbox_refs") or ()}
     for row in bboxes.values():
         source_id = row.get("source_document_id")
         page_number = row.get("page_number")
-        if row.get("evidence_id") not in evidence:
+        if row.get("bbox_id") not in referenced_bbox_ids:
+            errors.append(f"bbox_orphan_geometry:{row.get('bbox_id')}")
+        if "evidence_id" in row and row.get("evidence_id") not in evidence:
             errors.append(f"bbox_unknown_evidence:{row.get('bbox_id')}")
         if (source_id, page_number) not in page_keys:
             errors.append(f"bbox_unknown_page:{row.get('bbox_id')}")
@@ -167,6 +170,7 @@ def validate_corpus_ingestion_artifacts(corpus_id: str, repo_root: Path) -> dict
         "MODIFIES",
         "DELETES",
         "RENAMES",
+        "RENUMBERED_TO",
         "SUPPLEMENTS",
         "HAS_EFFECTIVE_RULE",
         "HAS_SIGNATORY",

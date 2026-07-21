@@ -259,8 +259,11 @@ def rebuild_metadata_grounding(
 ) -> tuple[list[dict], list[dict], list[dict]]:
     evidence_by_key = {(row.get("source_role"), row.get("citation")): row for row in evidence}
     bboxes_by_evidence: dict[str, list[dict]] = defaultdict(list)
-    for row in bbox_rows:
-        bboxes_by_evidence[row["evidence_id"]].append(row)
+    bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
+    for evidence_row in evidence:
+        for bbox_id in evidence_row.get("bbox_refs") or ():
+            if bbox_id in bbox_by_id:
+                bboxes_by_evidence[evidence_row["evidence_id"]].append(bbox_by_id[bbox_id])
     words_by_page = word_rows_by_page(word_bboxes)
     spans_by_id = {row["text_span_id"]: row for row in page_text_spans if row.get("text_span_id")}
     source_role_by_id = {row["source_document_id"]: row["source_role"] for row in document_metadata}

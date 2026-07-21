@@ -138,6 +138,7 @@ def _validate_schema6_trust_boundary(
     source_pages = {row.get("source_document_id"): int(row.get("page_count") or 0) for row in source_documents}
     span_ids = {row.get("text_span_id") for row in page_text_spans}
     bbox_ids = {row.get("bbox_id") for row in bbox_rows}
+    referenced_bbox_ids = {ref for row in evidence for ref in row.get("bbox_refs") or ()}
     node_ids = {row.get("node_id") for row in graph_nodes}
     for row in evidence:
         row_id = str(row.get("evidence_id"))
@@ -156,8 +157,10 @@ def _validate_schema6_trust_boundary(
             violations.append(_violation("REFERENCE_UNRESOLVED_BBOX", "evidence_registry", row_id, "bbox_refs", "existing bbox", row.get("bbox_refs"), "bbox missing"))
     for row in bbox_rows:
         row_id = str(row.get("bbox_id"))
-        if row.get("evidence_id") not in evidence_ids or row.get("evidence_exists") is not True:
-            violations.append(_violation("REFERENCE_UNRESOLVED_EVIDENCE", "bbox_registry", row_id, "evidence_id", "existing evidence", row.get("evidence_id"), "bbox owner missing"))
+        if "evidence_id" in row and row.get("evidence_id") not in evidence_ids:
+            violations.append(_violation("REFERENCE_UNRESOLVED_EVIDENCE", "bbox_registry", row_id, "evidence_id", "existing evidence", row.get("evidence_id"), "legacy owner reference unresolved"))
+        if row_id not in referenced_bbox_ids:
+            violations.append(_violation("REFERENCE_UNRESOLVED_BBOX", "bbox_registry", row_id, "bbox_id", "referenced geometry", row_id, "orphan geometry"))
         if row.get("viewer_highlightable") is True and any(row.get(field) is None for field in COORDINATE_FIELDS):
             violations.append(_violation("COORDINATE_METADATA_MISSING", "bbox_registry", row_id, "coordinates", "complete", None, "highlightable bbox requires coordinates"))
     for row in retrieval_units:

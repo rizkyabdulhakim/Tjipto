@@ -6,6 +6,7 @@ from tjipto.corpora.uud.artifact_policy import UUD_ARTIFACT_SCHEMA
 from tjipto.artifacts.manifest import refresh_manifest as refresh_artifact_manifest
 from tjipto.contracts.artifacts import MINIMUM_ARTIFACT_FIELDS
 from tjipto.corpora.uud.artifact_policy import UUD_ARTIFACT_ORIGIN_POLICY
+from tjipto.corpora.uud.contract import CONTRACT_FINGERPRINT, CONTRACT_ID, CONTRACT_VERSION
 
 
 ARTIFACT_FILES = (
@@ -121,6 +122,9 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "bbox_registry": "bbox_registry.jsonl",
         "chunks": "chunks.jsonl",
         "corpus_id": "uud",
+        "contract_id": CONTRACT_ID,
+        "contract_version": CONTRACT_VERSION,
+        "contract_fingerprint": CONTRACT_FINGERPRINT,
         "counts": {},
         "document_metadata": "document_metadata.jsonl",
         "document_relations": "document_relations.jsonl",

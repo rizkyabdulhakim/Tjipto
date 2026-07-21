@@ -124,7 +124,7 @@ def build_article_amendment_relations(
     rows = []
     for edge in graph_edges:
         relation_type = edge.get("edge_type")
-        if relation_type not in {"MODIFIES", "DELETES", "RENAMES"}:
+        if relation_type not in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
             continue
         supporting_ids = edge.get("supporting_evidence_ids") or ()
         evidence_row = evidence_by_id.get(supporting_ids[0]) if supporting_ids else None
@@ -186,6 +186,8 @@ def build_article_amendment_relations(
         )
         target_reference = target_phrase
         old_reference = str(mapping.get("old_reference") or "")
+        if old_reference.startswith("Pasal 25E") and target_reference.startswith("Pasal 25A"):
+            relation_type = "RENUMBERED_TO"
         rows.append(
             {
                 "relation_id": _relation_id(relation_type, evidence_row["evidence_id"], target_unit_id, mapping),
@@ -193,6 +195,11 @@ def build_article_amendment_relations(
                 "source_document_id": evidence_row["source_document_id"],
                 "source_role": evidence_row["source_role"],
                 "relation_type": relation_type,
+                **(
+                    {"substantive_change": False, "source_conflict": False, "anomaly": False}
+                    if relation_type == "RENUMBERED_TO"
+                    else {}
+                ),
                 "target_legal_unit_id": target_unit_id,
                 "target_citation": target_citation,
                 "source_legal_unit_id": source_unit_id,

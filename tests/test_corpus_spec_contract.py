@@ -157,7 +157,7 @@ class CorpusSpecContractTest(unittest.TestCase):
             path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
             errors = validate_uud_artifact_dir(target)
             self.assertIn(
-                f"source_conflict_missing_provenance_summary:{rows[0]['source_conflict_id']}",
+                "missing_required_field:source_conflicts:<missing>:provenance_summary",
                 errors,
             )
 

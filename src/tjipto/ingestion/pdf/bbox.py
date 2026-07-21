@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from hashlib import sha256
+import json
 
 from tjipto.contracts.coordinates import coordinate_metadata
 
@@ -62,10 +64,15 @@ def build_text_bbox_rows(
         )
     return [
         {
-            "bbox_id": f"{bbox_id_prefix}::{evidence_id}::{index:04d}",
+            "bbox_id": _geometry_id(
+                source_id=source_id,
+                source_sha256=source_meta["sha256"],
+                page_number=row["page_number"],
+                text=row["text"],
+                coordinates=row,
+            ),
             "bbox_precision": "exact",
             "corpus_id": corpus_id,
-            "evidence_id": evidence_id,
             "page_number": row["page_number"],
             "source_document_id": source_id,
             "source_pdf": source_meta["filename"],
@@ -111,6 +118,11 @@ def pdf_lines(doc) -> dict[int, list[dict]]:
                 continue
             for line in block.get("lines", []):
                 text = "".join(span.get("text", "") for span in line.get("spans", [])).strip()
+                text = text.replace("\u00ad", "")
+                if re.match(r"^Dihapus\.\s*\*+\)$", text):
+                    text = "Dihapus."
+                if not text:
+                    continue
                 if not text:
                     continue
                 x0 = min(span["bbox"][0] for span in line.get("spans", []))
@@ -158,10 +170,20 @@ def _fallback_bbox_rows(
             continue
         rows.append(
             {
-                "bbox_id": f"{bbox_id_prefix}::{evidence_id}::{index:04d}",
+                "bbox_id": _geometry_id(
+                    source_id=source_id,
+                    source_sha256=source_meta["sha256"],
+                    page_number=page_number,
+                    text=text.strip() if index == 0 else "",
+                    coordinates={
+                        "x0": min(row["x0"] for row in candidates),
+                        "y0": min(row["y0"] for row in candidates),
+                        "x1": max(row["x1"] for row in candidates),
+                        "y1": max(row["y1"] for row in candidates),
+                    },
+                ),
                 "bbox_precision": "page_grounded_only",
                 "corpus_id": corpus_id,
-                "evidence_id": evidence_id,
                 "page_number": page_number,
                 "source_document_id": source_id,
                 "source_pdf": source_meta["filename"],
@@ -180,6 +202,24 @@ def _fallback_bbox_rows(
     if not rows:
         raise ValueError(f"unable_to_build_bbox_rows:{source_id}:{text[:80]}")
     return rows
+
+
+def _geometry_id(*, source_id: str, source_sha256: str, page_number: int, text: str, coordinates: dict) -> str:
+    identity = {
+        "source_document_id": source_id,
+        "source_sha256": source_sha256,
+        "page_number": page_number,
+        "coordinate_space": coordinates.get("coordinate_space", "pdf_points"),
+        "coordinate_origin": coordinates.get("coordinate_origin", "top_left"),
+        "transform_version": coordinates.get("transform_version", "pdf_points_v1"),
+        "text": text,
+        "x0": coordinates.get("x0"),
+        "y0": coordinates.get("y0"),
+        "x1": coordinates.get("x1"),
+        "y1": coordinates.get("y1"),
+    }
+    digest = sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    return f"uud_geometry::{digest}"
 
 
 def _compact(text: str) -> str:

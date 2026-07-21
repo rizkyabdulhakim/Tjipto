@@ -8,7 +8,7 @@ ENDPOINT_EDGES = {
     "BELONGS_TO_SOURCE_ROLE",
     "HAS_FINAL_EVIDENCE",
 }
-INSTRUMENT_EDGES = {"MODIFIES", "DELETES", "RENAMES", "HAS_SIGNATORY", "HAS_DECISION_SESSION", "HAS_EFFECTIVE_RULE"}
+INSTRUMENT_EDGES = {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO", "HAS_SIGNATORY", "HAS_DECISION_SESSION", "HAS_EFFECTIVE_RULE"}
 
 
 def is_renumbering_provision(row: dict) -> bool:
@@ -35,7 +35,7 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
     relations_by_id = {row["relation_id"]: row for row in article_relations}
     for edge in edges:
         edge_type = edge["edge_type"]
-        if edge_type in {"MODIFIES", "DELETES", "RENAMES"}:
+        if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
             relation_id = str(edge.get("article_relation_ref") or "")
             relation = relations_by_id.get(relation_id)
             if relation is None:
@@ -74,7 +74,7 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
         elif edge_type in ENDPOINT_EDGES:
             support_kind = "endpoint_provenance"
             derivation_method = "endpoint_metadata"
-        elif edge_type in {"MODIFIES", "DELETES", "RENAMES"}:
+        elif edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
             relation = relations_by_id.get(str(edge.get("article_relation_ref") or ""), {})
             exact_relation = relation.get("support_class") == "exact_article_relation"
             support_kind = "exact_source_relation" if exact_relation else "instrument_provenance"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from hashlib import sha256
 import unittest
 
 from tjipto.core.manifest import read_jsonl
@@ -44,6 +45,18 @@ class PdfTextSpanCoverageTest(unittest.TestCase):
         self.assertEqual(rows[0]["source_role"], "synthetic_role")
         self.assertEqual(rows[0]["temporal_context"], "synthetic_time")
         self.assertEqual(rows[0]["text_span_id"], "span::synthetic_role::0001::0000")
+
+    def test_selectors_reconstruct_the_canonical_page_stream(self) -> None:
+        spans = read_jsonl(FINAL / "page_text_spans.jsonl")
+        streams: dict[str, list[dict]] = {}
+        for row in spans:
+            streams.setdefault(row["stream_id"], []).append(row)
+        for stream_id, rows in streams.items():
+            rows.sort(key=lambda row: row["text_start"])
+            stream = "\n".join(row["text"] for row in rows)
+            self.assertEqual(sha256(stream.encode("utf-8")).hexdigest(), rows[0]["page_text_hash"], stream_id)
+            for row in rows:
+                self.assertEqual(stream[row["text_start"] : row["text_end"]], row["exact_quote"], row["text_span_id"])
 
 
 if __name__ == "__main__":

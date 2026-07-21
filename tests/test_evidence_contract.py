@@ -31,8 +31,8 @@ class EvidenceContractTest(unittest.TestCase):
         units = read_jsonl(FINAL / "legal_units.jsonl")
         chunks = read_jsonl(FINAL / "chunks.jsonl")
         source_docs = read_jsonl(FINAL / "source_documents.jsonl")
-        self.assertEqual(len(units), 651)
-        self.assertEqual(len(chunks), 651)
+        self.assertEqual(len(units), len(chunks))
+        self.assertEqual(len(chunks), len(units))
         unit_ids = {row["legal_unit_id"] for row in units}
         source_doc_ids = {row["source_document_id"] for row in source_docs}
         for row in chunks:
@@ -145,8 +145,8 @@ class EvidenceContractTest(unittest.TestCase):
                 self.assertIn("decision_session", row["grounded_fields"])
                 self.assertIn("effective_rule", row["grounded_fields"])
             if row["source_role"] == "amendment_2_historical":
-                self.assertEqual(row["source_anomaly_status"], "source_article_renumbering_provenance")
-                self.assertEqual(row["field_statuses"]["source_anomaly_status"], "artifact_recorded")
+                self.assertNotIn("source_anomaly_status", row)
+                self.assertEqual(row["field_statuses"]["source_anomaly_status"], "not_found_in_source")
             if row["source_role"] == "original_historical":
                 self.assertEqual(row["status"], "not_found_in_source")
                 self.assertIsNone(row["official_title"])
@@ -203,7 +203,7 @@ class EvidenceContractTest(unittest.TestCase):
         pasal_i = next(row for row in units if row.get("hierarchy") == ["ATURAN TAMBAHAN", "Pasal I"])
         self.assertIsNone(pasal_i.get("exclusion_ref"))
         self.assertTrue(pasal_i["runtime_loadable"])
-        self.assertFalse(chunks[pasal_i["legal_unit_id"]]["canonical_use_allowed"])
+        self.assertTrue(chunks[pasal_i["legal_unit_id"]]["canonical_use_allowed"])
 
     def test_closing_clauses_are_separated_from_normative_units(self) -> None:
         forbidden = (

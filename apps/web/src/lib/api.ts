@@ -24,6 +24,7 @@ export interface TjiptoAskResponse {
   warnings?: string[];
   insufficient_reasons?: string[];
   citations?: CitationPayload[];
+  historical_citations?: CitationPayload[];
   viewer_refs?: ViewerRefPayload[];
   metadata_support?: MetadataSupportPayload[];
   document_relations?: DocumentRelationPayload[];
@@ -330,11 +331,29 @@ export function answerTextOrFallback(response: TjiptoAskResponse) {
 }
 
 export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation[] {
-  const citations = Array.isArray(response.citations) ? response.citations : [];
+  const citations: CitationPayload[] = [
+    ...(Array.isArray(response.citations) ? response.citations : []),
+    ...(Array.isArray(response.historical_citations) ? response.historical_citations : []),
+    ...(response.metadata_support ?? [])
+      .filter((item): item is MetadataSupportPayload & { evidence_id: string } => item?.evidence_id != null && item.viewer_ref?.can_resolve === true)
+      .map((item) => ({
+      evidence_id: item.evidence_id,
+      source_document_id: item.source_document_id,
+      source_role: item.source_role,
+      page_numbers: item.page_numbers,
+      authority_kind: item.authority_kind,
+      authority_label: item.authority_label,
+      citation_final: item.citation_final,
+      viewer_ref: item.viewer_ref,
+      citation: item.field ?? "Metadata",
+      label: item.field ?? "Metadata",
+      quoted_text: item.answer ?? item.field ?? "Metadata",
+    })),
+  ];
   const viewerRefs = Array.isArray(response.viewer_refs) ? response.viewer_refs : [];
   return citations.flatMap((item, index) => {
     if (!item?.evidence_id || !item?.quoted_text) return [];
-    const viewer = viewerRefs[index] ?? item.viewer_ref;
+    const viewer = item.viewer_ref ?? viewerRefs[index];
     if (viewer?.can_resolve !== true) return [];
     const relation = (response.article_amendment_relations ?? []).find((candidate) => candidate.evidence_id === item.evidence_id);
     const authorityKind = item.authority_kind ?? fallbackAuthorityKind(response);

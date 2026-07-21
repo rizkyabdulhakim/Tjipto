@@ -86,7 +86,9 @@ class BBoxContractTest(unittest.TestCase):
         heading_rows = [row for row in read_jsonl(FINAL / "bbox_registry.jsonl") if row["text"] in expected]
         self.assertEqual(len(heading_rows), 5)
         for row in heading_rows:
-            target = evidence[row["evidence_id"]]
+            targets = [target for target in evidence.values() if row["bbox_id"] in target["bbox_refs"]]
+            self.assertEqual(len(targets), 1, row["bbox_id"])
+            target = targets[0]
             owner = legal_units[target["legal_unit_id"]]
             self.assertIn(row["bbox_id"], target["bbox_refs"])
             self.assertEqual(target["hierarchy"][0], expected[row["text"]], row["bbox_id"])
