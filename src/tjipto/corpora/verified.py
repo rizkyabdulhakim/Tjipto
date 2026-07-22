@@ -61,12 +61,14 @@ VerifiedCorpusSnapshot = ValidatedCorpusSnapshot
 class CorpusPublicationService:
     def verify_and_publish(self, config) -> ValidatedCorpusSnapshot:
         manifest, manifest_digest = _read_trusted_manifest(config)
-        artifacts = _verify_artifacts(config.manifest_path.parent.resolve(), manifest, config.setting("runtime_required_artifacts"))
+        runtime_required = tuple(config.setting("runtime_required_artifacts"))
+        artifacts = _verify_artifacts(config.manifest_path.parent.resolve(), manifest, runtime_required)
         _validate_cross_artifact_references(manifest, artifacts)
         semantic_attestation = _run_semantic_validator(config, manifest, artifacts)
         if semantic_attestation.violation_codes:
             raise CorpusIntegrityError(semantic_attestation.violation_codes[0])
-        frozen_artifacts = _freeze(artifacts)
+        retained_paths = {manifest[logical_key] for logical_key in runtime_required}
+        frozen_artifacts = _freeze({path: value for path, value in artifacts.items() if path in retained_paths})
         frozen_manifest = _freeze(manifest)
         verified = replace(
             config,

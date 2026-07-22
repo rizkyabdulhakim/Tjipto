@@ -64,12 +64,10 @@ test("scoped source answer opens the full document without citation geometry", (
   assert.deepEqual(mapAskResponseToCitations({ status: "answer_ready", answer_type: "source_document" }), []);
 });
 
-test("metadata and trace support are not mapped as exact citations", () => {
+test("a response without public supports has no citations", () => {
   const citations = mapAskResponseToCitations({
     status: "answer_ready",
     answer: "19 Oktober 1999",
-    metadata_support: [{ evidence_id: "meta_1", field: "enactment_date", answer: "19 Oktober 1999" }],
-    trace_support: [{ relation_id: "trace_1", target_citation: "Pasal 31", citation_available: false }],
     document_relations: [{ relation_id: "doc_1", relation_type: "AMENDED_BY", highlightable: false }],
   });
 

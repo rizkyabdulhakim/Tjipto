@@ -82,7 +82,7 @@ def route_retrieval(
                     "route": "metadata",
                     "intent": "metadata_lookup",
                     "reason": None,
-                    "matches": entity_matches[:limit],
+                    "matches": entity_matches,
                     "metadata_source_roles": tuple(sorted({row.get("source_role") for row in entity_matches if row.get("source_role")})),
                 }
             source_roles = tuple(
@@ -187,6 +187,15 @@ def route_retrieval(
     metadata_all = tuple(metadata_lookup(store, normalized["normalized_query"], len(store.metadata_grounding)))
     metadata = filter_evidence(metadata_all, filters)
     if metadata:
+        if all(row.get("metadata_field") == "signatories" for row in metadata):
+            return envelope | {
+                "status": "found",
+                "route": "metadata",
+                "intent": "metadata_lookup",
+                "reason": None,
+                "matches": metadata,
+                "metadata_source_roles": tuple(sorted({row.get("source_role") for row in metadata if row.get("source_role")})),
+            }
         ranked, trace = merge_ranked(store, {"metadata": metadata}, filters)
         return envelope | {
             "status": "found",

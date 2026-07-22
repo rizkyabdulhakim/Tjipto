@@ -488,7 +488,7 @@ class RuntimeContractTest(unittest.TestCase):
         citation = result["metadata_support"][0]
         self.assertEqual(citation["source_role"], "amendment_1_historical")
         viewer = self.service.viewer("uud", citation["evidence_id"])
-        self.assertEqual([box["text"] for box in viewer["bbox_rectangles"]], ["Prof. Dr. H.M. Amien Rais"])
+        self.assertEqual([box["text"] for box in viewer["bbox_rectangles"]], ["Ketua,", "Prof. Dr. H.M. Amien Rais"])
 
     def test_unscoped_metadata_requests_clarification_without_combined_citations(self) -> None:
         for query in ("penandatangan UUD", "kapan UUD ditetapkan"):

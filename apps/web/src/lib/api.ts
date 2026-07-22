@@ -25,10 +25,6 @@ export interface TjiptoAskResponse {
   insufficient_reasons?: string[];
   document_relations?: DocumentRelationPayload[];
   article_amendment_relations?: ArticleAmendmentRelationPayload[];
-  /** @deprecated Runtime responses expose `supports` only. */
-  metadata_support?: MetadataSupportPayload[];
-  /** @deprecated Runtime responses expose `supports` only. */
-  trace_support?: TraceSupportPayload[];
   clarification_options?: ClarificationOptionPayload[];
   supports?: SupportPayload[];
 }
@@ -65,22 +61,6 @@ export interface DocumentSourcePayload {
 export interface ClarificationOptionPayload {
   source_role?: string;
   label?: string;
-}
-
-export interface MetadataSupportPayload {
-  support_class?: "metadata_support" | "metadata_trace" | "exact_metadata_citation";
-  authority_kind?: Citation["authorityKind"];
-  authority_label?: string;
-  citation_final?: boolean;
-  field?: string;
-  answer?: string;
-  evidence_id?: string;
-  source_document_id?: string;
-  source_role?: string;
-  page_numbers?: number[];
-  citation_available?: boolean;
-  viewer_highlightable?: boolean;
-  viewer_ref?: ViewerRefPayload;
 }
 
 export interface DocumentRelationPayload {
@@ -125,24 +105,6 @@ export interface ArticleAmendmentRelationPayload {
   trace_only_reason?: string;
   citation_available?: boolean;
   viewer_highlightable?: boolean;
-}
-
-export interface TraceSupportPayload {
-  authority_kind?: Citation["authorityKind"];
-  authority_label?: string;
-  citation_final?: boolean;
-  source_conflict_id?: string;
-  relation_id?: string;
-  relation_type?: string;
-  source_role?: string;
-  classification?: string;
-  target_citation?: string;
-  evidence_id?: string;
-  support_class?: string;
-  grounding_level?: string;
-  citation_available?: boolean;
-  viewer_highlightable?: boolean;
-  failure_reason?: string;
 }
 
 export interface SearchResult {
@@ -442,47 +404,6 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
       kind: "article_relation" as const,
       label: String(row.relation_type ?? "Relasi Pasal"),
       detail: "Dukungan relasi sumber.",
-      clickable: row.viewer_highlightable === true,
-    })),
-  };
-  /* Legacy buckets are intentionally unreachable; the public API exposes supports only. */
-  return {
-    metadata: (response.metadata_support ?? []).map((row, index) => ({
-      id: String(row.evidence_id ?? `metadata_${index}`),
-      kind: "metadata",
-      label: row.authority_label ?? (row.authority_kind === "metadata_trace" ? "Metadata trace" : "Metadata sumber"),
-      detail: [row.field, row.answer ?? (row.support_class === "exact_metadata_citation" ? "Metadata exact tersedia" : "Metadata trace-only")]
-        .filter(Boolean)
-        .join(" · "),
-      clickable: row.viewer_highlightable === true && row.viewer_ref?.can_resolve === true,
-    })),
-    structure: [],
-    trace: (response.trace_support ?? []).map((row, index) => ({
-      id: String(row.source_conflict_id ?? row.relation_id ?? row.evidence_id ?? `trace_${index}`),
-      kind: "trace",
-      label: row.authority_label ?? String(row.target_citation ?? row.classification ?? row.relation_type ?? "trace_support"),
-      detail: [
-        row.classification,
-        row.support_class === "source_conflict_trace" ? "Trace-only, tidak dapat di-highlight." : "Trace-only support.",
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      clickable: false,
-    })),
-    documentRelations: (response.document_relations ?? []).map((row, index) => ({
-      id: String(row.relation_id ?? `document_relation_${index}`),
-      kind: "document_relation",
-      label: String(row.relation_type ?? "document_relation"),
-      detail: "Relasi tingkat dokumen, bukan sitasi atau highlight exact.",
-      clickable: false,
-    })),
-    articleRelations: (response.article_amendment_relations ?? []).map((row, index) => ({
-      id: String(row.relation_id ?? `article_relation_${index}`),
-      kind: "article_relation",
-      label: `${row.relation_type ?? "RELATION"}: ${row.source_reference ?? row.source_label ?? "source"} → ${row.target_reference ?? row.target_label ?? "target"}`,
-      detail: row.support_class === "exact_article_relation"
-        ? `Source proof exact (${row.source_proof_text_span_ids?.length ?? row.text_span_ids?.length ?? 0} spans / ${row.source_proof_bbox_refs?.length ?? row.bbox_refs?.length ?? 0} BBoxes); target ${row.target_precision ?? "shared_span"}. Evidence ${row.evidence_id ?? "unavailable"}.`
-        : `Source-backed trace-only (${row.trace_only_reason ?? "precision not isolated"}; ${row.source_proof_text_span_ids?.length ?? row.text_span_ids?.length ?? 0} proof spans). Evidence ${row.evidence_id ?? "unavailable"}.`,
       clickable: row.viewer_highlightable === true,
     })),
   };

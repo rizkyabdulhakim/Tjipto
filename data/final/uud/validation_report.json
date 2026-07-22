@@ -394,13 +394,13 @@
     "note": "exact metadata rows may be viewer-highlightable only with exact bbox and text-span support; page-grounded rows remain trace-only"
   },
   "metadata_bbox_registry_health": {
-    "metadata_grounding_registry_rows": 289,
-    "metadata_grounding_ref_id_count": 289,
-    "metadata_grounding_ref_id_unique_count": 289,
-    "duplicate_bbox_id_reference_count": 168,
+    "metadata_grounding_registry_rows": 320,
+    "metadata_grounding_ref_id_count": 320,
+    "metadata_grounding_ref_id_unique_count": 320,
+    "duplicate_bbox_id_reference_count": 199,
     "unresolved_bbox_id_count": 0,
-    "exact_metadata_bbox_rows": 289,
-    "exact_metadata_viewer_highlightable_rows": 289,
+    "exact_metadata_bbox_rows": 320,
+    "exact_metadata_viewer_highlightable_rows": 320,
     "unresolved_exact_metadata_bbox_rows": 0,
     "page_grounded_only_metadata_rows": 0,
     "metadata_bbox_false_exact_claims": 0

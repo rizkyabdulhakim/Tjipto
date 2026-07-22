@@ -285,9 +285,9 @@ def _signatory_grounding(grounding_by_id: dict[str, dict], refs: tuple[str, ...]
     return next(
         (
             grounding
-            for grounding_id in refs
+            for grounding_id in reversed(refs)
             if (grounding := grounding_by_id.get(grounding_id)) is not None
-            and normalize_intent_text(grounding.get("quoted_text")) == expected
+            and normalize_intent_text(grounding.get("quoted_text")).endswith(expected)
         ),
         None,
     )

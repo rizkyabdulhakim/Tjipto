@@ -509,19 +509,20 @@ def rebuild_metadata_grounding(
                         source_sha256=signatories["source_sha256"],
                     )
                 ]
+                signatory_quotes = _signatory_source_quotes(signatories["quoted_text"], row.get("signatories") or ())
                 grounded_fields["signatories"].extend(
                     append_grounding(
                         source_role=role,
                         source_document_id=source_document_id,
                         metadata_field="signatories",
-                        quoted_text=signatory["name_text"],
+                        quoted_text=signatory_quote,
                         donor_id=signatories["evidence_id"],
                         page_numbers=signatories["page_numbers"],
                         source_pdf_path=signatories["source_pdf_path"],
                         source_sha256=signatories["source_sha256"],
                         item_key=f"person_{index:04d}",
                     )
-                    for index, signatory in enumerate(row.get("signatories") or ())
+                    for index, (signatory, signatory_quote) in enumerate(zip(row.get("signatories") or (), signatory_quotes, strict=True))
                     if signatory.get("name_text")
                 )
                 field_statuses["institution"] = "grounded"
@@ -977,6 +978,40 @@ def _signatories(text: str) -> list[dict]:
     if role and name_parts:
         rows.append({"name_text": " ".join(name_parts), "role_text": role})
     return rows
+
+
+def _signatory_source_quotes(text: str, signatories: list[dict] | tuple[dict, ...]) -> list[str]:
+    """Pair each parsed signatory with its preceding printed role in source order."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    quotes: list[str] = []
+    cursor = 0
+    for signatory in signatories:
+        name = compact(str(signatory.get("name_text") or ""))
+        role = _role_key(str(signatory.get("role_text") or ""))
+        for role_index in range(cursor, len(lines)):
+            if _role_key(lines[role_index]) != role:
+                continue
+            name_lines: list[str] = []
+            for name_index in range(role_index + 1, len(lines)):
+                name_lines.append(lines[name_index])
+                joined = compact(" ".join(name_lines))
+                if joined == name:
+                    quotes.append("\n".join((lines[role_index], *name_lines)))
+                    cursor = name_index + 1
+                    break
+                if not name.startswith(joined):
+                    break
+            else:
+                continue
+            if cursor > role_index:
+                break
+        else:
+            raise ValueError(f"signatory_source_name_missing:{signatory.get('name_text')}")
+    return quotes
+
+
+def _role_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", compact(value))
 
 
 def _exact_bbox_rows(quoted_text: str, bbox_rows: list[dict]) -> list[dict]:

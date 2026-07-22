@@ -195,7 +195,7 @@ class EvidenceStore:
 
     def _bbox_rows_by_id(self) -> dict[str, dict]:
         rows = {row["bbox_id"]: row for row in self._bbox_rows_all()}
-        referenced_character_ids = {
+        referenced_bbox_ids = {
             value
             for artifact_rows in (
                 self.evidence,
@@ -208,17 +208,24 @@ class EvidenceStore:
             for field, values in artifact_row.items()
             if "bbox" in field and isinstance(values, (list, tuple))
             for value in values
-            if str(value).startswith("uud_character_bbox::")
+            if isinstance(value, str)
         }
         for row in self._word_bboxes_all():
-            rows[row["word_bbox_id"]] = {
-                "bbox_id": row["word_bbox_id"],
-                "bbox_precision": "exact",
-                "viewer_highlightable": True,
-                **row,
-            }
-            for character in row.get("characters") or ():
-                if character.get("character_bbox_id") not in referenced_character_ids:
+            word_id = row["word_bbox_id"]
+            characters = row.get("characters") or ()
+            if word_id not in referenced_bbox_ids and not any(
+                character.get("character_bbox_id") in referenced_bbox_ids for character in characters
+            ):
+                continue
+            if word_id in referenced_bbox_ids:
+                rows[word_id] = {
+                    "bbox_id": word_id,
+                    "bbox_precision": "exact",
+                    "viewer_highlightable": True,
+                    **row,
+                }
+            for character in characters:
+                if character.get("character_bbox_id") not in referenced_bbox_ids:
                     continue
                 rows[character["character_bbox_id"]] = {
                     "bbox_id": character["character_bbox_id"],

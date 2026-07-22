@@ -22,7 +22,7 @@
     "metadata_assertions": 1877,
     "metadata_graph_edges": 635,
     "metadata_grounding": 68,
-    "metadata_grounding_records": 289,
+    "metadata_grounding_records": 320,
     "not_promoted_amends_edges": 8,
     "pages": 63,
     "promotion_decisions": 77,
@@ -342,8 +342,8 @@
         "artifact_status",
         "object_role"
       ],
-      "bytes": 150348,
-      "sha256": "7aaabe338f84d24f6c9e964bbc67cca4547c0089870bf7b0945ce43048feceeb"
+      "bytes": 157905,
+      "sha256": "9bc0b02cef6237c600f5606b5d2662a0a1c41644c0fff145a3cd7e98633cb8d2"
     },
     "metadata_grounding_registry.jsonl": {
       "origin": "generated",
@@ -360,8 +360,8 @@
         "metadata_grounding_id",
         "bbox_id"
       ],
-      "bytes": 502372,
-      "sha256": "d9c13e7b2e11227ba17b729aee18806d2a97e2e5cc3fbd5bdae98815608ccbc0"
+      "bytes": 535833,
+      "sha256": "d22ffee83a685f6837f2431cb07102e5e69fdb24f4ddc6750da2ac53c6224f7e"
     },
     "pages.jsonl": {
       "origin": "generated",
@@ -561,7 +561,7 @@
       "format": "json",
       "artifact_schema": 7,
       "bytes": 23230,
-      "sha256": "e9b00ba27cc2fee0485b11f21532e4724fa6d0e910b4bce2aa3e5caf41459d04"
+      "sha256": "77b5e9f8f65b49caf06f2774e9196a8d4f342b23d25a18f38fa70b100f2d72ac"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -597,8 +597,8 @@
         "reason_code",
         "reason"
       ],
-      "bytes": 5142317,
-      "sha256": "0cbb7c1df930b79bec9ff64886f0643c8363eae4761f8e3ed09d0a743f380fa8"
+      "bytes": 5144859,
+      "sha256": "25c5a004791c3c114db601c9bf6ecfec9027dbe5b64cf1ae96285fb50e1b0b8d"
     },
     "raw_source_spans.jsonl": {
       "origin": "generated",

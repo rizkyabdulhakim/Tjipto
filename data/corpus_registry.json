@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "37e2fc673cc66b74011d9ddae21886a7cfb8fb7b33f3a658d72d41748a46febc",
+    "manifest_sha256": "24b6027f2f405918145a56e185b90b3e0a4de3bfe37bc2824e2e7b3a5d67484a",
     "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
     "runtime_required_artifacts": [
       "evidence_registry",
@@ -14,7 +14,13 @@
       "source_documents",
       "pages",
       "page_text_spans",
-      "word_bboxes"
+      "word_bboxes",
+      "document_metadata",
+      "metadata_grounding",
+      "metadata_grounding_registry",
+      "document_relations",
+      "article_amendment_relations",
+      "source_conflicts"
     ],
     "query_strategy": "uud_1945",
     "structured_strategy": "uud_1945",
