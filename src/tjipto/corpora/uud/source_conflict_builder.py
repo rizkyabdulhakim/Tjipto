@@ -33,16 +33,23 @@ def apply_source_conflict_grounding(
             for ref in _candidate_evidence_refs(row)
             if ref in evidence_by_id and evidence_by_id[ref]["source_document_id"] == row["source_document_id"]
         ]
-        if row.get("source_anomaly_kind") == "source_marker_sequence_anomaly":
-            evidence_ids.extend(
-                evidence["evidence_id"]
-                for evidence in evidence_by_id.values()
-                if evidence.get("source_document_id") == row["source_document_id"]
-                and evidence.get("hierarchy") == ["ATURAN TAMBAHAN", "Pasal III"]
-            )
         evidence_ids = list(dict.fromkeys(evidence_ids))
         row["page_numbers"] = list(row.get("affected_pages") or [])
         row["text_span_ids"] = _matching_text_spans(row, page_text_spans)
+        matched_spans = [span_by_id[span_id] for span_id in row["text_span_ids"] if span_id in span_by_id]
+        row["source_sha256"] = matched_spans[0].get("source_sha256") if matched_spans else None
+        row["source_quote"] = "\n".join(span.get("exact_quote") or span.get("text") or "" for span in matched_spans)
+        comparison = [
+            span
+            for span in page_text_spans
+            if span.get("source_document_id") == "uud::current_consolidated"
+            and row.get("canonical_label")
+            and row.get("canonical_label") in (span.get("text") or "")
+        ]
+        row["comparison_source_document_id"] = comparison[0].get("source_document_id") if comparison else None
+        row["comparison_source_sha256"] = comparison[0].get("source_sha256") if comparison else None
+        row["comparison_quote"] = "\n".join(span.get("exact_quote") or span.get("text") or "" for span in comparison)
+        row["review_evidence"] = row.get("provenance_summary") or row.get("provenance_review_status") or "reviewed_source_comparison"
         row["evidence_ids"] = evidence_ids
         row["authoritative_evidence_id"] = evidence_ids[0] if evidence_ids else None
         row["authority_kind"] = "source_anomaly_provenance"

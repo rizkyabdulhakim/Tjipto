@@ -127,10 +127,12 @@ class BBoxContractTest(unittest.TestCase):
 
     def test_word_bbox_rows_are_valid_and_nonempty(self) -> None:
         rows = read_jsonl(FINAL / "word_bboxes.jsonl")
-        self.assertEqual(len(rows), 11336)
+        self.assertEqual(len(rows), read_json(FINAL / "manifest.json")["counts"]["word_bboxes"])
         self.assertEqual({row["extractor_version"] for row in rows}, {"pymupdf_words"})
         for row in rows:
-            self.assertTrue(row["normalized_text"])
+            self.assertTrue(row["text"])
+            if not row["normalized_text"]:
+                self.assertTrue(set(row["text"]) <= {"\u00ad"})
             self.assertGreaterEqual(row["x1"], row["x0"])
             self.assertGreaterEqual(row["y1"], row["y0"])
             self.assertGreater(row["page_width"], 0)

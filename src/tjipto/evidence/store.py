@@ -1,9 +1,35 @@
 from __future__ import annotations
 
+from collections import OrderedDict
+from threading import RLock
+
 from tjipto.contracts.evidence import source_lineage_reason
 
 
 class EvidenceStore:
+    _shared_stores: OrderedDict[tuple[str, str], "EvidenceStore"] = OrderedDict()
+    _shared_lock = RLock()
+    _shared_limit = 1
+
+    @classmethod
+    def shared(cls, config) -> "EvidenceStore":
+        key = (str(config.manifest_path.resolve()), str(config.manifest_digest or config.artifact_set_digest or ""))
+        with cls._shared_lock:
+            store = cls._shared_stores.get(key)
+            if store is None:
+                store = cls(config)
+                cls._shared_stores[key] = store
+                while len(cls._shared_stores) > cls._shared_limit:
+                    cls._shared_stores.popitem(last=False)
+            else:
+                cls._shared_stores.move_to_end(key)
+            return store
+
+    @classmethod
+    def clear_shared_cache(cls) -> None:
+        with cls._shared_lock:
+            cls._shared_stores.clear()
+
     def __init__(self, config):
         self.config = config
         self._evidence: list[dict] | None = None
@@ -169,6 +195,21 @@ class EvidenceStore:
 
     def _bbox_rows_by_id(self) -> dict[str, dict]:
         rows = {row["bbox_id"]: row for row in self._bbox_rows_all()}
+        referenced_character_ids = {
+            value
+            for artifact_rows in (
+                self.evidence,
+                self.metadata_grounding,
+                self.page_text_spans,
+                self.article_amendment_relations,
+                self.source_conflicts,
+            )
+            for artifact_row in artifact_rows
+            for field, values in artifact_row.items()
+            if "bbox" in field and isinstance(values, (list, tuple))
+            for value in values
+            if str(value).startswith("uud_character_bbox::")
+        }
         for row in self._word_bboxes_all():
             rows[row["word_bbox_id"]] = {
                 "bbox_id": row["word_bbox_id"],
@@ -177,6 +218,8 @@ class EvidenceStore:
                 **row,
             }
             for character in row.get("characters") or ():
+                if character.get("character_bbox_id") not in referenced_character_ids:
+                    continue
                 rows[character["character_bbox_id"]] = {
                     "bbox_id": character["character_bbox_id"],
                     "bbox_precision": "exact",

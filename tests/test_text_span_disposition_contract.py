@@ -110,7 +110,7 @@ class TextSpanDispositionContractTest(unittest.TestCase):
         self.assert_span("Segala warga negara bersamaan kedudukannya", "normative_text", "promoted_legal_unit", "ayat_record")
         self.assert_span("Bahwa sesungguhnya kemerdekaan", "normative_text", "promoted_legal_unit", "pembukaan_record")
         self.assert_span("BAB IXA", "structural_heading", "excluded_structural", "bab_record")
-        self.assert_span("ATURAN TAMBAHAN", "source_conflict_trace", "promoted_source_conflict", None)
+        self.assert_span("ATURAN TAMBAHAN", "structural_heading", "excluded_structural", "aturan_tambahan_record")
         self.assert_span("Peralihan Pasal I, II, dan III", "instrument_scope", "nonruntime_instrument_text", None)
 
     def test_known_instrument_text_gaps_remain_nonruntime(self) -> None:

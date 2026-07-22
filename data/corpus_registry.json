@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "928a331bd54d600b2f4e5ae970297361abab2b7397db14462fe3aa62169852bb",
+    "manifest_sha256": "6305e6c2c9e23e58ad8f0d2a818b9a0f29d18a98fe6249062ecc8e35c366d010",
     "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
     "runtime_required_artifacts": [
       "evidence_registry",
@@ -44,6 +44,10 @@
       {
         "pattern": "\\bu\\s*u\\s*d\\s+45\\b",
         "replacement": "UUD 1945"
+      },
+      {
+        "pattern": "\\bPasal III(?=\\s+Aturan Tambahan)\\b",
+        "replacement": "Pasal II"
       }
     ],
     "source_roles": [
@@ -236,6 +240,12 @@
       "source_conflict_types": [
         "article_renumbering_conflict",
         "source_marker_sequence_conflict"
+      ],
+      "source_discrepancy_types": [
+        "PRINTED_NUMBERING_TYPO",
+        "SOURCE_COPY_SCOPE_OMISSION",
+        "SOURCE_COPY_TEXTUAL_OMISSION",
+        "PRINTED_TYPO"
       ],
       "source_anomaly_kinds": [
         "renumbering_provenance",

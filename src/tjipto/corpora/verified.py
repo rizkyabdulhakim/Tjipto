@@ -12,6 +12,7 @@ from collections import OrderedDict
 from tjipto.contracts.artifacts import ARTIFACT_ALLOWED_FIELDS, ARTIFACT_OPTIONAL_FIELDS, COMMON_ARTIFACT_FIELDS, CURRENT_ARTIFACT_SCHEMA, FORBIDDEN_ARTIFACT_FIELDS, MINIMUM_ARTIFACT_FIELDS
 from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage_reason
 from tjipto.core.manifest import ALLOWED_ARTIFACT_ORIGINS, verified_file_bytes
+from tjipto.core.manifest import artifact_set_digest as compute_artifact_set_digest
 
 
 class CorpusIntegrityError(ValueError):
@@ -73,9 +74,9 @@ class CorpusPublicationService:
             settings=_freeze(config.settings or {}),
             verified_artifacts=frozen_artifacts,
             manifest_digest=manifest_digest,
-            artifact_set_digest=_artifact_digest(manifest),
+            artifact_set_digest=compute_artifact_set_digest(manifest),
         )
-        artifact_set_digest = _artifact_digest(manifest)
+        artifact_set_digest = compute_artifact_set_digest(manifest)
         readiness = CorpusReadiness(True, manifest_digest, artifact_set_digest)
         return ValidatedCorpusSnapshot(
             config=verified,
@@ -97,7 +98,7 @@ class VerifiedCorpusRepository:
     # publication must be shared across processes.
     _published_snapshots: OrderedDict[tuple[str, str, str], ValidatedCorpusSnapshot] = OrderedDict()
     _published_lock = RLock()
-    _published_snapshot_limit = 8
+    _published_snapshot_limit = 1
 
     def __init__(self, registry):
         self.registry = registry
@@ -395,8 +396,3 @@ def _contained_path(final_dir: Path, rel: str) -> Path:
     if not resolved.is_relative_to(final_dir):
         raise CorpusIntegrityError("artifact_path_invalid")
     return resolved
-
-
-def _artifact_digest(manifest: dict) -> str:
-    rows = [(name, row.get("sha256"), row.get("bytes")) for name, row in sorted(manifest["files"].items())]
-    return sha256(json.dumps(rows, separators=(",", ":")).encode("utf-8")).hexdigest()

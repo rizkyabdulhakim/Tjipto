@@ -143,7 +143,7 @@ def _instrument_rows(
     ):
         if probe_only:
             return ({"probe": True},)
-        matches = []
+        matches: list[dict] = []
         for row in getattr(store, "evidence", ()):
             hierarchy = {str(value).casefold() for value in row.get("hierarchy") or ()}
             text = str(row.get("quoted_text") or "").casefold()
@@ -163,7 +163,7 @@ def _instrument_rows(
     ):
         if probe_only:
             return ({"probe": True},)
-        matches: list[dict] = []
+        clause_matches: list[dict] = []
         prefix = intent["instrument_citation_templates"].get("prefix", "")
         clause_marker = intent["instrument_citation_templates"].get("clause_marker", "")
         for row in getattr(store, "evidence", ()):
@@ -174,8 +174,8 @@ def _instrument_rows(
             if bab.casefold() in text.casefold() and any(word in text.casefold() for word in intent["instrument_deletion_evidence_words"]):
                 candidate = _candidate(row, "instrument_clause_candidate")
                 if candidate is not None:
-                    matches.append(candidate)
-        return tuple(matches[:limit])
+                    clause_matches.append(candidate)
+        return tuple(clause_matches[:limit])
     decision = resolve_instrument_intent(query, intent, corpus=corpus_id)
     if decision.target_status == "instrument_unresolved":
         return ({"probe": True},) if probe_only else ()

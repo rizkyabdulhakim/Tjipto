@@ -29,7 +29,7 @@ def assemble_context_pack(store, matches: tuple[dict, ...]) -> dict:
     supporting_context = []
     excluded = []
     reasons = {}
-    groups = {name: [] for name in ("final_citations", "historical_citations", "metadata_support", "structural_support", "trace_support")}
+    groups: dict[str, list[dict]] = {name: [] for name in ("final_citations", "historical_citations", "metadata_support", "structural_support", "trace_support")}
     for row in matches:
         accepted, reason = validate_answer_candidate(store, row)
         payload = _payload(store, row)

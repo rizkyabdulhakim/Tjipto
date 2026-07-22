@@ -12,6 +12,7 @@ from tjipto.core.manifest import read_json, read_jsonl
 from tjipto.corpora.uud.validation import validate_uud_artifact_dir
 from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
+from tjipto.evidence.store import EvidenceStore
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -213,6 +214,15 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             second = second_service.repository.load("uud")
             self.assertIs(first, second)
             self.assertEqual(first_service.repository.load_count + second_service.repository.load_count, 1)
+
+    def test_runtime_store_cache_has_one_owner_per_snapshot(self) -> None:
+        EvidenceStore.clear_shared_cache()
+        first = LegalRuntimeService(ROOT)
+        second = LegalRuntimeService(ROOT)
+        self.assertIs(first._store("uud"), second._store("uud"))
+        self.assertEqual(len(EvidenceStore._shared_stores), 1)
+        EvidenceStore.clear_shared_cache()
+        self.assertEqual(len(EvidenceStore._shared_stores), 0)
 
     def test_duplicate_primary_id_fails_before_publication(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -8,7 +8,7 @@ from tjipto.ingestion.pdf.bbox import _geometry_id
 from tjipto.corpora.uud.provenance_exceptions import RECOVERABLE_GROUNDING_LABELS, SEGMENTATION_BOUNDARY_LABELS
 from tjipto.corpora.uud.structure_builder import compact, slug
 from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, compact_text, word_rows_by_page
-from tjipto.ingestion.pdf.text_spans import normalize_semantic_text
+from tjipto.corpora.uud.source_policy import normalize_semantic_text
 
 
 def _admit_evidence(unit: dict, chunk: dict, *, has_descendants: bool = False) -> bool:
@@ -186,13 +186,24 @@ def _semantic_line_entries(pdf_lines_by_source: dict[str, dict[int, list[dict]]]
 
 
 def _semantic_word_geometry(word: dict) -> dict:
-    match = re.search(r"\*{1,4}(?:/\*{1,4})?\)", str(word.get("text") or ""))
+    word_text = str(word.get("text") or "")
+    match = re.search(r"\*{1,4}(?:/\*{1,4})?\)", word_text)
     if not match or not word.get("characters"):
         return word
     chars = [char for char in word["characters"] if int(char.get("char_end", 0)) <= match.start()]
     if not chars:
         return word
-    return {**word, "x0": min(char["x0"] for char in chars), "x1": max(char["x1"] for char in chars)}
+    x0 = min(char["x0"] for char in chars)
+    x1 = max(char["x1"] for char in chars)
+    marker_x0 = min(
+        char["x0"]
+        for char in word["characters"]
+        if int(char.get("char_start", 0)) >= match.start()
+    )
+    # Some PDFs place the marker glyph a fraction inside the preceding glyph's
+    # extraction box. Keep the semantic highlight on the legal side of that
+    # observed boundary rather than covering the annotation.
+    return {**word, "x0": x0, "x1": min(x1, marker_x0)}
 
 
 def _recover_word_bbox(
@@ -259,7 +270,7 @@ def _recover_aggregate_word_bboxes(
     word_bboxes: list[dict],
 ) -> list[dict]:
     words_by_page = word_rows_by_page(word_bboxes)
-    matches = []
+    matches: list[dict] = []
     for part in text_parts or [text]:
         match = align_text_to_word_bboxes(
             text=part,

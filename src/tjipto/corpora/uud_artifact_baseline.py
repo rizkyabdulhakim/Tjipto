@@ -31,7 +31,7 @@ from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_gro
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import build_validation_report, validate_uud_artifact_dir
-from tjipto.corpora.uud.policy.authority import apply_authority_contract
+from tjipto.corpora.uud.policy.authority import apply_authority_contract, apply_retrieval_semantics
 from tjipto.corpora.uud.policy.relations import apply_graph_relation_policy
 from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
@@ -217,6 +217,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         nodes=graph_nodes,
         edges=graph_edges,
     )
+    apply_retrieval_semantics(retrieval_units, evidence)
     document_relations = build_document_relations(list(source_documents.values()))
     promotion_decisions = build_promotion_decisions(
         evidence=evidence,
@@ -229,6 +230,17 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     validation_exceptions = [
         {
             **row,
+            **(
+                {
+                    "evidence_summary": {
+                        **(row.get("evidence_summary") or {}),
+                        "parent_labels": ["ATURAN TAMBAHAN", "Pasal I", "Pasal II"],
+                        "unit_label": "ATURAN TAMBAHAN",
+                    }
+                }
+                if row.get("exception_id") == "uud_chunk_source_alignment_exception_0009"
+                else {}
+            ),
             "chunk_id": row.get("chunk_id"),
             "current_resolution_state": "historical_review_context",
             "resolving_commit": "797d2f8",

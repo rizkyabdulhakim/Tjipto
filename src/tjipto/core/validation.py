@@ -25,8 +25,8 @@ def validate_text_provenance(config: CorpusConfig, header_stripper=None) -> dict
     source_by_legal_unit = {row["legal_unit_id"]: row["source_document_id"] for row in legal_units}
     evidence_ids = {row["legal_unit_id"] for row in config.jsonl("evidence")}
     results: dict[str, dict] = {
-        "legal_units": _validate_rows(legal_units, page_text, evidence_ids, header_stripper, source_by_legal_unit),
-        "chunks": _validate_rows(config.jsonl("chunks"), page_text, evidence_ids, header_stripper, source_by_legal_unit),
+        "legal_units": _validate_rows([dict(row) for row in legal_units], page_text, evidence_ids, header_stripper, source_by_legal_unit),
+        "chunks": _validate_rows([dict(row) for row in config.jsonl("chunks")], page_text, evidence_ids, header_stripper, source_by_legal_unit),
     }
     status = "pass" if all(part["needs_review"] == 0 for part in results.values()) else "needs_review"
     return {**results, "status": status}

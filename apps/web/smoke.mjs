@@ -156,11 +156,8 @@ async function runEvidenceContractSmoke(browser) {
   await metadataPage.locator('[data-runtime-status="answer_ready"]').waitFor();
   await metadataPage.locator('[data-support-kind="metadata-support"]').waitFor();
   await metadataPage.locator('[data-support-kind="metadata-support"]').getByText("19 Oktober 1999").waitFor();
-  await metadataPage.locator('[data-citation-kind="metadata_source"]').first().waitFor();
-  await metadataPage.locator('[data-citation-footer="true"] button[data-citation-kind="metadata_source"]').first().click();
-  await metadataPage.locator('[data-evidence-panel="normal"]').waitFor();
-  await metadataPage.locator('[data-bbox-highlight="active"]').first().waitFor();
-  await assertHighlightGeometry(metadataPage);
+  assert((await metadataPage.locator('[data-citation-kind="metadata_source"]').count()) === 0, "Metadata rendered as a relevant quotation.");
+  assert((await metadataPage.locator('[data-evidence-panel]').count()) === 0, "Metadata opened the legal evidence panel.");
   await metadataPage.close();
 
   for (const query of ["Aturan Tambahan Pasal I", "Aturan Tambahan Pasal I Perubahan Keempat", "Pasal 1 UUD 1945"]) {
@@ -189,16 +186,7 @@ async function runEvidenceContractSmoke(browser) {
   await relationSupport.getByText(/Pasal 25E.*Pasal 25A/).waitFor();
   await relationSupport.getByText(/Source proof exact/).waitFor();
   await relationSupport.getByText(/target target_local/).waitFor();
-  await articleRelationPage.locator('[data-citation-footer="true"] button').first().click();
-  await articleRelationPage.locator('[data-evidence-panel="normal"]').waitFor();
-  await articleRelationPage.locator('[data-relation-layer="source-proof"]').first().waitFor();
-  await articleRelationPage.locator('[data-relation-layer="target-emphasis"]').first().waitFor();
-  assert(
-    (await articleRelationPage.locator('[data-relation-layer="target-emphasis"]').count()) <=
-      (await articleRelationPage.locator('[data-relation-layer="source-proof"], [data-relation-layer="target-emphasis"]').count()),
-    "Target emphasis is not a source-proof subset.",
-  );
-  await assertHighlightGeometry(articleRelationPage);
+  await expectNoExactCitationUi(articleRelationPage);
   await articleRelationPage.close();
 
   const sourceDocumentPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
@@ -218,11 +206,7 @@ async function runEvidenceContractSmoke(browser) {
   await traceRelationSupport.waitFor();
   await traceRelationSupport.getByText(/Source proof exact/).waitFor();
   await traceRelationSupport.getByText(/target target_local/).waitFor();
-  await traceRelationPage.locator('[data-citation-footer="true"] button').first().click();
-  await traceRelationPage.locator('[data-evidence-panel="normal"]').waitFor();
-  await traceRelationPage.locator('[data-relation-layer="source-proof"]').first().waitFor();
-  await traceRelationPage.locator('[data-relation-layer="target-emphasis"]').first().waitFor();
-  await assertHighlightGeometry(traceRelationPage);
+  await expectNoExactCitationUi(traceRelationPage);
   await traceRelationPage.close();
 
   const insufficientPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
@@ -240,11 +224,12 @@ async function runSmoke() {
 
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: frontendUrl });
   try {
     await page.goto(frontendUrl, { waitUntil: "networkidle" });
     await page.getByText("Tjipto").first().waitFor();
 
-    const composer = page.getByPlaceholder("Tanya UUD 1945...").first();
+    const composer = page.locator("textarea").first();
     await composer.fill("Pasal 1 ayat (3)");
     await page.getByLabel("Send").click();
     await page.getByText("Dukungan sitasi berbasis bukti").waitFor();
@@ -265,6 +250,23 @@ async function runSmoke() {
     await page.waitForFunction(() => !document.body.textContent?.includes("1 / 1"));
     await page.waitForFunction(() => !document.body.textContent?.includes("Hal. 3"));
     await page.locator('[data-evidence-detail-area="normal"]').waitFor();
+    const relevantQuote = page.locator('[data-evidence-detail-area="normal"] blockquote').first();
+    const visibleQuote = await relevantQuote.innerText();
+    assert(!/[*]{1,4}\)/.test(visibleQuote), "Source marker leaked into the visible relevant quotation.");
+    assert(!visibleQuote.includes("Metadata"), "Metadata rendered as a relevant quotation.");
+    await page.getByLabel("Salin kutipan relevan").click();
+    const copiedQuote = await page.evaluate(() => navigator.clipboard.readText());
+    const expectedCopy = await page.evaluate(async () => {
+      const response = await fetch("http://localhost:8000/legal/uud/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "Pasal 1 ayat (3)" }),
+      });
+      const body = await response.json();
+      return body.citations?.[0]?.copy_text ?? "";
+    });
+    assert(copiedQuote === expectedCopy, "Clipboard text differs from the validated DTO copyText.");
+    assert(!copiedQuote.includes("<") && !/[*]{1,4}\)/.test(copiedQuote), "Clipboard contains markup or a source marker.");
     const separatedScroll = await page.evaluate(() => {
       const pdfArea = document.querySelector('[data-evidence-pdf-area="normal"]');
       const detailArea = document.querySelector('[data-evidence-detail-area="normal"]');
@@ -362,7 +364,7 @@ async function runSmoke() {
 
     const mobilePage = await browser.newPage({ viewport: { width: 390, height: 800 } });
     await mobilePage.goto(frontendUrl, { waitUntil: "networkidle" });
-    await mobilePage.getByPlaceholder("Tanya UUD 1945...").fill("Pasal 1 ayat (3)");
+    await mobilePage.locator("textarea").fill("Pasal 1 ayat (3)");
     await mobilePage.getByLabel("Send").click();
     await mobilePage.getByText("Dukungan sitasi berbasis bukti").waitFor();
     await mobilePage.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();
@@ -419,7 +421,7 @@ async function runSmoke() {
       }),
     );
     await fallbackPage.goto(frontendUrl, { waitUntil: "networkidle" });
-    await fallbackPage.getByPlaceholder("Tanya UUD 1945...").fill("Pasal 1 ayat (3)");
+    await fallbackPage.locator("textarea").fill("Pasal 1 ayat (3)");
     await fallbackPage.getByLabel("Send").click();
     await fallbackPage.getByText("Dukungan sitasi berbasis bukti").waitFor();
     await fallbackPage.locator("button", { hasText: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945" }).first().click();

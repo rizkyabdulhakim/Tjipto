@@ -28,10 +28,10 @@ def build_word_bbox_rows(
         for word_index, word in enumerate(page_words):
             x0, y0, x1, y1, text, block_index, line_index, word_no = word
             normalized_text = normalize_text(text)
-            if not compact_text(normalized_text):
+            if not text.strip():
                 continue
             character_rows, character_cursor = _match_word_characters(
-                text, page_characters, character_cursor, source_document_id, page_number, word_index
+                text, page_characters, character_cursor, source_document_id, page_number, word_index, (x0, y0, x1, y1)
             )
             rows.append(
                 {
@@ -86,8 +86,9 @@ def _match_word_characters(
     source_document_id: str,
     page_number: int,
     word_index: int,
+    word_bbox: tuple[float, float, float, float],
 ) -> tuple[list[dict], int]:
-    target = compact_text(text)
+    target = normalize_text(text)
     if not target:
         return [], cursor
     compacted = ""
@@ -97,16 +98,25 @@ def _match_word_characters(
         char = characters[index]
         value = str(char.get("c") or "")
         matched.append(char)
-        compacted = compact_text(compacted + value)
+        compacted = normalize_text(compacted + value)
         index += 1
     if compacted != target:
-        return [], cursor
+        x0, y0, x1, y1 = word_bbox
+        candidates = sorted(
+            (char for char in characters if char.get("bbox") and char["bbox"][0] >= x0 - 0.5 and char["bbox"][2] <= x1 + 0.5 and char["bbox"][1] >= y0 - 0.5 and char["bbox"][3] <= y1 + 0.5),
+            key=lambda char: (char["bbox"][1], char["bbox"][0]),
+        )
+        candidate_text = "".join(str(char.get("c") or "") for char in candidates)
+        if normalize_text(candidate_text) != target:
+            return [], cursor
+        matched = candidates
+        index = cursor
     result = []
     char_index = 0
     char_offset = 0
     for char in matched:
         value = str(char.get("c") or "")
-        if not compact_text(value):
+        if not value.strip():
             continue
         x0, y0, x1, y1 = char.get("bbox", (None, None, None, None))
         if not all(isinstance(item, (int, float)) for item in (x0, y0, x1, y1)):

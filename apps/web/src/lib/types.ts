@@ -25,6 +25,12 @@ export interface Citation {
   paragraph?: string;
   pageNumber: number;
   excerpt: string;
+  supportKind?: string;
+  relevantQuoteEligible?: boolean;
+  displayText?: string;
+  copyText?: string;
+  layoutLines?: string[];
+  viewerTarget?: Record<string, unknown>;
   sourceUrl: string;
   sourceDomain?: string;
   sourceRole?: string;

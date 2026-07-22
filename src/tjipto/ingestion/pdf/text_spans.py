@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from hashlib import sha256
-import re
 import unicodedata
 
 
-NORMALIZATION_CONTRACT = "NFKC;NBSP=SPACE;SOFT_HYPHEN=REMOVE;FOOTNOTE_MARKER=REMOVE;LINE_SEPARATOR=LF"
-FOOTNOTE_MARKER_RE = re.compile(r"\*{1,4}(?:/\*{1,4})?\)")
+NORMALIZATION_CONTRACT = "NFKC;NBSP=SPACE;SOFT_HYPHEN=REMOVE;LINE_SEPARATOR=LF"
+class RawSegmentGeometryError(ValueError):
+    code = "raw_segment_geometry_unavailable"
 
 
 def build_pdf_text_spans(
@@ -17,6 +17,9 @@ def build_pdf_text_spans(
     text_span_id_prefix: str,
     raw_source_spans: list[dict] | None = None,
     word_bboxes: list[dict] | None = None,
+    semantic_normalizer=None,
+    source_segmenter=None,
+    normalization_contract: str = NORMALIZATION_CONTRACT,
 ) -> list[dict]:
     rows: list[dict] = []
     for source_id, pages in sorted(pdf_lines.items()):
@@ -24,7 +27,7 @@ def build_pdf_text_spans(
         source_role = source["source_role"]
         temporal_context = source.get("temporal_context", source_role)
         for page_number, lines in sorted(pages.items()):
-            normalized_lines = [_normalize(line["text"]) for line in lines]
+            normalized_lines = [(semantic_normalizer or _normalize)(line["text"]) for line in lines]
             if raw_source_spans is not None:
                 _append_raw_source_spans(
                     raw_source_spans,
@@ -34,6 +37,7 @@ def build_pdf_text_spans(
                     lines=lines,
                     corpus_id=corpus_id,
                     word_bboxes=word_bboxes or [],
+                    source_segmenter=source_segmenter or _default_source_segmenter,
                 )
             semantic_lines = [text for text in normalized_lines if text]
             stream = "\n".join(semantic_lines)
@@ -63,7 +67,7 @@ def build_pdf_text_spans(
                         "exact_quote": text,
                         "stream_id": stream_id,
                         "page_text_hash": stream_hash,
-                        "normalization_contract": NORMALIZATION_CONTRACT,
+                        "normalization_contract": normalization_contract,
                         "unicode_offset_basis": "python_unicode_code_points",
                         "text_start": start,
                         "text_end": end,
@@ -84,8 +88,7 @@ def build_pdf_text_spans(
 
 def _normalize(value: str) -> str:
     value = unicodedata.normalize("NFKC", value or "").replace("\xa0", " ").replace("\u00ad", "")
-    value = FOOTNOTE_MARKER_RE.sub("", value)
-    return value if not value.startswith("Dihapus.") else value.split("****", 1)[0].strip()
+    return value
 
 
 def normalize_semantic_text(value: str) -> str:
@@ -101,6 +104,7 @@ def _append_raw_source_spans(
     lines: list[dict],
     corpus_id: str,
     word_bboxes: list[dict],
+    source_segmenter,
 ) -> None:
     raw_stream = "\n".join(str(line.get("text") or "") for line in lines)
     raw_hash = sha256(raw_stream.encode("utf-8")).hexdigest()
@@ -110,79 +114,78 @@ def _append_raw_source_spans(
     for line_index, line in enumerate(lines):
         raw_text = str(line.get("text") or "")
         if raw_text:
-            start = cursor
-            end = start + len(raw_text)
-            marker_matches = list(FOOTNOTE_MARKER_RE.finditer(raw_text))
-            rows.append({
-                "raw_source_span_id": f"{corpus_id}::raw_source::{source_id}::{page_number:04d}::{line_index:04d}",
-                "source_document_id": source_id,
-                "source_sha256": source["sha256"],
-                "source_role": source["source_role"],
-                "page_number": page_number,
-                "extraction_order": extraction_order,
-                "raw_text": raw_text,
-                "raw_quote": raw_text,
-                "raw_stream_id": f"{corpus_id}::raw_page_text::{source_id}::{page_number:04d}",
-                "raw_stream_sha256": raw_hash,
-                "raw_text_start": start,
-                "raw_text_end": end,
-                "x0": line["x0"], "y0": line["y0"], "x1": line["x1"], "y1": line["y1"],
-                "classification": "source_text",
-                "legal_text": not marker_matches,
-                "citation_eligible": not marker_matches,
-                "relevant_quote_eligible": not marker_matches,
-                "default_highlight_eligible": not marker_matches,
-                "normalization_actions": [
-                    {"action": "remove_source_annotation_marker", "start": match.start(), "end": match.end(), "quote": match.group(0)}
-                    for match in marker_matches
-                ],
-                "disposition_reason": "semantic_projection" if not marker_matches else "source_annotation_marker_removed",
-            })
-            extraction_order += 1
-            for marker_index, match in enumerate(marker_matches):
-                geometry = _marker_geometry(line, raw_text, match, page_words)
+            segments = source_segmenter(raw_text)
+            for segment_index, segment in enumerate(segments):
+                start, end = segment["start"], segment["end"]
+                if start == end:
+                    continue
+                segment_text = raw_text[start:end]
+                geometry = _segment_geometry(line, raw_text, start, end, page_words, source_id, page_number, line_index)
                 rows.append({
-                    "raw_source_span_id": f"{corpus_id}::raw_marker::{source_id}::{page_number:04d}::{line_index:04d}::{marker_index:02d}",
+                    "raw_source_span_id": f"{corpus_id}::raw::{source_id}::{page_number:04d}::{line_index:04d}::{segment_index:02d}",
                     "source_document_id": source_id,
                     "source_sha256": source["sha256"],
                     "source_role": source["source_role"],
                     "page_number": page_number,
+                    "line_index": line_index,
+                    "segment_order": segment_index,
                     "extraction_order": extraction_order,
-                    "raw_text": match.group(0),
-                    "raw_quote": match.group(0),
+                    "raw_text": segment_text,
+                    "raw_quote": segment_text,
                     "raw_stream_id": f"{corpus_id}::raw_page_text::{source_id}::{page_number:04d}",
                     "raw_stream_sha256": raw_hash,
-                    "raw_text_start": cursor + match.start(),
-                    "raw_text_end": cursor + match.end(),
+                    "raw_text_start": cursor + start,
+                    "raw_text_end": cursor + end,
                     "x0": geometry["x0"], "y0": geometry["y0"], "x1": geometry["x1"], "y1": geometry["y1"],
                     "raw_geometry_method": geometry["method"],
-                    "classification": "source_annotation_marker",
-                    "legal_text": False,
-                    "citation_eligible": False,
-                    "relevant_quote_eligible": False,
-                    "default_highlight_eligible": False,
-                    "normalization_actions": [{"action": "remove_source_annotation_marker", "start": match.start(), "end": match.end(), "quote": match.group(0)}],
-                    "disposition_reason": "source_annotation_marker",
+                    "classification": segment["classification"],
+                    "legal_text": segment["legal_text"],
+                    "citation_eligible": segment["citation_eligible"],
+                    "relevant_quote_eligible": segment["relevant_quote_eligible"],
+                    "default_highlight_eligible": segment["default_highlight_eligible"],
+                    "normalization_actions": segment["normalization_actions"],
+                    "disposition_reason": segment["disposition_reason"],
                 })
                 extraction_order += 1
         cursor += len(raw_text) + (1 if line_index < len(lines) - 1 else 0)
 
 
-def _marker_geometry(line: dict, raw_text: str, match: re.Match[str], page_words: list[dict]) -> dict:
+def _segment_geometry(line: dict, raw_text: str, start: int, end: int, page_words: list[dict], source_id: str, page_number: int, line_index: int) -> dict:
     candidates = []
-    marker_start, marker_end = match.span()
-    for word in page_words:
+    word_cursor = 0
+    line_words = [word for word in page_words if word.get("y1", 0) >= line.get("y0", 0) and word.get("y0", 0) <= line.get("y1", 0) and word.get("x1", 0) >= line.get("x0", 0) and word.get("x0", 0) <= line.get("x1", 0)]
+    exact_words = [word for word in line_words if str(word.get("text") or "").strip() == raw_text[start:end]]
+    if exact_words:
+        word = min(exact_words, key=lambda item: (item.get("x0", 0), item.get("y0", 0)))
+        chars = word.get("characters") or []
+        if chars:
+            return {"x0": min(char["x0"] for char in chars), "y0": min(char["y0"] for char in chars), "x1": max(char["x1"] for char in chars), "y1": max(char["y1"] for char in chars), "method": "pdf_character_bbox"}
+        return {"x0": word["x0"], "y0": word["y0"], "x1": word["x1"], "y1": word["y1"], "method": "pdf_word_bbox"}
+    for word in sorted(line_words, key=lambda item: (item.get("x0", 0), item.get("y0", 0))):
         word_text = str(word.get("text") or "")
-        word_start = raw_text.find(word_text)
-        if word_start < 0 or not (word.get("y1", 0) >= line.get("y0", 0) and word.get("y0", 0) <= line.get("y1", 0)):
+        while word_cursor < len(raw_text) and raw_text[word_cursor].isspace():
+            word_cursor += 1
+        if not raw_text.startswith(word_text, word_cursor):
             continue
-        if word_start >= marker_end or word_start + len(word_text) <= marker_start:
+        word_start = word_cursor
+        word_cursor += len(word_text)
+        if word_start >= end or word_start + len(word_text) <= start:
             continue
         for char in word.get("characters") or []:
             char_start = word_start + int(char.get("char_start", 0))
             char_end = word_start + int(char.get("char_end", 0))
-            if char_start < marker_end and char_end > marker_start:
+            if char_start < end and char_end > start:
                 candidates.append(char)
+        if not word.get("characters") and start <= word_start and word_start + len(word_text) <= end:
+            return {"x0": word["x0"], "y0": word["y0"], "x1": word["x1"], "y1": word["y1"], "method": "pdf_word_bbox"}
     if candidates:
         return {"x0": min(char["x0"] for char in candidates), "y0": min(char["y0"] for char in candidates), "x1": max(char["x1"] for char in candidates), "y1": max(char["y1"] for char in candidates), "method": "pdf_character_bbox"}
-    return {"x0": line["x0"], "y0": line["y0"], "x1": line["x1"], "y1": line["y1"], "method": "source_line_bbox"}
+    raise RawSegmentGeometryError(f"raw_segment:{source_id}:{page_number}:{line_index}:{start}:{end}:{raw_text!r}:{line!r}")
+
+
+def _default_source_segmenter(raw_text: str) -> list[dict]:
+    return [{
+        "start": 0, "end": len(raw_text), "classification": "source_text", "legal_text": True,
+        "citation_eligible": True, "relevant_quote_eligible": True, "default_highlight_eligible": True,
+        "normalization_actions": [], "disposition_reason": "semantic_projection",
+    }]

@@ -1964,7 +1964,7 @@ class RuntimeContractTest(unittest.TestCase):
         }
         for chunk_id in ("uud_chunk_00646", "uud_chunk_00647"):
             self.assertTrue(chunks[chunk_id]["runtime_loadable"])
-            self.assertEqual(chunks[chunk_id]["canonical_use_allowed"], chunk_id == "uud_chunk_00646")
+            self.assertTrue(chunks[chunk_id]["canonical_use_allowed"])
             self.assertIn(chunk_id, retrieval_chunk_ids)
 
     def test_failure_ask_context_pack_has_no_final_payloads(self) -> None:

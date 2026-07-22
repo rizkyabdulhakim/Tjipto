@@ -14,7 +14,7 @@ INSTRUMENT_UNIT_ROLES = {
     "effective_clause_record": "effective_clause",
     "determination_clause_record": "metadata_text",
     "signatory_block_record": "signatory_block",
-    "aturan_tambahan_record": "source_conflict_trace",
+    "aturan_tambahan_record": "structural_heading",
 }
 
 INSTRUMENT_ROLE_CLASSIFICATION = {

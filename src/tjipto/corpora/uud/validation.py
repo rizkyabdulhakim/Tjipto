@@ -341,7 +341,9 @@ def build_validation_report(
         promotion_engine_health=cast(dict, validation_report["promotion_engine_health"]),
         article_relations=article_amendment_relations or (),
     )
-    validation_report["promotion_engine_health"]["promotion_blocked_count"] = validation_report["promotion_decision_audit_health"][
+    promotion_engine_health = cast(dict, validation_report["promotion_engine_health"])
+    promotion_decision_audit_health = cast(dict, validation_report["promotion_decision_audit_health"])
+    promotion_engine_health["promotion_blocked_count"] = promotion_decision_audit_health[
         "blocked_decision_count"
     ]
     validation_report["metadata_exact_promotion_feasibility_health"] = _metadata_exact_promotion_feasibility_health(
@@ -500,7 +502,8 @@ def _validate_schema6_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
         row_id = str(row.get("text_span_id"))
         if row.get("object_role") != "source_span":
             errors.append(f"artifact_field_invalid:page_text_spans:{row_id}:object_role")
-        if row.get("text_start") is not None and row.get("text_end") is not None and row.get("text_start") > row.get("text_end"):
+        start, end = row.get("text_start"), row.get("text_end")
+        if isinstance(start, int) and isinstance(end, int) and start > end:
             errors.append(f"artifact_field_invalid:page_text_spans:{row_id}:text_range")
         for ref in row.get("evidence_ids") or ():
             if ref not in evidence_ids:
@@ -1109,6 +1112,14 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
             "anchor_terms",
             "query_anchor_terms",
             "source_anomaly_kind",
+            "discrepancy_type",
+            "substantive_conflict",
+            "source_sha256",
+            "source_quote",
+            "comparison_source_document_id",
+            "comparison_source_sha256",
+            "comparison_quote",
+            "review_evidence",
             "provenance_summary",
             "final_authority_policy",
         ):
@@ -1118,6 +1129,15 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
             errors.append(f"source_conflict_missing_anchor_terms:{row['source_conflict_id']}")
         if not row.get("query_anchor_terms"):
             errors.append(f"source_conflict_missing_query_anchor_terms:{row['source_conflict_id']}")
+        if row.get("discrepancy_type") not in {
+            "PRINTED_NUMBERING_TYPO",
+            "SOURCE_COPY_SCOPE_OMISSION",
+            "SOURCE_COPY_TEXTUAL_OMISSION",
+            "PRINTED_TYPO",
+        }:
+            errors.append(f"source_conflict_invalid_discrepancy_type:{row['source_conflict_id']}")
+        if not isinstance(row.get("substantive_conflict"), bool):
+            errors.append(f"source_conflict_invalid_substantive_conflict:{row['source_conflict_id']}")
         if row.get("source_anomaly_kind") not in {"renumbering_provenance", "source_marker_sequence_anomaly"}:
             errors.append(f"source_conflict_invalid_source_anomaly_kind:{row['source_conflict_id']}")
         if (
@@ -1249,7 +1269,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
                 for box in boxes
             ):
                 errors.append(f"signatory_grounding_cross_source:{row['metadata_grounding_id']}")
-            elif _source_quote_normalize(" ".join(str(box.get("text") or "") for box in boxes)) != quote:
+            elif _source_quote_normalize(" ".join(str((box or {}).get("text") or "") for box in boxes)) != quote:
                 errors.append(f"signatory_grounding_geometry_mismatch:{row['metadata_grounding_id']}")
     for row in metadata_grounding_registry:
         ref_id = row.get("metadata_grounding_ref_id")
@@ -1710,8 +1730,8 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
         if sha256(stream.encode("utf-8")).hexdigest() != str(stream_rows[0].get("raw_stream_sha256")):
             errors.append(f"invalid_selector:{stream_id}:raw_stream_hash")
         for row in stream_rows:
-            start, end, quote = row.get("raw_text_start"), row.get("raw_text_end"), row.get("raw_quote")
-            if not isinstance(start, int) or not isinstance(end, int) or not isinstance(quote, str) or stream[start:end] != quote:
+            raw_start, raw_end, quote = row.get("raw_text_start"), row.get("raw_text_end"), row.get("raw_quote")
+            if not isinstance(raw_start, int) or not isinstance(raw_end, int) or not isinstance(quote, str) or stream[raw_start:raw_end] != quote:
                 errors.append(f"invalid_selector:{row.get('raw_source_span_id')}:raw_offset")
             if row.get("classification") == "source_annotation_marker" and any(row.get(field) is not False for field in ("legal_text", "citation_eligible", "relevant_quote_eligible", "default_highlight_eligible")):
                 errors.append(f"owner_field_violation:raw_source_spans:{row.get('raw_source_span_id')}:marker_policy")
@@ -1773,12 +1793,12 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
             errors.append(f"invalid_selector:{stream_id}:stream_hash")
 
     for row in spans:
-        start, end, quote = row.get("text_start"), row.get("text_end"), row.get("exact_quote")
-        if not isinstance(start, int) or not isinstance(end, int) or not isinstance(quote, str) or end < start or end - start != len(quote):
+        selector_start, selector_end, quote = row.get("text_start"), row.get("text_end"), row.get("exact_quote")
+        if not isinstance(selector_start, int) or not isinstance(selector_end, int) or not isinstance(quote, str) or selector_end < selector_start or selector_end - selector_start != len(quote):
             errors.append(f"invalid_selector:{row.get('text_span_id')}")
         if quote != row.get("text"):
             errors.append(f"invalid_selector:{row.get('text_span_id')}:quote")
-        if isinstance(start, int) and isinstance(end, int) and stream_values.get(str(row.get("stream_id")), "")[start:end] != quote:
+        if isinstance(selector_start, int) and isinstance(selector_end, int) and stream_values.get(str(row.get("stream_id")), "")[selector_start:selector_end] != quote:
             errors.append(f"invalid_selector:{row.get('text_span_id')}:offset")
         if row.get("semantic_classification") == "normative_constitutional_text" and row.get("linked_authority") == "rejected":
             errors.append(f"owner_field_violation:page_text_spans:{row.get('text_span_id')}:linked_authority")
@@ -1790,7 +1810,7 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
                 errors.append(f"invalid_reference:page_text_spans:{row.get('text_span_id')}:span_bbox_ids")
 
     for row in evidence:
-        row_id = row.get("evidence_id")
+        row_id = str(row.get("evidence_id") or "")
         if row.get("legal_unit_id") is None or row.get("source_document_id") not in source_ids:
             errors.append(f"invalid_reference:evidence_registry:{row_id}")
         source = sources_by_id.get(row.get("source_document_id"))
@@ -1868,7 +1888,7 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
                     errors.append(f"article_relation_new_range_text_mismatch:{relation_id}")
 
     for row in rows("graph_edges"):
-        relation_id = row.get("relation_id") or row.get("article_relation_ref")
+        relation_id = str(row.get("relation_id") or row.get("article_relation_ref") or "")
         relation = relations_by_id.get(relation_id)
         if row.get("edge_type") in {"RENAMES", "RENUMBERED_TO"} and relation is not None:
             if row.get("source_id") != f"legal_unit::{relation.get('source_legal_unit_id')}":
@@ -1904,7 +1924,7 @@ def _aggregate_evidence_errors(
             if not parent.get("aggregate_failure_reason") and not chunks_by_unit.get(parent_id, {}).get("aggregate_failure_reason"):
                 errors.append(f"aggregate_missing_failure_reason:{parent_id}")
             continue
-        expected_span_ids = _ordered_aggregate_span_ids(parent, descendants, spans_by_id)
+        expected_span_ids = _ordered_aggregate_span_ids(parent, descendants, {str(key): value for key, value in spans_by_id.items() if key is not None})
         actual_span_ids = list(aggregate.get("text_span_ids") or ())
         if len(actual_span_ids) != len(set(actual_span_ids)) or actual_span_ids != expected_span_ids:
             errors.append(f"aggregate_text_span_sequence_incomplete:{aggregate.get('evidence_id')}")
@@ -1949,7 +1969,9 @@ def _all_descendants(parent_id: str | None, descendants_by_parent: dict[str, lis
     while pending:
         child = pending.pop(0)
         descendants.append(child)
-        pending.extend(descendants_by_parent.get(child.get("legal_unit_id"), ()))
+        child_id = child.get("legal_unit_id")
+        if child_id is not None:
+            pending.extend(descendants_by_parent.get(str(child_id), ()))
     return descendants
 
 

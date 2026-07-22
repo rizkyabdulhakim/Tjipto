@@ -4,6 +4,7 @@ from pathlib import Path
 
 from tjipto.ingestion.pdf.pages import build_pdf_pages
 from tjipto.corpora.uud.specs import PAGE_ID_PREFIXES, PAGE_SOURCE_ORDER
+from tjipto.corpora.uud.source_policy import normalize_semantic_text
 
 
 def build_pages(repo_root: Path, source_documents: dict[str, dict]) -> list[dict]:
@@ -14,4 +15,5 @@ def build_pages(repo_root: Path, source_documents: dict[str, dict]) -> list[dict
         page_id_prefixes=PAGE_ID_PREFIXES,
         corpus_id="uud",
         status="finalized_text_boundary",
+        semantic_normalizer=normalize_semantic_text,
     )

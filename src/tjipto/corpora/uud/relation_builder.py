@@ -405,7 +405,7 @@ def _recover_target_character_bbox_refs(
                 if (
                     character_offsets[start] in target_offsets
                     and
-                    (not next_text.isalnum() or next_character.get("word_bbox_id") != matched[-1].get("word_bbox_id"))
+                    (not next_text.isalnum() or (next_character or {}).get("word_bbox_id") != matched[-1].get("word_bbox_id"))
                     and len({item.get("page_number") for item in matched}) == 1
                     and all(item.get("source_document_id") == source_document_id for item in matched)
                     and _compact("".join(str(item.get("text") or "") for item in matched)) == target

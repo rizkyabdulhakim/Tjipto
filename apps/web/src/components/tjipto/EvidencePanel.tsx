@@ -164,18 +164,14 @@ function EvidenceContent({
     };
   }, [citation.documentId, citation.viewerMode, citation.relationId]);
 
-  const copyExcerpt = () => {
+  const copyExcerpt = async () => {
+    const text = citation.copyText ?? citation.excerpt;
     try {
-      const textArea = document.createElement("textarea");
-      textArea.value = citation.excerpt;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textArea);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch (err) {
-      console.error("Fallback copy failed", err);
+    } catch {
+      setCopied(false);
     }
   };
 
@@ -342,6 +338,8 @@ function EvidenceContent({
                 Kutipan Relevan
               </h3>
               <button
+                type="button"
+                aria-label="Salin kutipan relevan"
                 onClick={copyExcerpt}
                 className={`flex items-center gap-1.5 h-7 px-3 rounded-lg transition-all active:scale-95 ${copied ? "bg-[var(--tj-success)]/10 text-[var(--tj-success)]" : "bg-[var(--tj-surface)] text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface-hover)]"}`}
                 style={{ fontSize: 12, fontWeight: 600 }}
@@ -350,6 +348,7 @@ function EvidenceContent({
                 {copied ? "Tersalin" : "Salin"}
               </button>
             </div>
+            <p className="sr-only" aria-live="polite">{copied ? "Kutipan relevan tersalin sebagai teks biasa." : ""}</p>
             <div className="rounded-2xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] p-5 shadow-sm relative overflow-hidden group">
               <div className="absolute top-0 left-0 w-1 h-full bg-[var(--tj-accent)] opacity-80" />
               <blockquote
@@ -360,7 +359,7 @@ function EvidenceContent({
                   fontStyle: "italic",
                 }}
               >
-                "{citation.excerpt}"
+                {(citation.layoutLines ?? [citation.displayText ?? citation.excerpt]).join("\n")}
               </blockquote>
             </div>
           </section>

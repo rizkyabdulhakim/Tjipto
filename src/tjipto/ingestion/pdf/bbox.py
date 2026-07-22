@@ -113,14 +113,11 @@ def pdf_lines(doc) -> dict[int, list[dict]]:
     for page_number in range(1, doc.page_count + 1):
         page = doc[page_number - 1]
         entries = []
-        for block in page.get_text("dict").get("blocks", []):
+        for block_index, block in enumerate(page.get_text("dict").get("blocks", [])):
             if block.get("type") != 0:
                 continue
-            for line in block.get("lines", []):
+            for line_index, line in enumerate(block.get("lines", [])):
                 text = "".join(span.get("text", "") for span in line.get("spans", [])).strip()
-                text = text.replace("\u00ad", "")
-                if re.match(r"^Dihapus\.\s*\*+\)$", text):
-                    text = "Dihapus."
                 if not text:
                     continue
                 if not text:
@@ -129,7 +126,7 @@ def pdf_lines(doc) -> dict[int, list[dict]]:
                 y0 = min(span["bbox"][1] for span in line.get("spans", []))
                 x1 = max(span["bbox"][2] for span in line.get("spans", []))
                 y1 = max(span["bbox"][3] for span in line.get("spans", []))
-                entries.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "width": page.rect.width, "height": page.rect.height})
+                entries.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "width": page.rect.width, "height": page.rect.height, "block_index": block_index, "line_index": line_index})
         pages[page_number] = entries
     return pages
 

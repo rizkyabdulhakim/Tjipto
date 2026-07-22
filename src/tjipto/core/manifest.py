@@ -40,6 +40,11 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def artifact_set_digest(manifest: dict) -> str:
+    rows = [(name, row.get("sha256"), row.get("bytes")) for name, row in sorted(manifest["files"].items())]
+    return hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 def verified_file_bytes(path: Path, record: dict) -> tuple[bytes | None, str | None]:
     try:
         data = path.read_bytes()

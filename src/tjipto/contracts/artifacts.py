@@ -310,7 +310,7 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "word_bbox_match_method", "x0", "x1", "y0", "y1",
     }),
     "raw_source_spans": frozenset({
-        "raw_source_span_id", "source_document_id", "source_sha256", "source_role", "page_number", "extraction_order",
+        "raw_source_span_id", "source_document_id", "source_sha256", "source_role", "page_number", "line_index", "segment_order", "extraction_order",
         "raw_text", "raw_quote", "raw_stream_id", "raw_stream_sha256", "raw_text_start", "raw_text_end",
         "x0", "y0", "x1", "y1", "classification", "legal_text", "citation_eligible", "relevant_quote_eligible",
         "default_highlight_eligible", "normalization_actions", "disposition_reason", "raw_geometry_method",
@@ -371,7 +371,7 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "provenance_bbox_status", "provenance_exception_category", "provenance_highlight_scope", "provenance_review_status", "provenance_summary",
         "query_anchor_terms", "query_exclusion_terms", "query_required_terms", "raw_provenance_bbox_ids", "raw_provenance_text_span_ids", "recovery_capability",
         "recovery_status", "resolution_decision", "runtime_loadable", "source_anomaly_kind", "source_anomaly_policy", "source_conflict_id",
-        "source_document_id", "source_mapping_kind", "status", "target_precision", "text_span_ids", "type", "validation_status",
+        "source_document_id", "source_mapping_kind", "status", "target_precision", "text_span_ids", "type", "validation_status", "failure_reason", "recovery_failure_code", "source_sha256", "source_quote", "comparison_source_document_id", "comparison_source_sha256", "comparison_quote", "review_evidence",
     }),
     "source_documents": frozenset({
         "content_fingerprint", "corpus_id", "download_url", "file_size", "file_size_match", "filename", "final_download_url", "http_content_type",
@@ -387,3 +387,7 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
     "validation_exception_review_labels": frozenset({"chunk_id", "corpus_id", "exception_review_id", "primary_exception_review_label", "review_decision", "runtime_loadable", "secondary_review_flags", "source_document_id", "source_exception_id"}),
     "word_bboxes": frozenset({"bbox_source", "block_index", "characters", "coordinate_origin", "coordinate_space", "corpus_id", "extractor", "extractor_version", "line_index", "normalized_text", "page_box_basis", "page_height", "page_number", "page_rotation", "page_width", "source_document_id", "source_pdf", "source_pdf_path", "source_sha256", "text", "transform_version", "word_bbox_id", "word_index", "word_no", "x0", "x1", "y0", "y1"}),
 }
+
+_CONSTITUTIONAL_SEMANTIC_FIELDS = frozenset({"provision_kind", "anomaly", "source_conflict", "citation_eligible", "viewer_eligible", "relevant_quote_eligible"})
+for _artifact_name in ("page_text_spans", "legal_units", "chunks", "evidence_registry", "retrieval_units", "graph_nodes", "graph_edges"):
+    ARTIFACT_ALLOWED_FIELDS[_artifact_name] |= _CONSTITUTIONAL_SEMANTIC_FIELDS

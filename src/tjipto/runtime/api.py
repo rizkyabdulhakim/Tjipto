@@ -316,6 +316,12 @@ def _public_citation(row: dict) -> dict:
         "bbox_count": row.get("bbox_count"),
         "viewer_ref": _public_viewer_ref(row.get("viewer_ref") or {}),
         "evidence_status": row.get("evidence_status"),
+        "support_kind": row.get("support_kind"),
+        "relevant_quote_eligible": row.get("relevant_quote_eligible") is True,
+        "display_text": row.get("display_text") or row.get("quoted_text") or "",
+        "copy_text": row.get("copy_text") or row.get("quoted_text") or "",
+        "layout_lines": row.get("layout_lines") or tuple(str(row.get("quoted_text") or "").splitlines()),
+        "viewer_target": row.get("viewer_target") or row.get("viewer_ref") or {},
     }
     if row.get("legal_relation"):
         public["legal_relation"] = _public_legal_relation(row["legal_relation"])

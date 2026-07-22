@@ -76,7 +76,7 @@ test("metadata and trace support are not mapped as exact citations", () => {
   assert.deepEqual(citations, []);
 });
 
-test("exact metadata provenance is mapped as non-final metadata source", () => {
+test("metadata provenance is not mapped as a relevant legal quotation", () => {
   const citations = mapAskResponseToCitations({
     status: "answer_ready",
     route: "metadata_fact",
@@ -102,11 +102,7 @@ test("exact metadata provenance is mapped as non-final metadata source", () => {
     ],
   });
 
-  assert.equal(citations.length, 1);
-  assert.equal(citations[0].authorityKind, "metadata_source");
-  assert.equal(citations[0].authorityLabel, "Metadata sumber");
-  assert.equal(citations[0].citationFinal, false);
-  assert.equal(citations[0].sourceUrl, "https://peraturan.bpk.go.id/Details/101646/uud-no--");
+  assert.deepEqual(citations, []);
 });
 
 test("relation citation preserves viewer source identity and proof layers", () => {
@@ -115,6 +111,9 @@ test("relation citation preserves viewer source identity and proof layers", () =
     citations: [{
       evidence_id: "evidence_rename",
       quoted_text: "Pasal 25E menjadi Pasal 25A",
+      support_kind: "legal_unit",
+      relevant_quote_eligible: true,
+      authority_kind: "legal_citation",
       citation_final: false,
       page_numbers: [1],
     }],
@@ -155,7 +154,7 @@ test("insufficient evidence without answer still falls back safely", () => {
   );
 });
 
-test("source-conflict exact provenance citations are labeled as audit provenance", () => {
+test("source-conflict provenance is not mapped as a relevant legal quotation", () => {
   const citations = mapAskResponseToCitations({
     status: "limited_answer",
     route: "source_anomaly_explanation",
@@ -180,9 +179,7 @@ test("source-conflict exact provenance citations are labeled as audit provenance
     ],
   });
 
-  assert.equal(citations.length, 1);
-  assert.equal(citations[0].authorityKind, "source_conflict_provenance");
-  assert.equal(citations[0].authorityLabel, "Jejak audit sumber");
+  assert.deepEqual(citations, []);
 });
 
 test("non-resolvable provenance citations are not mapped as clickable citations", () => {
@@ -209,7 +206,7 @@ test("non-resolvable provenance citations are not mapped as clickable citations"
   assert.deepEqual(citations, []);
 });
 
-test("exact source anomaly provenance stays non-final but clickable when viewer refs resolve", () => {
+test("source anomaly provenance stays outside relevant quotations", () => {
   const citations = mapAskResponseToCitations({
     status: "limited_answer",
     route: "source_anomaly_explanation",
@@ -233,10 +230,7 @@ test("exact source anomaly provenance stays non-final but clickable when viewer 
     ],
   });
 
-  assert.equal(citations.length, 1);
-  assert.equal(citations[0].authorityKind, "source_anomaly");
-  assert.equal(citations[0].authorityLabel, "Source anomaly");
-  assert.equal(citations[0].citationFinal, false);
+  assert.deepEqual(citations, []);
 });
 
 test("article relation support preserves source proof and target precision wording", () => {

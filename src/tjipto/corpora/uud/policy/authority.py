@@ -107,7 +107,6 @@ def apply_authority_contract(
             units_by_id.get(row.get("legal_unit_id"), {})
         ) == "structural_heading"
         historical_anomaly = bool(units_by_id.get(row.get("legal_unit_id"), {}).get("exclusion_ref"))
-        historical_pasali = row.get("hierarchy") == ["ATURAN TAMBAHAN", "Pasal I"] and row.get("source_role") == "amendment_4_historical"
         instrument_trace = units_by_id.get(row.get("legal_unit_id"), {}).get("unit_type") in {
             "amendment_recital_record",
             "amendment_scope_record",
@@ -125,11 +124,9 @@ def apply_authority_contract(
                 if historical_anomaly
                 else ("instrument_provenance" if instrument_trace else ("normative_legal_text" if exact else "page_only")),
                 exact and not structural_provenance and not instrument_trace and not historical_anomaly,
-                exact and not historical_pasali and not structural_provenance and not instrument_trace and not historical_anomaly,
+                exact and not structural_provenance and not instrument_trace and not historical_anomaly,
                 "historical_source_anomaly_not_final"
                 if historical_anomaly
-                else "historical_exact_nonfinal"
-                if historical_pasali
                 else "structural_source_provenance_not_final"
                 if structural_provenance
                 else "instrument_trace_only_not_public_citation"
@@ -271,6 +268,47 @@ def apply_authority_contract(
             "evidence_exists",
         ):
             row.pop(field, None)
+    _apply_constitutional_semantics(spans, evidence, units, chunks, nodes)
+
+
+def apply_retrieval_semantics(retrieval_units: list[dict], evidence: list[dict]) -> None:
+    eligible = {row.get("evidence_id") for row in evidence if _aturan_tambahan(row)}
+    for row in retrieval_units:
+        if row.get("evidence_id") in eligible:
+            row.update(_constitutional_fields())
+
+
+def _apply_constitutional_semantics(spans, evidence, units, chunks, nodes) -> None:
+    unit_ids = {row.get("legal_unit_id") for row in (*units, *chunks, *evidence) if _aturan_tambahan(row)}
+    evidence_ids = {row.get("evidence_id") for row in evidence if _aturan_tambahan(row)}
+    for row in (*units, *chunks):
+        if _aturan_tambahan(row):
+            row.update(_constitutional_fields())
+    for row in evidence:
+        if _aturan_tambahan(row):
+            row.update(_constitutional_fields())
+    for row in spans:
+        if row.get("promotion_target_id") in unit_ids:
+            row.update(_constitutional_fields())
+    for row in nodes:
+        if row.get("legal_unit_id") in unit_ids or row.get("evidence_id") in evidence_ids:
+            row.update(_constitutional_fields())
+
+
+def _aturan_tambahan(row: dict) -> bool:
+    hierarchy = row.get("hierarchy") or []
+    return hierarchy[:1] == ["ATURAN TAMBAHAN"] and any(label in {"Pasal I", "Pasal II"} for label in hierarchy)
+
+
+def _constitutional_fields() -> dict:
+    return {
+        "provision_kind": "normative_constitutional_text",
+        "anomaly": False,
+        "source_conflict": False,
+        "citation_eligible": True,
+        "viewer_eligible": True,
+        "relevant_quote_eligible": True,
+    }
 
 
 def _decision(

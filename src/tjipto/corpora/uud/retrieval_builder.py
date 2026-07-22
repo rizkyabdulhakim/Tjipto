@@ -26,8 +26,23 @@ def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict
             "temporal_context": row["temporal_context"],
             "text": _retrieval_unit_text(row),
         }
+        | _constitutional_retrieval_fields(row)
         for row in sorted(evidence, key=lambda item: item["evidence_id"])
     ]
+
+
+def _constitutional_retrieval_fields(row: dict) -> dict:
+    hierarchy = row.get("hierarchy") or ()
+    if hierarchy[:1] != ["ATURAN TAMBAHAN"] or not any(label in {"Pasal I", "Pasal II"} for label in hierarchy):
+        return {}
+    return {
+        "provision_kind": "normative_constitutional_text",
+        "anomaly": False,
+        "source_conflict": False,
+        "citation_eligible": True,
+        "viewer_eligible": True,
+        "relevant_quote_eligible": True,
+    }
 
 
 def _retrieval_answerability(evidence: dict, chunk: dict) -> dict:

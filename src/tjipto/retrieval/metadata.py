@@ -148,7 +148,7 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
         if requires_penetapan and row.get("field_statuses", {}).get("penetapan") != "grounded":
             continue
         selected_signatories = _matching_signatories(store, query, row)
-        selected_field = "signatories" if selected_signatories else field
+        selected_field = "signatories" if selected_signatories else (field or "")
         if row.get("field_statuses", {}).get(selected_field) != "grounded":
             continue
         refs = tuple(row.get("grounded_fields", {}).get(selected_field) or ())
@@ -158,7 +158,8 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
         grounding = _signatory_grounding(grounding_by_id, refs, signatory) if signatory else grounding_by_id.get(refs[0])
         if grounding is None:
             continue
-        result = _metadata_result(store, row, grounding, selected_field, value=signatory.get("name_text") if signatory else None)
+        value = str(signatory.get("name_text") or "") if signatory else None
+        result = _metadata_result(store, row, grounding, selected_field, value=value)
         if result:
             rows.append(result)
     return tuple(rows[:limit])

@@ -98,25 +98,25 @@ def append_amendment_instrument_units(
             hierarchy=["Perubahan Keempat Scope", clause],
             parent_legal_unit_ids=[scope_unit_id],
         )
-    aturan_text = slice_between(page5 + "\n" + page6, "ATURAN TAMBAHAN", "Perubahan tersebut diputuskan").strip()
+    # The division owns only its heading.  Normative text belongs to Pasal I/II
+    # children so a printed-number discrepancy cannot taint their semantics.
+    aturan_text = "ATURAN TAMBAHAN"
     aturan_page5_text = page5[page5.index("ATURAN TAMBAHAN") :]
     pasal_i_text = aturan_page5_text[aturan_page5_text.index("Pasal I") :].strip()
     pasal_iii_text = slice_between(page6, "Pasal III", "Perubahan tersebut diputuskan").strip()
-    anomaly_ref = "source_typo_reference::uud_source_typo_reference_00001"
+    pasal_iii_text = "\n".join(pasal_iii_text.splitlines()[1:]).strip()
     aturan_unit_id = append_instrument_unit(
         source_id,
         "aturan_tambahan_record",
-        "ATURAN TAMBAHAN source typo reference",
+        "ATURAN TAMBAHAN",
         aturan_text,
         5,
         6,
         hierarchy=["ATURAN TAMBAHAN"],
         chunk_type="aturan_section_context_record",
-        canonical_use_allowed=False,
-        chunk_status="inactive_source_typo_reference",
-        runtime_loadable=False,
-        exclusion_ref=anomaly_ref,
-        build_evidence=False,
+        canonical_use_allowed=True,
+        chunk_status="active_historical_record",
+        runtime_loadable=True,
     )
     append_instrument_unit(
         source_id,
@@ -135,16 +135,15 @@ def append_amendment_instrument_units(
     append_instrument_unit(
         source_id,
         "pasal_record",
-        "Pasal III",
+        "Pasal II",
         pasal_iii_text,
         6,
         6,
-        hierarchy=["ATURAN TAMBAHAN", "Pasal III"],
+        hierarchy=["ATURAN TAMBAHAN", "Pasal II"],
         parent_legal_unit_ids=[aturan_unit_id],
         chunk_type="pasal_chunk_record",
-        canonical_use_allowed=False,
+        canonical_use_allowed=True,
         chunk_status="active_historical_record",
-        exclusion_ref=anomaly_ref,
     )
     decision, effective = split_effective_clause(slice_between(page6, "Perubahan tersebut diputuskan", "Ditetapkan di Jakarta").strip())
     determination = slice_between(page6, "Ditetapkan di Jakarta", "MAJELIS PERMUSYAWARATAN RAKYAT").strip()

@@ -152,12 +152,12 @@ def _release_sidecar(repo_root: Path, archive_path: Path, result: dict) -> dict:
         files = {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist() if not name.endswith("/")}
         manifest_bytes = archive.read("data/final/uud/manifest.json")
     manifest = json.loads(manifest_bytes)
-    artifact_files = manifest.get("files", {})
-    artifact_set = json.dumps(sorted((name, item["sha256"]) for name, item in artifact_files.items()), separators=(",", ":"))
+    sys.path.insert(0, str(repo_root / "src"))
+    from tjipto.core.manifest import artifact_set_digest
     return {
         "archive_byte_representation": "git archive ZIP entry bytes",
         "archive_sha256": result["archive_sha256"],
-        "artifact_set_digest": hashlib.sha256(artifact_set.encode()).hexdigest(),
+        "artifact_set_digest": artifact_set_digest(manifest),
         "candidate_checks": result["candidate_checks"],
         "commit_sha": result["commit_sha"],
         "contract": {key: manifest[key] for key in ("contract_id", "contract_version", "contract_fingerprint")},

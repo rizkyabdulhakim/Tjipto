@@ -91,7 +91,7 @@ class LegalRuntimeService:
         except CorpusIntegrityError as error:
             self._integrity_error = error.code
             return None
-        store = EvidenceStore(config)
+        store = EvidenceStore.shared(config)
         self._store_cache[corpus_id] = store
         return store
 
@@ -547,6 +547,7 @@ class LegalRuntimeService:
             else "answer_ready"
         )
         metadata_support = tuple(_metadata_support(store, row) for row in evidence if row.get("metadata_field"))
+        citations: tuple[dict, ...]
         if metadata_support:
             citations = ()
             viewer_refs = ()
@@ -657,6 +658,8 @@ def _metadata_scope_clarification(store, routed: dict) -> dict | None:
 
 
 def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> dict:
+    owner = store.get(row.get("evidence_id")) if store is not None and row.get("evidence_id") else None
+    source_row = {**(owner or {}), **row}
     authority_kind = _authority_kind(store, row, can_resolve=can_resolve, conflict=conflict)
     conflict_row = conflict or _source_conflict_by_evidence(store, row.get("evidence_id"))
     non_final_conflict = conflict_row is not None or row.get("source_conflict_id")
@@ -675,12 +678,21 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
             "instrument_provenance": "Instrument provenance",
         }[authority_kind],
         "citation_final": citation_final,
-        "support_kind": _support_kind_for_authority(authority_kind),
         "source_url": row.get("source_url") or _source_url(store, row),
+        "support_kind": "legal_unit" if source_row.get("evidence_owner_kind") == "legal_unit_source" and authority_kind == "legal_citation" else row.get("support_kind") or _support_kind_for_authority(authority_kind),
+        "relevant_quote_eligible": source_row.get("relevant_quote_eligible") is True and authority_kind == "legal_citation",
+        "display_text": row.get("display_text") or row.get("quoted_text") or "",
+        "copy_text": _copy_text(row.get("copy_text") or row.get("quoted_text") or ""),
+        "layout_lines": tuple(str(row.get("layout_lines") or row.get("quoted_text") or "").splitlines()),
+        "viewer_target": row.get("viewer_ref") or {},
     }
     if conflict_row is not None or row.get("source_conflict_id"):
         payload |= _source_conflict_taxonomy_fields(conflict_row or row)
     return payload
+
+
+def _copy_text(value: str) -> str:
+    return "\n".join(line.lstrip(" \t") for line in str(value).replace("\r\n", "\n").replace("\r", "\n").split("\n")).strip()
 
 
 def _support_kind_for_authority(authority_kind: str) -> str:
@@ -1741,7 +1753,7 @@ def _is_source_anomaly_query(store, query: str) -> bool:
     unresolved_terms = tuple(str(term).casefold() for term in intent.get("unresolved_query_terms") or ())
     if any(_query_contains_term(folded, term) for term in unresolved_terms):
         return True
-    return any(_source_conflict_match_score(store, row, folded, intent) > 0 for row in store.source_conflicts)
+    return False
 
 
 def _source_anomaly_fallback() -> dict:

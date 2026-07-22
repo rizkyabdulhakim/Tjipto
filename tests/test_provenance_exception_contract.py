@@ -29,7 +29,7 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         self.report = read_json(FINAL / "validation_report.json")
 
     def test_needs_review_records_are_classified(self) -> None:
-        for row_id in ("00623", "00634", "00645", "00647", "00648"):
+        for row_id in ("00623", "00634", "00648"):
             unit = self.units[f"uud_legal_unit_{row_id}"]
             chunk = self.chunks[f"uud_chunk_{row_id}"]
             self.assertIn("provenance_exception_category", unit)
@@ -52,11 +52,11 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         for row_id in ("00645", "00647"):
             unit = self.units[f"uud_legal_unit_{row_id}"]
             chunk = self.chunks[f"uud_chunk_{row_id}"]
-            self.assertFalse(unit["canonical_use_allowed"])
-            self.assertFalse(chunk["canonical_use_allowed"])
+            self.assertTrue(unit["canonical_use_allowed"])
+            self.assertTrue(chunk["canonical_use_allowed"])
+            self.assertTrue(unit["runtime_loadable"])
         self.assertTrue(self.units["uud_legal_unit_00646"]["canonical_use_allowed"])
         self.assertTrue(self.chunks["uud_chunk_00646"]["canonical_use_allowed"])
-        self.assertFalse(self.units["uud_legal_unit_00645"]["runtime_loadable"])
         for row_id in ("00646", "00647"):
             unit = self.units[f"uud_legal_unit_{row_id}"]
             chunk = self.chunks[f"uud_chunk_{row_id}"]
@@ -66,10 +66,7 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
             self.assertTrue(unit["text_span_ids"])
             self.assertTrue(chunk["evidence_ids"])
             self.assertTrue(chunk["text_span_ids"])
-        self.assertEqual(
-            self.units["uud_legal_unit_00645"]["provenance_exception_category"],
-            ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
-        )
+        self.assertNotIn("provenance_exception_category", self.units["uud_legal_unit_00645"])
 
     def test_00646_does_not_have_misleading_aturan_tambahan_label(self) -> None:
         text = self.units["uud_legal_unit_00646"]["text"]
@@ -78,18 +75,15 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         self.assertNotIn("provenance_exception_category", unit)
         self.assertTrue(unit["runtime_loadable"])
         self.assertEqual(evidence["authority_kind"], "normative_legal_text")
-        self.assertFalse(evidence["citation_final"])
+        self.assertTrue(evidence["citation_final"])
         self.assertTrue(evidence["viewer_highlightable"])
         self.assertIn("Majelis Permusyawaratan Rakyat", text)
         self.assertNotIn("Segala peraturan perundangundangan", text)
 
     def test_00647_does_not_duplicate_heading(self) -> None:
         text = self.units["uud_legal_unit_00647"]["text"]
-        self.assertEqual(
-            self.units["uud_legal_unit_00647"]["provenance_exception_category"],
-            ACCEPTED_NONCANONICAL_SOURCE_CONFLICT_TRACE_ONLY,
-        )
-        self.assertEqual([line.strip() for line in text.splitlines()].count("Pasal III"), 1)
+        self.assertNotIn("provenance_exception_category", self.units["uud_legal_unit_00647"])
+        self.assertNotIn("Pasal III", text)
 
     def test_previously_excluded_records_are_admitted_from_exact_grounding(self) -> None:
         evidence = read_jsonl(FINAL / "evidence_registry.jsonl")
@@ -105,7 +99,7 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
     def test_validation_report_has_provenance_exception_health(self) -> None:
         health = self.report["provenance_exception_health"]
         self.assertEqual(health["accepted_false_positive_segmentation_punctuation_count"], 12)
-        self.assertGreaterEqual(health["accepted_noncanonical_source_conflict_trace_only_count"], 3)
+        self.assertEqual(health["accepted_noncanonical_source_conflict_trace_only_count"], 1)
         self.assertLessEqual(health["builder_slicing_label_issue_confirmed_count"], 2)
         self.assertLessEqual(health["duplicated_heading_artifact_issue_confirmed_count"], 2)
 
@@ -124,7 +118,7 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         self.assertEqual(health["invalid_source_mapping_kind_count"], 0)
         self.assertEqual(health["invalid_provenance_exception_category_count"], 0)
         self.assertEqual(health["invalid_provenance_review_status_count"], 0)
-        self.assertEqual(health["final_evidence_available_count"], 1)
+        self.assertEqual(health["final_evidence_available_count"], 0)
         self.assertEqual(health["raw_provenance_exact_available_count"], 1)
         self.assertEqual(health["raw_provenance_partial_available_count"], 0)
         self.assertEqual(health["raw_provenance_unavailable_count"], 0)
