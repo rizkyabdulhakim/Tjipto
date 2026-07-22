@@ -130,6 +130,7 @@ function EvidenceContent({
   onTogglePdfOnly: () => void;
 }) {
   const documentMode = citation.viewerMode === "document";
+  const isLegalExcerpt = citation.supportKind === "legal_unit" && citation.relevantQuoteEligible === true;
   const [zoom, setZoom] = useState(100);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -332,7 +333,7 @@ function EvidenceContent({
 
         {!pdfOnly && !documentMode && <div className="flex-1 min-h-0 overflow-y-auto tj-scroll px-6 py-6" data-evidence-detail-area="normal">
           {/* EXCERPT CARD */}
-          <section className="mb-6">
+          {isLegalExcerpt && <section className="mb-6">
             <div className="flex items-center justify-between mb-3 px-1">
               <h3
                 className="uppercase"
@@ -379,7 +380,7 @@ function EvidenceContent({
                 ))}
               </blockquote>
             </div>
-          </section>
+          </section>}
 
           {/* DETAILS */}
           <section className="mb-6">
