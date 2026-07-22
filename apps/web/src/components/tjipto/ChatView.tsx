@@ -278,6 +278,8 @@ function AssistantMessage({
 
           {message.status !== "streaming" && (
             <SupportFooter
+              citations={message.citations}
+              onCitationClick={onCitationClick}
               metadataSupport={message.metadataSupport}
               traceSupport={message.traceSupport}
               documentRelations={message.documentRelations}
@@ -331,13 +333,17 @@ function CitationFooter({
   onClick: (c: Citation) => void;
   activeId?: number;
 }) {
-  const hasProvenance = citations.some((c) => c.citationFinal === false);
+  const relevantCitations = citations.filter(
+    (citation) => citation.supportKind === "legal_unit" && citation.relevantQuoteEligible === true,
+  );
+  if (!relevantCitations.length) return null;
+  const hasProvenance = relevantCitations.some((c) => c.citationFinal === false);
   return (
     <div data-citation-footer="true" className="mt-5 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] overflow-hidden">
       <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[var(--tj-border-subtle)]">
         <FileText size={13} className="text-[var(--tj-text-secondary)]" />
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.02em", color: "var(--tj-text-secondary)" }}>
-          {hasProvenance ? "PROVENANSI SUMBER" : "SUMBER"} · {citations.length} sitasi
+          {hasProvenance ? "PROVENANSI SUMBER" : "SUMBER"} · {relevantCitations.length} sitasi
         </span>
       </div>
       {hasProvenance && (
@@ -350,7 +356,7 @@ function CitationFooter({
         </div>
       )}
       <ul>
-        {citations.map((c) => (
+        {relevantCitations.map((c) => (
           <li key={c.id}>
             <button
               data-citation-kind={c.authorityKind ?? "legal_citation"}
@@ -415,11 +421,15 @@ function legalUnitLabel(article?: string, paragraph?: string) {
 }
 
 function SupportFooter({
+  citations,
+  onCitationClick,
   metadataSupport,
   traceSupport,
   documentRelations,
   articleRelations,
 }: {
+  citations?: Citation[];
+  onCitationClick: (citation: Citation) => void;
   metadataSupport?: SupportItem[];
   traceSupport?: SupportItem[];
   documentRelations?: SupportItem[];
@@ -451,7 +461,19 @@ function SupportFooter({
                 data-support-clickable={row.clickable ? "true" : "false"}
                 style={{ fontSize: 12, color: "var(--tj-text-muted)" }}
               >
-                <span style={{ color: "var(--tj-text-primary)", fontWeight: 600 }}>{row.label}</span>
+                {row.clickable ? (() => {
+                  const citation = citations?.find((item) => item.documentId === row.id || item.viewerRefId === row.id);
+                  return citation ? (
+                    <button
+                      type="button"
+                      onClick={() => onCitationClick(citation)}
+                      className="underline underline-offset-2 hover:text-[var(--tj-text-primary)]"
+                      style={{ color: "var(--tj-text-primary)", fontWeight: 600 }}
+                    >
+                      {row.label}
+                    </button>
+                  ) : <span style={{ color: "var(--tj-text-primary)", fontWeight: 600 }}>{row.label}</span>;
+                })() : <span style={{ color: "var(--tj-text-primary)", fontWeight: 600 }}>{row.label}</span>}
                 {row.detail ? ` · ${row.detail}` : ""}
               </li>
             ))}

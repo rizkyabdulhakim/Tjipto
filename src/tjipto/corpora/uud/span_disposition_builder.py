@@ -25,7 +25,10 @@ def apply_page_text_span_dispositions(
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     legal_refs = _legal_span_refs(legal_units, chunks_by_unit)
     metadata_refs = _row_refs(metadata_grounding, "metadata_grounding_id")
-    conflict_refs = _row_refs(source_conflicts, "source_conflict_id")
+    conflict_refs = _row_refs(
+        [row for row in source_conflicts if row.get("source_anomaly_kind") != "typed_source_discrepancy"],
+        "source_conflict_id",
+    )
     instrument_units = [row for row in legal_units if role_for_legal_unit(row) not in {"normative_text", "structural_heading"}]
 
     for span in page_text_spans:

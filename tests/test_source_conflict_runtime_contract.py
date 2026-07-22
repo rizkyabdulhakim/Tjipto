@@ -53,14 +53,14 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(citation["authority_kind"], "source_anomaly")
         self.assertEqual(citation["support_kind"], "source_anomaly_provenance")
         self.assertEqual(citation["finality_policy"], "source_anomaly_provenance")
-        self.assertEqual(citation["source_anomaly_kind"], "source_marker_sequence_anomaly")
+        self.assertEqual(citation["source_anomaly_kind"], "typed_source_discrepancy")
         self.assertEqual(citation["provenance_highlight_scope"], "all_relevant_spans")
         self.assertFalse(citation["citation_final"])
         self.assertEqual(citation["evidence_id"], "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict")
         self.assertEqual(result["source_conflict"]["provenance_bbox_status"], "exact_raw_provenance_bbox_available")
 
         self.assertEqual(result["source_conflict"]["provenance_highlight_scope"], "all_relevant_spans")
-        self.assertEqual(result["source_conflict"]["source_anomaly_kind"], "source_marker_sequence_anomaly")
+        self.assertEqual(result["source_conflict"]["source_anomaly_kind"], "typed_source_discrepancy")
         self.assertEqual(result["source_conflict"]["blocked_raw_provenance_text_span_count"], 0)
         conflict = next(
             row
@@ -80,7 +80,7 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["trace_support"][0]["bbox_count"], len(conflict["raw_provenance_bbox_ids"]))
         self.assertEqual(result["trace_support"][0]["authority_kind"], "source_anomaly")
         self.assertEqual(result["trace_support"][0]["support_kind"], "source_anomaly_provenance")
-        self.assertEqual(result["trace_support"][0]["source_anomaly_kind"], "source_marker_sequence_anomaly")
+        self.assertEqual(result["trace_support"][0]["source_anomaly_kind"], "typed_source_discrepancy")
         self.assertEqual(result["trace_support"][0]["provenance_highlight_scope"], "all_relevant_spans")
 
     def test_canonical_pasal_ii_does_not_use_printed_label_provenance(self) -> None:

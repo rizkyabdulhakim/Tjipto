@@ -6,7 +6,7 @@
   "corpus_id": "uud",
   "contract_id": "tjipto.uud.artifact-contract",
   "contract_version": 7,
-  "contract_fingerprint": "3db503ea18b2e4f3df8ccb3fd7cb7fc7784f61c60fde0356013356982e7b5987",
+  "contract_fingerprint": "63ad1f8e31db9c4db9c3e00988f7c8d367ecc437b4248b17f2fc8d6da105f1d1",
   "counts": {
     "article_amendment_relations": 72,
     "article_versions": 218,
@@ -16,8 +16,8 @@
     "document_relations": 13,
     "evidence_records": 650,
     "excluded_records": 0,
-    "graph_edges": 7915,
-    "graph_nodes": 3206,
+    "graph_edges": 7918,
+    "graph_nodes": 3209,
     "legal_units": 653,
     "metadata_assertions": 1877,
     "metadata_graph_edges": 635,
@@ -27,7 +27,7 @@
     "pages": 63,
     "promotion_decisions": 77,
     "retrieval_units": 650,
-    "source_conflicts": 1,
+    "source_conflicts": 4,
     "source_documents": 6,
     "validation_alignment_results": 610,
     "validation_exception_review_labels": 9,
@@ -146,8 +146,8 @@
       "format": "jsonl",
       "artifact_schema": 7,
       "primary_id": "document_metadata_id",
-      "bytes": 22677,
-      "sha256": "554e684523101772d76952e02fc986b629497c2ee0c578cd16e6b7de4dfc1403"
+      "bytes": 22666,
+      "sha256": "2d328ad1887545f800d132cfa3e37dcd33f52c008b10ee3febb78e4d2ad10eaa"
     },
     "document_relations.jsonl": {
       "origin": "generated",
@@ -247,8 +247,8 @@
         "support_exception_ids",
         "support_kind"
       ],
-      "bytes": 6152029,
-      "sha256": "e59d18df3776f70b5b8beebb65a454542fecaae9249763a9450cced558eccdd4"
+      "bytes": 6155089,
+      "sha256": "8f6d904d055a81d7c60cac895db06fcb5cc66fe6cd36d9dec92f63c3b17da434"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -265,8 +265,8 @@
         "node_type",
         "object_role"
       ],
-      "bytes": 1923379,
-      "sha256": "1828f3964ba8d8c408a9136af7231e2c8055e31ff8a29a533004ea8c49b519ea"
+      "bytes": 1924959,
+      "sha256": "bde5b5d675255d9d13cabc41f2ff5001fa258ebbb824f3e0039930fa763cbe71"
     },
     "legal_units.jsonl": {
       "origin": "generated",
@@ -463,8 +463,8 @@
         "recovery_capability",
         "recovery_status"
       ],
-      "bytes": 4409,
-      "sha256": "6d4037f6b97c349466a8d824e13ea474240d7fe38210a48a25f7b2b3e1734afa"
+      "bytes": 14687,
+      "sha256": "2e54612388c9ae978211de4dca5d1e03976b6117fbbfcf97ed42a4ba76bbaf23"
     },
     "source_documents.jsonl": {
       "origin": "generated",
@@ -560,8 +560,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 22974,
-      "sha256": "c9c6a21f4766b403aebed09cbc63a2a71eda40ffdfe0cb79ba78c3b599d71d0f"
+      "bytes": 23230,
+      "sha256": "e9b00ba27cc2fee0485b11f21532e4724fa6d0e910b4bce2aa3e5caf41459d04"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -597,8 +597,8 @@
         "reason_code",
         "reason"
       ],
-      "bytes": 5142753,
-      "sha256": "a1da3aee248b7f31fc72edd96bbdddfa048d932317902ad02eaaa6c4c991bc01"
+      "bytes": 5142317,
+      "sha256": "0cbb7c1df930b79bec9ff64886f0643c8363eae4761f8e3ed09d0a743f380fa8"
     },
     "raw_source_spans.jsonl": {
       "origin": "generated",
@@ -623,6 +623,13 @@
         "raw_stream_sha256",
         "raw_text_start",
         "raw_text_end",
+        "block_index",
+        "span_index",
+        "character_start",
+        "character_end",
+        "character_ids",
+        "character_texts",
+        "character_bboxes",
         "x0",
         "y0",
         "x1",
@@ -635,8 +642,8 @@
         "normalization_actions",
         "disposition_reason"
       ],
-      "bytes": 2381173,
-      "sha256": "61506c4979cfcba4340f8d0b6b00a092601d6be38c8c27519cc5a8ee22011c9a"
+      "bytes": 19350222,
+      "sha256": "9edc9f9fc6d0ae009023fd3be093fa38bc9baae30118fef1aefa0b107b4b10be"
     },
     "word_bboxes.jsonl": {
       "origin": "generated",

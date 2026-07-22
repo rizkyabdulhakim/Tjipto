@@ -100,6 +100,7 @@ def build_validation_report(
     document_relations: list[dict],
     article_amendment_relations: list[dict],
     page_text_spans: list[dict],
+    raw_source_spans: list[dict] | None = None,
     pdf_health_report: dict | None = None,
     pages: list[dict] | None = None,
     intent_config: dict | None = None,
@@ -162,6 +163,10 @@ def build_validation_report(
         "viewer_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is True),
         "non_highlightable": sum(1 for row in bbox_rows if row.get("viewer_highlightable") is not True),
     }
+    if raw_source_spans is None:
+        fallback_path = Path("data/final/uud/raw_source_spans.jsonl")
+        raw_source_spans = read_jsonl(fallback_path) if fallback_path.exists() else []
+    validation_report["raw_source_geometry_health"] = _raw_source_geometry_health(raw_source_spans)
     validation_report["chunk_self_contained_health"] = _chunk_self_contained_health(
         chunks,
         {row["legal_unit_id"]: row for row in legal_units},
@@ -1138,7 +1143,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
             errors.append(f"source_conflict_invalid_discrepancy_type:{row['source_conflict_id']}")
         if not isinstance(row.get("substantive_conflict"), bool):
             errors.append(f"source_conflict_invalid_substantive_conflict:{row['source_conflict_id']}")
-        if row.get("source_anomaly_kind") not in {"renumbering_provenance", "source_marker_sequence_anomaly"}:
+        if row.get("source_anomaly_kind") not in {"renumbering_provenance", "source_marker_sequence_anomaly", "typed_source_discrepancy"}:
             errors.append(f"source_conflict_invalid_source_anomaly_kind:{row['source_conflict_id']}")
         if (
             row.get("source_anomaly_kind") == "renumbering_provenance"
@@ -1685,6 +1690,34 @@ def _recovery_state_errors(promotion_decisions: list[dict]) -> tuple[str, ...]:
     return tuple(errors)
 
 
+def _raw_source_geometry_health(rows: list[dict]) -> dict:
+    mismatches = 0
+    marker_mismatches = 0
+    for row in rows:
+        boxes = row.get("character_bboxes") or []
+        valid = (
+            row.get("raw_geometry_method") == "pdf_rawdict_character_bbox"
+            and "".join(str(value) for value in row.get("character_texts") or ()) == str(row.get("raw_text") or "")
+            and len(boxes) == len(row.get("character_ids") or ())
+            and bool(boxes)
+        )
+        if valid:
+            union = (min(box["x0"] for box in boxes), min(box["y0"] for box in boxes), max(box["x1"] for box in boxes), max(box["y1"] for box in boxes))
+            valid = union == tuple(row.get(field) for field in ("x0", "y0", "x1", "y1"))
+        if not valid:
+            mismatches += 1
+            if row.get("classification") == "source_annotation_marker":
+                marker_mismatches += 1
+    return {
+        "raw_segment_count": len(rows),
+        "non_empty_disposition_count": sum(bool(str(row.get("raw_text") or "")) for row in rows),
+        "raw_geometry_mismatch_count": mismatches,
+        "marker_geometry_mismatch_count": marker_mismatches,
+        "whole_line_geometry_fallback_count": sum(row.get("raw_geometry_method") != "pdf_rawdict_character_bbox" for row in rows),
+        "status": "pass" if not mismatches and all(str(row.get("raw_text") or "") for row in rows) else "fail",
+    }
+
+
 def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ...]:
     """Closed UUD contract shared by offline rebuild validation and runtime publication."""
     errors: list[str] = []
@@ -1735,6 +1768,21 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
                 errors.append(f"invalid_selector:{row.get('raw_source_span_id')}:raw_offset")
             if row.get("classification") == "source_annotation_marker" and any(row.get(field) is not False for field in ("legal_text", "citation_eligible", "relevant_quote_eligible", "default_highlight_eligible")):
                 errors.append(f"owner_field_violation:raw_source_spans:{row.get('raw_source_span_id')}:marker_policy")
+            character_texts = row.get("character_texts") or []
+            character_bboxes = row.get("character_bboxes") or []
+            if "".join(str(value) for value in character_texts) != str(row.get("raw_text") or ""):
+                errors.append(f"raw_geometry_mismatch:{row.get('raw_source_span_id')}:character_text")
+            if len(character_texts) != len(row.get("character_ids") or ()) or len(character_texts) != len(character_bboxes):
+                errors.append(f"raw_geometry_mismatch:{row.get('raw_source_span_id')}:character_lineage")
+            if character_bboxes:
+                union = (
+                    min(float(box["x0"]) for box in character_bboxes),
+                    min(float(box["y0"]) for box in character_bboxes),
+                    max(float(box["x1"]) for box in character_bboxes),
+                    max(float(box["y1"]) for box in character_bboxes),
+                )
+                if union != tuple(float(cast(float, row.get(field))) for field in ("x0", "y0", "x1", "y1")):
+                    errors.append(f"raw_geometry_mismatch:{row.get('raw_source_span_id')}:union")
 
     marker_pattern = re.compile(r"\*{1,4}(?:/\*{1,4})?\)")
     for row in rows("page_text_spans"):
@@ -3582,7 +3630,7 @@ def _source_conflict_provenance_health(source_conflicts: list[dict]) -> dict:
         "unknown_source_anomaly_kind_count": sum(
             1
             for row in source_conflicts
-            if row.get("source_anomaly_kind") not in {"renumbering_provenance", "source_marker_sequence_anomaly"}
+            if row.get("source_anomaly_kind") not in {"renumbering_provenance", "source_marker_sequence_anomaly", "typed_source_discrepancy"}
         ),
         "invalid_source_mapping_kind_count": sum(
             1

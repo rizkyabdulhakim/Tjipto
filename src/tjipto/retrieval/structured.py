@@ -24,6 +24,9 @@ def structured_lookup(
     corpus_id = _corpus_id(config)
     if not intent["structured_lookup_enabled"]:
         return ()
+    structure_list = _structure_list_rows(store, query, limit, intent, corpus_id, source_role)
+    if structure_list:
+        return structure_list
     instrument = _instrument_rows(store, query, limit, strategy=strategy, config=config)
     if instrument:
         return instrument
@@ -66,7 +69,21 @@ def structured_lookup(
                 and row.get("legal_unit_id") in dedicated_unit_ids
             ]
         if dedicated:
-            return tuple(dedicated[:limit])
+            detail_terms = tuple(str(term).casefold() for term in intent.get("structure_detail_terms") or ())
+            if any(term in query.casefold() for term in detail_terms) or ("isi" in query.casefold() and "saat ini" not in query.casefold()):
+                child_ids = {
+                    unit.get("legal_unit_id")
+                    for unit in store.legal_units
+                    if unit.get("source_role") == (dedicated[0].get("source_role"))
+                    and tuple(unit.get("hierarchy") or ())[:1] == (bab,)
+                    and unit.get("unit_label") == "Dihapus."
+                }
+                children = [
+                    row for row in store.evidence
+                    if row.get("legal_unit_id") in child_ids and row.get("status") == "final" and store.bboxes_for(row["evidence_id"])
+                ]
+                return tuple(row | {"route_sources": ("structured",)} for row in (*dedicated, *children))[:limit]
+            return tuple(row | {"route_sources": ("structured",)} for row in dedicated[:limit])
     preferred_unit_ids = _preferred_unit_ids(store, targets, requested_role)
     rows = [
         row
@@ -90,6 +107,28 @@ def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None
     if _instrument_target(query, strategy=strategy, config=config):
         return True
     return bool(_targets(query, intent, _corpus_id(config))) or _has_incomplete_pasal(query)
+
+
+def _structure_list_rows(store: EvidenceStore, query: str, limit: int, intent: dict, corpus_id: str, source_role: str | None) -> tuple[dict, ...]:
+    folded = (query or "").casefold()
+    terms = tuple(str(term).casefold() for term in intent.get("structure_list_terms") or ())
+    if not terms or not any(term in folded for term in terms):
+        return ()
+    if any(re.search(r"\bbab\s+[ivxlcdm]+[a-z]?\b", folded) for _ in (0,)):
+        return ()
+    unit_type = intent.get("structure_unit_type")
+    units = [
+        row for row in store.legal_units
+        if row.get("unit_type") == unit_type
+        and (source_role is None or row.get("source_role") == source_role)
+        and row.get("source_role") == getattr(store.config, "preferred_source_role", row.get("source_role"))
+    ]
+    evidence_by_unit = {row.get("legal_unit_id"): row for row in store.evidence if row.get("status") == "final"}
+    return tuple(
+        evidence_by_unit[unit["legal_unit_id"]] | {"candidate_type": "structural_list_candidate", "route_sources": ("structured",)}
+        for unit in sorted(units, key=lambda row: (row.get("page_start", 0), row.get("unit_label", "")))
+        if unit.get("legal_unit_id") in evidence_by_unit
+    )[:limit]
 
 
 def structured_failure_reason(store: EvidenceStore, query: str, *, strategy: str = "uud_1945") -> str | None:

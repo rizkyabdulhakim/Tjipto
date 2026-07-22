@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, CSSProperties, PointerEvent, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ClipboardEvent, CSSProperties, PointerEvent, ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import * as pdfjs from "pdfjs-dist";
@@ -165,7 +165,7 @@ function EvidenceContent({
   }, [citation.documentId, citation.viewerMode, citation.relationId]);
 
   const copyExcerpt = async () => {
-    const text = citation.copyText ?? citation.excerpt;
+    const text = (citation.copyText ?? citation.excerpt).replace(/\r\n?/g, "\n");
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -173,6 +173,12 @@ function EvidenceContent({
     } catch {
       setCopied(false);
     }
+  };
+
+  const normalizeSelectionCopy = (event: ClipboardEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.clipboardData.clearData();
+    event.clipboardData.setData("text/plain", (citation.copyText ?? citation.excerpt).replace(/\r\n?/g, "\n"));
   };
 
   const savePointer = async () => {
@@ -335,7 +341,7 @@ function EvidenceContent({
                   color: "var(--tj-text-muted)",
                 }}
               >
-                Kutipan Relevan
+                {citation.panelSection ?? "Kutipan Relevan"}
               </h3>
               <button
                 type="button"
@@ -352,14 +358,23 @@ function EvidenceContent({
             <div className="rounded-2xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] p-5 shadow-sm relative overflow-hidden group">
               <div className="absolute top-0 left-0 w-1 h-full bg-[var(--tj-accent)] opacity-80" />
               <blockquote
+                onCopy={normalizeSelectionCopy}
+                tabIndex={0}
                 style={{
                   fontSize: 15,
                   lineHeight: "24px",
                   color: "var(--tj-text-primary)",
-                  fontStyle: "italic",
+                  whiteSpace: "pre-wrap",
                 }}
               >
-                {(citation.layoutLines ?? [citation.displayText ?? citation.excerpt]).join("\n")}
+                {(citation.layoutLines ?? [{ text: citation.displayText ?? citation.excerpt, line_order: 0, paragraph_id: "support", alignment: "unknown", indent: 0, source_bbox_refs: [] }]).map((line) => (
+                  <span
+                    key={`${line.paragraph_id}:${line.line_order}`}
+                    style={{ display: "block", textAlign: line.alignment === "unknown" ? "left" : line.alignment, paddingLeft: line.indent ? `${line.indent}px` : undefined }}
+                  >
+                    {line.text}
+                  </span>
+                ))}
               </blockquote>
             </div>
           </section>

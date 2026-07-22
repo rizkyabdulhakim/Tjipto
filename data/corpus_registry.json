@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "6305e6c2c9e23e58ad8f0d2a818b9a0f29d18a98fe6249062ecc8e35c366d010",
+    "manifest_sha256": "37e2fc673cc66b74011d9ddae21886a7cfb8fb7b33f3a658d72d41748a46febc",
     "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
     "runtime_required_artifacts": [
       "evidence_registry",
@@ -249,7 +249,8 @@
       ],
       "source_anomaly_kinds": [
         "renumbering_provenance",
-        "source_marker_sequence_anomaly"
+        "source_marker_sequence_anomaly",
+        "typed_source_discrepancy"
       ],
       "source_mapping_kinds": [
         "historical_to_canonical_mapping"
@@ -941,7 +942,18 @@
           "sebelum"
         ]
       },
-      "structured_lookup_enabled": true
+      "structured_lookup_enabled": true,
+      "structure_list_terms": [
+        "daftar bab",
+        "bab lengkap",
+        "daftar bab dalam uud",
+        "bab"
+      ],
+      "structure_unit_type": "bab_record",
+      "structure_detail_terms": [
+        "dihapus",
+        "hapus"
+      ]
     },
     "source_conflict_intent": {
       "query_terms": [

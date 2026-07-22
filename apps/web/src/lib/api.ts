@@ -1,4 +1,4 @@
-import type { Citation, SupportItem } from "./types";
+import type { Citation, LayoutLine, SupportItem } from "./types";
 import type { PdfBBox } from "./pdfBBox";
 
 const API_BASE =
@@ -31,6 +31,23 @@ export interface TjiptoAskResponse {
   article_amendment_relations?: ArticleAmendmentRelationPayload[];
   trace_support?: TraceSupportPayload[];
   clarification_options?: ClarificationOptionPayload[];
+  supports?: SupportPayload[];
+}
+
+export interface SupportPayload {
+  support_id?: string;
+  support_kind?: string;
+  panel_section?: string;
+  authority_kind?: Citation["authorityKind"];
+  source_document?: string;
+  source_role?: string;
+  display_text?: string;
+  layout_lines?: LayoutLine[];
+  copy_text?: string;
+  citation_available?: boolean;
+  viewer_target?: ViewerRefPayload;
+  page_numbers?: number[];
+  highlightable?: boolean;
 }
 
 export interface DocumentSourcePayload {
@@ -189,7 +206,7 @@ export interface CitationPayload {
   relevant_quote_eligible?: boolean;
   display_text?: string;
   copy_text?: string;
-  layout_lines?: string[];
+  layout_lines?: LayoutLine[];
   viewer_target?: Record<string, unknown>;
 }
 
@@ -342,7 +359,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
     ...(Array.isArray(response.historical_citations) ? response.historical_citations : []),
   ];
   const viewerRefs = Array.isArray(response.viewer_refs) ? response.viewer_refs : [];
-  return citations.flatMap((item, index) => {
+  const legalCitations = citations.flatMap<Citation>((item, index) => {
     if (!item?.evidence_id || !item?.quoted_text || item.relevant_quote_eligible !== true || item.support_kind !== "legal_unit") return [];
     const viewer = item.viewer_ref ?? viewerRefs[index];
     if (viewer?.can_resolve !== true) return [];
@@ -362,7 +379,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       viewerRefId: viewer?.evidence_id,
       relationId: relation?.relation_id,
       documentTitle: item.document_title ?? fallbackDocumentTitle(item.corpus_id),
-      regulationType: "UUD",
+      regulationType: "UUD" as const,
       authorityKind,
       authorityLabel: item.authority_label ?? fallbackAuthorityLabel(authorityKind),
       citationFinal: item.citation_final ?? authorityKind === "legal_citation",
@@ -386,8 +403,43 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       relationTargetBBoxRefs: viewer?.target_bbox_refs,
       relationTargetPrecision: relation?.target_precision,
       relationProof: Array.isArray(viewer?.source_proof_bbox_refs) && viewer.source_proof_bbox_refs.length > 0,
+      panelSection: "Kutipan Relevan",
     };
   });
+  const supportCitations = (response.supports ?? []).flatMap<Citation>((support, index) => {
+    if (!support.support_id || support.highlightable !== true || support.viewer_target?.can_resolve !== true) return [];
+    const panelSection: NonNullable<Citation["panelSection"]> = support.panel_section === "Bukti Metadata"
+      ? "Bukti Metadata"
+      : support.panel_section === "Struktur Dokumen"
+        ? "Struktur Dokumen"
+        : "Catatan Sumber";
+    const pages = support.page_numbers ?? support.viewer_target.page_numbers ?? [];
+    return [{
+      id: legalCitations.length + index + 1,
+      documentId: String(support.support_id),
+      sourceDocumentId: support.source_document ?? support.viewer_target.source_document_id,
+      documentTitle: fallbackDocumentTitle("uud"),
+      regulationType: "UUD" as const,
+      authorityKind: support.authority_kind,
+      authorityLabel: panelSection,
+      citationFinal: support.citation_available === true,
+      article: panelSection,
+      pageNumber: Number(pages[0] ?? 1),
+      excerpt: support.display_text ?? "",
+      supportKind: support.support_kind,
+      relevantQuoteEligible: false,
+      displayText: support.display_text ?? "",
+      copyText: support.copy_text ?? support.display_text ?? "",
+      layoutLines: support.layout_lines,
+      viewerTarget: support.viewer_target as Record<string, unknown>,
+      viewerRefId: support.viewer_target.evidence_id,
+      sourceUrl: "",
+      sourceDomain: support.source_role ?? "runtime",
+      sourceRole: support.source_role,
+      panelSection,
+    }];
+  });
+  return [...legalCitations, ...supportCitations];
 }
 
 export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Citation | null {
@@ -424,7 +476,7 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
       detail: [row.field, row.answer ?? (row.support_class === "exact_metadata_citation" ? "Metadata exact tersedia" : "Metadata trace-only")]
         .filter(Boolean)
         .join(" · "),
-      clickable: false,
+      clickable: row.viewer_highlightable === true && row.viewer_ref?.can_resolve === true,
     })),
     trace: (response.trace_support ?? []).map((row, index) => ({
       id: String(row.source_conflict_id ?? row.relation_id ?? row.evidence_id ?? `trace_${index}`),

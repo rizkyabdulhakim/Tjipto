@@ -29,7 +29,7 @@ export interface Citation {
   relevantQuoteEligible?: boolean;
   displayText?: string;
   copyText?: string;
-  layoutLines?: string[];
+  layoutLines?: LayoutLine[];
   viewerTarget?: Record<string, unknown>;
   sourceUrl: string;
   sourceDomain?: string;
@@ -42,6 +42,16 @@ export interface Citation {
   relationTargetBBoxRefs?: string[];
   relationTargetPrecision?: string;
   relationProof?: boolean;
+  panelSection?: "Kutipan Relevan" | "Bukti Metadata" | "Struktur Dokumen" | "Catatan Sumber";
+}
+
+export interface LayoutLine {
+  text: string;
+  line_order: number;
+  paragraph_id: string;
+  alignment: "left" | "center" | "right" | "justify" | "unknown";
+  indent: number;
+  source_bbox_refs: string[];
 }
 
 export interface ChatMessage {

@@ -293,6 +293,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         article_amendment_relations=article_amendment_relations,
         promotion_decisions=promotion_decisions,
         page_text_spans=page_text_spans,
+        raw_source_spans=raw_source_spans,
         word_bboxes=word_bboxes,
         pdf_health_report=pdf_health_report,
         pages=pages,

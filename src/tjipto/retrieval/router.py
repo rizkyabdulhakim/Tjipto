@@ -75,6 +75,16 @@ def route_retrieval(
         normalized["normalized_query"], strategy=structured_strategy, config=config
     ):
         if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config, store=store):
+            entity_matches = tuple(metadata_lookup(store, normalized["normalized_query"], len(store.document_metadata)))
+            if entity_matches and all(row.get("metadata_field") == "signatories" for row in entity_matches):
+                return envelope | {
+                    "status": "found",
+                    "route": "metadata",
+                    "intent": "metadata_lookup",
+                    "reason": None,
+                    "matches": entity_matches[:limit],
+                    "metadata_source_roles": tuple(sorted({row.get("source_role") for row in entity_matches if row.get("source_role")})),
+                }
             source_roles = tuple(
                 sorted({row.get("source_role") for row in store.document_metadata if row.get("source_role")})
             )
@@ -102,7 +112,7 @@ def route_retrieval(
             "status": "found",
             "route": "relation",
             "intent": "legal_relation_lookup",
-            "matches": ranked[:limit],
+            "matches": ranked if all(row.get("metadata_field") == "signatories" for row in ranked) else ranked[:limit],
             "expansion_trace": trace,
         }
     if relation_all:
@@ -182,7 +192,7 @@ def route_retrieval(
             "status": "found",
             "route": "metadata",
             "intent": "metadata_lookup",
-            "matches": ranked[:limit],
+            "matches": ranked if all(row.get("metadata_field") == "signatories" for row in ranked) else ranked[:limit],
             "expansion_trace": trace,
             "metadata_source_roles": tuple(sorted({row.get("source_role") for row in metadata if row.get("source_role")})),
         }
@@ -212,7 +222,7 @@ def route_retrieval(
             if row.get("authority_kind") == "structural_context"
             and str(row.get("citation") or "").casefold() == normalized["normalized_query"].casefold()
         )
-        if heading:
+        if heading and len(heading) == len(structured):
             heading = tuple(
                 row
                 | {
@@ -230,16 +240,17 @@ def route_retrieval(
             }
         ranked, trace = merge_ranked(store, {"structured": structured}, filters, expand_graph=False)
         structural_navigation = any(row.get("candidate_type") == "structural_navigation_candidate" for row in structured)
+        structure_list = any(row.get("candidate_type") == "structural_list_candidate" for row in structured)
         structured_route = "exact" if intent["intent"] == "exact_citation" else "structured"
         return envelope | {
             "status": "found",
-            "route": "structural_navigation" if structural_navigation else structured_route,
+            "route": "structure_list" if structure_list else "structural_navigation" if structural_navigation else structured_route,
             "intent": "structural_navigation"
             if structural_navigation
             else "exact_citation"
             if intent["intent"] == "exact_citation"
             else "structured_lookup",
-            "matches": ranked[:limit],
+            "matches": ranked if structure_list else ranked[:limit],
             "expansion_trace": trace,
         }
     if structured_all:

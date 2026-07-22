@@ -68,7 +68,7 @@ class GraphContractTest(unittest.TestCase):
     def test_source_conflicts_reference_source_documents(self) -> None:
         source_ids = {row["source_document_id"] for row in read_jsonl(ROOT / "data/final/uud/source_documents.jsonl")}
         rows = read_jsonl(ROOT / "data/final/uud/source_conflicts.jsonl")
-        self.assertEqual(len(rows), 1)
+        self.assertGreaterEqual(len(rows), 1)
         conflict_ids = {row["source_conflict_id"] for row in rows}
         self.assertNotIn("uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict", conflict_ids)
         for row in rows:

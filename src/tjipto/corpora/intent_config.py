@@ -50,6 +50,9 @@ _GENERIC = {
     "structured_sections": (),
     "structural_navigation": {},
     "structured_lookup_enabled": False,
+    "structure_list_terms": (),
+    "structure_unit_type": "",
+    "structure_detail_terms": (),
 }
 
 
@@ -93,6 +96,9 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "structured_sections": tuple(raw.get("structured_sections") or ()),
         "structural_navigation": {key: tuple(value) for key, value in (raw.get("structural_navigation") or {}).items()},
         "structured_lookup_enabled": bool(raw.get("structured_lookup_enabled")),
+        "structure_list_terms": tuple(raw.get("structure_list_terms") or ()),
+        "structure_unit_type": str(raw.get("structure_unit_type") or ""),
+        "structure_detail_terms": tuple(raw.get("structure_detail_terms") or ()),
     }
 
 

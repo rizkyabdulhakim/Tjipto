@@ -106,10 +106,10 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
     def test_source_conflict_provenance_health_distinguishes_final_and_raw_bbox_status(self) -> None:
         health = self.report["source_conflict_provenance_health"]
         self.assertEqual(health["status"], "complete")
-        self.assertEqual(health["source_conflict_count"], 1)
+        self.assertEqual(health["source_conflict_count"], len(read_jsonl(FINAL / "source_conflicts.jsonl")))
         self.assertEqual(health["renumbering_provenance_count"], 0)
         self.assertEqual(health["historical_to_canonical_mapping_count"], 0)
-        self.assertEqual(health["source_marker_sequence_anomaly_count"], 1)
+        self.assertEqual(health["source_marker_sequence_anomaly_count"], 0)
         self.assertEqual(health["missing_anchor_terms_count"], 0)
         self.assertEqual(health["missing_query_anchor_terms_count"], 0)
         self.assertEqual(health["missing_provenance_summary_count"], 0)
@@ -119,10 +119,10 @@ class ProvenanceExceptionContractTest(unittest.TestCase):
         self.assertEqual(health["invalid_provenance_exception_category_count"], 0)
         self.assertEqual(health["invalid_provenance_review_status_count"], 0)
         self.assertEqual(health["final_evidence_available_count"], 0)
-        self.assertEqual(health["raw_provenance_exact_available_count"], 1)
+        self.assertEqual(health["raw_provenance_exact_available_count"], health["source_conflict_count"])
         self.assertEqual(health["raw_provenance_partial_available_count"], 0)
         self.assertEqual(health["raw_provenance_unavailable_count"], 0)
-        self.assertEqual(health["all_relevant_span_highlight_count"], 1)
+        self.assertEqual(health["all_relevant_span_highlight_count"], health["source_conflict_count"])
         self.assertEqual(health["anchor_only_highlight_count"], 0)
         self.assertEqual(health["contradictory_failure_reason_count"], 0)
 

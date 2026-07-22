@@ -554,7 +554,18 @@ class LegalRuntimeService:
         else:
             citations = tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"])
             viewer_refs = context_pack["viewer_refs"]
-        deterministic_answer = self._answer_text(status, evidence, templates)
+        if metadata_support:
+            values = tuple(dict.fromkeys(str(row.get("answer") or "") for row in metadata_support if row.get("answer")))
+            deterministic_answer = templates["metadata"].format(answer=", ".join(values))
+        else:
+            deterministic_answer = self._answer_text(status, evidence, templates)
+            if routed.get("route") == "structure_list":
+                labels = tuple(dict.fromkeys(
+                    str(row.get("citation") or row.get("label") or "").strip() for row in evidence
+                ))
+                labels = tuple(label for label in labels if label)
+                if labels:
+                    deterministic_answer = ", ".join(labels)
         answer = self._agent_answer(query, evidence, deterministic_answer)
         return routed | {
             "status": status,
@@ -615,6 +626,8 @@ def _metadata_scope_clarification(store, routed: dict) -> dict | None:
     if routed.get("route") not in {"metadata", "metadata_scope_unresolved"} or "source_role" in routed.get("applied_filters", {}):
         return None
     roles = tuple(routed.get("metadata_source_roles") or ())
+    if any(row.get("metadata_field") == "signatories" for row in routed.get("matches", ())) and _is_entity_support_query(store, routed):
+        return None
     if not roles:
         roles = tuple(
             sorted(
@@ -657,6 +670,18 @@ def _metadata_scope_clarification(store, routed: dict) -> dict | None:
     }
 
 
+def _is_entity_support_query(store, routed: dict) -> bool:
+    query = normalize_intent_text(routed.get("normalized_query") or routed.get("original_query") or "")
+    if "wakil ketua" in query:
+        return True
+    intent = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
+    vocabulary = {normalize_intent_text(value) for value in intent.get("document_target_words", ())}
+    vocabulary.update(normalize_intent_text(value) for values in intent.get("metadata_fields", {}).values() for value in values)
+    vocabulary.update(normalize_intent_text(value) for values in intent.get("metadata_rules", {}).values() for value in values)
+    vocabulary.update({"siapa", "yang", "apa", "dengan", "dan", "atau"})
+    return any(token not in vocabulary and token not in {"menandatangani", "menandatangi", "penandatangan"} for token in query.split())
+
+
 def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> dict:
     owner = store.get(row.get("evidence_id")) if store is not None and row.get("evidence_id") else None
     source_row = {**(owner or {}), **row}
@@ -683,8 +708,8 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
         "relevant_quote_eligible": source_row.get("relevant_quote_eligible") is True and authority_kind == "legal_citation",
         "display_text": row.get("display_text") or row.get("quoted_text") or "",
         "copy_text": _copy_text(row.get("copy_text") or row.get("quoted_text") or ""),
-        "layout_lines": tuple(str(row.get("layout_lines") or row.get("quoted_text") or "").splitlines()),
-        "viewer_target": row.get("viewer_ref") or {},
+        "layout_lines": _layout_lines(store, source_row),
+        "viewer_target": _viewer_target(row),
     }
     if conflict_row is not None or row.get("source_conflict_id"):
         payload |= _source_conflict_taxonomy_fields(conflict_row or row)
@@ -693,6 +718,50 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
 
 def _copy_text(value: str) -> str:
     return "\n".join(line.lstrip(" \t") for line in str(value).replace("\r\n", "\n").replace("\r", "\n").split("\n")).strip()
+
+
+def _viewer_target(row: dict) -> dict:
+    target = dict(row.get("viewer_target") or row.get("viewer_ref") or {})
+    target.setdefault("source_document_id", row.get("source_document_id"))
+    target.setdefault("evidence_id", row.get("evidence_id"))
+    target.setdefault("page_numbers", tuple(row.get("page_numbers") or ()))
+    return target
+
+
+def _layout_lines(store, row: dict) -> tuple[dict, ...]:
+    """Expose source-derived line layout without making the UI infer it."""
+    configured = row.get("layout_lines")
+    if isinstance(configured, (list, tuple)) and configured and isinstance(configured[0], dict):
+        return tuple(configured)
+    text = str(row.get("display_text") or row.get("quoted_text") or "")
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").splitlines() or [text]
+    evidence_id = row.get("evidence_id")
+    boxes = []
+    if store is not None and evidence_id:
+        boxes = list(store.bboxes_for(evidence_id))
+        if not boxes and str(evidence_id).startswith("uud_metadata_"):
+            boxes = list(store.metadata_bboxes_for(evidence_id))
+    boxes.sort(key=lambda item: (item.get("page_number", 0), item.get("y0", 0), item.get("x0", 0)))
+    min_x = min((float(box.get("x0")) for box in boxes if isinstance(box.get("x0"), (int, float))), default=0.0)
+    result = []
+    for index, line in enumerate(lines):
+        box = boxes[index] if index < len(boxes) else {}
+        width = float(box.get("page_width") or 0)
+        x0, x1 = box.get("x0"), box.get("x1")
+        if width and isinstance(x0, (int, float)) and isinstance(x1, (int, float)):
+            center_distance = abs(((x0 + x1) / 2) - width / 2)
+            alignment = "center" if center_distance <= max(8.0, width * 0.04) else "right" if width - x1 <= width * 0.08 else "left"
+        else:
+            alignment = "unknown"
+        result.append({
+            "text": line,
+            "line_order": index,
+            "paragraph_id": f"{evidence_id or 'support'}::paragraph::{index}",
+            "alignment": alignment,
+            "indent": max(0.0, float(x0) - min_x) if isinstance(x0, (int, float)) else 0.0,
+            "source_bbox_refs": [box["bbox_id"]] if box.get("bbox_id") else [],
+        })
+    return tuple(result)
 
 
 def _support_kind_for_authority(authority_kind: str) -> str:
@@ -946,6 +1015,7 @@ def _ask_route(route: str) -> str:
         "exact": "legal_reference",
         "structured": "legal_reference",
         "structural_navigation": "structural_navigation",
+        "structure_list": "structural_navigation",
         "metadata": "metadata_fact",
         "metadata_not_found": "metadata_fact",
         "metadata_scope_unresolved": "metadata_fact",
@@ -1800,7 +1870,7 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
     role_anchor_match = _query_contains_term(folded_query, role_label) and any(
         _query_contains_term(folded_query, anchor) for anchor in anchors
     )
-    source_marker_context = conflict.get("source_anomaly_kind") == "source_marker_sequence_anomaly" and role_anchor_match
+    source_marker_context = conflict.get("source_anomaly_kind") in {"source_marker_sequence_anomaly", "typed_source_discrepancy"} and role_anchor_match
     if required and not any(_query_contains_term(folded_query, term) for term in required) and not source_marker_context:
         return 0
     explicit_anchor_match = any(
@@ -1813,12 +1883,12 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
         and not any(_query_contains_term(folded_query, term) for term in semantic_required)
         and not role_anchor_match
         and not (
-            conflict.get("source_anomaly_kind") == "source_marker_sequence_anomaly"
+            conflict.get("source_anomaly_kind") in {"source_marker_sequence_anomaly", "typed_source_discrepancy"}
             and (explicit_anchor_match or role_anchor_match)
         )
     ):
         return 0
-    if conflict.get("source_anomaly_kind") == "source_marker_sequence_anomaly" and not marker_context:
+    if conflict.get("source_anomaly_kind") in {"source_marker_sequence_anomaly", "typed_source_discrepancy"} and not marker_context:
         return 0
     score = 0
     if _query_contains_term(folded_query, role_label):
@@ -1942,6 +2012,7 @@ def _source_conflict_trace_support(store, conflict: dict, validation_reasons: di
     return (
         {
             "support_class": authority.get("support_kind") or "source_conflict_trace",
+            "evidence_id": conflict.get("source_conflict_id"),
             "source_conflict_id": conflict.get("source_conflict_id"),
             "type": conflict.get("type"),
             "classification": conflict.get("classification"),
@@ -1950,6 +2021,7 @@ def _source_conflict_trace_support(store, conflict: dict, validation_reasons: di
             "text_span_ids": tuple(conflict.get("text_span_ids") or ()),
             "evidence_ids": tuple(conflict.get("evidence_ids") or ()),
             "bbox_ids": tuple(conflict.get("bbox_ids") or ()),
+            "bbox_count": len(conflict.get("raw_provenance_bbox_ids") or ()),
             "citation_available": False,
             "viewer_highlightable": False,
             "viewer_ref": None,
@@ -2088,6 +2160,13 @@ def _source_conflict_viewer_evidence(store, evidence_id: str | None) -> tuple[di
     if conflict is None:
         return None, None
     synthetic = _synthetic_source_conflict_support(store, conflict)
+    if synthetic is None:
+        raw_bboxes = tuple(store.bboxes_for_refs(tuple(conflict.get("raw_provenance_bbox_ids") or ())))
+        if raw_bboxes:
+            synthetic = {
+                "evidence": (_synthetic_source_conflict_evidence(store, conflict, raw_bboxes),),
+                "bboxes": raw_bboxes,
+            }
     if synthetic is None:
         return None, None
     return synthetic["evidence"][0], list(synthetic["bboxes"])

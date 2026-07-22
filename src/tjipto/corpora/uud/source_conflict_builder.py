@@ -39,12 +39,18 @@ def apply_source_conflict_grounding(
         matched_spans = [span_by_id[span_id] for span_id in row["text_span_ids"] if span_id in span_by_id]
         row["source_sha256"] = matched_spans[0].get("source_sha256") if matched_spans else None
         row["source_quote"] = "\n".join(span.get("exact_quote") or span.get("text") or "" for span in matched_spans)
+        comparison_source = row.get("comparison_source_document_id") or "uud::current_consolidated"
+        comparison_pages = set(row.get("comparison_pages") or ())
+        comparison_terms = tuple(str(value) for value in row.get("comparison_anchor_terms") or ())
         comparison = [
             span
             for span in page_text_spans
-            if span.get("source_document_id") == "uud::current_consolidated"
-            and row.get("canonical_label")
-            and row.get("canonical_label") in (span.get("text") or "")
+            if span.get("source_document_id") == comparison_source
+            and (not comparison_pages or span.get("page_number") in comparison_pages)
+            and (
+                any(term.casefold() in (span.get("text") or "").casefold() for term in comparison_terms)
+                or (row.get("canonical_label") and row.get("canonical_label") in (span.get("text") or ""))
+            )
         ]
         row["comparison_source_document_id"] = comparison[0].get("source_document_id") if comparison else None
         row["comparison_source_sha256"] = comparison[0].get("source_sha256") if comparison else None

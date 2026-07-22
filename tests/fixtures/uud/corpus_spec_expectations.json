@@ -13,12 +13,12 @@
     "metadata_fields": ["source_anomaly_status"],
     "relation_types": ["HAS_SOURCE_ANOMALY"],
     "source_conflict_types": ["article_renumbering_conflict"],
-    "source_anomaly_kinds": ["renumbering_provenance", "source_marker_sequence_anomaly"],
+    "source_anomaly_kinds": ["renumbering_provenance", "typed_source_discrepancy"],
     "source_mapping_kinds": ["historical_to_canonical_mapping"],
     "chunk_policy": {"direct_grounding": "text_span_exact"}
   },
   "source_conflict_specs": {
-    "source_anomaly_kinds": ["renumbering_provenance", "source_marker_sequence_anomaly"],
+    "source_anomaly_kinds": ["renumbering_provenance", "typed_source_discrepancy"],
     "source_mapping_kinds": ["historical_to_canonical_mapping"],
     "policy_fields": ["provenance_summary", "final_authority_policy"],
     "anchor_terms": ["Pasal III", "Pasal 25E"],
@@ -50,6 +50,6 @@
     "unsupported_relation_context_words": ["perubahan"],
     "metadata_roles": [{"index": 1, "role": "amendment_2_historical"}]
   },
-  "generic_intent_source_absent": ["perubahan pertama", "berada di bab", "mengubah pasal apa", "dihapus", "aturan tambahan", "pasal_parent_bab", "Perubahan {ordinal} Scope", "Perubahan {ordinal} Clause"],
+  "generic_intent_source_absent": ["perubahan pertama", "berada di bab", "mengubah pasal apa", "aturan tambahan", "pasal_parent_bab", "Perubahan {ordinal} Scope", "Perubahan {ordinal} Clause"],
   "relation_source_absent": ["ayat"]
 }

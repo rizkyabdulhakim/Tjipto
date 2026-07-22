@@ -478,8 +478,9 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_signatory_name_uses_individual_exact_grounding(self) -> None:
         ambiguous = self.service.ask("uud", "Amien Rais")
-        self.assertEqual(ambiguous["status"], "clarification_required")
+        self.assertEqual(ambiguous["status"], "answer_ready")
         self.assertFalse(ambiguous["citations"])
+        self.assertGreaterEqual(len(ambiguous["metadata_support"]), 2)
         result = self.service.ask("uud", "Amien Rais Perubahan Pertama UUD")
         self.assertEqual(result["status"], "answer_ready")
         self.assertFalse(result["citations"])

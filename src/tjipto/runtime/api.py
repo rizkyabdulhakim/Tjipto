@@ -109,6 +109,13 @@ def _public_ask(result: dict) -> dict:
         "answer_scope": result.get("answer_scope"),
         "warnings": tuple(result.get("warnings", ())),
         "insufficient_reasons": tuple(_public_reason(row) or row for row in result.get("insufficient_reasons", ())),
+        "supports": tuple(
+            _public_support(row, "metadata") for row in result.get("metadata_support", ())
+        ) + tuple(
+            _public_support(row, "structure") for row in result.get("structural_support", ())
+        ) + tuple(
+            _public_support(row, "trace") for row in result.get("trace_support", ())
+        ),
     }
     if result.get("document_source") is not None:
         source = result["document_source"]
@@ -294,6 +301,10 @@ def _public_search_result(row: dict) -> dict:
 
 
 def _public_citation(row: dict) -> dict:
+    viewer_ref = dict(row.get("viewer_ref") or {})
+    viewer_ref.setdefault("source_document_id", row.get("source_document_id"))
+    viewer_ref.setdefault("evidence_id", row.get("evidence_id"))
+    viewer_ref.setdefault("page_numbers", tuple(row.get("page_numbers") or ()))
     public = {
         "corpus_id": row.get("corpus_id"),
         "evidence_id": row.get("evidence_id"),
@@ -314,18 +325,39 @@ def _public_citation(row: dict) -> dict:
         "citation_final": row.get("citation_final"),
         "page_numbers": row.get("page_numbers", ()),
         "bbox_count": row.get("bbox_count"),
-        "viewer_ref": _public_viewer_ref(row.get("viewer_ref") or {}),
+        "viewer_ref": _public_viewer_ref(viewer_ref),
         "evidence_status": row.get("evidence_status"),
         "support_kind": row.get("support_kind"),
         "relevant_quote_eligible": row.get("relevant_quote_eligible") is True,
         "display_text": row.get("display_text") or row.get("quoted_text") or "",
         "copy_text": row.get("copy_text") or row.get("quoted_text") or "",
         "layout_lines": row.get("layout_lines") or tuple(str(row.get("quoted_text") or "").splitlines()),
-        "viewer_target": row.get("viewer_target") or row.get("viewer_ref") or {},
+        "viewer_target": _public_viewer_ref(row.get("viewer_target") or viewer_ref),
     }
     if row.get("legal_relation"):
         public["legal_relation"] = _public_legal_relation(row["legal_relation"])
     return public
+
+
+def _public_support(row: dict, panel_section: str) -> dict:
+    support_kind = row.get("support_kind") or ("metadata_source" if panel_section == "metadata" else "structural_provenance" if panel_section == "structure" else "trace_support")
+    viewer_target = dict(row.get("viewer_target") or row.get("viewer_ref") or {})
+    viewer_target.setdefault("source_document_id", row.get("source_document_id"))
+    return {
+        "support_id": row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
+        "support_kind": support_kind,
+        "panel_section": {"metadata": "Bukti Metadata", "structure": "Struktur Dokumen", "trace": "Catatan Sumber"}[panel_section],
+        "authority_kind": row.get("authority_kind"),
+        "source_document": row.get("source_document_id"),
+        "source_role": row.get("source_role"),
+        "display_text": row.get("display_text") or row.get("quoted_text") or row.get("answer") or "",
+        "layout_lines": tuple(row.get("layout_lines") or ()),
+        "copy_text": row.get("copy_text") or "",
+        "citation_available": row.get("citation_available") is True,
+        "viewer_target": _public_viewer_ref(viewer_target),
+        "page_numbers": tuple(row.get("page_numbers") or ()),
+        "highlightable": row.get("viewer_highlightable") is True,
+    }
 
 
 def _public_metadata_fact(row: dict) -> dict:
@@ -383,7 +415,7 @@ def handle_pdf_request(
     )
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=1)
 def _service_for(repo_root: Path | None) -> LegalRuntimeService:
     return LegalRuntimeService(repo_root)
 

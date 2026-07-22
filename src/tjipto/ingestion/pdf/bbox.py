@@ -4,6 +4,7 @@ import re
 import unicodedata
 from hashlib import sha256
 import json
+from typing import Any, cast
 
 from tjipto.contracts.coordinates import coordinate_metadata
 
@@ -113,20 +114,80 @@ def pdf_lines(doc) -> dict[int, list[dict]]:
     for page_number in range(1, doc.page_count + 1):
         page = doc[page_number - 1]
         entries = []
-        for block_index, block in enumerate(page.get_text("dict").get("blocks", [])):
+        # rawdict is the only extraction mode that preserves the character
+        # lineage needed by source-segment provenance.  The dict/text modes
+        # flatten spans and make an exact sub-line geometry impossible.
+        # Preserve the PDF extraction order used by the corpus builders.  The
+        # rawdict payload still supplies character lineage; sorting here would
+        # silently reorder repeated source occurrences.
+        raw_payload = cast(dict[str, Any], page.get_text("rawdict"))
+        legacy_payload = cast(dict[str, Any], page.get_text("dict"))
+        for block_index, block in enumerate(raw_payload.get("blocks", [])):
             if block.get("type") != 0:
                 continue
             for line_index, line in enumerate(block.get("lines", [])):
-                text = "".join(span.get("text", "") for span in line.get("spans", [])).strip()
+                raw_characters: list[dict[str, Any]] = []
+                raw_offset = 0
+                for span_index, span in enumerate(line.get("spans", [])):
+                    for character_index, character in enumerate(span.get("chars", [])):
+                        value = str(character.get("c") or "")
+                        if not value:
+                            continue
+                        raw_characters.append(
+                            {
+                                "character_id": f"pdf_character::{page_number:04d}::{block_index:04d}::{line_index:04d}::{span_index:04d}::{character_index:04d}",
+                                "block_index": block_index,
+                                "line_index": line_index,
+                                "span_index": span_index,
+                                "character_index": character_index,
+                                "char_start": raw_offset,
+                                "char_end": raw_offset + len(value),
+                                "text": value,
+                                "bbox": tuple(character.get("bbox") or ()),
+                            }
+                        )
+                        raw_offset += len(value)
+                raw_text = "".join(character["text"] for character in raw_characters)
+                left_trim = len(raw_text) - len(raw_text.lstrip())
+                right_trim = len(raw_text.rstrip())
+                text = raw_text[left_trim:right_trim]
                 if not text:
                     continue
-                if not text:
-                    continue
-                x0 = min(span["bbox"][0] for span in line.get("spans", []))
-                y0 = min(span["bbox"][1] for span in line.get("spans", []))
-                x1 = max(span["bbox"][2] for span in line.get("spans", []))
-                y1 = max(span["bbox"][3] for span in line.get("spans", []))
-                entries.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "width": page.rect.width, "height": page.rect.height, "block_index": block_index, "line_index": line_index})
+                characters = []
+                for character in raw_characters:
+                    if character["char_end"] <= left_trim or character["char_start"] >= right_trim:
+                        continue
+                    if len(character["bbox"]) != 4:
+                        raise ValueError(f"missing_character_bbox:{page_number}:{block_index}:{line_index}:{character['character_id']}")
+                    characters.append(
+                        {
+                            **character,
+                            "char_start": character["char_start"] - left_trim,
+                            "char_end": character["char_end"] - left_trim,
+                            "x0": character["bbox"][0],
+                            "y0": character["bbox"][1],
+                            "x1": character["bbox"][2],
+                            "y1": character["bbox"][3],
+                        }
+                    )
+                if not characters or "".join(character["text"] for character in characters) != text:
+                    raise ValueError(f"raw_line_character_mismatch:{page_number}:{block_index}:{line_index}")
+                legacy_line = (
+                    legacy_payload.get("blocks", [])[block_index].get("lines", [])[line_index]
+                    if block_index < len(legacy_payload.get("blocks", []))
+                    and line_index < len(legacy_payload.get("blocks", [])[block_index].get("lines", []))
+                    else {}
+                )
+                legacy_spans = legacy_line.get("spans", [])
+                legacy_text = "".join(str(span.get("text") or "") for span in legacy_spans).strip()
+                if legacy_text != text:
+                    raise ValueError(f"legacy_raw_line_mismatch:{page_number}:{block_index}:{line_index}")
+                legacy_boxes = [span.get("bbox") for span in legacy_spans if len(span.get("bbox") or ()) == 4]
+                x0 = min(box[0] for box in legacy_boxes) if legacy_boxes else min(character["x0"] for character in characters)
+                y0 = min(box[1] for box in legacy_boxes) if legacy_boxes else min(character["y0"] for character in characters)
+                x1 = max(box[2] for box in legacy_boxes) if legacy_boxes else max(character["x1"] for character in characters)
+                y1 = max(box[3] for box in legacy_boxes) if legacy_boxes else max(character["y1"] for character in characters)
+                entries.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "width": page.rect.width, "height": page.rect.height, "block_index": block_index, "line_index": line_index, "characters": characters})
         pages[page_number] = entries
     return pages
 

@@ -140,6 +140,7 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     scope = resolve_source_scope(query, strategy=strategy, config=config)
     role = scope.role if scope.explicit else None
     requires_penetapan = _asks_enactment_context((query or "").casefold(), intent)
+    requested_role = _requested_signatory_role(query, intent)
     rows = []
     grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}
     for row in store.document_metadata:
@@ -147,21 +148,28 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
             continue
         if requires_penetapan and row.get("field_statuses", {}).get("penetapan") != "grounded":
             continue
-        selected_signatories = _matching_signatories(store, query, row)
+        selected_signatories = (
+            tuple(signatory for signatory in row.get("signatories") or () if signatory.get("role_text") == requested_role)
+            if requested_role is not None
+            else _matching_signatories(store, query, row)
+        )
+        if requested_role is not None and not selected_signatories:
+            continue
         selected_field = "signatories" if selected_signatories else (field or "")
         if row.get("field_statuses", {}).get(selected_field) != "grounded":
             continue
         refs = tuple(row.get("grounded_fields", {}).get(selected_field) or ())
         if not refs:
             continue
-        signatory = selected_signatories[0] if selected_signatories else None
-        grounding = _signatory_grounding(grounding_by_id, refs, signatory) if signatory else grounding_by_id.get(refs[0])
-        if grounding is None:
-            continue
-        value = str(signatory.get("name_text") or "") if signatory else None
-        result = _metadata_result(store, row, grounding, selected_field, value=value)
-        if result:
-            rows.append(result)
+        candidates = selected_signatories or (None,)
+        for signatory in candidates:
+            grounding = _signatory_grounding(grounding_by_id, refs, signatory) if signatory else grounding_by_id.get(refs[0])
+            if grounding is None:
+                continue
+            value = str(signatory.get("name_text") or "") if signatory else None
+            result = _metadata_result(store, row, grounding, selected_field, value=value)
+            if result:
+                rows.append(result)
     return tuple(rows[:limit])
 
 
@@ -198,7 +206,12 @@ def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
     patterns = intent["metadata_fields"]
     if not patterns:
         return None
-    if not any(word in folded for word in intent["document_target_words"]):
+    has_document_target = any(word in folded for word in intent["document_target_words"])
+    has_bounded_field = any(
+        normalize_intent_text(term) in folded
+        for term in intent.get("metadata_rules", {}).get("enactment_date", ())
+    )
+    if not has_document_target and not has_bounded_field:
         return None
     if _asks_promulgation(folded, intent):
         return "promulgation"
@@ -237,6 +250,14 @@ def _matching_signatories(store, query: str, row: dict | None = None) -> tuple[d
             if _contains_name_tokens(query_tokens, name_tokens):
                 matches.append(signatory)
     return tuple(matches)
+
+
+def _requested_signatory_role(query: str, intent: dict) -> str | None:
+    folded = normalize_intent_text(query)
+    role_terms = tuple(intent.get("metadata_rules", {}).get("signatories", ()))
+    if any(normalize_intent_text(term) == "wakil ketua" and " wakil ketua " in f" {folded} " for term in role_terms):
+        return "Wakil Ketua"
+    return None
 
 
 def _contains_name_tokens(query_tokens: list[str], name_tokens: list[str]) -> bool:

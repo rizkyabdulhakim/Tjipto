@@ -110,8 +110,8 @@ def _append_raw_source_spans(
     raw_hash = sha256(raw_stream.encode("utf-8")).hexdigest()
     cursor = 0
     extraction_order = 0
-    page_words = [word for word in word_bboxes if word.get("source_document_id") == source_id and word.get("page_number") == page_number]
     for line_index, line in enumerate(lines):
+        source_line_index = int(line.get("line_index", line_index))
         raw_text = str(line.get("text") or "")
         if raw_text:
             segments = source_segmenter(raw_text)
@@ -120,14 +120,21 @@ def _append_raw_source_spans(
                 if start == end:
                     continue
                 segment_text = raw_text[start:end]
-                geometry = _segment_geometry(line, raw_text, start, end, page_words, source_id, page_number, line_index)
+                geometry = _segment_geometry(line, raw_text, start, end, source_id, page_number, line_index)
                 rows.append({
-                    "raw_source_span_id": f"{corpus_id}::raw::{source_id}::{page_number:04d}::{line_index:04d}::{segment_index:02d}",
+                    "raw_source_span_id": f"{corpus_id}::raw::{source_id}::{page_number:04d}::{int(line.get('block_index', 0)):04d}::{source_line_index:04d}::{segment_index:02d}",
                     "source_document_id": source_id,
                     "source_sha256": source["sha256"],
                     "source_role": source["source_role"],
                     "page_number": page_number,
-                    "line_index": line_index,
+                    "line_index": source_line_index,
+                    "block_index": geometry["block_index"],
+                    "span_index": geometry["span_index"],
+                    "character_start": geometry["character_start"],
+                    "character_end": geometry["character_end"],
+                    "character_ids": geometry["character_ids"],
+                    "character_texts": geometry["character_texts"],
+                    "character_bboxes": geometry["character_bboxes"],
                     "segment_order": segment_index,
                     "extraction_order": extraction_order,
                     "raw_text": segment_text,
@@ -150,37 +157,45 @@ def _append_raw_source_spans(
         cursor += len(raw_text) + (1 if line_index < len(lines) - 1 else 0)
 
 
-def _segment_geometry(line: dict, raw_text: str, start: int, end: int, page_words: list[dict], source_id: str, page_number: int, line_index: int) -> dict:
-    candidates = []
-    word_cursor = 0
-    line_words = [word for word in page_words if word.get("y1", 0) >= line.get("y0", 0) and word.get("y0", 0) <= line.get("y1", 0) and word.get("x1", 0) >= line.get("x0", 0) and word.get("x0", 0) <= line.get("x1", 0)]
-    exact_words = [word for word in line_words if str(word.get("text") or "").strip() == raw_text[start:end]]
-    if exact_words:
-        word = min(exact_words, key=lambda item: (item.get("x0", 0), item.get("y0", 0)))
-        chars = word.get("characters") or []
-        if chars:
-            return {"x0": min(char["x0"] for char in chars), "y0": min(char["y0"] for char in chars), "x1": max(char["x1"] for char in chars), "y1": max(char["y1"] for char in chars), "method": "pdf_character_bbox"}
-        return {"x0": word["x0"], "y0": word["y0"], "x1": word["x1"], "y1": word["y1"], "method": "pdf_word_bbox"}
-    for word in sorted(line_words, key=lambda item: (item.get("x0", 0), item.get("y0", 0))):
-        word_text = str(word.get("text") or "")
-        while word_cursor < len(raw_text) and raw_text[word_cursor].isspace():
-            word_cursor += 1
-        if not raw_text.startswith(word_text, word_cursor):
-            continue
-        word_start = word_cursor
-        word_cursor += len(word_text)
-        if word_start >= end or word_start + len(word_text) <= start:
-            continue
-        for char in word.get("characters") or []:
-            char_start = word_start + int(char.get("char_start", 0))
-            char_end = word_start + int(char.get("char_end", 0))
-            if char_start < end and char_end > start:
-                candidates.append(char)
-        if not word.get("characters") and start <= word_start and word_start + len(word_text) <= end:
-            return {"x0": word["x0"], "y0": word["y0"], "x1": word["x1"], "y1": word["y1"], "method": "pdf_word_bbox"}
-    if candidates:
-        return {"x0": min(char["x0"] for char in candidates), "y0": min(char["y0"] for char in candidates), "x1": max(char["x1"] for char in candidates), "y1": max(char["y1"] for char in candidates), "method": "pdf_character_bbox"}
-    raise RawSegmentGeometryError(f"raw_segment:{source_id}:{page_number}:{line_index}:{start}:{end}:{raw_text!r}:{line!r}")
+def _segment_geometry(line: dict, raw_text: str, start: int, end: int, source_id: str, page_number: int, line_index: int) -> dict:
+    """Resolve a segment only through its rawdict character lineage.
+
+    A word rectangle is not an acceptable substitute: it can include adjacent
+    punctuation, annotations, or whitespace.  Any missing character lineage
+    is a construction error and therefore fails the staged artifact build.
+    """
+    characters = list(line.get("characters") or [])
+    selected = [
+        character
+        for character in characters
+        if int(character.get("char_start", -1)) < end and int(character.get("char_end", -1)) > start
+    ]
+    selected_text = "".join(str(character.get("text") or "") for character in selected)
+    expected = raw_text[start:end]
+    if not selected or selected_text != expected:
+        raise RawSegmentGeometryError(
+            f"raw_segment_character_mismatch:{source_id}:{page_number}:{line_index}:{start}:{end}:{expected!r}:{selected_text!r}"
+        )
+    if any(len(character.get("bbox") or ()) != 4 for character in selected):
+        raise RawSegmentGeometryError(f"raw_segment_character_bbox_missing:{source_id}:{page_number}:{line_index}:{start}:{end}")
+    boxes = [tuple(character["bbox"]) for character in selected]
+    return {
+        "x0": min(box[0] for box in boxes),
+        "y0": min(box[1] for box in boxes),
+        "x1": max(box[2] for box in boxes),
+        "y1": max(box[3] for box in boxes),
+        "method": "pdf_rawdict_character_bbox",
+        "block_index": selected[0]["block_index"],
+        "span_index": selected[0]["span_index"],
+        "character_start": selected[0]["char_start"],
+        "character_end": selected[-1]["char_end"],
+        "character_ids": [character["character_id"] for character in selected],
+        "character_texts": [character["text"] for character in selected],
+        "character_bboxes": [
+            {"character_id": character["character_id"], "x0": character["x0"], "y0": character["y0"], "x1": character["x1"], "y1": character["y1"]}
+            for character in selected
+        ],
+    }
 
 
 def _default_source_segmenter(raw_text: str) -> list[dict]:
