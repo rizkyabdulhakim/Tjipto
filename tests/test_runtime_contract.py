@@ -490,6 +490,12 @@ class RuntimeContractTest(unittest.TestCase):
         viewer = self.service.viewer("uud", citation["evidence_id"])
         self.assertEqual([box["text"] for box in viewer["bbox_rectangles"]], ["Ketua,", "Prof. Dr. H.M. Amien Rais"])
 
+    def test_scoped_person_role_projects_only_the_exact_name(self) -> None:
+        result = self.service.ask("uud", "ketua Majelis Permusyawaratan Rakyat Republik Indonesia UUD amandemen pertama")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["answer"], "Prof. Dr. H.M. Amien Rais")
+        self.assertEqual(result["metadata_support"][0]["printed_role"], "Ketua")
+
     def test_unscoped_metadata_requests_clarification_without_combined_citations(self) -> None:
         for query in ("penandatangan UUD", "kapan UUD ditetapkan"):
             result = self.service.ask("uud", query)

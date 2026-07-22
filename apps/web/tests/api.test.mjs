@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  askLegal,
   answerTextOrFallback,
   mapAskResponseToCitations,
   mapAskResponseToDocumentSource,
@@ -103,7 +104,7 @@ test("metadata provenance is not mapped as a relevant legal quotation", () => {
   assert.deepEqual(citations, []);
 });
 
-test("relation citation preserves viewer source identity and proof layers", () => {
+test("relation citation preserves opaque viewer source identity", () => {
   const citations = mapAskResponseToCitations({
     status: "answer_ready",
     supports: [{
@@ -120,21 +121,16 @@ test("relation citation preserves viewer source identity and proof layers", () =
       linkable: true,
       highlightable: true,
       viewer_target: {
-        evidence_id: "evidence_rename",
         source_document_id: "uud::amendment_4_historical",
         page_numbers: [1],
-        source_proof_text_span_ids: ["span_old", "span_transition", "span_new"],
-        source_proof_bbox_refs: ["bbox_old", "bbox_transition", "bbox_new"],
-        target_text_span_ids: ["span_new"],
-        target_bbox_refs: ["bbox_new"],
         can_resolve: true,
       },
     }],
   });
 
   assert.equal(citations[0].sourceDocumentId, "uud::amendment_4_historical");
-  assert.deepEqual(citations[0].relationSourceProofBBoxRefs, ["bbox_old", "bbox_transition", "bbox_new"]);
-  assert.deepEqual(citations[0].relationTargetBBoxRefs, ["bbox_new"]);
+  assert.equal(citations[0].viewerRefId, "evidence_rename");
+  assert.equal(citations[0].viewerTarget?.can_resolve, true);
 });
 
 test("limited answer keeps backend answer text instead of fallback", () => {
@@ -236,24 +232,40 @@ test("source anomaly provenance stays outside relevant quotations", () => {
   assert.deepEqual(citations, []);
 });
 
-test("article relation support preserves source proof and target precision wording", () => {
+test("article relation support uses the source-note panel", () => {
   const support = mapAskResponseToSupportItems({
     status: "answer_ready",
-    article_amendment_relations: [{
-      relation_id: "rename_25e_25a",
-      relation_type: "RENAMES",
-      source_reference: "Pasal 25E",
-      target_reference: "Pasal 25A",
-      evidence_id: "evidence_rename",
-      source_proof_text_span_ids: ["span_old", "span_transition", "span_new"],
-      source_proof_bbox_refs: ["bbox_old", "bbox_transition", "bbox_new"],
-      target_precision: "target_local",
-      support_class: "exact_article_relation",
-      viewer_highlightable: true,
+    supports: [{
+      support_id: "evidence_rename",
+      support_kind: "article_relation",
+      panel_section: "Catatan Sumber",
+      display_label: "RENAMES",
+      display_text: "Pasal 25E menjadi Pasal 25A",
+      linkable: true,
+      highlightable: true,
+      viewer_target: { can_resolve: true },
     }],
   });
 
-  assert.equal(support.articleRelations.length, 1);
-  assert.equal(support.articleRelations[0].label, "RENAMES");
-  assert.equal(support.articleRelations[0].detail, "Dukungan relasi sumber.");
+  assert.equal(support.trace.length, 1);
+  assert.equal(support.trace[0].label, "RENAMES");
+  assert.equal(support.trace[0].clickable, true);
+});
+
+test("ask sends the original question with its selected source role", async () => {
+  const originalFetch = globalThis.fetch;
+  let payload;
+  globalThis.fetch = async (_url, options) => {
+    payload = JSON.parse(options.body);
+    return new Response(JSON.stringify({ status: "answer_ready" }), { status: 200 });
+  };
+  try {
+    await askLegal("ketua MPR", { source_role: "amendment_1_historical" });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.deepEqual(payload, {
+    query: "ketua MPR",
+    filters: { source_role: "amendment_1_historical" },
+  });
 });

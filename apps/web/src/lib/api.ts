@@ -199,11 +199,11 @@ export interface BookmarksResponse {
   bookmarks: BookmarkPointer[];
 }
 
-export async function askLegal(query: string): Promise<TjiptoAskResponse> {
+export async function askLegal(query: string, filters?: { source_role: string }): Promise<TjiptoAskResponse> {
   const response = await fetch(corpusEndpoint("ask"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, ...(filters ? { filters } : {}) }),
   });
   if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} runtime returned ${response.status}`);
   return response.json();

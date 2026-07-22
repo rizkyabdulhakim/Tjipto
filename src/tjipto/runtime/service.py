@@ -559,7 +559,11 @@ class LegalRuntimeService:
                 str(row.get("display_text") or row.get("answer") or "") for row in metadata_support
                 if row.get("display_text") or row.get("answer")
             ))
-            deterministic_answer = " ".join(values) if any(row.get("fact_kind") == "person_role" for row in metadata_support) else templates["metadata"].format(answer=", ".join(values))
+            names = tuple(dict.fromkeys(
+                str(row.get("printed_name") or "").strip() for row in metadata_support
+                if row.get("fact_kind") == "person_role" and str(row.get("printed_name") or "").strip()
+            ))
+            deterministic_answer = ", ".join(names) if names else templates["metadata"].format(answer=", ".join(values))
         else:
             deterministic_answer = self._answer_text(status, evidence, templates)
             if routed.get("route") == "structure_list":

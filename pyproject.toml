@@ -7,7 +7,7 @@ name = "tjipto-legal-evidence-engine"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-  "PyMuPDF>=1.27.2,<1.28",
+  "PyMuPDF==1.27.2.3",
 ]
 
 [tool.setuptools.packages.find]

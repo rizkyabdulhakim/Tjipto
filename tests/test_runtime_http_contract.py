@@ -213,6 +213,15 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertTrue(result["clarification_options"])
         self.assertFalse(result["supports"])
 
+    def test_source_role_filter_preserves_the_person_role_question(self) -> None:
+        result = self._post("/legal/uud/ask", {
+            "query": "ketua Majelis Permusyawaratan Rakyat Republik Indonesia UUD",
+            "filters": {"source_role": "amendment_1_historical"},
+        })
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["answer"], "Prof. Dr. H.M. Amien Rais")
+        self.assertEqual(result["supports"][0]["source_role"], "amendment_1_historical")
+
     def test_unresolved_temporal_scope_public_contract_is_fail_closed(self) -> None:
         result = self._post("/legal/uud/ask", {"query": "Pasal 31 perubahan ke-5"})
         self.assertEqual(result["status"], "insufficient_evidence")

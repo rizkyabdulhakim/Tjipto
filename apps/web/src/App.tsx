@@ -63,13 +63,13 @@ export default function App() {
     setMobileNavOpen(false);
   };
 
-  const submit = async (value: string) => {
+  const submit = async (value: string, filters?: { source_role: string }, displayValue = value) => {
     if (!hasChat) setHasChat(true);
     setRoute("chat");
     const userMsg: TMessage = {
       id: "u_" + Date.now(),
       role: "user",
-      content: value,
+      content: displayValue,
     };
     const asstId = "a_" + Date.now();
     setMessages((prev) => [
@@ -85,7 +85,7 @@ export default function App() {
     setIsStreaming(true);
 
     try {
-      const response = await askLegal(value);
+      const response = await askLegal(value, filters);
       const citations = mapAskResponseToCitations(response);
       const documentSource = mapAskResponseToDocumentSource(response);
       const support = mapAskResponseToSupportItems(response);
@@ -107,6 +107,7 @@ export default function App() {
                 clarificationOptions: (response.clarification_options ?? [])
                   .filter((option) => option.label)
                   .map((option) => ({ sourceRole: option.source_role, label: option.label as string })),
+                clarificationQuery: response.status === "clarification_required" ? value : undefined,
               }
             : m,
         ),
@@ -128,6 +129,9 @@ export default function App() {
       setIsStreaming(false);
     }
   };
+
+  const clarify = (query: string, sourceRole: string, label: string) =>
+    submit(query, { source_role: sourceRole }, `${query}\nKonteks sumber: ${label}`);
 
   const stop = () => setIsStreaming(false);
   const allCitations = messages.flatMap((message) => message.citations ?? []);
@@ -248,6 +252,7 @@ export default function App() {
                 <ChatView
                   messages={messages}
                   onSubmit={submit}
+                  onClarify={clarify}
                   isStreaming={isStreaming}
                   onStop={stop}
                   onCitationClick={setActiveCitation}

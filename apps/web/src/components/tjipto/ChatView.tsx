@@ -15,6 +15,7 @@ import { Composer } from "./Composer";
 interface ChatViewProps {
   messages: ChatMessage[];
   onSubmit: (value: string) => void;
+  onClarify: (query: string, sourceRole: string, label: string) => void;
   isStreaming: boolean;
   onStop: () => void;
   onCitationClick: (citation: Citation) => void;
@@ -191,11 +192,13 @@ function UserMessage({ content }: { content: string }) {
 function AssistantMessage({
   message,
   onSubmit,
+  onClarify,
   onCitationClick,
   activeCitationId,
 }: {
   message: ChatMessage;
   onSubmit: (value: string) => void;
+  onClarify: (query: string, sourceRole: string, label: string) => void;
   onCitationClick: (c: Citation) => void;
   activeCitationId?: number;
 }) {
@@ -266,7 +269,8 @@ function AssistantMessage({
                       key={option.sourceRole ?? option.label}
                       type="button"
                       data-clarification-option={option.sourceRole ?? option.label}
-                      onClick={() => onSubmit(option.label)}
+                      disabled={!option.sourceRole || !message.clarificationQuery}
+                      onClick={() => option.sourceRole && message.clarificationQuery && onClarify(message.clarificationQuery, option.sourceRole, option.label)}
                       className="rounded-lg border border-[var(--tj-border-subtle)] px-2.5 py-1.5 text-xs hover:bg-[var(--tj-surface-hover)]"
                     >
                       {option.label}
@@ -487,6 +491,7 @@ function SupportFooter({
 export function ChatView({
   messages,
   onSubmit,
+  onClarify,
   isStreaming,
   onStop,
   onCitationClick,
@@ -525,6 +530,7 @@ export function ChatView({
                 <AssistantMessage
                   message={m}
                   onSubmit={onSubmit}
+                  onClarify={onClarify}
                   onCitationClick={onCitationClick}
                   activeCitationId={activeCitationId}
                 />
