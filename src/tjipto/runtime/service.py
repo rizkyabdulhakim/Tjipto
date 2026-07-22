@@ -555,8 +555,11 @@ class LegalRuntimeService:
             citations = tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"])
             viewer_refs = context_pack["viewer_refs"]
         if metadata_support:
-            values = tuple(dict.fromkeys(str(row.get("answer") or "") for row in metadata_support if row.get("answer")))
-            deterministic_answer = templates["metadata"].format(answer=", ".join(values))
+            values = tuple(dict.fromkeys(
+                str(row.get("display_text") or row.get("answer") or "") for row in metadata_support
+                if row.get("display_text") or row.get("answer")
+            ))
+            deterministic_answer = " ".join(values) if any(row.get("fact_kind") == "person_role" for row in metadata_support) else templates["metadata"].format(answer=", ".join(values))
         else:
             deterministic_answer = self._answer_text(status, evidence, templates)
             if routed.get("route") == "structure_list":
@@ -580,8 +583,8 @@ class LegalRuntimeService:
             "viewer_refs": viewer_refs,
             "metadata_facts": tuple(_metadata_fact(row) for row in evidence if row.get("metadata_field")),
             "metadata_support": metadata_support,
-            "structural_support": context_pack.get("structural_support", ()),
-            "trace_support": context_pack.get("trace_support", ()),
+            "structural_support": tuple(_citation_with_authority(store, row) for row in context_pack.get("structural_support", ())),
+            "trace_support": tuple(_citation_with_authority(store, row) for row in context_pack.get("trace_support", ())),
             "legal_relations": tuple(row["legal_relation"] for row in evidence if row.get("legal_relation")),
             "answer_scope": "direct_evidence" if status == "answer_ready" else "limited_evidence",
             "warnings": ("metadata_support_not_exact_highlightable",)
@@ -733,35 +736,34 @@ def _layout_lines(store, row: dict) -> tuple[dict, ...]:
     configured = row.get("layout_lines")
     if isinstance(configured, (list, tuple)) and configured and isinstance(configured[0], dict):
         return tuple(configured)
-    text = str(row.get("display_text") or row.get("quoted_text") or "")
-    lines = text.replace("\r\n", "\n").replace("\r", "\n").splitlines() or [text]
-    evidence_id = row.get("evidence_id")
-    boxes = []
-    if store is not None and evidence_id:
-        boxes = list(store.bboxes_for(evidence_id))
-        if not boxes and str(evidence_id).startswith("uud_metadata_"):
-            boxes = list(store.metadata_bboxes_for(evidence_id))
-    boxes.sort(key=lambda item: (item.get("page_number", 0), item.get("y0", 0), item.get("x0", 0)))
-    min_x = min((float(box.get("x0")) for box in boxes if isinstance(box.get("x0"), (int, float))), default=0.0)
+    spans = {
+        item.get("text_span_id"): item
+        for item in (getattr(store, "page_text_spans", ()) if store is not None else ())
+    }
     result = []
-    for index, line in enumerate(lines):
-        box = boxes[index] if index < len(boxes) else {}
-        width = float(box.get("page_width") or 0)
-        x0, x1 = box.get("x0"), box.get("x1")
-        if width and isinstance(x0, (int, float)) and isinstance(x1, (int, float)):
-            center_distance = abs(((x0 + x1) / 2) - width / 2)
-            alignment = "center" if center_distance <= max(8.0, width * 0.04) else "right" if width - x1 <= width * 0.08 else "left"
-        else:
-            alignment = "unknown"
+    for order, span_id in enumerate(row.get("text_span_ids") or ()):
+        span = spans.get(span_id)
+        if not span:
+            continue
+        boxes = store.exact_bboxes_for_text_spans((span_id,)) if store is not None else ()
+        width = next((float(box["page_width"]) for box in boxes if isinstance(box.get("page_width"), (int, float))), 0.0)
+        x0 = min((float(box["x0"]) for box in boxes if isinstance(box.get("x0"), (int, float))), default=0.0)
+        x1 = max((float(box["x1"]) for box in boxes if isinstance(box.get("x1"), (int, float))), default=0.0)
+        alignment = "unknown"
+        if width and x1 > x0:
+            alignment = "center" if abs(((x0 + x1) / 2) - width / 2) <= max(8.0, width * 0.04) else "right" if width - x1 <= width * 0.08 else "left"
         result.append({
-            "text": line,
-            "line_order": index,
-            "paragraph_id": f"{evidence_id or 'support'}::paragraph::{index}",
+            "text": span.get("exact_quote") or span.get("text") or "",
+            "line_order": order,
+            "paragraph_id": str(span_id),
             "alignment": alignment,
-            "indent": max(0.0, float(x0) - min_x) if isinstance(x0, (int, float)) else 0.0,
-            "source_bbox_refs": [box["bbox_id"]] if box.get("bbox_id") else [],
+            "indent": x0 if alignment == "left" else 0.0,
+            "source_bbox_refs": [box["bbox_id"] for box in boxes if box.get("bbox_id")],
         })
-    return tuple(result)
+    if result:
+        return tuple(result)
+    text = str(row.get("display_text") or row.get("quoted_text") or "")
+    return ({"text": text, "line_order": 0, "paragraph_id": str(row.get("evidence_id") or "support"), "alignment": "unknown", "indent": 0.0, "source_bbox_refs": []},)
 
 
 def _support_kind_for_authority(authority_kind: str) -> str:
@@ -1144,10 +1146,38 @@ def _metadata_support(store, row: dict) -> dict:
     can_resolve = row.get("viewer_ref", {}).get("can_resolve") is True
     authority = _authority_policy(store, row, can_resolve=can_resolve)
     viewer_ref = ((row.get("viewer_ref") or {}) | authority) if can_resolve else None
-    return {
+    field = str(row.get("metadata_field") or "")
+    labels = {
+        "signatories": "Penandatangan",
+        "penetapan": "Tanggal Penetapan",
+        "institution": "Lembaga",
+        "place": "Tempat Penetapan",
+    }
+    source = _source_document_meta(store, row.get("source_document_id"))
+    document_title = _document_title(store, source)
+    name = str(row.get("printed_name") or "").strip()
+    role = str(row.get("printed_role") or "").strip()
+    institution = str(row.get("institution") or "").strip()
+    date_context = str(row.get("date_context") or "").strip()
+    display_text = str(row.get("display_text") or row.get("answer") or "").strip()
+    if name and role:
+        display_text = f"{name} tercantum sebagai {role} dalam {document_title}."
+        if institution:
+            display_text += f" Lembaga: {institution}."
+        if date_context:
+            display_text += f" Tanggal: {date_context}."
+    return authority | {
         "support_class": "exact_metadata_citation" if can_resolve else "metadata_trace",
         "field": row.get("metadata_field"),
         "answer": row.get("metadata_answer"),
+        "fact_kind": row.get("fact_kind") or ("source_fact" if field else "metadata"),
+        "display_label": labels.get(field, "Sumber Dokumen"),
+        "display_text": display_text,
+        "copy_text": _copy_text(display_text),
+        "printed_name": name or None,
+        "printed_role": role or None,
+        "institution": institution or None,
+        "date_context": date_context or None,
         "evidence_id": row.get("evidence_id"),
         "source_document_id": row.get("source_document_id"),
         "source_role": row.get("source_role"),
@@ -1155,7 +1185,7 @@ def _metadata_support(store, row: dict) -> dict:
         "citation_available": can_resolve,
         "viewer_highlightable": can_resolve,
         "viewer_ref": viewer_ref,
-    } | authority
+    }
 
 
 def _metadata_grounding_evidence(store, metadata_grounding_id: str | None) -> dict | None:

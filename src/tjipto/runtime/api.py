@@ -90,32 +90,25 @@ def _public_search(result: dict) -> dict:
 def _public_ask(result: dict) -> dict:
     if result.get("readiness") is False:
         return _public_integrity(result)
+    support_rows = (
+        *((row, "legal") for row in result.get("final_citations", result.get("citations", ()))),
+        *((row, "legal") for row in result.get("historical_citations", ())),
+        *((row, "metadata") for row in result.get("metadata_support", ())),
+        *((row, "structure") for row in result.get("structural_support", ())),
+        *((row, "trace") for row in result.get("trace_support", ())),
+    )
     public = {
         "status": result.get("status"),
         "answer": result.get("answer"),
         "intent": result.get("intent"),
         "route": result.get("route"),
-        "citations": tuple(_public_citation(row) for row in result.get("citations", ())),
-        "final_citations": tuple(_public_citation(row) for row in result.get("final_citations", result.get("citations", ()))),
-        "historical_citations": tuple(_public_citation(row) for row in result.get("historical_citations", ())),
-        "viewer_refs": tuple(_public_viewer_ref(row) for row in result.get("viewer_refs", ())),
-        "metadata_facts": tuple(_public_metadata_fact(row) for row in result.get("metadata_facts", ())),
-        "metadata_support": tuple(result.get("metadata_support", ())),
-        "structural_support": tuple(result.get("structural_support", ())),
         "legal_relations": tuple(_public_legal_relation(row) for row in result.get("legal_relations", ())),
         "document_relations": tuple(result.get("document_relations", ())),
         "article_amendment_relations": tuple(_public_article_relation(row) for row in result.get("article_amendment_relations", ())),
-        "trace_support": tuple(result.get("trace_support", ())),
         "answer_scope": result.get("answer_scope"),
         "warnings": tuple(result.get("warnings", ())),
         "insufficient_reasons": tuple(_public_reason(row) or row for row in result.get("insufficient_reasons", ())),
-        "supports": tuple(
-            _public_support(row, "metadata") for row in result.get("metadata_support", ())
-        ) + tuple(
-            _public_support(row, "structure") for row in result.get("structural_support", ())
-        ) + tuple(
-            _public_support(row, "trace") for row in result.get("trace_support", ())
-        ),
+        "supports": tuple(_public_support(row, panel_section) for row, panel_section in support_rows),
     }
     if result.get("document_source") is not None:
         source = result["document_source"]
@@ -343,20 +336,30 @@ def _public_support(row: dict, panel_section: str) -> dict:
     support_kind = row.get("support_kind") or ("metadata_source" if panel_section == "metadata" else "structural_provenance" if panel_section == "structure" else "trace_support")
     viewer_target = dict(row.get("viewer_target") or row.get("viewer_ref") or {})
     viewer_target.setdefault("source_document_id", row.get("source_document_id"))
+    labels = {
+        "legal": "Kutipan Relevan",
+        "metadata": "Sumber Dokumen",
+        "structure": "Struktur Dokumen",
+        "trace": "Catatan Sumber",
+    }
+    legal = panel_section == "legal"
+    linkable = row.get("viewer_highlightable") is True and viewer_target.get("can_resolve") is True
     return {
         "support_id": row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
         "support_kind": support_kind,
-        "panel_section": {"metadata": "Bukti Metadata", "structure": "Struktur Dokumen", "trace": "Catatan Sumber"}[panel_section],
-        "authority_kind": row.get("authority_kind"),
-        "source_document": row.get("source_document_id"),
-        "source_role": row.get("source_role"),
+        "panel_section": labels[panel_section],
+        "fact_kind": row.get("fact_kind") or ("legal_text" if legal else "document_structure" if panel_section == "structure" else "source_fact" if panel_section == "metadata" else "source_discrepancy"),
+        "display_label": row.get("display_label") or row.get("label") or row.get("citation") or labels[panel_section],
         "display_text": row.get("display_text") or row.get("quoted_text") or row.get("answer") or "",
         "layout_lines": tuple(row.get("layout_lines") or ()),
-        "copy_text": row.get("copy_text") or "",
-        "citation_available": row.get("citation_available") is True,
-        "viewer_target": _public_viewer_ref(viewer_target),
+        "copy_text": row.get("copy_text") or row.get("quoted_text") or "",
+        "source_document": row.get("source_document_id"),
+        "source_role": row.get("source_role"),
         "page_numbers": tuple(row.get("page_numbers") or ()),
-        "highlightable": row.get("viewer_highlightable") is True,
+        "legal_citation_available": legal and row.get("citation_final") is True,
+        "linkable": linkable,
+        "highlightable": linkable,
+        "viewer_target": _public_viewer_ref(viewer_target),
     }
 
 

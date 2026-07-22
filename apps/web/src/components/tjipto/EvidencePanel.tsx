@@ -176,9 +176,11 @@ function EvidenceContent({
   };
 
   const normalizeSelectionCopy = (event: ClipboardEvent<HTMLElement>) => {
+    const selected = window.getSelection()?.toString() ?? "";
+    if (!selected.trim()) return;
     event.preventDefault();
     event.clipboardData.clearData();
-    event.clipboardData.setData("text/plain", (citation.copyText ?? citation.excerpt).replace(/\r\n?/g, "\n"));
+    event.clipboardData.setData("text/plain", selected.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trimStart()).join("\n"));
   };
 
   const savePointer = async () => {

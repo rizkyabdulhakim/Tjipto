@@ -145,60 +145,29 @@ class RuntimeHttpContractTest(unittest.TestCase):
             self.assertEqual(result["route"], case["route"], case["query"])
             if "intent" in case:
                 self.assertEqual(result["intent"], case["intent"], case["query"])
+            supports = result["supports"]
+            for support in supports:
+                self.assertEqual(
+                    set(support),
+                    {"support_id", "support_kind", "panel_section", "fact_kind", "display_label", "display_text", "layout_lines", "copy_text", "source_document", "source_role", "page_numbers", "legal_citation_available", "linkable", "highlightable", "viewer_target"},
+                    case["query"],
+                )
+                self.assertNotIn("source_sha256", json.dumps(support), case["query"])
+                self.assertNotIn("source_pdf_path", json.dumps(support), case["query"])
             if "has_citations" in case:
-                if case["has_citations"] and not result["citations"]:
-                    self.assertTrue(
-                        result.get("metadata_support") or result.get("historical_citations") or result.get("structural_support"),
-                        case["query"],
-                    )
-                else:
-                    self.assertEqual(bool(result["citations"]), case["has_citations"], case["query"])
+                expected_legal = case["has_citations"] and case["route"] != "metadata_fact"
+                self.assertEqual(any(row["legal_citation_available"] for row in supports), expected_legal, case["query"])
             if "has_viewer_refs" in case:
-                if case["has_viewer_refs"] and not result["viewer_refs"]:
-                    self.assertTrue(
-                        any(row.get("viewer_ref", {}).get("can_resolve") for row in result.get("metadata_support", ())),
-                        case["query"],
-                    )
-                else:
-                    self.assertEqual(bool(result["viewer_refs"]), case["has_viewer_refs"], case["query"])
-            if "public_keys" in case:
-                self.assertTrue(set(case["public_keys"]) <= set(result), case["query"])
-                self.assertTrue({"final_citations", "historical_citations", "structural_support"} <= set(result), case["query"])
-            for field in case.get("absent_top_level", ()):
-                self.assertNotIn(field, result, case["query"])
-            for field in case.get("absent_citation_fields", ()):
-                self.assertNotIn(field, result["citations"][0], case["query"])
-            for field in case.get("absent_viewer_ref_fields", ()):
-                self.assertNotIn(field, result["viewer_refs"][0], case["query"])
-            if "metadata_field" in case:
-                self.assertEqual(result["metadata_facts"][0]["field"], case["metadata_field"], case["query"])
+                self.assertEqual(any(row["highlightable"] for row in supports), case["has_viewer_refs"], case["query"])
             if "metadata_answer" in case:
-                self.assertEqual(result["metadata_facts"][0]["answer"], case["metadata_answer"], case["query"])
-            if case["route"] == "metadata_fact" and case["status"] == "answer_ready":
-                self.assertTrue(result["metadata_support"], case["query"])
-                support = result["metadata_support"][0]
-                if support["support_class"] == "exact_metadata_citation":
-                    self.assertFalse(result["citations"], case["query"])
-                    self.assertFalse(result["viewer_refs"], case["query"])
-                    self.assertTrue(support["citation_available"], case["query"])
-                    self.assertTrue(support["viewer_highlightable"], case["query"])
-                    self.assertTrue(support["viewer_ref"]["can_resolve"], case["query"])
-                    self.assertEqual(support["authority_kind"], "metadata_source", case["query"])
-                    self.assertFalse(support["citation_final"], case["query"])
-                    self.assertNotIn("source_sha256", json.dumps(support), case["query"])
-                    self.assertNotIn("source_pdf_path", json.dumps(support), case["query"])
-                else:
-                    self.assertFalse(support["citation_available"], case["query"])
-                    self.assertFalse(support["viewer_highlightable"], case["query"])
-                    self.assertIsNone(support["viewer_ref"], case["query"])
-                    self.assertEqual(support["authority_kind"], "metadata_trace", case["query"])
+                self.assertTrue(any(case["metadata_answer"] in row["display_text"] for row in supports), case["query"])
             if "relation_target_labels" in case:
                 self.assertEqual(
                     {row["target_label"] for row in result["legal_relations"]},
                     set(case["relation_target_labels"]),
                     case["query"],
                 )
-            for field in ("citations", "viewer_refs", "insufficient_reasons"):
+            for field in ("insufficient_reasons",):
                 if field in case:
                     self.assertEqual(result[field], case[field], case["query"])
 
@@ -207,28 +176,48 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(result["status"], "answer_ready")
         self.assertEqual(result["route"], "metadata_fact")
         self.assertEqual(result["intent"], "metadata_lookup")
-        self.assertEqual(result["metadata_facts"][0]["field"], "signatories")
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
-        self.assertTrue(result["metadata_support"])
-        self.assertEqual(result["metadata_support"][0]["authority_kind"], "metadata_source")
-        self.assertFalse(result["metadata_support"][0]["citation_final"])
+        self.assertTrue(result["supports"])
+        self.assertEqual(result["supports"][0]["panel_section"], "Sumber Dokumen")
+        self.assertFalse(result["supports"][0]["legal_citation_available"])
+
+    def test_structure_and_exact_roles_publish_clickable_supports(self) -> None:
+        structure = self._post("/legal/uud/ask", {"query": "bab XI agama"})
+        self.assertEqual(structure["supports"][0]["panel_section"], "Struktur Dokumen")
+        self.assertTrue(structure["supports"][0]["linkable"])
+        self.assertTrue(structure["supports"][0]["highlightable"])
+
+        deleted = self._post("/legal/uud/ask", {"query": "Apa isi BAB IV UUD 1945?"})
+        self.assertEqual({row["panel_section"] for row in deleted["supports"]}, {"Struktur Dokumen", "Kutipan Relevan"})
+        self.assertEqual(
+            [row["display_text"] for row in deleted["supports"] if row["panel_section"] == "Kutipan Relevan"],
+            ["Dihapus."],
+        )
+
+        chair = self._post("/legal/uud/ask", {"query": "siapa ketua mpr dalam Perubahan Keempat?"})
+        chair_text = " ".join(row["display_text"] for row in chair["supports"])
+        self.assertIn("Amien Rais", chair_text)
+        self.assertNotIn("Ginandjar", chair_text)
+
+        deputies = self._post("/legal/uud/ask", {"query": "siapa wakil ketua yang tercantum dalam Perubahan Keempat?"})
+        deputy_text = " ".join(row["display_text"] for row in deputies["supports"])
+        self.assertIn("Ginandjar", deputy_text)
+        self.assertIn("Nazri Adlani", deputy_text)
+        self.assertNotIn("Amien Rais", deputy_text)
+        for result in (structure, deleted, chair, deputies):
+            self.assertFalse({"metadata_support", "structural_support", "trace_support"} & set(result))
 
     def test_unscoped_metadata_public_contract_requires_clarification(self) -> None:
         result = self._post("/legal/uud/ask", {"query": "penandatangan UUD"})
         self.assertEqual(result["status"], "clarification_required")
         self.assertEqual(result["route"], "metadata_fact")
         self.assertTrue(result["clarification_options"])
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
-        self.assertFalse(result["metadata_facts"])
+        self.assertFalse(result["supports"])
 
     def test_unresolved_temporal_scope_public_contract_is_fail_closed(self) -> None:
         result = self._post("/legal/uud/ask", {"query": "Pasal 31 perubahan ke-5"})
         self.assertEqual(result["status"], "insufficient_evidence")
         self.assertIn("unresolved_source_scope", result["insufficient_reasons"])
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
+        self.assertFalse(result["supports"])
 
     def test_local_dev_cors_only(self) -> None:
         request = Request(

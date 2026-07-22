@@ -140,7 +140,7 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     scope = resolve_source_scope(query, strategy=strategy, config=config)
     role = scope.role if scope.explicit else None
     requires_penetapan = _asks_enactment_context((query or "").casefold(), intent)
-    requested_role = _requested_signatory_role(query, intent)
+    requested_role = _requested_signatory_role(store, query)
     rows = []
     grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}
     for row in store.document_metadata:
@@ -167,7 +167,7 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
             if grounding is None:
                 continue
             value = str(signatory.get("name_text") or "") if signatory else None
-            result = _metadata_result(store, row, grounding, selected_field, value=value)
+            result = _metadata_result(store, row, grounding, selected_field, value=value, signatory=signatory)
             if result:
                 rows.append(result)
     return tuple(rows[:limit])
@@ -252,11 +252,19 @@ def _matching_signatories(store, query: str, row: dict | None = None) -> tuple[d
     return tuple(matches)
 
 
-def _requested_signatory_role(query: str, intent: dict) -> str | None:
+def _requested_signatory_role(store, query: str) -> str | None:
+    """Resolve only an exact role declared by the current corpus facts."""
     folded = normalize_intent_text(query)
-    role_terms = tuple(intent.get("metadata_rules", {}).get("signatories", ()))
-    if any(normalize_intent_text(term) == "wakil ketua" and " wakil ketua " in f" {folded} " for term in role_terms):
-        return "Wakil Ketua"
+    roles = {
+        str(signatory.get("role_text") or "").strip()
+        for metadata in store.document_metadata
+        for signatory in metadata.get("signatories") or ()
+        if str(signatory.get("role_text") or "").strip()
+    }
+    for role in sorted(roles, key=lambda value: (-len(normalize_intent_text(value)), value)):
+        normalized = normalize_intent_text(role)
+        if normalized and re.search(rf"(?<!\w){re.escape(normalized)}(?!\w)", folded):
+            return role
     return None
 
 
@@ -342,12 +350,12 @@ def _asks_enactment_context(folded: str, intent: dict) -> bool:
     return _asks_any(folded, intent, "enactment_context") or _asks_token(folded, intent, "institution_tokens")
 
 
-def _metadata_result(store, row: dict, grounding: dict, field: str, *, value: str | None = None) -> dict | None:
+def _metadata_result(store, row: dict, grounding: dict, field: str, *, value: str | None = None, signatory: dict | None = None) -> dict | None:
     value = value or _field_value(row, field)
     if not value:
         return None
     bboxes = store.metadata_bboxes_for(grounding["metadata_grounding_id"])
-    return {
+    result = {
         "corpus_id": row.get("corpus_id"),
         "evidence_id": grounding["metadata_grounding_id"],
         "legal_unit_id": None,
@@ -380,6 +388,15 @@ def _metadata_result(store, row: dict, grounding: dict, field: str, *, value: st
             and _bboxes_have_coordinates(bboxes)
         ),
     }
+    if signatory:
+        result |= {
+            "fact_kind": "person_role",
+            "printed_name": signatory.get("name_text"),
+            "printed_role": signatory.get("role_text"),
+            "institution": row.get("institution"),
+            "date_context": row.get("date") or (row.get("penetapan") or {}).get("date_text"),
+        }
+    return result
 
 
 def _field_value(row: dict, field: str) -> str | None:

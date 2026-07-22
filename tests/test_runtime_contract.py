@@ -1162,8 +1162,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["answer_type"], "source_document")
         self.assertEqual(result["document_source"]["source_role"], "amendment_1_historical")
         self.assertEqual(result["document_source"]["viewer_target"]["action"], "open_document")
-        self.assertFalse(result["citations"])
-        self.assertFalse(result["viewer_refs"])
+        self.assertFalse(result["supports"])
 
     def test_two_artifact_declared_document_scopes_route_to_their_document_relation(self) -> None:
         result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")
@@ -1197,7 +1196,7 @@ class RuntimeContractTest(unittest.TestCase):
         )
         self.assertEqual(api_result["status"], "answer_ready")
         self.assertEqual(api_result["route"], "legal_reference")
-        self.assertEqual(api_result["citations"][0]["temporal_context"], "amendment_1_historical")
+        self.assertEqual(api_result["supports"][0]["source_role"], "amendment_1_historical")
 
     def test_dense_readiness_does_not_fake_matches(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")

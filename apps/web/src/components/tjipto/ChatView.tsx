@@ -281,6 +281,7 @@ function AssistantMessage({
               citations={message.citations}
               onCitationClick={onCitationClick}
               metadataSupport={message.metadataSupport}
+              structuralSupport={message.structuralSupport}
               traceSupport={message.traceSupport}
               documentRelations={message.documentRelations}
               articleRelations={message.articleRelations}
@@ -424,6 +425,7 @@ function SupportFooter({
   citations,
   onCitationClick,
   metadataSupport,
+  structuralSupport,
   traceSupport,
   documentRelations,
   articleRelations,
@@ -431,13 +433,15 @@ function SupportFooter({
   citations?: Citation[];
   onCitationClick: (citation: Citation) => void;
   metadataSupport?: SupportItem[];
+  structuralSupport?: SupportItem[];
   traceSupport?: SupportItem[];
   documentRelations?: SupportItem[];
   articleRelations?: SupportItem[];
 }) {
   const groups = [
-    ["metadata-support", "DUKUNGAN METADATA", metadataSupport],
-    ["trace-support", "TRACE-ONLY", traceSupport],
+    ["structure-support", "STRUKTUR DOKUMEN", structuralSupport],
+    ["metadata-support", "SUMBER DOKUMEN", metadataSupport],
+    ["trace-support", "CATATAN SUMBER", traceSupport],
     ["document-relations", "RELASI DOKUMEN", documentRelations],
     ["article-relations", "BUKTI RELASI PASAL", articleRelations],
   ] as const;

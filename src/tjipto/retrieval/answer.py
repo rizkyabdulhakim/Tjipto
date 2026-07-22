@@ -168,6 +168,11 @@ def _payload(store, row: dict) -> dict:
         "quoted_text": row.get("quoted_text"),
         "metadata_answer": row.get("metadata_answer"),
         "metadata_field": row.get("metadata_field"),
+        "fact_kind": row.get("fact_kind"),
+        "printed_name": row.get("printed_name"),
+        "printed_role": row.get("printed_role"),
+        "institution": row.get("institution"),
+        "date_context": row.get("date_context"),
         "legal_relation": row.get("legal_relation"),
         "candidate_type": row.get("candidate_type"),
         "route_sources": tuple(row.get("route_sources") or ()),
@@ -175,6 +180,7 @@ def _payload(store, row: dict) -> dict:
         "authority_kind": row.get("authority_kind"),
         "citation_final": row.get("citation_final"),
         "citable_status": row.get("citable_status"),
+        "viewer_highlightable": row.get("viewer_highlightable") is True,
         "viewer_ref": {
             "action": "viewer",
             "evidence_id": row["evidence_id"],
@@ -197,6 +203,11 @@ def _citation_payload(row: dict) -> dict:
         "quoted_text": row.get("quoted_text"),
         "metadata_answer": row.get("metadata_answer"),
         "metadata_field": row.get("metadata_field"),
+        "fact_kind": row.get("fact_kind"),
+        "printed_name": row.get("printed_name"),
+        "printed_role": row.get("printed_role"),
+        "institution": row.get("institution"),
+        "date_context": row.get("date_context"),
         "legal_relation": row.get("legal_relation"),
         "candidate_type": row.get("candidate_type"),
         "source_role": row.get("source_role"),
@@ -210,6 +221,7 @@ def _citation_payload(row: dict) -> dict:
         "authority_kind": row.get("authority_kind"),
         "citation_final": row.get("citation_final"),
         "citable_status": row.get("citable_status"),
+        "viewer_highlightable": row.get("viewer_highlightable") is True,
     }
 
 

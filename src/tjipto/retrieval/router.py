@@ -75,7 +75,7 @@ def route_retrieval(
         normalized["normalized_query"], strategy=structured_strategy, config=config
     ):
         if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config, store=store):
-            entity_matches = tuple(metadata_lookup(store, normalized["normalized_query"], len(store.document_metadata)))
+            entity_matches = tuple(metadata_lookup(store, normalized["normalized_query"], len(store.metadata_grounding)))
             if entity_matches and all(row.get("metadata_field") == "signatories" for row in entity_matches):
                 return envelope | {
                     "status": "found",
@@ -184,7 +184,7 @@ def route_retrieval(
                 "reason": "citation_not_found",
             }
 
-    metadata_all = tuple(metadata_lookup(store, normalized["normalized_query"], len(store.document_metadata)))
+    metadata_all = tuple(metadata_lookup(store, normalized["normalized_query"], len(store.metadata_grounding)))
     metadata = filter_evidence(metadata_all, filters)
     if metadata:
         ranked, trace = merge_ranked(store, {"metadata": metadata}, filters)

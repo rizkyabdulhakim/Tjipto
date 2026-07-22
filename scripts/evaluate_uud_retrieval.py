@@ -24,7 +24,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cases = _read_jsonl(args.cases)
-    results = [_evaluate(row) for row in cases]
+    service = LegalRuntimeService(ROOT)
+    results = [_evaluate(row, service) for row in cases]
     counts = {
         "pass": sum(row["outcome"] == "PASS" for row in results),
         "fail": sum(row["outcome"] == "FAIL" for row in results),
@@ -116,9 +117,10 @@ def _percentile(values: list[float], fraction: float) -> float:
     return values[index]
 
 
-def _evaluate(case: dict[str, Any]) -> dict[str, Any]:
-    response = handle_request(case["corpus_id"], "ask", {"query": case["query"]}, ROOT)
-    errors = _validate(case, response)
+def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, Any]:
+    response = handle_request(case["corpus_id"], "ask", {"query": case["query"]}, ROOT, service=service)
+    internal = service.ask(case["corpus_id"], case["query"])
+    errors = _validate(case, response, internal)
     if not errors:
         outcome = "PASS"
     elif case.get("case_status") == "known_gap":
@@ -136,26 +138,26 @@ def _evaluate(case: dict[str, Any]) -> dict[str, Any]:
             "route": response.get("route"),
             "intent": response.get("intent"),
             "requested_function": response.get("requested_function"),
-            "support_type": _support_type(response),
-            "citation_evidence_ids": _ids(response.get("citations", ()), "evidence_id"),
-            "citation_legal_unit_ids": _ids(response.get("citations", ()), "legal_unit_id"),
-            "final_citation_count": _final_citation_count(response),
+            "support_type": _support_type(internal),
+            "citation_evidence_ids": _ids(internal.get("citations", ()), "evidence_id"),
+            "citation_legal_unit_ids": _ids(internal.get("citations", ()), "legal_unit_id"),
+            "final_citation_count": _final_citation_count(internal),
         },
     }
 
 
-def _validate(case: dict[str, Any], response: dict[str, Any]) -> list[str]:
+def _validate(case: dict[str, Any], response: dict[str, Any], internal: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     _expect_equal(errors, "status", case.get("expected_status"), response.get("status"))
     _expect_equal(errors, "route", case.get("expected_route"), response.get("route"))
     _expect_equal(errors, "intent", case.get("expected_intent"), response.get("intent"))
     _expect_equal(errors, "requested_function", case.get("expected_requested_function"), response.get("requested_function"))
-    _expect_equal(errors, "support_type", case.get("expected_support_type"), _support_type(response))
-    citations = tuple(response.get("citations", ()))
-    historical = tuple(response.get("historical_citations", ()))
-    metadata = tuple(response.get("metadata_support", ()))
-    trace = tuple(response.get("trace_support", ()))
-    documents = tuple(response.get("document_relations", ()))
+    _expect_equal(errors, "support_type", case.get("expected_support_type"), _support_type(internal))
+    citations = tuple(internal.get("citations", ()))
+    historical = tuple(internal.get("historical_citations", ()))
+    metadata = tuple(internal.get("metadata_support", ()))
+    trace = tuple(internal.get("trace_support", ()))
+    documents = tuple(internal.get("document_relations", ()))
     citation_evidence_ids = set(_ids(citations, "evidence_id")) | set(_ids(historical, "evidence_id"))
     citation_legal_unit_ids = set(_ids(citations, "legal_unit_id")) | set(_ids(historical, "legal_unit_id"))
     support_evidence_ids = citation_evidence_ids | set(_ids(metadata, "evidence_id")) | set(_ids(trace, "evidence_id"))
@@ -188,7 +190,7 @@ def _validate(case: dict[str, Any], response: dict[str, Any]) -> list[str]:
     ):
         errors.append("insufficient_evidence_has_public_support")
     if "expected_final_citation_count" in case:
-        _expect_equal(errors, "final_citation_count", case["expected_final_citation_count"], _final_citation_count(response))
+        _expect_equal(errors, "final_citation_count", case["expected_final_citation_count"], _final_citation_count(internal))
     return errors
 
 

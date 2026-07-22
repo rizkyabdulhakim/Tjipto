@@ -108,24 +108,29 @@ test("metadata provenance is not mapped as a relevant legal quotation", () => {
 test("relation citation preserves viewer source identity and proof layers", () => {
   const citations = mapAskResponseToCitations({
     status: "answer_ready",
-    citations: [{
-      evidence_id: "evidence_rename",
-      quoted_text: "Pasal 25E menjadi Pasal 25A",
+    supports: [{
+      support_id: "evidence_rename",
       support_kind: "legal_unit",
-      relevant_quote_eligible: true,
-      authority_kind: "legal_citation",
-      citation_final: false,
+      panel_section: "Kutipan Relevan",
+      display_label: "Pasal 25E",
+      display_text: "Pasal 25E menjadi Pasal 25A",
+      copy_text: "Pasal 25E menjadi Pasal 25A",
+      source_document: "uud::amendment_4_historical",
+      source_role: "amendment_4_historical",
       page_numbers: [1],
-    }],
-    viewer_refs: [{
-      evidence_id: "evidence_rename",
-      source_document_id: "uud::amendment_4_historical",
-      page_numbers: [1],
-      source_proof_text_span_ids: ["span_old", "span_transition", "span_new"],
-      source_proof_bbox_refs: ["bbox_old", "bbox_transition", "bbox_new"],
-      target_text_span_ids: ["span_new"],
-      target_bbox_refs: ["bbox_new"],
-      can_resolve: true,
+      legal_citation_available: true,
+      linkable: true,
+      highlightable: true,
+      viewer_target: {
+        evidence_id: "evidence_rename",
+        source_document_id: "uud::amendment_4_historical",
+        page_numbers: [1],
+        source_proof_text_span_ids: ["span_old", "span_transition", "span_new"],
+        source_proof_bbox_refs: ["bbox_old", "bbox_transition", "bbox_new"],
+        target_text_span_ids: ["span_new"],
+        target_bbox_refs: ["bbox_new"],
+        can_resolve: true,
+      },
     }],
   });
 
@@ -251,7 +256,6 @@ test("article relation support preserves source proof and target precision wordi
   });
 
   assert.equal(support.articleRelations.length, 1);
-  assert.match(support.articleRelations[0].label, /Pasal 25E.*Pasal 25A/);
-  assert.match(support.articleRelations[0].detail, /Source proof exact/);
-  assert.match(support.articleRelations[0].detail, /target target_local/);
+  assert.equal(support.articleRelations[0].label, "RENAMES");
+  assert.equal(support.articleRelations[0].detail, "Dukungan relasi sumber.");
 });

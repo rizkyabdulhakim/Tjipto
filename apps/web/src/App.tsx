@@ -101,6 +101,7 @@ export default function App() {
                 runtimeStatus: response.status,
                 citations: citations.length ? citations : undefined,
                 metadataSupport: support.metadata.length ? support.metadata : undefined,
+                structuralSupport: support.structure.length ? support.structure : undefined,
                 traceSupport: support.trace.length ? support.trace : undefined,
                 documentRelations: support.documentRelations.length ? support.documentRelations : undefined,
                 articleRelations: support.articleRelations.length ? support.articleRelations : undefined,

@@ -42,7 +42,7 @@ export interface Citation {
   relationTargetBBoxRefs?: string[];
   relationTargetPrecision?: string;
   relationProof?: boolean;
-  panelSection?: "Kutipan Relevan" | "Bukti Metadata" | "Struktur Dokumen" | "Catatan Sumber";
+  panelSection?: "Kutipan Relevan" | "Sumber Dokumen" | "Struktur Dokumen" | "Catatan Sumber";
 }
 
 export interface LayoutLine {
@@ -60,6 +60,7 @@ export interface ChatMessage {
   content: string;
   citations?: Citation[];
   metadataSupport?: SupportItem[];
+  structuralSupport?: SupportItem[];
   traceSupport?: SupportItem[];
   documentRelations?: SupportItem[];
   articleRelations?: SupportItem[];
@@ -72,7 +73,7 @@ export interface SupportItem {
   id: string;
   label: string;
   detail?: string;
-  kind: "metadata" | "trace" | "document_relation" | "article_relation";
+  kind: "metadata" | "structure" | "trace" | "document_relation" | "article_relation";
   clickable?: boolean;
 }
 
