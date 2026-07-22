@@ -284,7 +284,6 @@ function AssistantMessage({
               structuralSupport={message.structuralSupport}
               traceSupport={message.traceSupport}
               documentRelations={message.documentRelations}
-              articleRelations={message.articleRelations}
             />
           )}
 
@@ -428,7 +427,6 @@ function SupportFooter({
   structuralSupport,
   traceSupport,
   documentRelations,
-  articleRelations,
 }: {
   citations?: Citation[];
   onCitationClick: (citation: Citation) => void;
@@ -436,14 +434,12 @@ function SupportFooter({
   structuralSupport?: SupportItem[];
   traceSupport?: SupportItem[];
   documentRelations?: SupportItem[];
-  articleRelations?: SupportItem[];
 }) {
   const groups = [
     ["structure-support", "STRUKTUR DOKUMEN", structuralSupport],
     ["metadata-support", "SUMBER DOKUMEN", metadataSupport],
     ["trace-support", "CATATAN SUMBER", traceSupport],
     ["document-relations", "RELASI DOKUMEN", documentRelations],
-    ["article-relations", "BUKTI RELASI PASAL", articleRelations],
   ] as const;
   const visible = groups.filter(([, , rows]) => rows?.length);
   if (!visible.length) return null;

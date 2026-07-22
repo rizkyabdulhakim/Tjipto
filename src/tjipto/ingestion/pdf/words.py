@@ -28,11 +28,11 @@ def build_word_bbox_rows(
         for word_index, word in enumerate(page_words):
             x0, y0, x1, y1, text, block_index, line_index, word_no = word
             normalized_text = normalize_text(text)
-            if not text.strip():
-                continue
             character_rows, character_cursor = _match_word_characters(
                 text, page_characters, character_cursor, source_document_id, page_number, word_index, (x0, y0, x1, y1)
             )
+            if not normalized_text:
+                continue
             rows.append(
                 {
                     "word_bbox_id": f"{bbox_id_prefix}::{source_document_id}::{page_number:04d}::{word_index:05d}",

@@ -34,7 +34,7 @@
     "validation_exceptions": 19,
     "page_text_spans": 2070,
     "raw_source_spans": 2370,
-    "word_bboxes": 11768
+    "word_bboxes": 11766
   },
   "document_metadata": "document_metadata.jsonl",
   "document_relations": "document_relations.jsonl",
@@ -560,8 +560,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 23230,
-      "sha256": "77b5e9f8f65b49caf06f2774e9196a8d4f342b23d25a18f38fa70b100f2d72ac"
+      "bytes": 23228,
+      "sha256": "1bf07beec97cb77a5e6c9cad9daccc388c804f392b3d089b0f32be98f7630d35"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -671,8 +671,8 @@
         "page_box_basis",
         "transform_version"
       ],
-      "bytes": 25953912,
-      "sha256": "7891b181bdabb4c0062db265711974871dfdc66a290a1e4561d59367635b85d4"
+      "bytes": 25952140,
+      "sha256": "f9467acf008ca86f5261af2b9201064371ff20cb86c973bd194e25792e239a43"
     }
   },
   "fixtures": {

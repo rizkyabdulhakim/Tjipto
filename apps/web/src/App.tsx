@@ -104,7 +104,6 @@ export default function App() {
                 structuralSupport: support.structure.length ? support.structure : undefined,
                 traceSupport: support.trace.length ? support.trace : undefined,
                 documentRelations: support.documentRelations.length ? support.documentRelations : undefined,
-                articleRelations: support.articleRelations.length ? support.articleRelations : undefined,
                 clarificationOptions: (response.clarification_options ?? [])
                   .filter((option) => option.label)
                   .map((option) => ({ sourceRole: option.source_role, label: option.label as string })),

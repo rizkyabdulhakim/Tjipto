@@ -75,16 +75,6 @@ def route_retrieval(
         normalized["normalized_query"], strategy=structured_strategy, config=config
     ):
         if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config, store=store):
-            entity_matches = tuple(metadata_lookup(store, normalized["normalized_query"], len(store.metadata_grounding)))
-            if entity_matches and all(row.get("metadata_field") == "signatories" for row in entity_matches):
-                return envelope | {
-                    "status": "found",
-                    "route": "metadata",
-                    "intent": "metadata_lookup",
-                    "reason": None,
-                    "matches": entity_matches,
-                    "metadata_source_roles": tuple(sorted({row.get("source_role") for row in entity_matches if row.get("source_role")})),
-                }
             source_roles = tuple(
                 sorted({row.get("source_role") for row in store.document_metadata if row.get("source_role")})
             )

@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "24b6027f2f405918145a56e185b90b3e0a4de3bfe37bc2824e2e7b3a5d67484a",
+    "manifest_sha256": "671a2d39c04308a3bf9335eb0b5769e492324c10cec244c31777a11368193781",
     "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
     "runtime_required_artifacts": [
       "evidence_registry",
@@ -418,7 +418,7 @@
         },
         {
           "role": "amendment_2_historical",
-          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(kedua|2|ii)|amendment\\s*2)\\b"
+          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(kedua|dua|2|ii)|amendment\\s*2)\\b"
         },
         {
           "role": "amendment_3_historical",
@@ -725,7 +725,8 @@
         "ke 4"
       ],
       "unresolved_source_scope_patterns": [
-        "\\b(?:perubahan|amandemen)\\s*(?:ke[-\\s]*)?\\d+\\b"
+        "\\b(?:perubahan|amandemen)\\s*(?:ke[-\\s]*)?\\d+\\b",
+        "\\buud\\s+(?:pertama|kedua|ketiga|keempat|satu|dua|tiga|empat|i|ii|iii|iv)\\b"
       ],
       "instrument_content_signals": [
         "muatan",

@@ -92,9 +92,10 @@ def _public_ask(result: dict) -> dict:
         return _public_integrity(result)
     support_rows = (
         *((row, "legal") for row in result.get("final_citations", result.get("citations", ()))),
-        *((row, "legal") for row in result.get("historical_citations", ())),
+        *(() if result.get("answer_type") == "article_amendment_relation" else ((row, "legal") for row in result.get("historical_citations", ()))),
         *((row, "metadata") for row in result.get("metadata_support", ())),
         *((row, "structure") for row in result.get("structural_support", ())),
+        *((row, "trace") for row in result.get("relation_support", ())),
         *((row, "trace") for row in result.get("trace_support", ())),
     )
     public = {
@@ -104,7 +105,6 @@ def _public_ask(result: dict) -> dict:
         "route": result.get("route"),
         "legal_relations": tuple(_public_legal_relation(row) for row in result.get("legal_relations", ())),
         "document_relations": tuple(result.get("document_relations", ())),
-        "article_amendment_relations": tuple(_public_article_relation(row) for row in result.get("article_amendment_relations", ())),
         "answer_scope": result.get("answer_scope"),
         "warnings": tuple(result.get("warnings", ())),
         "insufficient_reasons": tuple(_public_reason(row) or row for row in result.get("insufficient_reasons", ())),
@@ -389,15 +389,10 @@ def _public_article_relation(row: dict) -> dict:
 def _public_viewer_ref(row: dict) -> dict:
     return {
         "action": row.get("action"),
-        "evidence_id": row.get("evidence_id"),
         "source_document_id": row.get("source_document_id"),
         "page_numbers": row.get("page_numbers", ()),
         "bbox_count": row.get("bbox_count"),
         "can_resolve": row.get("can_resolve"),
-        "source_proof_text_span_ids": row.get("source_proof_text_span_ids", ()),
-        "source_proof_bbox_refs": row.get("source_proof_bbox_refs", ()),
-        "target_text_span_ids": row.get("target_text_span_ids", ()),
-        "target_bbox_refs": row.get("target_bbox_refs", ()),
     }
 
 

@@ -1162,10 +1162,6 @@ def _metadata_support(store, row: dict) -> dict:
     display_text = str(row.get("display_text") or row.get("answer") or "").strip()
     if name and role:
         display_text = f"{name} tercantum sebagai {role} dalam {document_title}."
-        if institution:
-            display_text += f" Lembaga: {institution}."
-        if date_context:
-            display_text += f" Tanggal: {date_context}."
     return authority | {
         "support_class": "exact_metadata_citation" if can_resolve else "metadata_trace",
         "field": row.get("metadata_field"),
@@ -1313,6 +1309,7 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
             "legal_relations": (),
             "document_relations": (),
             "article_amendment_relations": public_relations,
+            "relation_support": (),
             "trace_support": tuple(_public_article_relation(row) for row in trace_support),
             "answer_scope": "trace_article_relation",
             "warnings": ("article_relation_trace_only_not_citable",),
@@ -1324,14 +1321,13 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
     viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence if row.get("citation_final") is True)
     partial = bool(trace_support)
     public_evidence = answer_evidence
-    public_viewer_refs = viewer_refs
     context_pack = {
         "answer_evidence": public_evidence,
         "supporting_context": (),
         "excluded_results": (),
         "citation_payloads": final_citations,
         "historical_citations": historical_citations,
-        "viewer_refs": public_viewer_refs,
+        "viewer_refs": viewer_refs,
         "validation_reasons": {row["evidence_id"]: "article_amendment_relation_exact_source_text" for row in public_evidence},
     }
     return {
@@ -1352,11 +1348,12 @@ def _article_relation_response(store, corpus_id: str, query: str, target: dict, 
         "historical_citations": historical_citations,
         "metadata_support": (),
         "structural_support": (),
-        "viewer_refs": public_viewer_refs,
+        "viewer_refs": viewer_refs,
         "metadata_facts": (),
         "legal_relations": (),
         "document_relations": (),
         "article_amendment_relations": public_relations,
+        "relation_support": answer_evidence,
         "trace_support": tuple(_public_article_relation(row) for row in trace_support),
         "answer_scope": "partial_exact_article_relation" if partial else "exact_article_relation",
         "warnings": ("article_relation_exact_support_partial_trace_omitted",) if trace_support else (),
@@ -1538,6 +1535,7 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
         return None
     proof_bbox_refs = tuple(relation.get("bbox_refs") or row.get("bbox_refs") or ())
     proof_text_span_ids = tuple(relation.get("text_span_ids") or row.get("text_span_ids") or ())
+    source_quote = _source_quote_for_spans(store, proof_text_span_ids)
     target_bbox_refs = tuple(relation.get("target_bbox_refs") or ())
     proof_bboxes = store.bboxes_for_refs(proof_bbox_refs)
     if not proof_bboxes or not set(proof_bbox_refs) <= {bbox["bbox_id"] for bbox in proof_bboxes}:
@@ -1546,13 +1544,17 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
         return None
     return {
         **row,
+        "support_kind": "article_relation",
+        "fact_kind": "article_relation",
+        "display_label": relation.get("relation_type") or "Relasi Pasal",
+        "display_text": source_quote or relation.get("quoted_text") or row.get("quoted_text"),
         "bbox_refs": proof_bbox_refs,
         "text_span_ids": proof_text_span_ids,
         "relation_source_proof_bbox_refs": proof_bbox_refs,
         "relation_source_proof_text_span_ids": proof_text_span_ids,
         "relation_target_bbox_refs": target_bbox_refs,
         "relation_target_text_span_ids": tuple(relation.get("target_text_span_ids") or ()),
-        "quoted_text": relation.get("quoted_text") or row.get("quoted_text"),
+        "quoted_text": source_quote or relation.get("quoted_text") or row.get("quoted_text"),
         "bbox_count": len(proof_bboxes),
         "route_sources": ("article_amendment_relation",),
         "article_amendment_relation": relation,
@@ -1571,6 +1573,12 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
             "can_resolve": True,
         },
     }
+
+
+def _source_quote_for_spans(store, text_span_ids: tuple[str, ...]) -> str:
+    by_id = {span.get("text_span_id"): span for span in store.page_text_spans}
+    quotes = [str(by_id[span_id].get("exact_quote") or "") for span_id in text_span_ids if span_id in by_id]
+    return "\n".join(quote for quote in quotes if quote)
 
 
 def _relation_for_evidence(store, evidence_id: str | None, relation_id: str | None = None) -> dict | None:

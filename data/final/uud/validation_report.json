@@ -46,7 +46,7 @@
     "graph_nodes": 3209,
     "graph_edges": 7918,
     "page_text_spans": 2070,
-    "word_bboxes": 11768
+    "word_bboxes": 11766
   },
   "bbox_precision_counts": {
     "exact": 1827,
@@ -427,19 +427,19 @@
     "repair_required_count": 0
   },
   "word_bbox_registry_health": {
-    "word_bbox_rows": 11768,
+    "word_bbox_rows": 11766,
     "source_document_count": 6,
     "page_count": 63,
     "invalid_coordinate_count": 0,
     "missing_page_ref_count": 0,
-    "missing_normalized_text_count": 2,
-    "status": "incomplete"
+    "missing_normalized_text_count": 0,
+    "status": "complete"
   },
   "highlight_registry_contract": {
     "status": "complete",
     "architecture": "bbox_registry_union_word_bboxes",
     "bbox_registry_rows": 1827,
-    "word_bbox_rows": 11768,
+    "word_bbox_rows": 11766,
     "official_viewer_highlight_ref_sources": [
       "bbox_registry",
       "word_bboxes"

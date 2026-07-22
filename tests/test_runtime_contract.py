@@ -741,9 +741,13 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual({row["relation_type"] for row in anomaly["article_amendment_relations"]}, {"RENUMBERED_TO"})
 
         public = handle_request("uud", "ask", {"query": "Pasal 25E menjadi Pasal 25A"}, service=self.service)
-        self.assertEqual(public["article_amendment_relations"][0]["target_reference"], "Pasal 25A")
-        self.assertEqual(public["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00428")
-        self.assertEqual(public["article_amendment_relations"][0]["source_document_id"], "uud::amendment_4_historical")
+        self.assertNotIn("article_amendment_relations", public)
+        support = public["supports"][0]
+        self.assertEqual(support["support_kind"], "article_relation")
+        self.assertEqual(support["panel_section"], "Catatan Sumber")
+        self.assertEqual(support["source_document"], "uud::amendment_4_historical")
+        self.assertTrue(support["viewer_target"]["can_resolve"])
+        self.assertNotIn("evidence_id", support["viewer_target"])
 
     def test_current_and_historical_reference_routing_is_source_safe(self) -> None:
         current = self.service.ask("uud", "Aturan Tambahan Pasal II")

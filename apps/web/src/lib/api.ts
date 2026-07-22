@@ -24,7 +24,6 @@ export interface TjiptoAskResponse {
   warnings?: string[];
   insufficient_reasons?: string[];
   document_relations?: DocumentRelationPayload[];
-  article_amendment_relations?: ArticleAmendmentRelationPayload[];
   clarification_options?: ClarificationOptionPayload[];
   supports?: SupportPayload[];
 }
@@ -73,38 +72,6 @@ export interface DocumentRelationPayload {
   support_type?: string;
   reason?: string;
   highlightable?: boolean;
-}
-
-export interface ArticleAmendmentRelationPayload {
-  relation_id?: string;
-  relation_type?: string;
-  source_document_id?: string;
-  source_legal_unit_id?: string;
-  source_legal_unit_role?: string;
-  source_label?: string;
-  source_reference?: string;
-  source_reference_range?: [number, number];
-  source_reference_range_kind?: "literal" | "contextual";
-  source_role?: string;
-  target_legal_unit_id?: string;
-  target_label?: string;
-  target_reference?: string;
-  target_reference_range?: [number, number];
-  target_reference_range_kind?: "literal" | "contextual";
-  target_source_role?: string;
-  evidence_id?: string;
-  text_span_ids?: string[];
-  bbox_refs?: string[];
-  target_text_span_ids?: string[];
-  target_bbox_refs?: string[];
-  source_proof_text_span_ids?: string[];
-  source_proof_bbox_refs?: string[];
-  target_precision?: string;
-  source_support_exact?: boolean;
-  support_class?: string;
-  trace_only_reason?: string;
-  citation_available?: boolean;
-  viewer_highlightable?: boolean;
 }
 
 export interface SearchResult {
@@ -327,7 +294,9 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       sourceDocumentId: support.source_document ?? support.viewer_target.source_document_id,
       documentTitle: fallbackDocumentTitle("uud"),
       regulationType: "UUD" as const,
-      authorityKind: support.panel_section === "Kutipan Relevan" ? "legal_citation" : "metadata_source",
+      authorityKind: support.panel_section === "Kutipan Relevan"
+        ? "legal_citation"
+        : support.panel_section === "Catatan Sumber" ? "instrument_provenance" : "metadata_source",
       authorityLabel: support.display_label ?? panelSection,
       citationFinal: support.legal_citation_available === true,
       article: support.display_label ?? panelSection,
@@ -339,11 +308,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       copyText: support.copy_text ?? support.display_text ?? "",
       layoutLines: support.layout_lines,
       viewerTarget: support.viewer_target as Record<string, unknown>,
-      viewerRefId: support.viewer_target.evidence_id,
-      relationSourceProofTextSpanIds: support.viewer_target.source_proof_text_span_ids,
-      relationSourceProofBBoxRefs: support.viewer_target.source_proof_bbox_refs,
-      relationTargetTextSpanIds: support.viewer_target.target_text_span_ids,
-      relationTargetBBoxRefs: support.viewer_target.target_bbox_refs,
+      viewerRefId: String(support.support_id),
       sourceUrl: "",
       sourceDomain: support.source_role ?? "runtime",
       sourceRole: support.source_role,
@@ -377,7 +342,6 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
   structure: SupportItem[];
   trace: SupportItem[];
   documentRelations: SupportItem[];
-  articleRelations: SupportItem[];
 } {
   const grouped = (panel: string, kind: SupportItem["kind"]) => (response.supports ?? [])
     .filter((row) => row.panel_section === panel)
@@ -398,13 +362,6 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
       label: String(row.relation_type ?? "Relasi Dokumen"),
       detail: "Relasi tingkat dokumen.",
       clickable: false,
-    })),
-    articleRelations: (response.article_amendment_relations ?? []).map((row, index) => ({
-      id: String(row.relation_id ?? `article_relation_${index}`),
-      kind: "article_relation" as const,
-      label: String(row.relation_type ?? "Relasi Pasal"),
-      detail: "Dukungan relasi sumber.",
-      clickable: row.viewer_highlightable === true,
     })),
   };
 }

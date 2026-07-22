@@ -135,12 +135,12 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
         return ()
     intent = intent_config_for(strategy, config)
     field = _metadata_field(query, strategy=strategy, config=config)
-    if field is None and not _matching_signatories(store, query):
+    requested_role = _requested_signatory_role(store, query)
+    if field is None and requested_role is None and not _matching_signatories(store, query):
         return ()
     scope = resolve_source_scope(query, strategy=strategy, config=config)
     role = scope.role if scope.explicit else None
     requires_penetapan = _asks_enactment_context((query or "").casefold(), intent)
-    requested_role = _requested_signatory_role(store, query)
     rows = []
     grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}
     for row in store.document_metadata:
