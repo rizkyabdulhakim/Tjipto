@@ -175,6 +175,7 @@ class LegalRuntimeService:
         corpus_id: str,
         evidence_id: str | None,
         *,
+        source_support_id: str | None = None,
         relation_id: str | None = None,
         source_document_id: str | None = None,
         page_number: int | None = None,
@@ -184,6 +185,7 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return _integrity_failure(corpus_id, "", self._integrity_error)
+        evidence_id = evidence_id or source_support_id
         if evidence_id is None:
             source = _source_document_by_id(store, source_document_id)
             if source is None:
@@ -201,6 +203,9 @@ class LegalRuntimeService:
         synthetic_bboxes: list[dict] | None = None
         if evidence is None:
             evidence, synthetic_bboxes = _source_conflict_viewer_evidence(store, evidence_id)
+        if evidence is None:
+            evidence = _source_span_evidence(store, evidence_id)
+            synthetic_bboxes = store.source_span_bboxes(evidence_id) if evidence is not None else None
         if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
         relation = _relation_for_evidence(store, evidence_id, relation_id)
@@ -236,6 +241,7 @@ class LegalRuntimeService:
         corpus_id: str,
         evidence_id: str | None,
         *,
+        source_support_id: str | None = None,
         relation_id: str | None = None,
         source_document_id: str,
         page_number: int,
@@ -246,6 +252,7 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return _integrity_failure(corpus_id, "", self._integrity_error)
+        evidence_id = evidence_id or source_support_id
         if evidence_id is None:
             source = _source_document_by_id(store, source_document_id)
             if source is None:
@@ -263,6 +270,9 @@ class LegalRuntimeService:
         synthetic_bboxes: list[dict] | None = None
         if evidence is None:
             evidence, synthetic_bboxes = _source_conflict_viewer_evidence(store, evidence_id)
+        if evidence is None:
+            evidence = _source_span_evidence(store, evidence_id)
+            synthetic_bboxes = store.source_span_bboxes(evidence_id) if evidence is not None else None
         if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
         relation = _relation_for_evidence(store, evidence_id, relation_id)
@@ -708,6 +718,7 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
             "source_anomaly": "Source anomaly",
             "structural_context": "Provenance struktural",
             "instrument_provenance": "Instrument provenance",
+            "source_text": "Sumber teks PDF",
         }[authority_kind],
         "citation_final": citation_final,
         "source_url": row.get("source_url") or _source_url(store, row),
@@ -779,6 +790,7 @@ def _support_kind_for_authority(authority_kind: str) -> str:
         "source_anomaly": "source_anomaly_provenance",
         "structural_context": "structural_provenance",
         "instrument_provenance": "instrument_provenance",
+        "source_text": "source_text",
     }[authority_kind]
 
 
@@ -820,6 +832,8 @@ def _authority_kind(store, row: dict, *, can_resolve: bool | None = None, confli
     )
     if row.get("metadata_grounding") or row.get("metadata_field"):
         return "metadata_source" if viewer_resolvable else "metadata_trace"
+    if row.get("evidence_owner_kind") == "source_span" or row.get("authority_kind") == "source_text":
+        return "source_text"
     if row.get("authority_kind") == "source_anomaly_trace" and row.get("citation_final") is False:
         return "source_anomaly"
     if row.get("authority_kind") == "structural_context":
@@ -887,6 +901,38 @@ def _row_is_historical_anomaly(store, row: dict) -> bool:
 
 def _citation_with_authority(store, row: dict, *, conflict: dict | None = None) -> dict:
     return row | _authority_policy(store, row, conflict=conflict)
+
+
+def _source_span_evidence(store, support_id: str) -> dict | None:
+    span = store.source_span_for_support(support_id)
+    if not span or not span.get("semantic_text") or span.get("citation_eligible") is not True:
+        return None
+    if not store.source_span_bboxes(support_id):
+        return None
+    return {
+        "corpus_id": getattr(store.config, "corpus_id", None),
+        "evidence_id": support_id,
+        "source_support_id": support_id,
+        "source_document_id": span.get("source_document_id"),
+        "source_pdf_path": span.get("source_pdf_path"),
+        "source_sha256": span.get("source_sha256"),
+        "source_role": span.get("source_role"),
+        "temporal_context": span.get("source_role"),
+        "citation": span.get("semantic_exact_quote"),
+        "quoted_text": span.get("semantic_exact_quote"),
+        "page_numbers": [span.get("page_number")],
+        "bbox_refs": [support_id],
+        "bbox_precision": "exact",
+        "viewer_highlightable": True,
+        "status": "final",
+        "citation_final": False,
+        "citation_eligible": True,
+        "relevant_quote_eligible": False,
+        "authority_kind": "source_text",
+        "support_kind": "source_text",
+        "evidence_owner_kind": "source_span",
+        "text_span_ids": (),
+    }
 
 
 def _viewer_with_authority(store, evidence: dict, payload: dict) -> dict:

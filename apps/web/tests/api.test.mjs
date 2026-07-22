@@ -133,6 +133,33 @@ test("relation citation preserves opaque viewer source identity", () => {
   assert.equal(citations[0].viewerTarget?.can_resolve, true);
 });
 
+test("exact non-legal source text stays clickable outside relevant quotations", () => {
+  const citations = mapAskResponseToCitations({
+    status: "answer_ready",
+    supports: [{
+      support_id: "source_support_hash",
+      support_kind: "source_text",
+      panel_section: "Sumber Dokumen",
+      display_label: "PERUBAHAN PERTAMA",
+      display_text: "PERUBAHAN PERTAMA",
+      copy_text: "PERUBAHAN PERTAMA",
+      source_document: "uud::amendment_1_historical",
+      source_role: "amendment_1_historical",
+      page_numbers: [1],
+      legal_citation_available: false,
+      relevant_quote_eligible: false,
+      linkable: true,
+      highlightable: true,
+      viewer_target: { can_resolve: true, source_document_id: "uud::amendment_1_historical", page_numbers: [1] },
+    }],
+  });
+
+  assert.equal(citations.length, 1);
+  assert.equal(citations[0].panelSection, "Sumber Dokumen");
+  assert.equal(citations[0].relevantQuoteEligible, false);
+  assert.equal(citations[0].viewerTarget?.can_resolve, true);
+});
+
 test("limited answer keeps backend answer text instead of fallback", () => {
   assert.equal(
     answerTextOrFallback({

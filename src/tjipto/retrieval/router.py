@@ -45,6 +45,16 @@ def route_retrieval(
         strategy=query_strategy,
         config=config,
     )
+    if (
+        "source_role" not in filters
+        and not scope.unresolved
+        and scope.role
+        and (intent["intent"] == "exact_citation" or has_structured_target(
+            normalized["normalized_query"], strategy=structured_strategy, config=config
+        ))
+    ):
+        filters = dict(filters) | {"source_role": scope.role}
+    applied_filters = public_filters(filters)
     envelope = {
         "status": "no_results",
         "route": "no_results",

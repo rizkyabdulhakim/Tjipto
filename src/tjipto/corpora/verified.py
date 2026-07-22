@@ -106,26 +106,50 @@ class VerifiedCorpusRepository:
         self.registry = registry
         self.publication = CorpusPublicationService()
         self.load_count = 0
+        self._validated: dict[str, tuple[ValidatedCorpusSnapshot, tuple[tuple[str, int, int], ...]]] = {}
 
     def load(self, corpus_id: str) -> VerifiedCorpusSnapshot:
         config = self.registry.resolve(corpus_id)
         if config is None:
             raise CorpusIntegrityError(self.registry.error_code or "corpus_load_failure")
         manifest, manifest_digest = _read_trusted_manifest(config)
-        _verify_artifact_integrity(config.manifest_path.parent.resolve(), manifest)
+        final_dir = config.manifest_path.parent.resolve()
+        validated_entry = self._validated.get(corpus_id)
+        if validated_entry is not None and validated_entry[0].manifest_digest == manifest_digest:
+            signature = _artifact_stat_signature(final_dir, manifest)
+            if signature == validated_entry[1]:
+                return validated_entry[0]
+        _verify_artifact_integrity(final_dir, manifest)
         cache_key = (str(config.manifest_path.resolve()), corpus_id, manifest_digest)
         with self._published_lock:
-            cached = self._published_snapshots.get(cache_key)
-            if cached is not None:
+            published = self._published_snapshots.get(cache_key)
+            if published is not None:
                 self._published_snapshots.move_to_end(cache_key)
-                return cached
+                self._validated[corpus_id] = (published, _artifact_stat_signature(final_dir, manifest))
+                return published
             snapshot = self.publication.verify_and_publish(config)
             self._published_snapshots[cache_key] = snapshot
             self._published_snapshots.move_to_end(cache_key)
             while len(self._published_snapshots) > self._published_snapshot_limit:
                 self._published_snapshots.popitem(last=False)
             self.load_count += 1
+            self._validated[corpus_id] = (snapshot, _artifact_stat_signature(final_dir, manifest))
             return snapshot
+
+
+def _artifact_stat_signature(final_dir: Path, manifest: dict) -> tuple[tuple[str, int, int], ...]:
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        raise CorpusIntegrityError("manifest_files_missing")
+    signature: list[tuple[str, int, int]] = []
+    for rel in sorted(files):
+        path = _contained_path(final_dir, rel)
+        try:
+            stat = path.stat()
+        except OSError as error:
+            raise CorpusIntegrityError("artifact_missing") from error
+        signature.append((rel, stat.st_size, stat.st_mtime_ns))
+    return tuple(signature)
 
 
 def _read_manifest(config) -> tuple[dict, str]:

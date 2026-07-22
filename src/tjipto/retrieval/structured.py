@@ -42,7 +42,9 @@ def structured_lookup(
         if row.get("legal_unit_id") and _matches_unit(row, targets)
     }
     scope = resolve_source_scope(query, strategy=strategy, config=config)
-    requested_role = source_role if source_role is not None else None if scope.unresolved else scope.role
+    requested_role = source_role
+    if requested_role is None and not scope.unresolved:
+        requested_role = scope.role or getattr(config, "preferred_source_role", None)
     bab = parse_bab_reference(_corpus_id(config), query)
     if bab:
         dedicated_unit_ids = {
@@ -59,29 +61,26 @@ def structured_lookup(
             and row.get("citation", "").casefold() == bab.casefold()
             and row.get("legal_unit_id") in dedicated_unit_ids
         ]
-        if not dedicated:
-            dedicated = [
-                row
-                for row in store.evidence
-                if row.get("status") == "final"
-                and store.bboxes_for(row["evidence_id"])
-                and row.get("citation", "").casefold() == bab.casefold()
-                and row.get("legal_unit_id") in dedicated_unit_ids
-            ]
         if dedicated:
             detail_terms = tuple(str(term).casefold() for term in intent.get("structure_detail_terms") or ())
             if any(term in query.casefold() for term in detail_terms) or ("isi" in query.casefold() and "saat ini" not in query.casefold()):
                 child_ids = {
                     unit.get("legal_unit_id")
                     for unit in store.legal_units
-                    if unit.get("source_role") == (dedicated[0].get("source_role"))
+                    if unit.get("source_role") == dedicated[0].get("source_role")
                     and tuple(unit.get("hierarchy") or ())[:1] == (bab,)
-                    and unit.get("unit_label") == "Dihapus."
+                    and unit.get("unit_type") in {"pasal_record", "ayat_record"}
                 }
                 children = [
                     row for row in store.evidence
-                    if row.get("legal_unit_id") in child_ids and row.get("status") == "final" and store.bboxes_for(row["evidence_id"])
+                    if row.get("legal_unit_id") in child_ids
+                    and row.get("status") == "final"
+                    and row.get("authority_kind") == "normative_legal_text"
+                    and row.get("citation_eligibility") == "eligible"
+                    and row.get("relevant_quote_eligible") is True
+                    and store.bboxes_for(row["evidence_id"])
                 ]
+                children.sort(key=lambda row: (tuple(row.get("hierarchy") or ()), row.get("evidence_id", "")))
                 return tuple(row | {"route_sources": ("structured",)} for row in (*dedicated, *children))[:limit]
             return tuple(row | {"route_sources": ("structured",)} for row in dedicated[:limit])
     preferred_unit_ids = _preferred_unit_ids(store, targets, requested_role)

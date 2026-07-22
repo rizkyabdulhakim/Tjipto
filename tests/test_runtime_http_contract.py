@@ -149,7 +149,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             for support in supports:
                 self.assertEqual(
                     set(support),
-                    {"support_id", "support_kind", "panel_section", "fact_kind", "display_label", "display_text", "layout_lines", "copy_text", "source_document", "source_role", "page_numbers", "legal_citation_available", "linkable", "highlightable", "viewer_target"},
+                    {"support_id", "support_kind", "panel_section", "fact_kind", "display_label", "display_text", "layout_lines", "copy_text", "source_document", "source_role", "page_numbers", "legal_citation_available", "relevant_quote_eligible", "linkable", "highlightable", "viewer_target"},
                     case["query"],
                 )
                 self.assertNotIn("source_sha256", json.dumps(support), case["query"])
@@ -205,6 +205,21 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertNotIn("Amien Rais", deputy_text)
         for result in (structure, deleted, chair, deputies):
             self.assertFalse({"metadata_support", "structural_support", "trace_support"} & set(result))
+
+    def test_pasal_16_and_bab_detail_have_public_exact_supports(self) -> None:
+        pasal = self._post("/legal/uud/ask", {"query": "Pasal 16 UUD konsolidasi"})
+        legal = [row for row in pasal["supports"] if row["panel_section"] == "Kutipan Relevan"]
+        self.assertEqual(len(legal), 1)
+        self.assertEqual(legal[0]["display_label"], "BAB III / Pasal 16")
+        self.assertTrue(legal[0]["linkable"])
+        self.assertTrue(legal[0]["highlightable"])
+        self.assertTrue(legal[0]["relevant_quote_eligible"])
+        self.assertTrue(legal[0]["viewer_target"]["can_resolve"])
+
+        bab = self._post("/legal/uud/ask", {"query": "Apa isi BAB XI agama?"})
+        self.assertTrue(any(row["panel_section"] == "Struktur Dokumen" for row in bab["supports"]))
+        self.assertTrue(any(row["panel_section"] == "Kutipan Relevan" for row in bab["supports"]))
+        self.assertTrue(all(row["highlightable"] for row in bab["supports"] if row["panel_section"] == "Kutipan Relevan"))
 
     def test_unscoped_metadata_public_contract_requires_clarification(self) -> None:
         result = self._post("/legal/uud/ask", {"query": "penandatangan UUD"})

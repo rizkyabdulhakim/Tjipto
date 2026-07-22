@@ -43,6 +43,7 @@ def handle_request(
             service.viewer(
                 corpus_id,
                 _optional_str(payload, "evidence_id"),
+                source_support_id=_optional_str(payload, "source_support_id"),
                 relation_id=_optional_str(payload, "relation_id"),
                 source_document_id=_optional_str(payload, "source_document_id"),
                 page_number=_optional_int(payload, "page_number"),
@@ -357,6 +358,7 @@ def _public_support(row: dict, panel_section: str) -> dict:
         "source_role": row.get("source_role"),
         "page_numbers": tuple(row.get("page_numbers") or ()),
         "legal_citation_available": legal and row.get("citation_final") is True,
+        "relevant_quote_eligible": row.get("relevant_quote_eligible") is True,
         "linkable": linkable,
         "highlightable": linkable,
         "viewer_target": _public_viewer_ref(viewer_target),
@@ -405,6 +407,7 @@ def handle_pdf_request(
     return (service or _service_for(repo_root)).pdf_access(
         corpus_id,
         _optional_str(payload, "evidence_id"),
+        source_support_id=_optional_str(payload, "source_support_id"),
         source_document_id=_required_str(payload, "source_document_id"),
         page_number=_required_int(payload, "page_number"),
         source_sha256=_optional_str(payload, "source_sha256"),

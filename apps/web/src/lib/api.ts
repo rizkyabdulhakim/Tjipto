@@ -40,6 +40,7 @@ export interface SupportPayload {
   layout_lines?: LayoutLine[];
   copy_text?: string;
   legal_citation_available?: boolean;
+  relevant_quote_eligible?: boolean;
   linkable?: boolean;
   viewer_target?: ViewerRefPayload;
   page_numbers?: number[];
@@ -303,7 +304,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
       pageNumber: Number(pages[0] ?? 1),
       excerpt: support.display_text ?? "",
       supportKind: support.support_kind,
-      relevantQuoteEligible: support.panel_section === "Kutipan Relevan" && support.support_kind === "legal_unit",
+      relevantQuoteEligible: support.relevant_quote_eligible === true,
       displayText: support.display_text ?? "",
       copyText: support.copy_text ?? support.display_text ?? "",
       layoutLines: support.layout_lines,

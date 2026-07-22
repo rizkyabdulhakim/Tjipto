@@ -72,6 +72,25 @@ class PdfTextSpanCoverageTest(unittest.TestCase):
             rows = read_jsonl(FINAL / f"{name}.jsonl")
             self.assertFalse(any(marker in str(row.get(field) or "") for row in rows for marker in markers), name)
 
+    def test_nonempty_semantic_source_segments_have_exact_support_selectors(self) -> None:
+        rows = read_jsonl(FINAL / "raw_source_spans.jsonl")
+        semantic = [row for row in rows if row.get("semantic_text")]
+        self.assertTrue(semantic)
+        self.assertTrue(all(row.get("source_support_id") for row in semantic))
+        self.assertTrue(all(row["semantic_text"] == row["semantic_exact_quote"] for row in semantic))
+        self.assertTrue(all(row["semantic_text_start"] < row["semantic_text_end"] for row in semantic))
+        streams: dict[str, list[dict]] = {}
+        for row in semantic:
+            streams.setdefault(row["semantic_stream_id"], []).append(row)
+        for stream_id, stream_rows in streams.items():
+            stream_rows.sort(key=lambda row: row["semantic_text_start"])
+            stream = "\n".join(row["semantic_text"] for row in stream_rows)
+            self.assertEqual(sha256(stream.encode("utf-8")).hexdigest(), stream_rows[0]["semantic_stream_sha256"], stream_id)
+            for row in stream_rows:
+                self.assertEqual(stream[row["semantic_text_start"] : row["semantic_text_end"]], row["semantic_exact_quote"])
+        markers = [row for row in rows if row["classification"] == "source_annotation_marker"]
+        self.assertTrue(all(not row.get("semantic_text") for row in markers))
+
 
 if __name__ == "__main__":
     unittest.main()

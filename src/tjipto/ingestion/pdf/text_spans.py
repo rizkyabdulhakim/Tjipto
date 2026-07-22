@@ -38,6 +38,8 @@ def build_pdf_text_spans(
                     corpus_id=corpus_id,
                     word_bboxes=word_bboxes or [],
                     source_segmenter=source_segmenter or _default_source_segmenter,
+                    semantic_normalizer=semantic_normalizer or _normalize,
+                    semantic_stream_id=f"{corpus_id}::semantic_page_text::{source_id}::{page_number:04d}",
                 )
             semantic_lines = [text for text in normalized_lines if text]
             stream = "\n".join(semantic_lines)
@@ -105,11 +107,14 @@ def _append_raw_source_spans(
     corpus_id: str,
     word_bboxes: list[dict],
     source_segmenter,
+    semantic_normalizer,
+    semantic_stream_id: str,
 ) -> None:
     raw_stream = "\n".join(str(line.get("text") or "") for line in lines)
     raw_hash = sha256(raw_stream.encode("utf-8")).hexdigest()
     cursor = 0
     extraction_order = 0
+    page_rows: list[dict] = []
     for line_index, line in enumerate(lines):
         source_line_index = int(line.get("line_index", line_index))
         raw_text = str(line.get("text") or "")
@@ -121,10 +126,13 @@ def _append_raw_source_spans(
                     continue
                 segment_text = raw_text[start:end]
                 geometry = _segment_geometry(line, raw_text, start, end, source_id, page_number, line_index)
-                rows.append({
-                    "raw_source_span_id": f"{corpus_id}::raw::{source_id}::{page_number:04d}::{int(line.get('block_index', 0)):04d}::{source_line_index:04d}::{segment_index:02d}",
+                raw_source_span_id = f"{corpus_id}::raw::{source_id}::{page_number:04d}::{int(line.get('block_index', 0)):04d}::{source_line_index:04d}::{segment_index:02d}"
+                semantic_text = semantic_normalizer(segment_text)
+                page_rows.append({
+                    "raw_source_span_id": raw_source_span_id,
                     "source_document_id": source_id,
                     "source_sha256": source["sha256"],
+                    "source_pdf_path": source["path"],
                     "source_role": source["source_role"],
                     "page_number": page_number,
                     "line_index": source_line_index,
@@ -152,9 +160,29 @@ def _append_raw_source_spans(
                     "default_highlight_eligible": segment["default_highlight_eligible"],
                     "normalization_actions": segment["normalization_actions"],
                     "disposition_reason": segment["disposition_reason"],
+                    "source_support_id": f"{corpus_id}::source_support::{sha256(raw_source_span_id.encode('utf-8')).hexdigest()}",
+                    "semantic_text": semantic_text,
+                    "semantic_stream_id": semantic_stream_id,
+                    "semantic_stream_sha256": "",
+                    "semantic_text_start": 0,
+                    "semantic_text_end": 0,
+                    "semantic_exact_quote": semantic_text,
+                    "semantic_offset_basis": "python_unicode_code_points",
                 })
                 extraction_order += 1
         cursor += len(raw_text) + (1 if line_index < len(lines) - 1 else 0)
+    semantic_rows = [row for row in page_rows if row["semantic_text"]]
+    semantic_stream = "\n".join(row["semantic_text"] for row in semantic_rows)
+    semantic_hash = sha256(semantic_stream.encode("utf-8")).hexdigest()
+    semantic_cursor = 0
+    semantic_ids = {row["raw_source_span_id"] for row in semantic_rows}
+    for row in page_rows:
+        row["semantic_stream_sha256"] = semantic_hash
+        if row["raw_source_span_id"] in semantic_ids:
+            row["semantic_text_start"] = semantic_cursor
+            row["semantic_text_end"] = semantic_cursor + len(row["semantic_text"])
+            semantic_cursor = row["semantic_text_end"] + (1 if row["semantic_text_end"] < len(semantic_stream) else 0)
+        rows.append(row)
 
 
 def _segment_geometry(line: dict, raw_text: str, start: int, end: int, source_id: str, page_number: int, line_index: int) -> dict:

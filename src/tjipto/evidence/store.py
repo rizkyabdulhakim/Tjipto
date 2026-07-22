@@ -50,6 +50,8 @@ class EvidenceStore:
         self._word_bbox_by_id: dict[str, dict] | None = None
         self._page_text_spans: list[dict] | None = None
         self._page_text_span_by_id: dict[str, dict] | None = None
+        self._raw_source_spans: list[dict] | None = None
+        self._raw_source_span_by_support_id: dict[str, dict] | None = None
 
     @property
     def evidence(self) -> list[dict]:
@@ -123,8 +125,58 @@ class EvidenceStore:
             self._page_text_spans = _optional_jsonl(self.config, "page_text_spans")
         return self._page_text_spans
 
+    @property
+    def raw_source_spans(self) -> list[dict]:
+        if self._raw_source_spans is None:
+            self._raw_source_spans = _optional_jsonl(self.config, "raw_source_spans")
+        return self._raw_source_spans
+
     def get(self, evidence_id: str) -> dict | None:
         return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)
+
+    def source_span_for_support(self, support_id: str) -> dict | None:
+        if self._raw_source_span_by_support_id is None:
+            self._raw_source_span_by_support_id = {
+                str(row["source_support_id"]): row
+                for row in self.raw_source_spans
+                if isinstance(row.get("source_support_id"), str) and row["source_support_id"]
+            }
+        return self._raw_source_span_by_support_id.get(support_id)
+
+    def source_span_bboxes(self, support_id: str) -> list[dict]:
+        row = self.source_span_for_support(support_id)
+        if not row or not row.get("semantic_text") or row.get("citation_eligible") is not True:
+            return []
+        page_reference = next(
+            (
+                bbox
+                for bbox in self._bbox_rows_all()
+                if bbox.get("source_document_id") == row.get("source_document_id")
+                and bbox.get("page_number") == row.get("page_number")
+                and bbox.get("page_width") is not None
+            ),
+            {},
+        )
+        return [{
+            "bbox_id": support_id,
+            "bbox_precision": "exact",
+            "viewer_highlightable": row.get("default_highlight_eligible") is True,
+            "source_document_id": row.get("source_document_id"),
+            "source_pdf_path": row.get("source_pdf_path"),
+            "source_sha256": row.get("source_sha256"),
+            "page_number": row.get("page_number"),
+            "page_width": page_reference.get("page_width"),
+            "page_height": page_reference.get("page_height"),
+            "coordinate_space": page_reference.get("coordinate_space"),
+            "coordinate_origin": page_reference.get("coordinate_origin"),
+            "page_rotation": page_reference.get("page_rotation"),
+            "page_box_basis": page_reference.get("page_box_basis"),
+            "transform_version": page_reference.get("transform_version"),
+            "x0": row.get("x0"),
+            "y0": row.get("y0"),
+            "x1": row.get("x1"),
+            "y1": row.get("y1"),
+        }]
 
     def lineage_error(self, evidence: dict) -> str | None:
         return source_lineage_reason(

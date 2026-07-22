@@ -1744,6 +1744,47 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
                     errors.append(f"invalid_type:{artifact}:{row_id}:{field}")
 
     raw_rows = rows("raw_source_spans")
+    source_support_ids: set[str] = set()
+    semantic_stream_rows: dict[str, list[dict]] = defaultdict(list)
+    for row in raw_rows:
+        row_id = str(row.get("raw_source_span_id") or "<missing>")
+        support_id = row.get("source_support_id")
+        if not isinstance(support_id, str) or not support_id:
+            errors.append(f"missing_required_field:raw_source_spans:{row_id}:source_support_id")
+        elif support_id in source_support_ids:
+            errors.append(f"duplicate_source_support_id:{support_id}")
+        else:
+            source_support_ids.add(support_id)
+        semantic_text = row.get("semantic_text")
+        if not isinstance(semantic_text, str):
+            errors.append(f"invalid_type:raw_source_spans:{row_id}:semantic_text")
+            semantic_text = ""
+        if semantic_text:
+            semantic_stream_rows.setdefault(str(row.get("semantic_stream_id")), []).append(row)
+            if row.get("semantic_exact_quote") != semantic_text:
+                errors.append(f"invalid_selector:{row_id}:semantic_quote")
+            if not isinstance(row.get("semantic_text_start"), int) or not isinstance(row.get("semantic_text_end"), int):
+                errors.append(f"invalid_selector:{row_id}:semantic_offset_type")
+            elif row["semantic_text_end"] - row["semantic_text_start"] != len(semantic_text):
+                errors.append(f"invalid_selector:{row_id}:semantic_offset_length")
+        elif row.get("semantic_text_start") != 0 or row.get("semantic_text_end") != 0:
+            errors.append(f"invalid_selector:{row_id}:empty_semantic_offset")
+    for stream_id, stream_rows in semantic_stream_rows.items():
+        stream_rows.sort(key=lambda item: int(item.get("extraction_order") or 0))
+        stream = "\n".join(str(item["semantic_text"]) for item in stream_rows)
+        stream_hash = sha256(stream.encode("utf-8")).hexdigest()
+        cursor = 0
+        for index, row in enumerate(stream_rows):
+            if row.get("semantic_stream_sha256") != stream_hash:
+                errors.append(f"invalid_selector:{row.get('raw_source_span_id')}:semantic_stream_hash")
+            start = row.get("semantic_text_start")
+            end = row.get("semantic_text_end")
+            if not isinstance(start, int) or not isinstance(end, int):
+                errors.append(f"invalid_selector:{row.get('raw_source_span_id')}:semantic_offset_type")
+                continue
+            if start != cursor or end != start + len(row["semantic_text"]):
+                errors.append(f"invalid_selector:{row.get('raw_source_span_id')}:semantic_offset")
+            cursor = end + (1 if index < len(stream_rows) - 1 else 0)
     raw_streams: dict[str, str] = {}
     for row in raw_rows:
         raw_streams.setdefault(str(row.get("raw_stream_id")), "")

@@ -6,7 +6,7 @@
   "corpus_id": "uud",
   "contract_id": "tjipto.uud.artifact-contract",
   "contract_version": 7,
-  "contract_fingerprint": "63ad1f8e31db9c4db9c3e00988f7c8d367ecc437b4248b17f2fc8d6da105f1d1",
+  "contract_fingerprint": "b4fe9b00c712eb0a83e4d32b4ecb77be8f9f4e260b549084798b2ed4db0b9fba",
   "counts": {
     "article_amendment_relations": 72,
     "article_versions": 218,
@@ -614,6 +614,7 @@
         "raw_source_span_id",
         "source_document_id",
         "source_sha256",
+        "source_pdf_path",
         "source_role",
         "page_number",
         "extraction_order",
@@ -640,10 +641,18 @@
         "relevant_quote_eligible",
         "default_highlight_eligible",
         "normalization_actions",
-        "disposition_reason"
+        "disposition_reason",
+        "source_support_id",
+        "semantic_text",
+        "semantic_stream_id",
+        "semantic_stream_sha256",
+        "semantic_text_start",
+        "semantic_text_end",
+        "semantic_exact_quote",
+        "semantic_offset_basis"
       ],
-      "bytes": 19350222,
-      "sha256": "9edc9f9fc6d0ae009023fd3be093fa38bc9baae30118fef1aefa0b107b4b10be"
+      "bytes": 20715869,
+      "sha256": "c840c5069534a1d18c942c063ad66711ecab8edb535d257974db3164860b8ec5"
     },
     "word_bboxes.jsonl": {
       "origin": "generated",

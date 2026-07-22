@@ -1118,6 +1118,31 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["citations"][0]["citation"], citation, query)
             self.assertTrue(all(row["source_role"] == role for row in result["citations"]), query)
 
+    def test_current_consolidated_pasal_16_has_exact_public_citation(self) -> None:
+        result = self.service.ask("uud", "Pasal 16 UUD konsolidasi")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual({row["source_role"] for row in result["citations"]}, {"current_consolidated"})
+        self.assertEqual([row["citation"] for row in result["citations"]], ["Pasal 16"])
+        self.assertTrue(result["citations"][0]["viewer_ref"]["can_resolve"])
+        self.assertTrue(result["citations"][0]["relevant_quote_eligible"])
+
+    def test_source_span_support_resolves_exact_pdf_geometry(self) -> None:
+        store = self.service._store("uud")
+        row = next(item for item in store.raw_source_spans if item.get("semantic_text"))
+        result = handle_request("uud", "viewer", {"source_support_id": row["source_support_id"]}, service=self.service)
+        self.assertEqual(result["status"], "viewer_payload_ready")
+        self.assertTrue(result["viewer_highlightable"])
+        self.assertTrue(result["bbox_rectangles"])
+        self.assertEqual(result["bbox_rectangles"][0]["bbox_precision"], "exact")
+
+    def test_bab_detail_publishes_normative_children_as_relevant_support(self) -> None:
+        result = self.service.ask("uud", "Apa isi BAB XI agama?")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertTrue(result["structural_support"])
+        self.assertTrue(result["citations"])
+        self.assertTrue(all(row["relevant_quote_eligible"] for row in result["citations"]))
+        self.assertTrue(all(row["authority_kind"] == "legal_citation" for row in result["citations"]))
+
     def test_bab_deletion_query_uses_normative_deletion_evidence(self) -> None:
         result = self.service.ask("uud", "Apakah BAB IV dihapus?")
         self.assertEqual(result["status"], "answer_ready")
