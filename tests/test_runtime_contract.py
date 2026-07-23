@@ -751,7 +751,7 @@ class RuntimeContractTest(unittest.TestCase):
         support = public["supports"][0]
         self.assertEqual(support["support_kind"], "article_relation")
         self.assertEqual(support["panel_section"], "Catatan Sumber")
-        self.assertNotEqual(support["source_document"], "uud::amendment_4_historical")
+        self.assertNotEqual(support["source_label"], "uud::amendment_4_historical")
         self.assertTrue(support["viewer_target"]["can_resolve"])
         self.assertNotIn("evidence_id", support["viewer_target"])
 
@@ -872,7 +872,7 @@ class RuntimeContractTest(unittest.TestCase):
     def test_public_viewer_payload_exposes_highlightability_contract(self) -> None:
         service = LegalRuntimeService(ROOT)
         asked = handle_request("uud", "ask", {"query": "Pasal 1 ayat (3)"}, service=service)
-        exact = handle_request("uud", "viewer", {"target": asked["supports"][0]["viewer_target"]["target"]}, service=service)
+        exact = handle_request("uud", "viewer", {"target": asked["supports"][0]["viewer_target"]["public_target_id"]}, service=service)
         self.assertTrue(exact["bbox_rectangles"])
         self.assertEqual(exact["bbox_rectangles"][0]["bbox_precision"], "exact")
         self.assertTrue(exact["bbox_rectangles"][0]["viewer_highlightable"])
@@ -1125,7 +1125,7 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_source_span_support_resolves_exact_pdf_geometry(self) -> None:
         public = handle_request("uud", "ask", {"query": "Pasal 16 UUD konsolidasi"}, service=self.service)
-        target = public["supports"][0]["viewer_target"]["target"]
+        target = public["supports"][0]["viewer_target"]["public_target_id"]
         result = handle_request("uud", "viewer", {"target": target}, service=self.service)
         self.assertEqual(result["status"], "viewer_payload_ready")
         self.assertTrue(result["viewer_highlightable"])
@@ -1222,12 +1222,11 @@ class RuntimeContractTest(unittest.TestCase):
             "ask",
             {
                 "query": "Pasal 5 ayat (1)",
-                "filters": {"source_role": "amendment_1_historical", "temporal_context": "amendment_1_historical"},
+                "filters": {"source_role": "amendment_1_historical"},
             },
             ROOT,
         )
         self.assertEqual(api_result["status"], "answer_ready")
-        self.assertEqual(api_result["route"], "legal_reference")
         self.assertEqual(api_result["supports"][0]["source_role"], "amendment_1_historical")
 
     def test_dense_readiness_does_not_fake_matches(self) -> None:

@@ -8,6 +8,8 @@ interface ComposerProps {
   compact?: boolean;
 }
 
+const PLACEHOLDERS = ["Tanya UUD 1945...", "Pasal 1 ayat (3)", "Pembukaan", "Negara hukum", "Hak asasi manusia"];
+
 export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerProps) {
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
@@ -17,14 +19,6 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
   const [isDeleting, setIsDeleting] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  const placeholders = [
-    "Tanya UUD 1945...",
-    "Pasal 1 ayat (3)",
-    "Pembukaan",
-    "Negara hukum",
-    "Hak asasi manusia"
-  ];
-
   // Typing effect for placeholder
   useEffect(() => {
     if (focused || isHovered || value) {
@@ -32,7 +26,7 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
       return;
     }
 
-    const currentFullText = placeholders[placeholderIndex] ?? placeholders[0] ?? "";
+    const currentFullText = PLACEHOLDERS[placeholderIndex] ?? PLACEHOLDERS[0] ?? "";
     const speed = isDeleting ? 40 : 80;
     const pause = isDeleting ? 1000 : 2000;
 
@@ -42,7 +36,7 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
         setTimeout(() => setIsDeleting(true), pause);
       } else if (isDeleting && displayText === "") {
         setIsDeleting(false);
-        setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
+        setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
       } else {
         setDisplayText(
           isDeleting
@@ -53,7 +47,7 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
     }, speed);
 
     return () => clearTimeout(timeout);
-  }, [displayText, isDeleting, placeholderIndex, focused, value]);
+  }, [displayText, isDeleting, placeholderIndex, focused, value, isHovered]);
 
   useEffect(() => {
     const el = ref.current;

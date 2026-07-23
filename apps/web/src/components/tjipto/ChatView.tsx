@@ -9,7 +9,7 @@ import {
   Volume2,
   FileText,
 } from "lucide-react";
-import type { ChatMessage, Citation, SupportItem } from "../../lib/types";
+import type { ChatMessage, Citation, SupportGroup, SupportItem } from "../../lib/types";
 import { Composer } from "./Composer";
 
 interface ChatViewProps {
@@ -191,13 +191,11 @@ function UserMessage({ content }: { content: string }) {
 
 function AssistantMessage({
   message,
-  onSubmit,
   onClarify,
   onCitationClick,
   activeCitationId,
 }: {
   message: ChatMessage;
-  onSubmit: (value: string) => void;
   onClarify: (query: string, sourceRole: string, label: string) => void;
   onCitationClick: (c: Citation) => void;
   activeCitationId?: number;
@@ -287,6 +285,7 @@ function AssistantMessage({
               metadataSupport={message.metadataSupport}
               structuralSupport={message.structuralSupport}
               traceSupport={message.traceSupport}
+              supportGroups={message.supportGroups}
             />
           )}
 
@@ -429,12 +428,14 @@ function SupportFooter({
   metadataSupport,
   structuralSupport,
   traceSupport,
+  supportGroups,
 }: {
   citations?: Citation[];
   onCitationClick: (citation: Citation) => void;
   metadataSupport?: SupportItem[];
   structuralSupport?: SupportItem[];
   traceSupport?: SupportItem[];
+  supportGroups?: SupportGroup[];
 }) {
   const groups = [
     ["structure-support", "STRUKTUR DOKUMEN", structuralSupport],
@@ -442,27 +443,37 @@ function SupportFooter({
     ["trace-support", "CATATAN SUMBER", traceSupport],
   ] as const;
   const visible = groups.filter(([, , rows]) => rows?.length);
-  if (!visible.length) return null;
+  const grouped = supportGroups?.length ? supportGroups : visible.map(([testId, title, rows]) => ({
+    id: testId,
+    title,
+    summary: title,
+    kind: testId === "structure-support" ? "structure" : testId === "metadata-support" ? "metadata" : "trace",
+    members: rows ?? [],
+  }));
+  if (!grouped.length) return null;
   return (
     <div className="mt-4 space-y-2">
-      {visible.map(([testId, title, rows]) => (
-        <div
-          key={testId}
-          data-support-kind={testId}
+      {grouped.map((group, groupIndex) => (
+        <details
+          key={group.id}
+          data-support-kind={`${group.kind}-support`}
+          open={groupIndex === 0}
           className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3.5 py-2.5"
         >
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}>
-            {title}
-          </div>
+          <summary className="cursor-pointer list-none" aria-label={`${group.title}: ${group.summary}`}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}>
+              {group.title} · {group.summary}
+            </span>
+          </summary>
           <ul className="mt-1 space-y-1">
-            {rows?.map((row) => (
+            {group.members.map((row) => (
               <li
                 key={row.id}
                 data-support-clickable={row.clickable ? "true" : "false"}
                 style={{ fontSize: 12, color: "var(--tj-text-muted)" }}
               >
                 {row.clickable ? (() => {
-                  const citation = citations?.find((item) => item.documentId === row.id || item.viewerRefId === row.id);
+                  const citation = citations?.find((item) => item.publicTargetId === row.publicTargetId);
                   return citation ? (
                     <button
                       type="button"
@@ -478,7 +489,7 @@ function SupportFooter({
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       ))}
     </div>
   );
@@ -525,7 +536,6 @@ export function ChatView({
               >
                 <AssistantMessage
                   message={m}
-                  onSubmit={onSubmit}
                   onClarify={onClarify}
                   onCitationClick={onCitationClick}
                   activeCitationId={activeCitationId}

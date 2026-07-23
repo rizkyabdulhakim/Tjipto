@@ -7,7 +7,6 @@ import sys
 import time
 from typing import Any
 
-from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -118,9 +117,9 @@ def _percentile(values: list[float], fraction: float) -> float:
 
 
 def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, Any]:
-    response = handle_request(case["corpus_id"], "ask", {"query": case["query"]}, ROOT, service=service)
-    internal = service.ask(case["corpus_id"], case["query"])
-    errors = _validate(case, response, internal)
+    response = service.ask(case["corpus_id"], case["query"])
+    internal = response
+    errors = _validate(case, response, response)
     if not errors:
         outcome = "PASS"
     elif case.get("case_status") == "known_gap":

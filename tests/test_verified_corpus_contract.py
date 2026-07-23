@@ -280,14 +280,14 @@ class VerifiedCorpusContractTest(unittest.TestCase):
                 ("ask", {"query": "Pasal 7"}),
                 ("search", {"query": "Pasal 7"}),
                 ("citation", {"query": "Pasal 7"}),
-                ("viewer", {}),
                 ("capabilities", {}),
                 ("bookmarks", {}),
             ):
                 result = handle_request("uud", action, payload, root)
-                self.assertEqual(result["status"], "corpus_not_ready")
-                self.assertFalse(result["readiness"])
-                self.assertFalse(result["viewer_refs"])
+                self.assertEqual(result["status"], "unavailable")
+                self.assertEqual(result["reason"], "service_unavailable")
+                self.assertFalse(result["supports"])
+                self.assertFalse(result["support_groups"])
 
     def test_tampered_or_invalid_artifacts_cannot_answer(self) -> None:
         cases = (

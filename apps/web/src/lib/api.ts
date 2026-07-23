@@ -1,402 +1,256 @@
-import type { Citation, LayoutLine, SupportItem } from "./types";
+import type { Citation, LayoutLine, SupportGroup, SupportItem } from "./types";
 import type { PdfBBox } from "./pdfBBox";
 
-const API_BASE =
-  (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_TJIPTO_API_BASE ??
-  "http://localhost:8000";
-const DEFAULT_CORPUS_ID = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_TJIPTO_CORPUS_ID ?? "uud";
-
-function corpusEndpoint(action: string) {
-  return `${API_BASE}/legal/${DEFAULT_CORPUS_ID}/${action}`;
+declare global {
+  interface Window {
+    __TJIPTO_RUNTIME_CONFIG__?: { apiBase?: string; corpusId?: string };
+  }
 }
 
-export interface ValidationReasons {
-  [evidenceId: string]: string;
+const DOCUMENT_CONFIG = typeof document === "undefined" ? undefined : document.documentElement.dataset;
+const RUNTIME_CONFIG = typeof window === "undefined" ? undefined : window.__TJIPTO_RUNTIME_CONFIG__;
+const API_BASE = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_TJIPTO_API_BASE
+  ?? RUNTIME_CONFIG?.apiBase
+  ?? DOCUMENT_CONFIG?.tjiptoApiBase;
+const CORPUS_ID = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_TJIPTO_CORPUS_ID
+  ?? RUNTIME_CONFIG?.corpusId
+  ?? DOCUMENT_CONFIG?.tjiptoCorpus;
+
+function corpusEndpoint(action: string) {
+  if (!API_BASE || !CORPUS_ID) throw new Error("missing_runtime_configuration");
+  return `${API_BASE}/legal/${encodeURIComponent(CORPUS_ID)}/${action}`;
+}
+
+export interface ViewerTargetPayload {
+  action?: string;
+  public_target_id?: string | null;
+  page_numbers?: number[];
+  can_resolve?: boolean;
+}
+
+export interface LayoutPayloadLine {
+  text: string;
+  line_order: number;
+  paragraph_id: string;
+  alignment: LayoutLine["alignment"];
+  indent: number;
+}
+
+export interface SupportPayload {
+  public_support_id: string;
+  support_kind: string;
+  panel_section: "Kutipan Relevan" | "Sumber Dokumen" | "Struktur Dokumen" | "Catatan Sumber";
+  fact_kind: string;
+  label: string;
+  role_label?: string | null;
+  text: string;
+  layout_lines: LayoutPayloadLine[];
+  copy_text: string;
+  source_label?: string;
+  source_role?: string;
+  page_numbers: number[];
+  legal_citation_available: boolean;
+  relevant_quote_eligible: boolean;
+  viewer_target: ViewerTargetPayload;
+}
+
+export interface SupportGroupPayload {
+  public_group_id: string;
+  panel_section: SupportPayload["panel_section"];
+  label: string;
+  summary: string;
+  member_count: number;
+  members: SupportPayload[];
 }
 
 export interface TjiptoAskResponse {
   status: string;
-  route?: string;
-  answer_type?: string;
   answer?: string;
   answer_scope?: string;
-  document_source?: DocumentSourcePayload;
-  warnings?: string[];
-  insufficient_reasons?: string[];
-  clarification_options?: ClarificationOptionPayload[];
+  reason?: string | null;
+  document_source?: { label?: string; source_role?: string; viewer_target?: ViewerTargetPayload };
+  clarification_options?: { source_role?: string; label?: string }[];
   supports?: SupportPayload[];
-}
-
-export interface SupportPayload {
-  support_id?: string;
-  support_kind?: string;
-  panel_section?: string;
-  fact_kind?: string;
-  display_label?: string;
-  source_document?: string;
-  source_role?: string;
-  display_text?: string;
-  layout_lines?: LayoutLine[];
-  copy_text?: string;
-  legal_citation_available?: boolean;
-  relevant_quote_eligible?: boolean;
-  linkable?: boolean;
-  viewer_target?: ViewerRefPayload;
-  page_numbers?: number[];
-  highlightable?: boolean;
-}
-
-export interface DocumentSourcePayload {
-  source_role?: string;
-  temporal_context?: string;
-  document_title?: string;
-  viewer_target?: {
-    action?: "open_document";
-    target?: string;
-  };
-}
-
-export interface ClarificationOptionPayload {
-  source_role?: string;
-  label?: string;
+  support_groups?: SupportGroupPayload[];
 }
 
 export interface SearchResult {
-  corpus_id: string;
   title?: string;
-  document_title?: string;
-  citation?: string;
   label?: string;
   snippet?: string;
   source_role?: string;
-  temporal_context?: string;
   page_numbers?: number[];
-  bbox_count?: number;
-  viewer_target?: ViewerRefPayload;
-  status: string;
-}
-
-export interface ViewerRefPayload {
-  action?: string;
-  target?: string;
-  page_numbers?: number[];
-  bbox_count?: number;
-  source_status_label?: string;
-  can_resolve?: boolean;
-  source_proof_text_span_ids?: string[];
-  source_proof_bbox_refs?: string[];
-  target_text_span_ids?: string[];
-  target_bbox_refs?: string[];
-}
-
-export interface CitationPayload {
-  corpus_id?: string;
-  evidence_id: string;
-  legal_unit_id?: string;
-  source_document_id?: string;
-  source_url?: string;
-  citation?: string;
-  label?: string;
-  hierarchy?: string[];
-  document_title?: string;
-  quoted_text: string;
-  source_role?: string;
-  temporal_context?: string;
-  authority_kind?: Citation["authorityKind"];
-  authority_label?: string;
-  citation_final?: boolean;
-  page_numbers?: number[];
-  bbox_count?: number;
-  viewer_ref?: ViewerRefPayload;
-  evidence_status?: string;
-  metadata_answer?: string;
-  metadata_field?: string;
-  support_kind?: string;
-  relevant_quote_eligible?: boolean;
-  display_text?: string;
-  copy_text?: string;
-  layout_lines?: LayoutLine[];
-  viewer_target?: Record<string, unknown>;
+  viewer_target?: ViewerTargetPayload;
 }
 
 export interface ViewerPayload {
   status: string;
-  corpus_id?: string;
-  evidence_id?: string;
-  legal_unit_id?: string;
-  source_document_id?: string;
-  source_url?: string;
   citation?: string;
   quoted_text?: string;
   source_role?: string;
-  temporal_context?: string;
   source_status_label?: string;
-  authority_kind?: Citation["authorityKind"];
-  authority_label?: string;
-  citation_final?: boolean;
   page_numbers?: number[];
-  bbox_count?: number;
-  bbox_rectangles?: (PdfBBox & {
-    bbox_precision?: "exact" | "coarse" | "page_grounded_only";
-    viewer_highlightable?: boolean;
-    coordinate_space?: string;
-    coordinate_origin?: string;
-    page_width?: number;
-    page_height?: number;
-    page_rotation?: number;
-    page_box_basis?: string;
-    transform_version?: string;
-  })[];
+  bbox_rectangles?: (PdfBBox & { public_rectangle_id?: string; bbox_precision?: "exact" | "coarse" | "page_grounded_only"; viewer_highlightable?: boolean })[];
+  viewer_highlightable?: boolean;
   pdf_access_available?: boolean;
   rendering_available?: boolean;
-  render_status?: string;
-  page_number?: number;
-  page_width?: number;
-  page_height?: number;
   reason?: string | null;
-  pdf?: {
-    mime_type?: string;
-    access_url?: string;
-  };
+  pdf?: { mime_type?: string; access_url?: string };
 }
 
 export interface BookmarkPointer {
-  bookmark_id: string;
-  corpus_id: string;
-  legal_unit_id: string;
-  evidence_id: string;
-  citation_id?: string;
-  viewer_ref_id?: string;
+  public_bookmark_id: string;
+  public_target_id?: string;
   note?: string;
   created_at: string;
   status: string;
 }
 
-export interface BookmarksResponse {
-  persistence?: "memory" | string;
-  persistence_label?: string;
-  bookmarks: BookmarkPointer[];
-}
-
 export async function askLegal(query: string, filters?: { source_role: string }): Promise<TjiptoAskResponse> {
-  const response = await fetch(corpusEndpoint("ask"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, ...(filters ? { filters } : {}) }),
-  });
-  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} runtime returned ${response.status}`);
-  return response.json();
+  return request("ask", { query, ...(filters ? { filters } : {}) });
 }
 
 export async function searchLegal(query: string): Promise<SearchResult[]> {
-  const response = await fetch(corpusEndpoint("search"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, limit: 5 }),
-  });
-  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} search returned ${response.status}`);
-  const body = await response.json();
+  const body = await request<{ results?: SearchResult[] }>("search", { query, limit: 5 });
   return Array.isArray(body.results) ? body.results : [];
 }
 
-export async function listLegalBookmarks(): Promise<BookmarksResponse> {
+export async function listLegalBookmarks(): Promise<{ bookmarks: BookmarkPointer[] }> {
   const response = await fetch(corpusEndpoint("bookmarks"));
-  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} bookmarks returned ${response.status}`);
+  if (!response.ok) throw new Error(`runtime returned ${response.status}`);
   const body = await response.json();
-  return {
-    persistence: body.persistence,
-    persistence_label: body.persistence_label,
-    bookmarks: Array.isArray(body.bookmarks) ? body.bookmarks : [],
-  };
+  return { bookmarks: Array.isArray(body.bookmarks) ? body.bookmarks : [] };
 }
 
-export async function saveLegalBookmark(evidenceId: string): Promise<BookmarkPointer | null> {
-  const response = await fetch(corpusEndpoint("bookmarks"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ evidence_id: evidenceId }),
-  });
-  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} bookmark returned ${response.status}`);
-  const body = await response.json();
+export async function saveLegalBookmark(publicTargetId: string): Promise<BookmarkPointer | null> {
+  const body = await request<{ bookmark?: BookmarkPointer }>("bookmarks", { target: publicTargetId });
   return body.bookmark ?? null;
 }
 
-export async function getLegalViewerPayload(evidenceId: string, relationId?: string): Promise<ViewerPayload> {
-  const response = await fetch(corpusEndpoint("viewer"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ target: evidenceId }),
-  });
-  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} viewer returned ${response.status}`);
-  return response.json();
+export async function getLegalViewerPayload(publicTargetId: string): Promise<ViewerPayload> {
+  return request("viewer", { target: publicTargetId });
 }
 
-export async function getDocumentViewerPayload(sourceDocumentId: string): Promise<ViewerPayload> {
-  const response = await fetch(corpusEndpoint("viewer"), {
+async function request<T = TjiptoAskResponse>(action: string, body: object): Promise<T> {
+  const response = await fetch(corpusEndpoint(action), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ target: sourceDocumentId }),
+    body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} viewer returned ${response.status}`);
+  if (!response.ok) throw new Error(`runtime returned ${response.status}`);
   return response.json();
 }
 
 export function pdfAccessUrl(viewer: ViewerPayload): string | null {
   const accessUrl = viewer.pdf?.access_url;
-  if (!accessUrl) return null;
-  return new URL(accessUrl, API_BASE).toString();
+  return accessUrl && API_BASE ? new URL(accessUrl, API_BASE).toString() : null;
 }
 
-export const askUud = askLegal;
-export const searchUud = searchLegal;
-export const listBookmarks = listLegalBookmarks;
-export const saveBookmark = saveLegalBookmark;
-export const getViewerPayload = getLegalViewerPayload;
-
 export function fallbackAnswer() {
-  return "Bukti tidak cukup / database belum tersedia dalam korpus UUD terverifikasi saat ini.";
+  return "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.";
 }
 
 export function answerTextOrFallback(response: TjiptoAskResponse) {
-  const answer = typeof response.answer === "string" ? response.answer.trim() : "";
-  return answer || fallbackAnswer();
+  return response.answer?.trim() || fallbackAnswer();
 }
 
 export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation[] {
-  return (response.supports ?? []).flatMap<Citation>((support, index) => {
-    if (!support.support_id || support.linkable !== true || support.highlightable !== true || support.viewer_target?.can_resolve !== true) return [];
-    const panelSection = support.panel_section as NonNullable<Citation["panelSection"]>;
-    const pages = support.page_numbers ?? support.viewer_target.page_numbers ?? [];
-    return [{
-      id: index + 1,
-      documentId: String(support.support_id),
-      sourceDocumentId: support.source_document,
-      documentTitle: fallbackDocumentTitle("uud"),
-      regulationType: "UUD" as const,
-      authorityKind: support.panel_section === "Kutipan Relevan"
-        ? "legal_citation"
-        : support.panel_section === "Catatan Sumber" ? "instrument_provenance" : "metadata_source",
-      authorityLabel: support.display_label ?? panelSection,
-      citationFinal: support.legal_citation_available === true,
-      article: support.display_label ?? panelSection,
-      pageNumber: Number(pages[0] ?? 1),
-      excerpt: support.display_text ?? "",
-      supportKind: support.support_kind,
-      relevantQuoteEligible: support.relevant_quote_eligible === true,
-      displayText: support.display_text ?? "",
-      copyText: support.copy_text ?? support.display_text ?? "",
-      layoutLines: support.layout_lines,
-      viewerTarget: support.viewer_target as Record<string, unknown>,
-      viewerRefId: String(support.support_id),
-      sourceUrl: "",
-      sourceDomain: support.source_role ?? "runtime",
-      sourceRole: support.source_role,
-      panelSection,
-    }];
-  });
+  return (response.supports ?? []).flatMap((support, index) => mapSupportToCitation(support, index));
 }
 
 export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Citation | null {
   const source = response.document_source;
-  const target = source?.viewer_target?.target;
-  if (response.answer_type !== "source_document" || !target) return null;
+  const target = source?.viewer_target?.public_target_id;
+  if (!target) return null;
   return {
     id: 1,
-    documentId: target,
-    documentTitle: source.document_title ?? fallbackDocumentTitle("uud"),
-    regulationType: "UUD",
+    publicTargetId: target,
+    documentTitle: source.label ?? "Dokumen sumber",
+    regulationType: "legal",
     viewerMode: "document",
-    pageNumber: 1,
+    pageNumber: Number(source.viewer_target?.page_numbers?.[0] ?? 1),
     excerpt: "",
-    sourceUrl: "",
     sourceRole: source.source_role,
-    temporalContext: source.temporal_context,
-    sourceStatusLabel: sourceStatusLabel(source.source_role, source.temporal_context),
   };
 }
 
-export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
-  metadata: SupportItem[];
-  structure: SupportItem[];
-  trace: SupportItem[];
-} {
-  const grouped = (panel: string, kind: SupportItem["kind"]) => (response.supports ?? [])
-    .filter((row) => row.panel_section === panel)
-    .map((row, index) => ({
-      id: String(row.support_id ?? `${kind}_${index}`),
+export function mapAskResponseToSupportItems(response: TjiptoAskResponse): { metadata: SupportItem[]; structure: SupportItem[]; trace: SupportItem[] } {
+  const supports = response.supports ?? [];
+  const rows = (section: SupportPayload["panel_section"], kind: SupportItem["kind"]) => supports
+    .filter((support) => support.panel_section === section)
+    .map((support) => ({
+      id: support.public_support_id,
+      publicTargetId: support.viewer_target.public_target_id ?? undefined,
+      label: support.label,
+      detail: support.text,
       kind,
-      label: row.display_label ?? panel,
-      detail: row.display_text,
-      clickable: row.linkable === true && row.highlightable === true && row.viewer_target?.can_resolve === true,
+      clickable: support.viewer_target.can_resolve === true,
     }));
   return {
-    metadata: grouped("Sumber Dokumen", "metadata"),
-    structure: grouped("Struktur Dokumen", "structure"),
-    trace: grouped("Catatan Sumber", "trace"),
+    metadata: rows("Sumber Dokumen", "metadata"),
+    structure: rows("Struktur Dokumen", "structure"),
+    trace: rows("Catatan Sumber", "trace"),
   };
+}
+
+export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): SupportGroup[] {
+  return (response.support_groups ?? []).flatMap((group) => {
+    const kind = group.panel_section === "Sumber Dokumen" ? "metadata" : group.panel_section === "Struktur Dokumen" ? "structure" : group.panel_section === "Catatan Sumber" ? "trace" : null;
+    if (!kind) return [];
+    return [{
+      id: group.public_group_id,
+      title: group.label,
+      summary: group.summary,
+      kind,
+      members: group.members.map((support) => ({
+        id: support.public_support_id,
+        publicTargetId: support.viewer_target.public_target_id ?? undefined,
+        label: support.label,
+        detail: support.text,
+        kind,
+        clickable: support.viewer_target.can_resolve === true,
+      })),
+    }];
+  });
 }
 
 export function mapSearchResultToCitation(item: SearchResult, index: number): Citation | null {
-  const target = item?.viewer_target?.target;
+  const target = item.viewer_target?.public_target_id;
   if (!target || !item.snippet) return null;
-  const pages = Array.isArray(item.page_numbers)
-    ? item.page_numbers
-    : Array.isArray(item.viewer_target?.page_numbers)
-      ? item.viewer_target.page_numbers
-      : [];
-  const pageNumber = Number(pages[0] ?? 1);
   return {
     id: index + 1,
-    documentId: target,
-    viewerMode: item.status === "document" ? "document" : "evidence",
-    viewerRefId: target,
-    documentTitle: item.document_title ?? fallbackDocumentTitle(item.corpus_id),
-    regulationType: "UUD",
-    article: String(item.label ?? item.citation ?? item.title ?? "UUD"),
-    pageNumber: Number.isFinite(pageNumber) ? pageNumber : 1,
-    excerpt: String(item.snippet),
-    sourceUrl: "",
-    sourceDomain: item.source_role ?? item.corpus_id ?? "runtime",
+    publicTargetId: target,
+    documentTitle: item.title ?? "Dokumen sumber",
+    regulationType: "legal",
+    viewerMode: "evidence",
+    article: item.label,
+    pageNumber: Number(item.page_numbers?.[0] ?? item.viewer_target?.page_numbers?.[0] ?? 1),
+    excerpt: item.snippet,
     sourceRole: item.source_role,
-    temporalContext: item.temporal_context,
-    sourceStatusLabel: sourceStatusLabel(item.source_role, item.temporal_context),
   };
 }
 
-function fallbackDocumentTitle(corpusId?: string) {
-  return corpusId === "uud"
-    ? "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945"
-    : corpusId ?? "Dokumen hukum";
-}
-
-function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
-  const role = sourceRole ?? temporalContext;
-  if (role === "current_consolidated") return "Berlaku (konsolidasi saat ini)";
-  if (role?.startsWith("amendment_")) return "Historis (sumber perubahan)";
-  if (role === "original_historical") return "Historis (naskah asli)";
-  return undefined;
-}
-
-function fallbackAuthorityKind(response: TjiptoAskResponse): Citation["authorityKind"] {
-  if (
-    response.route === "source_anomaly_explanation" &&
-    response.answer_scope === "source_conflict_exact_provenance" &&
-    Array.isArray(response.warnings) &&
-    response.warnings.includes("source_conflict_not_final_legal_authority")
-  ) {
-    return "source_conflict_provenance";
-  }
-  return "legal_citation";
-}
-
-function fallbackAuthorityLabel(authorityKind: Citation["authorityKind"]) {
-  return {
-    legal_citation: "Sitasi hukum",
-    metadata_source: "Metadata sumber",
-    metadata_trace: "Metadata trace",
-    source_conflict_provenance: "Jejak audit sumber",
-    source_anomaly: "Source anomaly",
-    structural_context: "Provenance struktural",
-    instrument_provenance: "Instrument provenance",
-  }[authorityKind ?? "legal_citation"];
+function mapSupportToCitation(support: SupportPayload, index: number): Citation[] {
+  const target = support.viewer_target.public_target_id;
+  if (!target || support.viewer_target.can_resolve !== true) return [];
+  return [{
+    id: index + 1,
+    publicTargetId: target,
+    documentTitle: support.source_label ?? "Dokumen sumber",
+    regulationType: "legal",
+    authorityKind: support.panel_section === "Kutipan Relevan" ? "legal_citation" : undefined,
+    authorityLabel: support.label,
+    citationFinal: support.legal_citation_available,
+    article: support.label,
+    pageNumber: Number(support.page_numbers[0] ?? 1),
+    excerpt: support.text,
+    supportKind: support.support_kind,
+    relevantQuoteEligible: support.relevant_quote_eligible,
+    displayText: support.text,
+    copyText: support.copy_text,
+    layoutLines: support.layout_lines,
+    viewerTarget: support.viewer_target as Record<string, unknown>,
+    sourceRole: support.source_role,
+    panelSection: support.panel_section,
+  }];
 }

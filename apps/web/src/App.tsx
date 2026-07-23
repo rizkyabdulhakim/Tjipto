@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Sidebar, TjiptoLogo } from "./components/tjipto/Sidebar";
+import { Sidebar } from "./components/tjipto/Sidebar";
 import { EmptyState } from "./components/tjipto/EmptyState";
 import { ChatView } from "./components/tjipto/ChatView";
 import { SearchRoute, LibraryRoute } from "./components/tjipto/SecondaryRoutes";
@@ -11,6 +11,7 @@ import {
   askLegal,
   mapAskResponseToCitations,
   mapAskResponseToDocumentSource,
+  mapAskResponseToSupportGroups,
   mapAskResponseToSupportItems,
 } from "./lib/api";
 import { Menu, SquarePen } from "lucide-react";
@@ -89,6 +90,7 @@ export default function App() {
       const citations = mapAskResponseToCitations(response);
       const documentSource = mapAskResponseToDocumentSource(response);
       const support = mapAskResponseToSupportItems(response);
+      const supportGroups = mapAskResponseToSupportGroups(response);
       const content = answerTextOrFallback(response);
       setActiveCitation(documentSource);
       setMessages((prev) =>
@@ -103,6 +105,7 @@ export default function App() {
                 metadataSupport: support.metadata.length ? support.metadata : undefined,
                 structuralSupport: support.structure.length ? support.structure : undefined,
                 traceSupport: support.trace.length ? support.trace : undefined,
+                supportGroups: supportGroups.length ? supportGroups : undefined,
                 clarificationOptions: (response.clarification_options ?? [])
                   .filter((option) => option.label)
                   .map((option) => ({ sourceRole: option.source_role, label: option.label as string })),
@@ -111,7 +114,7 @@ export default function App() {
             : m,
         ),
       );
-    } catch (error) {
+    } catch {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === asstId
@@ -134,7 +137,7 @@ export default function App() {
 
   const stop = () => setIsStreaming(false);
   const allCitations = messages.flatMap((message) => message.citations ?? []);
-  const panelCitations = activeCitation && !allCitations.some((c) => c.documentId === activeCitation.documentId)
+  const panelCitations = activeCitation && !allCitations.some((c) => c.publicTargetId === activeCitation.publicTargetId)
     ? [...allCitations, activeCitation]
     : allCitations;
 

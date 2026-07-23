@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ClipboardEvent, CSSProperties, PointerEvent, ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist/types/src/display/api";
@@ -142,15 +142,19 @@ function EvidenceContent({
   const location = legalUnitLabel(citation.article, citation.paragraph);
   const pageNumber = viewer?.page_numbers?.[0] ?? citation.pageNumber;
   const sourceStatus = viewer?.source_status_label ?? citation.sourceStatusLabel ?? sourceStatusLabel(citation.sourceRole, citation.temporalContext);
+  const markRenderFailed = useCallback(() => {
+    setRenderFailed(true);
+    setViewer((current) => current ? { ...current, rendering_available: false } : current);
+  }, []);
 
-  useEffect(() => setSaved(false), [citation.documentId]);
+  useEffect(() => setSaved(false), [citation.publicTargetId]);
 
   useEffect(() => {
     let stale = false;
     setViewer(null);
     setViewerError(false);
     setRenderFailed(false);
-    const request = getLegalViewerPayload(citation.documentId, citation.relationId);
+    const request = getLegalViewerPayload(citation.publicTargetId);
     request
       .then((payload) => {
         if (!stale) setViewer(payload);
@@ -161,7 +165,7 @@ function EvidenceContent({
     return () => {
       stale = true;
     };
-  }, [citation.documentId, citation.viewerMode, citation.relationId]);
+  }, [citation.publicTargetId, citation.viewerMode]);
 
   const copyExcerpt = async () => {
     const text = (citation.copyText ?? citation.excerpt).replace(/\r\n?/g, "\n");
@@ -179,12 +183,14 @@ function EvidenceContent({
     if (!selected.trim()) return;
     event.preventDefault();
     event.clipboardData.clearData();
-    event.clipboardData.setData("text/plain", selected.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trimStart()).join("\n"));
+    const fullSelection = selected.replace(/\s+/g, " ").trim() === (event.currentTarget.innerText ?? "").replace(/\s+/g, " ").trim();
+    const text = fullSelection ? citation.copyText ?? citation.excerpt : selected;
+    event.clipboardData.setData("text/plain", text.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trimStart()).join("\n").trim());
   };
 
   const savePointer = async () => {
     try {
-      const bookmark = await saveLegalBookmark(citation.documentId);
+      const bookmark = await saveLegalBookmark(citation.publicTargetId);
       if (bookmark) setSaved(true);
     } catch {
       setSaved(false);
@@ -309,14 +315,10 @@ function EvidenceContent({
           >
             {viewer?.pdf_access_available && viewer.pdf?.access_url && !renderFailed ? (
               <RenderedViewer
-                key={`${citation.viewerMode ?? "evidence"}:${viewer.source_document_id}:${viewer.evidence_id ?? "document"}:${viewer.bbox_rectangles?.length ?? 0}`}
+                key={`${citation.viewerMode ?? "evidence"}:${citation.publicTargetId}:${viewer.bbox_rectangles?.length ?? 0}`}
                 viewer={viewer}
-                citation={citation}
                 targetPage={pageNumber}
-                onRenderFailed={() => {
-                  setRenderFailed(true);
-                  setViewer((current) => current ? { ...current, rendering_available: false, render_status: "render_failed_safe" } : current);
-                }}
+                onRenderFailed={markRenderFailed}
               />
             ) : (
               <UnavailableViewer
@@ -368,9 +370,10 @@ function EvidenceContent({
                   whiteSpace: "pre-wrap",
                 }}
               >
-                {(citation.layoutLines ?? [{ text: citation.displayText ?? citation.excerpt, line_order: 0, paragraph_id: "support", alignment: "unknown", indent: 0, source_bbox_refs: [] }]).map((line) => (
+                {(citation.layoutLines ?? [{ text: citation.displayText ?? citation.excerpt, line_order: 0, paragraph_id: "support", alignment: "unknown", indent: 0 }]).map((line) => (
                   <span
                     key={`${line.paragraph_id}:${line.line_order}`}
+                    data-copy-line={line.line_order}
                     style={{ display: "block", textAlign: line.alignment === "unknown" ? "left" : line.alignment, paddingLeft: line.indent ? `${line.indent}px` : undefined }}
                   >
                     {line.text}
@@ -471,12 +474,10 @@ function MetaRow({
 
 function RenderedViewer({
   viewer,
-  citation,
   targetPage,
   onRenderFailed,
 }: {
   viewer: ViewerPayload;
-  citation: Citation;
   targetPage: number;
   onRenderFailed: () => void;
 }) {
@@ -484,6 +485,7 @@ function RenderedViewer({
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [renderedPages, setRenderedPages] = useState(0);
   const pdfUrl = pdfAccessUrl(viewer);
+  const markRendered = useCallback(() => setRenderedPages((count) => count + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -502,7 +504,7 @@ function RenderedViewer({
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl]);
+  }, [pdfUrl, onRenderFailed]);
 
   useEffect(() => {
     if (!pdf || renderedPages < 1) return;
@@ -536,9 +538,8 @@ function RenderedViewer({
               pageNumber={pageNumber}
               active={pageNumber === targetPage}
               boxes={viewer.bbox_rectangles ?? []}
-              citation={citation}
               onRenderFailed={onRenderFailed}
-              onRendered={() => setRenderedPages((count) => count + 1)}
+              onRendered={markRendered}
             />
           </div>
         );
@@ -552,7 +553,6 @@ function PdfPage({
   pageNumber,
   active,
   boxes,
-  citation,
   onRenderFailed,
   onRendered,
 }: {
@@ -560,7 +560,6 @@ function PdfPage({
   pageNumber: number;
   active: boolean;
   boxes: NonNullable<ViewerPayload["bbox_rectangles"]>;
-  citation: Citation;
   onRenderFailed: () => void;
   onRendered: () => void;
 }) {
@@ -568,11 +567,9 @@ function PdfPage({
   const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
   const [pageViewport, setPageViewport] = useState<ReturnType<PDFPageProxy["getViewport"]> | null>(null);
   const [rendered, setRendered] = useState(false);
-  const relationProofIds = citation.relationProof ? citation.relationSourceProofBBoxRefs : undefined;
-  const targetIds = new Set(citation.relationTargetBBoxRefs ?? []);
   const pageBoxes = boxes.filter(
     (box) => box.page_number === pageNumber && box.viewer_highlightable === true,
-  ).filter((box) => !relationProofIds || relationProofIds.includes(String(box.bbox_id)));
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -606,7 +603,7 @@ function PdfPage({
     return () => {
       cancelled = true;
     };
-  }, [pdf, pageNumber]);
+  }, [pdf, pageNumber, onRenderFailed, onRendered]);
 
   return (
     <>
@@ -627,9 +624,8 @@ function PdfPage({
           if (!rect.ok) return null;
           return (
             <span
-              key={box.bbox_id}
-              data-bbox-highlight={targetIds.has(String(box.bbox_id)) ? "target" : active ? "active" : "related"}
-              data-relation-layer={relationProofIds ? (targetIds.has(String(box.bbox_id)) ? "target-emphasis" : "source-proof") : undefined}
+              key={box.public_rectangle_id ?? `${box.page_number}:${box.x0}:${box.y0}:${box.x1}:${box.y1}`}
+              data-bbox-highlight={active ? "active" : "related"}
               className="absolute"
               style={{
                 left: `${rect.left}%`,

@@ -1,7 +1,5 @@
 import { motion } from "motion/react";
-import { ArrowUpRight } from "lucide-react";
 import { Composer } from "./Composer";
-import { suggestedPrompts } from "./data";
 
 interface EmptyStateProps {
   onSubmit: (value: string) => void;

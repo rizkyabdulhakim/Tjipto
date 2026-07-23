@@ -89,22 +89,22 @@ export function SearchRoute({ onOpenCitation }: { onOpenCitation?: (citation: Ci
               const citation = mapSearchResultToCitation(row, index);
               const page = row.page_numbers?.[0] ?? row.viewer_target?.page_numbers?.[0];
               return (
-                <li key={row.viewer_target?.target ?? `${row.corpus_id}:${index}`} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
+                <li key={row.viewer_target?.public_target_id ?? `${row.title}:${index}`} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
                   <button
                     type="button"
-                    aria-label={`Buka viewer ${row.title ?? row.corpus_id}`}
+                    aria-label={`Buka viewer ${row.title ?? "dokumen"}`}
                     className="w-full flex items-start gap-3 text-left disabled:cursor-not-allowed disabled:opacity-70"
                     onClick={() => citation && onOpenCitation?.(citation)}
                     disabled={!citation}
                   >
                     <span className="inline-flex items-center px-2 h-[22px] rounded-md shrink-0 mt-0.5" style={{ fontSize: 11, fontWeight: 600, background: "var(--tj-accent-soft)", color: "var(--tj-accent)" }}>
-                      {row.corpus_id.toUpperCase()}
+                      SUMBER
                     </span>
                     <span className="min-w-0">
                       <span className="block" style={{ fontSize: 15, fontWeight: 600, color: "var(--tj-text-primary)" }}>{row.title}</span>
                       <span className="block mt-1.5 line-clamp-3" style={{ fontSize: 13.5, lineHeight: "20px", color: "var(--tj-text-secondary)" }}>{row.snippet}</span>
                       <span className="block mt-3" style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
-                        {page ? `Halaman ${page}` : "Halaman tidak tersedia"} · {sourceStatusLabel(row.source_role, row.temporal_context)}
+                        {page ? `Halaman ${page}` : "Halaman tidak tersedia"} · {sourceStatusLabel(row.source_role)}
                       </span>
                     </span>
                   </button>
@@ -120,14 +120,12 @@ export function SearchRoute({ onOpenCitation }: { onOpenCitation?: (citation: Ci
 
 export function LibraryRoute() {
   const [bookmarks, setBookmarks] = useState<BookmarkPointer[]>([]);
-  const [persistence, setPersistence] = useState("temporary_process_memory");
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
     listLegalBookmarks()
       .then((body) => {
         setBookmarks(body.bookmarks);
-        setPersistence(body.persistence_label ?? body.persistence ?? "temporary_process_memory");
         setStatus(body.bookmarks.length ? "ready" : "empty");
       })
       .catch(() => setStatus("unavailable"));
@@ -146,7 +144,7 @@ export function LibraryRoute() {
           className="mt-1.5"
           style={{ fontSize: 14, color: "var(--tj-text-secondary)" }}
         >
-          Korpus runtime terverifikasi saat ini: UUD-only. Bookmark bersifat sementara di memori proses.
+          Bookmark yang tersimpan pada sesi ini.
         </p>
 
         <div className="mt-7 flex items-center gap-2">
@@ -155,9 +153,6 @@ export function LibraryRoute() {
             style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}
           >
             LIBRARY STATUS
-          </span>
-          <span style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>
-            {persistence}
           </span>
         </div>
 
@@ -173,13 +168,13 @@ export function LibraryRoute() {
             </div>
           ) : (
             bookmarks.map((row) => (
-              <div key={row.bookmark_id} className="flex items-center gap-3 px-4 py-3.5 border-b border-[var(--tj-border-subtle)] last:border-b-0">
+              <div key={row.public_bookmark_id} className="flex items-center gap-3 px-4 py-3.5 border-b border-[var(--tj-border-subtle)] last:border-b-0">
                 <div className="w-9 h-11 rounded-md bg-[var(--tj-surface-subtle)] border border-[var(--tj-border-subtle)] flex items-center justify-center shrink-0">
                   <FileText size={15} className="text-[var(--tj-text-secondary)]" />
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "var(--tj-text-primary)" }}>{row.evidence_id}</div>
-                  <div style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>{row.status} · {row.legal_unit_id}</div>
+                  <div className="truncate" style={{ fontSize: 14, fontWeight: 600, color: "var(--tj-text-primary)" }}>{row.note || "Dukungan tersimpan"}</div>
+                  <div style={{ fontSize: 12, color: "var(--tj-text-muted)" }}>{row.status}</div>
                 </div>
               </div>
             ))
@@ -190,10 +185,6 @@ export function LibraryRoute() {
   );
 }
 
-function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
-  const role = sourceRole ?? temporalContext;
-  if (role === "current_consolidated") return "Berlaku";
-  if (role?.startsWith("amendment_")) return "Historis";
-  if (role === "original_historical") return "Historis";
-  return "Status sumber tidak tersedia";
+function sourceStatusLabel(sourceRole?: string) {
+  return sourceRole || "Status sumber tidak tersedia";
 }

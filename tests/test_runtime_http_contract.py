@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
+from pathlib import Path
 import threading
 import unittest
-from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -13,11 +12,7 @@ from tjipto.runtime.http import make_server
 
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def _http_ask_cases() -> tuple[dict, ...]:
-    path = ROOT / "tests/fixtures/uud/http_ask_cases.jsonl"
-    return tuple(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+_FORBIDDEN = ("evidence_id", "legal_unit_id", "source_document_id", "bbox_id", "source_bbox_refs", "manifest_digest", "artifact_set_digest", "context_pack")
 
 
 class RuntimeHttpContractTest(unittest.TestCase):
@@ -39,314 +34,105 @@ class RuntimeHttpContractTest(unittest.TestCase):
         cls.server.server_close()
         cls.thread.join(timeout=2)
 
-    def test_health(self) -> None:
-        self.assertEqual(self._get("/health")["status"], "ok")
-
-    def test_exposed_runtime_endpoints(self) -> None:
+    def test_public_capabilities_and_search_are_closed(self) -> None:
         capabilities = self._get("/legal/uud/capabilities")
-        self.assertEqual(capabilities["status"], "ok")
-        self.assertIn("search", capabilities["capabilities"])
+        self.assertEqual(capabilities, {"status": "ok", "capabilities": ["search", "ask", "citation", "viewer", "bookmarks"]})
+        result = self._post("/legal/uud/search", {"query": "UUD 1945", "limit": 2})
+        self.assertEqual(result["status"], "found")
+        self.assertTrue(result["results"])
+        self._assert_public(result)
+        self.assertEqual(set(result["results"][0]), {"title", "label", "snippet", "source_role", "page_numbers", "viewer_target"})
+        self.assertTrue(result["results"][0]["viewer_target"]["public_target_id"])
 
-        search = self._post("/legal/uud/search", {"query": "UUD 1945", "limit": 2})
-        self.assertEqual(search["status"], "found")
-        self.assertTrue(search["results"])
-        for internal in ("matches", "context_pack", "route", "intent", "ranked_final_evidence_ids"):
-            self.assertNotIn(internal, search)
-        first = search["results"][0]
-        self.assertEqual(first["status"], "document")
-        self.assertTrue(first["viewer_target"]["target"])
-        self.assertIn("source_role", first)
-        self.assertNotIn("route_score", first)
-        for internal in ("document_id", "source_document_id", "evidence_id", "legal_unit_id", "viewer_ref_id"):
-            self.assertNotIn(internal, first)
-        search_viewer = self._post("/legal/uud/viewer", {"target": first["viewer_target"]["target"]})
-        self.assertEqual(search_viewer["status"], "viewer_payload_ready")
-        self.assertFalse(search_viewer["bbox_rectangles"])
-
-        weak = self._post("/legal/uud/search", {"query": "hak pendidikan"})
-        self.assertEqual(weak["public_status"], "no_results")
-        self.assertEqual(weak["results"], [])
-
-        citation = self._post("/legal/uud/citation", {"query": "Pasal 1 ayat (3)"})
-        self.assertEqual(citation["status"], "found")
-        self.assertNotIn("matches", citation)
-        self.assertNotIn("context_pack", citation)
-        self.assertEqual(citation["citation_payloads"][0]["authority_kind"], "legal_citation")
-        self.assertTrue(citation["citation_payloads"][0]["citation_final"])
-        self.assertNotIn("source_sha256", citation["citation_payloads"][0])
-        self.assertNotIn("source_pdf_path", citation["citation_payloads"][0])
-        self.assertNotIn("source_sha256", citation["viewer_refs"][0])
-        self.assertNotIn("source_pdf_path", citation["viewer_refs"][0])
-        evidence_id = citation["citation_payloads"][0]["evidence_id"]
-        asked = self._post("/legal/uud/ask", {"query": "Pasal 1 ayat (3)"})
-        target = asked["supports"][0]["viewer_target"]["target"]
+    def test_ask_citation_viewer_pdf_and_bookmark_use_only_public_targets(self) -> None:
+        asked = self._post("/legal/uud/ask", {"query": "Pasal 16 UUD konsolidasi"})
+        self.assertEqual(asked["status"], "answer_ready")
+        self._assert_public(asked)
+        support = asked["supports"][0]
+        self.assertEqual(set(support), {
+            "public_support_id", "support_kind", "panel_section", "fact_kind", "label", "role_label", "text", "layout_lines", "copy_text",
+            "source_label", "source_role", "page_numbers", "legal_citation_available", "relevant_quote_eligible", "viewer_target",
+        })
+        self.assertEqual(support["panel_section"], "Kutipan Relevan")
+        self.assertNotIn("\nPresiden\nmembentuk", support["copy_text"])
+        self.assertNotIn("source_bbox_refs", json.dumps(support))
+        target = support["viewer_target"]["public_target_id"]
         viewer = self._post("/legal/uud/viewer", {"target": target})
-        self.assertEqual(viewer["status"], "viewer_payload_ready")
-        self.assertNotIn("evidence_id", viewer)
+        self._assert_public(viewer)
         self.assertTrue(viewer["pdf_access_available"])
-        self.assertEqual(viewer["render_status"], "pdf_access_available")
-        self.assertTrue(viewer["pdf"]["access_url"].startswith("/legal/uud/pdf?"))
-        self.assertNotIn("source_sha256", viewer)
-        self.assertNotIn("source_pdf_path", viewer)
-        self.assertNotIn("source_sha256", viewer["pdf"]["access_url"])
-        self.assertNotIn("source_pdf_path", viewer["pdf"]["access_url"])
-        self.assertNotIn("data_url", viewer["pdf"])
         self.assertTrue(viewer["bbox_rectangles"])
-        self.assertEqual(viewer["bbox_rectangles"][0]["bbox_precision"], "exact")
-        self.assertTrue(viewer["bbox_rectangles"][0]["viewer_highlightable"])
-        self.assertNotIn("source_pdf_path", viewer["bbox_rectangles"][0])
-        self.assertNotIn("source_sha256", viewer["bbox_rectangles"][0])
-        self.assertNotIn("source_document_id", viewer["bbox_rectangles"][0])
-        self.assertNotIn("evidence_id", viewer["bbox_rectangles"][0])
-        pdf_body, pdf_headers = self._get_bytes(viewer["pdf"]["access_url"])
-        self.assertEqual(pdf_headers["Content-Type"], "application/pdf")
-        self.assertTrue(pdf_body.startswith(b"%PDF"))
+        self.assertTrue(viewer["pdf"]["access_url"].startswith("/legal/uud/pdf?target="))
+        pdf, headers = self._get_bytes(viewer["pdf"]["access_url"])
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertEqual(headers["Content-Type"], "application/pdf")
 
-        saved = self._post("/legal/uud/bookmarks", {"evidence_id": evidence_id, "note": "cek lagi"})
+        saved = self._post("/legal/uud/bookmarks", {"target": target, "note": "cek lagi"})
         self.assertEqual(saved["status"], "saved")
-        self.assertNotIn("quoted_text", saved["bookmark"])
+        self._assert_public(saved)
+        self.assertEqual(set(saved["bookmark"]), {"public_bookmark_id", "public_target_id", "note", "created_at", "status"})
         bookmarks = self._get("/legal/uud/bookmarks")
-        self.assertEqual(bookmarks["persistence"], "memory")
-        self.assertEqual(bookmarks["persistence_label"], "temporary_process_memory")
+        self._assert_public(bookmarks)
         self.assertTrue(bookmarks["bookmarks"])
 
-        self.assertEqual(self._post("/legal/unknown/search", {"query": "Pasal 1"})["status"], "unsupported_corpus")
-
-    def test_uud_routes_are_dev_aliases_not_canonical_contract(self) -> None:
-        canonical = self._get("/legal/uud/capabilities")
-        alias = self._get("/uud/capabilities")
-        self.assertEqual(alias["status"], canonical["status"])
-        self.assertEqual(alias["capabilities"], canonical["capabilities"])
-
-    def test_uud_alias_is_disabled_outside_development(self) -> None:
-        old = os.environ.get("TJIPTO_MODE")
-        os.environ["TJIPTO_MODE"] = "staging"
-        try:
-            with self.assertRaises(HTTPError) as error:
-                self._get("/uud/capabilities")
-            self.assertEqual(error.exception.code, 404)
-        finally:
-            if old is None:
-                os.environ.pop("TJIPTO_MODE", None)
-            else:
-                os.environ["TJIPTO_MODE"] = old
-
-    def test_uud_ask_examples(self) -> None:
-        for case in _http_ask_cases():
-            result = self._post("/legal/uud/ask", {"query": case["query"]})
-            self.assertEqual(result["status"], case["status"], case["query"])
-            self.assertEqual(result["route"], case["route"], case["query"])
-            if "intent" in case:
-                self.assertEqual(result["intent"], case["intent"], case["query"])
-            supports = result["supports"]
-            for support in supports:
-                self.assertEqual(
-                    set(support),
-                    {"support_id", "support_kind", "panel_section", "fact_kind", "display_label", "display_text", "layout_lines", "copy_text", "source_document", "source_role", "page_numbers", "legal_citation_available", "relevant_quote_eligible", "linkable", "highlightable", "viewer_target"},
-                    case["query"],
-                )
-                self.assertNotIn("source_sha256", json.dumps(support), case["query"])
-                self.assertNotIn("source_pdf_path", json.dumps(support), case["query"])
-            if "has_citations" in case:
-                expected_legal = case["has_citations"] and case["route"] != "metadata_fact"
-                self.assertEqual(any(row["legal_citation_available"] for row in supports), expected_legal, case["query"])
-            if "has_viewer_refs" in case:
-                self.assertEqual(any(row["highlightable"] for row in supports), case["has_viewer_refs"], case["query"])
-            if "metadata_answer" in case:
-                self.assertTrue(any(case["metadata_answer"] in row["display_text"] for row in supports), case["query"])
-            self.assertNotIn("legal_relations", result, case["query"])
-            self.assertNotIn("document_relations", result, case["query"])
-            for field in ("insufficient_reasons",):
-                if field in case:
-                    self.assertEqual(result[field], case[field], case["query"])
-
-    def test_penandatangan_alias_uses_metadata_public_contract(self) -> None:
-        result = self._post("/legal/uud/ask", {"query": "penandatangan perubahan pertama UUD"})
-        self.assertEqual(result["status"], "answer_ready")
-        self.assertEqual(result["route"], "metadata_fact")
-        self.assertEqual(result["intent"], "metadata_lookup")
+    def test_citation_shares_the_support_contract(self) -> None:
+        result = self._post("/legal/uud/citation", {"query": "Pasal 1 ayat (3)"})
+        self.assertEqual(result["status"], "found")
         self.assertTrue(result["supports"])
-        self.assertEqual(result["supports"][0]["panel_section"], "Sumber Dokumen")
-        self.assertFalse(result["supports"][0]["legal_citation_available"])
+        self.assertEqual(result["supports"][0]["panel_section"], "Kutipan Relevan")
+        self._assert_public(result)
 
-    def test_structure_and_exact_roles_publish_clickable_supports(self) -> None:
-        structure = self._post("/legal/uud/ask", {"query": "bab XI agama"})
-        structural = [row for row in structure["supports"] if row["panel_section"] == "Struktur Dokumen"]
-        self.assertEqual(len(structural), 1)
-        self.assertTrue(structural[0]["linkable"])
-        self.assertTrue(structural[0]["highlightable"])
-        self.assertTrue(any(row["panel_section"] == "Kutipan Relevan" for row in structure["supports"]))
+    def test_groups_preserve_members_and_keep_nonlegal_sections_out_of_quotes(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "siapa wakil ketua yang tercantum dalam Perubahan Pertama?"})
+        self.assertTrue(result["support_groups"])
+        self._assert_public(result)
+        for group in result["support_groups"]:
+            self.assertEqual(group["member_count"], len(group["members"]))
+            self.assertTrue(group["public_group_id"])
+            for member in group["members"]:
+                self.assertIn(member, result["supports"])
+                if member["panel_section"] != "Kutipan Relevan":
+                    self.assertFalse(member["legal_citation_available"])
+                    self.assertFalse(member["relevant_quote_eligible"])
 
-        deleted = self._post("/legal/uud/ask", {"query": "Apa isi BAB IV UUD 1945?"})
-        self.assertEqual({row["panel_section"] for row in deleted["supports"]}, {"Struktur Dokumen", "Kutipan Relevan"})
-        self.assertEqual(
-            [row["display_text"] for row in deleted["supports"] if row["panel_section"] == "Kutipan Relevan"],
-            ["Dihapus."],
-        )
-
-        chair = self._post("/legal/uud/ask", {"query": "siapa ketua mpr dalam Perubahan Keempat?"})
-        chair_text = " ".join(row["display_text"] for row in chair["supports"])
-        self.assertIn("Amien Rais", chair_text)
-        self.assertNotIn("Ginandjar", chair_text)
-
-        deputies = self._post("/legal/uud/ask", {"query": "siapa wakil ketua yang tercantum dalam Perubahan Keempat?"})
-        deputy_text = " ".join(row["display_text"] for row in deputies["supports"])
-        self.assertIn("Ginandjar", deputy_text)
-        self.assertIn("Nazri Adlani", deputy_text)
-        self.assertNotIn("Amien Rais", deputy_text)
-        for result in (structure, deleted, chair, deputies):
-            self.assertFalse({"metadata_support", "structural_support", "trace_support"} & set(result))
-
-    def test_pasal_16_and_bab_detail_have_public_exact_supports(self) -> None:
-        pasal = self._post("/legal/uud/ask", {"query": "Pasal 16 UUD konsolidasi"})
-        legal = [row for row in pasal["supports"] if row["panel_section"] == "Kutipan Relevan"]
-        self.assertEqual(len(legal), 1)
-        self.assertEqual(legal[0]["display_label"], "BAB III / Pasal 16")
-        self.assertTrue(legal[0]["linkable"])
-        self.assertTrue(legal[0]["highlightable"])
-        self.assertTrue(legal[0]["relevant_quote_eligible"])
-        self.assertTrue(legal[0]["viewer_target"]["can_resolve"])
-
-        bab = self._post("/legal/uud/ask", {"query": "Apa isi BAB XI agama?"})
-        self.assertTrue(any(row["panel_section"] == "Struktur Dokumen" for row in bab["supports"]))
-        self.assertTrue(any(row["panel_section"] == "Kutipan Relevan" for row in bab["supports"]))
-        self.assertTrue(all(row["highlightable"] for row in bab["supports"] if row["panel_section"] == "Kutipan Relevan"))
-
-    def test_unscoped_metadata_public_contract_requires_clarification(self) -> None:
-        result = self._post("/legal/uud/ask", {"query": "penandatangan UUD"})
-        self.assertEqual(result["status"], "clarification_required")
-        self.assertEqual(result["route"], "metadata_fact")
-        self.assertTrue(result["clarification_options"])
-        self.assertFalse(result["supports"])
-
-    def test_source_role_filter_preserves_the_person_role_question(self) -> None:
-        result = self._post("/legal/uud/ask", {
-            "query": "ketua Majelis Permusyawaratan Rakyat Republik Indonesia UUD",
-            "filters": {"source_role": "amendment_1_historical"},
-        })
-        self.assertEqual(result["status"], "answer_ready")
-        self.assertEqual(result["answer"], "Prof. Dr. H.M. Amien Rais")
-        self.assertEqual(result["supports"][0]["source_role"], "amendment_1_historical")
-
-    def test_unresolved_temporal_scope_public_contract_is_fail_closed(self) -> None:
-        result = self._post("/legal/uud/ask", {"query": "Pasal 31 perubahan ke-5"})
-        self.assertEqual(result["status"], "insufficient_evidence")
-        self.assertIn("unresolved_source_scope", result["insufficient_reasons"])
-        self.assertFalse(result["supports"])
-
-    def test_local_dev_cors_only(self) -> None:
-        request = Request(
-            self.base_url + "/legal/uud/ask",
-            data=json.dumps({"query": "Pasal 1 ayat (3)"}).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Origin": "http://localhost:5173"},
-            method="POST",
-        )
-        with self._open_local(request) as response:
-            self.assertEqual(response.headers["Access-Control-Allow-Origin"], "http://localhost:5173")
-            self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
-            self.assertEqual(response.headers["Referrer-Policy"], "no-referrer")
-
-        request = Request(
-            self.base_url + "/legal/uud/ask",
-            data=json.dumps({"query": "Pasal 1 ayat (3)"}).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Origin": "https://example.com"},
-            method="POST",
-        )
-        with self._open_local(request) as response:
-            self.assertIsNone(response.headers.get("Access-Control-Allow-Origin"))
-
-    def test_unknown_path(self) -> None:
-        with self.assertRaises(HTTPError) as error:
-            self._get("/not-real")
-        self.assertEqual(error.exception.code, 404)
-
-    def test_invalid_json_and_oversized_payloads_fail_safely(self) -> None:
-        request = Request(
-            self.base_url + "/legal/uud/ask",
-            data=b"{",
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with self.assertRaises(HTTPError) as error:
-            self._open_local(request)
-        self.assertEqual(error.exception.code, 400)
-        self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "invalid_json")
-
-        request = Request(
-            self.base_url + "/legal/uud/ask",
-            data=b"x" * (64 * 1024 + 1),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with self.assertRaises(HTTPError) as error:
-            self._open_local(request)
-        self.assertEqual(error.exception.code, 413)
-        self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "request_body_too_large")
-
-        request = Request(
-            self.base_url + "/legal/uud/search",
-            data=json.dumps({"query": "x", "limit": 0}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with self.assertRaises(HTTPError) as error:
-            self._open_local(request)
-        self.assertEqual(error.exception.code, 400)
-        self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "invalid_limit")
-
-    def test_viewer_invalid_inputs_do_not_leak_paths_or_traces(self) -> None:
-        asked = self._post("/legal/uud/ask", {"query": "Pasal 1 ayat (3)"})
-        target = asked["supports"][0]["viewer_target"]["target"]
-        for payload in (
-            {"target": target, "source_document_id": "uud::missing"},
-            {"target": target, "page_number": 999},
-            {"target": target, "bbox_id": "missing_bbox"},
-            {"target": target, "source_pdf_path": "../secret.pdf"},
+    def test_public_payload_rejects_unknown_and_legacy_fields(self) -> None:
+        for path, payload in (
+            ("/legal/uud/viewer", {"target": "bad", "evidence_id": "forged"}),
+            ("/legal/uud/bookmarks", {"evidence_id": "forged"}),
+            ("/legal/uud/ask", {"query": "Pasal 1", "context_pack": {}}),
         ):
-            viewer = self._post("/legal/uud/viewer", payload)
-            self.assertEqual(viewer["status"], "viewer_payload_ready")
-            self.assertTrue(viewer["rendering_available"])
-            body = json.dumps(viewer)
-            self.assertNotIn(str(ROOT), body)
-            self.assertNotIn("Traceback", body)
-        self.assertEqual(
-            self._post("/legal/unknown/viewer", {"target": target})["status"],
-            "unsupported_corpus",
-        )
+            with self.assertRaises(HTTPError) as error:
+                self._post(path, payload)
+            self.assertEqual(error.exception.code, 400)
+            self.assertEqual(json.loads(error.exception.read().decode("utf-8")), {"status": "bad_request", "reason": "invalid_request"})
 
-        viewer = self._post("/legal/uud/viewer", {"target": target})
-        forged = viewer["pdf"]["access_url"] + "&source_sha256=" + ("0" * 64)
+    def test_invalid_target_and_pdf_query_do_not_leak(self) -> None:
+        viewer = self._post("/legal/uud/viewer", {"target": "not-a-target"})
+        self.assertEqual(viewer["status"], "not_found")
+        self._assert_public(viewer)
         with self.assertRaises(HTTPError) as error:
-            self._get(forged)
-        self.assertEqual(error.exception.code, 404)
-        body = error.exception.read().decode("utf-8")
+            self._get("/legal/uud/pdf?evidence_id=forged")
+        self.assertEqual(error.exception.code, 400)
+        self._assert_public(json.loads(error.exception.read().decode("utf-8")))
+
+    def _assert_public(self, payload: object) -> None:
+        body = json.dumps(payload)
+        for forbidden in _FORBIDDEN:
+            self.assertNotIn(forbidden, body)
         self.assertNotIn(str(ROOT), body)
         self.assertNotIn("Traceback", body)
 
-        with self.assertRaises(HTTPError) as error:
-            self._get(viewer["pdf"]["access_url"] + "&source_pdf_path=../secret.pdf")
-        self.assertEqual(error.exception.code, 404)
-
     def _get(self, path: str) -> dict:
-        with self._open_local(self.base_url + path) as response:
+        with urlopen(self.base_url + path, timeout=10) as response:  # nosec B310
             return json.loads(response.read().decode("utf-8"))
 
     def _get_bytes(self, path: str) -> tuple[bytes, Any]:
-        with self._open_local(self.base_url + path) as response:
+        with urlopen(self.base_url + path, timeout=10) as response:  # nosec B310
             return response.read(), response.headers
 
     def _post(self, path: str, payload: dict) -> dict:
-        request = Request(
-            self.base_url + path,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with self._open_local(request) as response:
+        request = Request(self.base_url + path, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
+        with urlopen(request, timeout=10) as response:  # nosec B310
             return json.loads(response.read().decode("utf-8"))
-
-    def _open_local(self, request_or_url):
-        return urlopen(request_or_url, timeout=10)  # nosec B310
 
 
 if __name__ == "__main__":

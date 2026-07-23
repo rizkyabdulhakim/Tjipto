@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import threading
 from collections import OrderedDict
+from typing import Any
 from uuid import uuid4
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
@@ -117,18 +118,54 @@ class LegalRuntimeService:
                 self._public_targets.popitem(last=False)
         return target
 
+    def public_identifier(self, corpus_id: str, kind: str, value: object) -> str:
+        """Create a deterministic public identifier that has no storage meaning."""
+        encoded = json.dumps(
+            {"corpus_id": corpus_id, "kind": kind, "value": value},
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return sha256(encoded).hexdigest()
+
+    def _public_target_request(self, corpus_id: str, target: str | None) -> dict | None:
+        if target is None:
+            return None
+        with self._public_target_lock:
+            record = self._public_targets.get(target)
+            if record is None or record[0] != corpus_id:
+                return None
+            self._public_targets.move_to_end(target)
+            return dict(record[1])
+
     def viewer_public(self, corpus_id: str, target: str | None) -> dict:
         if self._store(corpus_id) is None:
             return _integrity_failure(corpus_id, "", self._integrity_error)
-        with self._public_target_lock:
-            record = self._public_targets.get(target)
-            if record is not None and record[0] == corpus_id:
-                self._public_targets.move_to_end(target)
-            else:
-                record = None
-        if record is None:
+        request = self._public_target_request(corpus_id, target)
+        if request is None:
             return {"status": "not_found", "reason": "invalid_viewer_target", "corpus_id": corpus_id}
-        return self.viewer(corpus_id, **record[1])
+        result = self.viewer(corpus_id, **request)
+        if result.get("pdf_access_available"):
+            page_number = result.get("page_number") or (result.get("page_numbers") or (1,))[0]
+            result["public_pdf_target"] = self.register_public_target(
+                corpus_id,
+                request | {"page_number": page_number},
+            )
+        return result
+
+    def pdf_public(self, corpus_id: str, target: str | None) -> dict:
+        if self._store(corpus_id) is None:
+            return _integrity_failure(corpus_id, "", self._integrity_error)
+        request = self._public_target_request(corpus_id, target)
+        if request is None:
+            return {"status": "not_found", "reason": "invalid_pdf_target", "corpus_id": corpus_id}
+        return self.pdf_access(
+            corpus_id,
+            request.get("evidence_id"),
+            relation_id=request.get("relation_id"),
+            source_document_id=str(request.get("source_document_id") or ""),
+            page_number=int(request.get("page_number") or 1),
+        )
 
     def search(self, corpus_id: str, query: str, limit: int = 10, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
@@ -391,6 +428,17 @@ class LegalRuntimeService:
         with _BOOKMARK_LOCK:
             _BOOKMARKS[bookmark["bookmark_id"]] = bookmark
         return {"status": "saved", "bookmark": bookmark}
+
+    def bookmark_public(self, corpus_id: str, target: str | None, note: str | None = None) -> dict:
+        request = self._public_target_request(corpus_id, target)
+        if request is None or not request.get("evidence_id"):
+            return {"status": "unavailable", "reason": "bookmark_target_unavailable"}
+        result = self.bookmark(corpus_id, request["evidence_id"], note)
+        if result.get("status") != "saved":
+            return result
+        bookmark = result["bookmark"]
+        bookmark["public_target"] = target
+        return result
 
     def _bookmark_status(self, bookmark: dict, store=None) -> dict:
         store = store or self._store(bookmark["corpus_id"])
@@ -740,6 +788,7 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
     citation_final = row.get("citation_final") if isinstance(row.get("citation_final"), bool) else authority_kind == "legal_citation"
     if non_final_conflict and authority_kind in {"source_anomaly", "source_conflict_provenance"}:
         citation_final = False
+    layout_lines = _layout_lines(store, source_row)
     payload = {
         "authority_kind": authority_kind,
         "authority_label": {
@@ -757,8 +806,9 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
         "support_kind": "legal_unit" if source_row.get("evidence_owner_kind") == "legal_unit_source" and authority_kind == "legal_citation" else row.get("support_kind") or _support_kind_for_authority(authority_kind),
         "relevant_quote_eligible": source_row.get("relevant_quote_eligible") is True and authority_kind == "legal_citation",
         "display_text": row.get("display_text") or row.get("quoted_text") or "",
-        "copy_text": _copy_text(row.get("copy_text") or row.get("quoted_text") or ""),
-        "layout_lines": _layout_lines(store, source_row),
+        "source_label": row.get("document_title") or _source_label(store, row),
+        "copy_text": _copy_text(row.get("copy_text") or row.get("quoted_text") or "", layout_lines),
+        "layout_lines": layout_lines,
         "viewer_target": _viewer_target(row),
     }
     if conflict_row is not None or row.get("source_conflict_id"):
@@ -766,7 +816,26 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
     return payload
 
 
-def _copy_text(value: str) -> str:
+def _copy_text(value: str, layout_lines: tuple[dict, ...] = ()) -> str:
+    """Copy semantic paragraphs, not PDF-width visual wrapping."""
+    if layout_lines:
+        paragraphs: list[list[str]] = []
+        current: list[str] = []
+        current_id = object()
+        for line in layout_lines:
+            paragraph_id = line.get("paragraph_id")
+            text = " ".join(str(line.get("text") or "").split())
+            if not text:
+                continue
+            if current and paragraph_id != current_id:
+                paragraphs.append(current)
+                current = []
+            current_id = paragraph_id
+            current.append(text)
+        if current:
+            paragraphs.append(current)
+        if paragraphs:
+            return "\n\n".join(" ".join(paragraph) for paragraph in paragraphs).strip()
     return "\n".join(line.lstrip(" \t") for line in str(value).replace("\r\n", "\n").replace("\r", "\n").split("\n")).strip()
 
 
@@ -812,12 +881,12 @@ def _layout_lines(store, row: dict) -> tuple[dict, ...]:
     if fragments:
         # Page-text spans may be fragments of one visual source line.  Merge
         # only exact same-baseline fragments in extraction order.
-        visual = []
+        visual: list[dict[str, Any]] = []
         for fragment in fragments:
             previous = visual[-1] if visual else None
-            previous_part = previous["parts"][-1] if previous else None
-            same_line = previous_part and fragment["page"] == previous["page"] and abs(fragment["y0"] - previous_part["y0"]) <= 1.0 and abs(fragment["y1"] - previous_part["y1"]) <= 1.0
-            if same_line:
+            previous_part = previous["parts"][-1] if previous is not None else None
+            same_line = previous is not None and previous_part is not None and fragment["page"] == previous["page"] and abs(fragment["y0"] - previous_part["y0"]) <= 1.0 and abs(fragment["y1"] - previous_part["y1"]) <= 1.0
+            if same_line and previous is not None:
                 previous["parts"].append(fragment)
             else:
                 visual.append({"page": fragment["page"], "parts": [fragment]})
@@ -836,7 +905,7 @@ def _layout_lines(store, row: dict) -> tuple[dict, ...]:
             text = " ".join(str(part["text"]).strip() for part in parts if str(part["text"]).strip())
             centered = width and (x1 - x0) <= width * 0.55 and abs(((x0 + x1) / 2) - width / 2) <= max(8.0, width * 0.04)
             alignment = "center" if centered else "left"
-            if previous and (line["page"] != previous["page"] or y0 - previous["y1"] > max(20.0, 1.5 * (y1 - y0)) or alignment == "center"):
+            if previous and (line["page"] != previous["page"] or y0 - previous["y1"] > max(20.0, 1.5 * (y1 - y0)) or alignment == "center" or previous["alignment"] == "center"):
                 paragraph += 1
             result.append({
                 "text": text,
@@ -846,7 +915,7 @@ def _layout_lines(store, row: dict) -> tuple[dict, ...]:
                 "indent": max(0.0, x0 - page_left[line["page"]]) if alignment == "left" else 0.0,
                 "source_bbox_refs": [ref for part in parts for ref in part["refs"]],
             })
-            previous = {"page": line["page"], "y1": y1}
+            previous = {"page": line["page"], "y1": y1, "alignment": alignment}
         return tuple(result)
     text = str(row.get("display_text") or row.get("quoted_text") or "")
     return ({"text": text, "line_order": 0, "paragraph_id": str(row.get("evidence_id") or "support"), "alignment": "unknown", "indent": 0.0, "source_bbox_refs": []},)
@@ -875,6 +944,13 @@ def _source_url(store, row: dict) -> str | None:
         ),
         None,
     )
+
+
+def _source_label(store, row: dict) -> str | None:
+    source_id = row.get("source_document_id")
+    source: dict[str, Any] = next((item for item in getattr(store, "source_documents", ()) if item.get("source_document_id") == source_id), {})
+    catalog: dict[str, Any] = getattr(getattr(store, "config", None), "setting", lambda *args: {})("document_catalog", {}) or {}
+    return (catalog.get("titles") or {}).get(source.get("source_role")) or source.get("filename")
 
 
 def _source_conflict_taxonomy_fields(conflict: dict | None) -> dict:

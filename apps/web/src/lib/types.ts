@@ -3,7 +3,7 @@ export type RegulationType = CorpusId;
 
 export interface Citation {
   id: number;
-  documentId: string;
+  publicTargetId: string;
   documentTitle: string;
   regulationType: RegulationType;
   authorityKind?:
@@ -17,10 +17,6 @@ export interface Citation {
   authorityLabel?: string;
   citationFinal?: boolean;
   viewerMode?: "evidence" | "document";
-  legalUnitId?: string;
-  sourceDocumentId?: string;
-  viewerRefId?: string;
-  relationId?: string;
   article?: string;
   paragraph?: string;
   pageNumber: number;
@@ -31,17 +27,10 @@ export interface Citation {
   copyText?: string;
   layoutLines?: LayoutLine[];
   viewerTarget?: Record<string, unknown>;
-  sourceUrl: string;
   sourceDomain?: string;
   sourceRole?: string;
   temporalContext?: string;
   sourceStatusLabel?: string;
-  relationSourceProofTextSpanIds?: string[];
-  relationSourceProofBBoxRefs?: string[];
-  relationTargetTextSpanIds?: string[];
-  relationTargetBBoxRefs?: string[];
-  relationTargetPrecision?: string;
-  relationProof?: boolean;
   panelSection?: "Kutipan Relevan" | "Sumber Dokumen" | "Struktur Dokumen" | "Catatan Sumber";
 }
 
@@ -51,7 +40,6 @@ export interface LayoutLine {
   paragraph_id: string;
   alignment: "left" | "center" | "right" | "justify" | "unknown";
   indent: number;
-  source_bbox_refs: string[];
 }
 
 export interface ChatMessage {
@@ -62,6 +50,7 @@ export interface ChatMessage {
   metadataSupport?: SupportItem[];
   structuralSupport?: SupportItem[];
   traceSupport?: SupportItem[];
+  supportGroups?: SupportGroup[];
   clarificationOptions?: { sourceRole?: string; label: string }[];
   clarificationQuery?: string;
   status?: "streaming" | "complete";
@@ -70,10 +59,19 @@ export interface ChatMessage {
 
 export interface SupportItem {
   id: string;
+  publicTargetId?: string;
   label: string;
   detail?: string;
   kind: "metadata" | "structure" | "trace";
   clickable?: boolean;
+}
+
+export interface SupportGroup {
+  id: string;
+  title: string;
+  summary: string;
+  kind: SupportItem["kind"];
+  members: SupportItem[];
 }
 
 export interface ChatThread {

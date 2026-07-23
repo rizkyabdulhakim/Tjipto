@@ -1,5 +1,5 @@
 export interface PdfBBox {
-  bbox_id?: string;
+  public_rectangle_id?: string;
   page_number?: number;
   x0?: number;
   y0?: number;
