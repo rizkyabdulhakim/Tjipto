@@ -46,6 +46,7 @@ class EvidenceStore:
         self._graph_edges: list[dict] | None = None
         self._bbox_by_evidence: dict[str, list[dict]] | None = None
         self._bbox_rows: list[dict] | None = None
+        self._bbox_by_id: dict[str, dict] | None = None
         self._word_bboxes: list[dict] | None = None
         self._word_bbox_by_id: dict[str, dict] | None = None
         self._page_text_spans: list[dict] | None = None
@@ -246,6 +247,8 @@ class EvidenceStore:
         return self._word_bboxes
 
     def _bbox_rows_by_id(self) -> dict[str, dict]:
+        if self._bbox_by_id is not None:
+            return self._bbox_by_id
         rows = {row["bbox_id"]: row for row in self._bbox_rows_all()}
         referenced_bbox_ids = {
             value
@@ -297,6 +300,7 @@ class EvidenceStore:
                     "transform_version": row.get("transform_version"),
                     **character,
                 }
+        self._bbox_by_id = rows
         return rows
 
     def _page_text_span(self, text_span_id: str) -> dict | None:

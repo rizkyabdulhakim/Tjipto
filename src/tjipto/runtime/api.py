@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from tjipto.runtime.service import LegalRuntimeService, public_article_relation
+from tjipto.runtime.service import LegalRuntimeService
 
 
 class BadRequest(ValueError):
@@ -104,8 +104,6 @@ def _public_ask(result: dict) -> dict:
         "answer": result.get("answer"),
         "intent": result.get("intent"),
         "route": result.get("route"),
-        "legal_relations": tuple(_public_legal_relation(row) for row in result.get("legal_relations", ())),
-        "document_relations": tuple(result.get("document_relations", ())),
         "answer_scope": result.get("answer_scope"),
         "warnings": tuple(result.get("warnings", ())),
         "insufficient_reasons": tuple(_public_reason(row) or row for row in result.get("insufficient_reasons", ())),
@@ -382,10 +380,6 @@ def _public_legal_relation(row: dict) -> dict:
         "target_legal_unit_id": row.get("target_legal_unit_id"),
         "target_label": row.get("target_label"),
     }
-
-
-def _public_article_relation(row: dict) -> dict:
-    return public_article_relation(row)
 
 
 def _public_viewer_ref(row: dict) -> dict:

@@ -23,7 +23,6 @@ export interface TjiptoAskResponse {
   document_source?: DocumentSourcePayload;
   warnings?: string[];
   insufficient_reasons?: string[];
-  document_relations?: DocumentRelationPayload[];
   clarification_options?: ClarificationOptionPayload[];
   supports?: SupportPayload[];
 }
@@ -61,18 +60,6 @@ export interface DocumentSourcePayload {
 export interface ClarificationOptionPayload {
   source_role?: string;
   label?: string;
-}
-
-export interface DocumentRelationPayload {
-  relation_id?: string;
-  relation_type?: string;
-  source_role?: string;
-  source_document_id?: string;
-  target_source_role?: string;
-  target_document_id?: string;
-  support_type?: string;
-  reason?: string;
-  highlightable?: boolean;
 }
 
 export interface SearchResult {
@@ -342,7 +329,6 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
   metadata: SupportItem[];
   structure: SupportItem[];
   trace: SupportItem[];
-  documentRelations: SupportItem[];
 } {
   const grouped = (panel: string, kind: SupportItem["kind"]) => (response.supports ?? [])
     .filter((row) => row.panel_section === panel)
@@ -357,13 +343,6 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
     metadata: grouped("Sumber Dokumen", "metadata"),
     structure: grouped("Struktur Dokumen", "structure"),
     trace: grouped("Catatan Sumber", "trace"),
-    documentRelations: (response.document_relations ?? []).map((row, index) => ({
-      id: String(row.relation_id ?? `document_relation_${index}`),
-      kind: "document_relation" as const,
-      label: String(row.relation_type ?? "Relasi Dokumen"),
-      detail: "Relasi tingkat dokumen.",
-      clickable: false,
-    })),
   };
 }
 

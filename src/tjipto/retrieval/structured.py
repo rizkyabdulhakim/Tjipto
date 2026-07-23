@@ -62,27 +62,26 @@ def structured_lookup(
             and row.get("legal_unit_id") in dedicated_unit_ids
         ]
         if dedicated:
-            detail_terms = tuple(str(term).casefold() for term in intent.get("structure_detail_terms") or ())
-            if any(term in query.casefold() for term in detail_terms) or ("isi" in query.casefold() and "saat ini" not in query.casefold()):
-                child_ids = {
-                    unit.get("legal_unit_id")
-                    for unit in store.legal_units
-                    if unit.get("source_role") == dedicated[0].get("source_role")
-                    and tuple(unit.get("hierarchy") or ())[:1] == (bab,)
-                    and unit.get("unit_type") in {"pasal_record", "ayat_record"}
-                }
-                children = [
-                    row for row in store.evidence
-                    if row.get("legal_unit_id") in child_ids
-                    and row.get("status") == "final"
-                    and row.get("authority_kind") == "normative_legal_text"
-                    and row.get("citation_eligibility") == "eligible"
-                    and row.get("relevant_quote_eligible") is True
-                    and store.bboxes_for(row["evidence_id"])
-                ]
-                children.sort(key=lambda row: (tuple(row.get("hierarchy") or ()), row.get("evidence_id", "")))
-                return tuple(row | {"route_sources": ("structured",)} for row in (*dedicated, *children))[:limit]
-            return tuple(row | {"route_sources": ("structured",)} for row in dedicated[:limit])
+            # A resolved structural reference is detail regardless of harmless
+            # wording.  Otherwise the same BAB hides its normative children.
+            child_ids = {
+                unit.get("legal_unit_id")
+                for unit in store.legal_units
+                if unit.get("source_role") == dedicated[0].get("source_role")
+                and tuple(unit.get("hierarchy") or ())[:1] == (bab,)
+                and unit.get("unit_type") in {"pasal_record", "ayat_record"}
+            }
+            children = [
+                row for row in store.evidence
+                if row.get("legal_unit_id") in child_ids
+                and row.get("status") == "final"
+                and row.get("authority_kind") == "normative_legal_text"
+                and row.get("citation_eligibility") == "eligible"
+                and row.get("relevant_quote_eligible") is True
+                and store.bboxes_for(row["evidence_id"])
+            ]
+            children.sort(key=lambda row: (tuple(row.get("hierarchy") or ()), row.get("evidence_id", "")))
+            return tuple(row | {"route_sources": ("structured",)} for row in (*dedicated, *children))[:limit]
     preferred_unit_ids = _preferred_unit_ids(store, targets, requested_role)
     rows = [
         row
@@ -106,6 +105,11 @@ def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None
     if _instrument_target(query, strategy=strategy, config=config):
         return True
     return bool(_targets(query, intent, _corpus_id(config))) or _has_incomplete_pasal(query)
+
+
+def has_instrument_target(query: str, *, strategy: str = "uud_1945", config=None) -> bool:
+    """Whether a corpus-configured instrument operation owns this query."""
+    return _instrument_target(query, strategy=strategy, config=config)
 
 
 def _structure_list_rows(store: EvidenceStore, query: str, limit: int, intent: dict, corpus_id: str, source_role: str | None) -> tuple[dict, ...]:

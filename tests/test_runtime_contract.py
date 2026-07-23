@@ -1104,7 +1104,7 @@ class RuntimeContractTest(unittest.TestCase):
     def test_temporal_target_prefers_current_or_requested_historical_source(self) -> None:
         current = self.service.ask("uud", "Apa isi BAB IV UUD 1945 saat ini?")
         self.assertEqual(current["status"], "answer_ready")
-        self.assertFalse(current["citations"])
+        self.assertEqual([row["quoted_text"] for row in current["citations"]], ["Dihapus."])
         self.assertEqual([row["citation"] for row in current["structural_support"]], ["BAB IV"])
         self.assertEqual(current["structural_support"][0]["source_role"], "current_consolidated")
         for query, role, citation in (

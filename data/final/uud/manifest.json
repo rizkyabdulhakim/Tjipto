@@ -651,8 +651,8 @@
         "semantic_exact_quote",
         "semantic_offset_basis"
       ],
-      "bytes": 20715869,
-      "sha256": "c840c5069534a1d18c942c063ad66711ecab8edb535d257974db3164860b8ec5"
+      "bytes": 20715881,
+      "sha256": "c7372c3d9451cc855055d4537ab8d225c93a194748060a3dfbae5c776378a8ea"
     },
     "word_bboxes.jsonl": {
       "origin": "generated",

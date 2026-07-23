@@ -161,12 +161,8 @@ class RuntimeHttpContractTest(unittest.TestCase):
                 self.assertEqual(any(row["highlightable"] for row in supports), case["has_viewer_refs"], case["query"])
             if "metadata_answer" in case:
                 self.assertTrue(any(case["metadata_answer"] in row["display_text"] for row in supports), case["query"])
-            if "relation_target_labels" in case:
-                self.assertEqual(
-                    {row["target_label"] for row in result["legal_relations"]},
-                    set(case["relation_target_labels"]),
-                    case["query"],
-                )
+            self.assertNotIn("legal_relations", result, case["query"])
+            self.assertNotIn("document_relations", result, case["query"])
             for field in ("insufficient_reasons",):
                 if field in case:
                     self.assertEqual(result[field], case[field], case["query"])
@@ -182,9 +178,11 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
     def test_structure_and_exact_roles_publish_clickable_supports(self) -> None:
         structure = self._post("/legal/uud/ask", {"query": "bab XI agama"})
-        self.assertEqual(structure["supports"][0]["panel_section"], "Struktur Dokumen")
-        self.assertTrue(structure["supports"][0]["linkable"])
-        self.assertTrue(structure["supports"][0]["highlightable"])
+        structural = [row for row in structure["supports"] if row["panel_section"] == "Struktur Dokumen"]
+        self.assertEqual(len(structural), 1)
+        self.assertTrue(structural[0]["linkable"])
+        self.assertTrue(structural[0]["highlightable"])
+        self.assertTrue(any(row["panel_section"] == "Kutipan Relevan" for row in structure["supports"]))
 
         deleted = self._post("/legal/uud/ask", {"query": "Apa isi BAB IV UUD 1945?"})
         self.assertEqual({row["panel_section"] for row in deleted["supports"]}, {"Struktur Dokumen", "Kutipan Relevan"})

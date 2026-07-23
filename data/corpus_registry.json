@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "34f0f7599e6d7e582450ee7a9c12ac368b81a0fe0294a1d636673346c5378820",
+    "manifest_sha256": "35a8881acb37979af79ce7021a7cb40b8094dd9dd7c340752b223e4a837ec377",
     "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
     "runtime_required_artifacts": [
       "evidence_registry",
@@ -833,7 +833,8 @@
               "pencabutan",
               "repeal",
               "remove",
-              "delete"
+              "delete",
+              "deletes"
             ],
             "relation_types": [
               "DELETES"

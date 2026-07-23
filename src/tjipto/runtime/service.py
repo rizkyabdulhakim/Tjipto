@@ -755,7 +755,7 @@ def _layout_lines(store, row: dict) -> tuple[dict, ...]:
         item.get("text_span_id"): item
         for item in (getattr(store, "page_text_spans", ()) if store is not None else ())
     }
-    result = []
+    fragments = []
     for order, span_id in enumerate(row.get("text_span_ids") or ()):
         span = spans.get(span_id)
         if not span:
@@ -764,18 +764,57 @@ def _layout_lines(store, row: dict) -> tuple[dict, ...]:
         width = next((float(box["page_width"]) for box in boxes if isinstance(box.get("page_width"), (int, float))), 0.0)
         x0 = min((float(box["x0"]) for box in boxes if isinstance(box.get("x0"), (int, float))), default=0.0)
         x1 = max((float(box["x1"]) for box in boxes if isinstance(box.get("x1"), (int, float))), default=0.0)
-        alignment = "unknown"
-        if width and x1 > x0:
-            alignment = "center" if abs(((x0 + x1) / 2) - width / 2) <= max(8.0, width * 0.04) else "right" if width - x1 <= width * 0.08 else "left"
-        result.append({
+        y0 = min((float(box["y0"]) for box in boxes if isinstance(box.get("y0"), (int, float))), default=0.0)
+        y1 = max((float(box["y1"]) for box in boxes if isinstance(box.get("y1"), (int, float))), default=0.0)
+        fragments.append({
             "text": span.get("exact_quote") or span.get("text") or "",
-            "line_order": order,
-            "paragraph_id": str(span_id),
-            "alignment": alignment,
-            "indent": x0 if alignment == "left" else 0.0,
-            "source_bbox_refs": [box["bbox_id"] for box in boxes if box.get("bbox_id")],
+            "order": order,
+            "page": span.get("page_number"),
+            "width": width,
+            "x0": x0,
+            "x1": x1,
+            "y0": y0,
+            "y1": y1,
+            "refs": [box["bbox_id"] for box in boxes if box.get("bbox_id")],
         })
-    if result:
+    if fragments:
+        # Page-text spans may be fragments of one visual source line.  Merge
+        # only exact same-baseline fragments in extraction order.
+        visual = []
+        for fragment in fragments:
+            previous = visual[-1] if visual else None
+            previous_part = previous["parts"][-1] if previous else None
+            same_line = previous_part and fragment["page"] == previous["page"] and abs(fragment["y0"] - previous_part["y0"]) <= 1.0 and abs(fragment["y1"] - previous_part["y1"]) <= 1.0
+            if same_line:
+                previous["parts"].append(fragment)
+            else:
+                visual.append({"page": fragment["page"], "parts": [fragment]})
+        page_left = {
+            page: min(part["x0"] for line in visual if line["page"] == page for part in line["parts"])
+            for page in {line["page"] for line in visual}
+        }
+        result = []
+        paragraph = 0
+        previous = None
+        for line_order, line in enumerate(visual):
+            parts = line["parts"]
+            x0, x1 = min(part["x0"] for part in parts), max(part["x1"] for part in parts)
+            y0, y1 = min(part["y0"] for part in parts), max(part["y1"] for part in parts)
+            width = next((part["width"] for part in parts if part["width"]), 0.0)
+            text = " ".join(str(part["text"]).strip() for part in parts if str(part["text"]).strip())
+            centered = width and (x1 - x0) <= width * 0.55 and abs(((x0 + x1) / 2) - width / 2) <= max(8.0, width * 0.04)
+            alignment = "center" if centered else "left"
+            if previous and (line["page"] != previous["page"] or y0 - previous["y1"] > max(20.0, 1.5 * (y1 - y0)) or alignment == "center"):
+                paragraph += 1
+            result.append({
+                "text": text,
+                "line_order": line_order,
+                "paragraph_id": str(paragraph),
+                "alignment": alignment,
+                "indent": max(0.0, x0 - page_left[line["page"]]) if alignment == "left" else 0.0,
+                "source_bbox_refs": [ref for part in parts for ref in part["refs"]],
+            })
+            previous = {"page": line["page"], "y1": y1}
         return tuple(result)
     text = str(row.get("display_text") or row.get("quoted_text") or "")
     return ({"text": text, "line_order": 0, "paragraph_id": str(row.get("evidence_id") or "support"), "alignment": "unknown", "indent": 0.0, "source_bbox_refs": []},)
@@ -1596,7 +1635,7 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
         **row,
         "support_kind": "article_relation",
         "fact_kind": "article_relation",
-        "display_label": relation.get("relation_type") or "Relasi Pasal",
+        "display_label": relation.get("target_label") or relation.get("target_citation") or relation.get("relation_type") or "Relasi Pasal",
         "display_text": source_quote or relation.get("quoted_text") or row.get("quoted_text"),
         "bbox_refs": proof_bbox_refs,
         "text_span_ids": proof_text_span_ids,

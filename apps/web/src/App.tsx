@@ -103,7 +103,6 @@ export default function App() {
                 metadataSupport: support.metadata.length ? support.metadata : undefined,
                 structuralSupport: support.structure.length ? support.structure : undefined,
                 traceSupport: support.trace.length ? support.trace : undefined,
-                documentRelations: support.documentRelations.length ? support.documentRelations : undefined,
                 clarificationOptions: (response.clarification_options ?? [])
                   .filter((option) => option.label)
                   .map((option) => ({ sourceRole: option.source_role, label: option.label as string })),

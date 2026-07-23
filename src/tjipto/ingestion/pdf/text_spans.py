@@ -128,6 +128,15 @@ def _append_raw_source_spans(
                 geometry = _segment_geometry(line, raw_text, start, end, source_id, page_number, line_index)
                 raw_source_span_id = f"{corpus_id}::raw::{source_id}::{page_number:04d}::{int(line.get('block_index', 0)):04d}::{source_line_index:04d}::{segment_index:02d}"
                 semantic_text = semantic_normalizer(segment_text)
+                # A segment without semantic text is provenance only.  It
+                # cannot inherit legal/publication eligibility from its raw
+                # source line because there is no semantic text to cite.
+                semantic_flags = {
+                    "legal_text": bool(segment["legal_text"] and semantic_text),
+                    "citation_eligible": bool(segment["citation_eligible"] and semantic_text),
+                    "relevant_quote_eligible": bool(segment["relevant_quote_eligible"] and semantic_text),
+                    "default_highlight_eligible": bool(segment["default_highlight_eligible"] and semantic_text),
+                }
                 page_rows.append({
                     "raw_source_span_id": raw_source_span_id,
                     "source_document_id": source_id,
@@ -154,12 +163,13 @@ def _append_raw_source_spans(
                     "x0": geometry["x0"], "y0": geometry["y0"], "x1": geometry["x1"], "y1": geometry["y1"],
                     "raw_geometry_method": geometry["method"],
                     "classification": segment["classification"],
-                    "legal_text": segment["legal_text"],
-                    "citation_eligible": segment["citation_eligible"],
-                    "relevant_quote_eligible": segment["relevant_quote_eligible"],
-                    "default_highlight_eligible": segment["default_highlight_eligible"],
+                    **semantic_flags,
                     "normalization_actions": segment["normalization_actions"],
-                    "disposition_reason": segment["disposition_reason"],
+                    "disposition_reason": (
+                        segment["disposition_reason"]
+                        if semantic_text or segment["classification"] == "source_annotation_marker"
+                        else "nonsemantic_raw_glyph"
+                    ),
                     "source_support_id": f"{corpus_id}::source_support::{sha256(raw_source_span_id.encode('utf-8')).hexdigest()}",
                     "semantic_text": semantic_text,
                     "semantic_stream_id": semantic_stream_id,

@@ -62,7 +62,6 @@ export interface ChatMessage {
   metadataSupport?: SupportItem[];
   structuralSupport?: SupportItem[];
   traceSupport?: SupportItem[];
-  documentRelations?: SupportItem[];
   clarificationOptions?: { sourceRole?: string; label: string }[];
   clarificationQuery?: string;
   status?: "streaming" | "complete";
@@ -73,7 +72,7 @@ export interface SupportItem {
   id: string;
   label: string;
   detail?: string;
-  kind: "metadata" | "structure" | "trace" | "document_relation";
+  kind: "metadata" | "structure" | "trace";
   clickable?: boolean;
 }
 

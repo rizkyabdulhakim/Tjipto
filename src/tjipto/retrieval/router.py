@@ -14,7 +14,7 @@ from tjipto.retrieval.metadata import (
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.relations import has_relation_target, relation_lookup
 from tjipto.retrieval.service import RetrievalService
-from tjipto.retrieval.structured import has_structured_target, structured_failure_reason, structured_lookup
+from tjipto.retrieval.structured import has_instrument_target, has_structured_target, structured_failure_reason, structured_lookup
 
 
 def route_retrieval(
@@ -52,6 +52,7 @@ def route_retrieval(
         and (intent["intent"] == "exact_citation" or has_structured_target(
             normalized["normalized_query"], strategy=structured_strategy, config=config
         ))
+        and not has_instrument_target(normalized["normalized_query"], strategy=structured_strategy, config=config)
     ):
         filters = dict(filters) | {"source_role": scope.role}
     applied_filters = public_filters(filters)
@@ -122,7 +123,13 @@ def route_retrieval(
             "intent": "legal_relation_lookup",
             "reason": "filters_removed_all",
         }
-    if has_relation_target(normalized["normalized_query"], strategy=query_strategy, config=config):
+    # Some corpus adapters expose an exact structural/instrument support for a
+    # relation-shaped query (for example a deleted chapter).  Only fail the
+    # generic legal-relation route after that configured structured operation
+    # has had a chance to resolve it.
+    if has_relation_target(normalized["normalized_query"], strategy=query_strategy, config=config) and not has_instrument_target(
+        normalized["normalized_query"], strategy=structured_strategy, config=config
+    ):
         return envelope | {
             "status": "no_results",
             "route": "relation_not_found",

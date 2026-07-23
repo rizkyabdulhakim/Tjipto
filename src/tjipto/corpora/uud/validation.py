@@ -1769,6 +1769,11 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
                 errors.append(f"invalid_selector:{row_id}:semantic_offset_length")
         elif row.get("semantic_text_start") != 0 or row.get("semantic_text_end") != 0:
             errors.append(f"invalid_selector:{row_id}:empty_semantic_offset")
+        if not semantic_text and any(
+            row.get(field) is not False
+            for field in ("legal_text", "citation_eligible", "relevant_quote_eligible", "default_highlight_eligible")
+        ):
+            errors.append(f"owner_field_violation:raw_source_spans:{row_id}:empty_semantic_policy")
     for stream_id, stream_rows in semantic_stream_rows.items():
         stream_rows.sort(key=lambda item: int(item.get("extraction_order") or 0))
         stream = "\n".join(str(item["semantic_text"]) for item in stream_rows)
