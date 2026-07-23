@@ -25,6 +25,7 @@ from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.relation_builder import build_article_amendment_relations, build_document_relations
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, build_retrieval_units
+from tjipto.corpora.uud.runtime_projection import build_runtime_projection
 from tjipto.corpora.uud.specs import FINAL_DIR
 from tjipto.corpora.uud.span_disposition_builder import apply_page_text_span_dispositions
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
@@ -271,9 +272,28 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
     write_jsonl(final_dir / "raw_source_spans.jsonl", raw_source_spans)
     write_jsonl(final_dir / "word_bboxes.jsonl", word_bboxes)
+    write_json(final_dir / "runtime_projection.json", build_runtime_projection(
+        evidence_registry=evidence,
+        bbox_registry=bbox_rows,
+        legal_units=legal_units,
+        chunks=chunks,
+        retrieval_units=retrieval_units,
+        graph_edges=graph_edges,
+        source_documents=list(source_documents.values()),
+        page_text_spans=page_text_spans,
+        document_metadata=document_metadata,
+        metadata_grounding=metadata_grounding,
+        metadata_grounding_registry=metadata_grounding_registry,
+        document_relations=document_relations,
+        article_amendment_relations=article_amendment_relations,
+        source_conflicts=source_conflicts,
+        raw_source_spans=raw_source_spans,
+        word_bboxes=word_bboxes,
+    ))
     write_jsonl(final_dir / "promotion_decisions.jsonl", promotion_decisions)
     write_jsonl(final_dir / "validation_exceptions.jsonl", validation_exceptions)
     write_json(final_dir / "pdf_health_report.json", pdf_health_report)
+    refresh_manifest(final_dir, manifest)
 
     corpus_config = CorpusRegistry(repo_root).resolve("uud")
     validation_report = build_validation_report(

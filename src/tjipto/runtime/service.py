@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
+import json
 from pathlib import Path
 import re
 import threading
+from collections import OrderedDict
 from uuid import uuid4
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
@@ -79,6 +82,9 @@ class LegalRuntimeService:
         self.repository = VerifiedCorpusRepository(self.registry)
         self._integrity_error: str | None = None
         self._store_cache: dict[str, EvidenceStore] = {}
+        self._public_targets: OrderedDict[str, tuple[str, dict]] = OrderedDict()
+        self._public_target_limit = 1024
+        self._public_target_lock = threading.RLock()
 
     def _store(self, corpus_id: str):
         cached = self._store_cache.get(corpus_id)
@@ -94,6 +100,35 @@ class LegalRuntimeService:
         store = EvidenceStore.shared(config)
         self._store_cache[corpus_id] = store
         return store
+
+    def register_public_target(self, corpus_id: str, request: dict) -> str:
+        """Return a stable opaque handle; persistence identifiers never leave this boundary."""
+        encoded = json.dumps(
+            {"corpus_id": corpus_id, "request": request},
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        target = sha256(encoded).hexdigest()
+        with self._public_target_lock:
+            self._public_targets[target] = (corpus_id, dict(request))
+            self._public_targets.move_to_end(target)
+            while len(self._public_targets) > self._public_target_limit:
+                self._public_targets.popitem(last=False)
+        return target
+
+    def viewer_public(self, corpus_id: str, target: str | None) -> dict:
+        if self._store(corpus_id) is None:
+            return _integrity_failure(corpus_id, "", self._integrity_error)
+        with self._public_target_lock:
+            record = self._public_targets.get(target)
+            if record is not None and record[0] == corpus_id:
+                self._public_targets.move_to_end(target)
+            else:
+                record = None
+        if record is None:
+            return {"status": "not_found", "reason": "invalid_viewer_target", "corpus_id": corpus_id}
+        return self.viewer(corpus_id, **record[1])
 
     def search(self, corpus_id: str, query: str, limit: int = 10, filters: dict | None = None) -> dict:
         store = self._store(corpus_id)
@@ -569,10 +604,7 @@ class LegalRuntimeService:
                 str(row.get("display_text") or row.get("answer") or "") for row in metadata_support
                 if row.get("display_text") or row.get("answer")
             ))
-            names = tuple(dict.fromkeys(
-                str(row.get("printed_name") or "").strip() for row in metadata_support
-                if row.get("fact_kind") == "person_role" and str(row.get("printed_name") or "").strip()
-            ))
+            names = _unique_printed_names(metadata_support)
             deterministic_answer = ", ".join(names) if names else templates["metadata"].format(answer=", ".join(values))
         else:
             deterministic_answer = self._answer_text(status, evidence, templates)
@@ -1221,6 +1253,17 @@ def _has_metadata_field_target(query: str, intent: dict) -> bool:
         field != "official_title" and contains_intent_phrase(query, aliases)
         for field, aliases in intent.get("metadata_fields", {}).items()
     )
+
+
+def _unique_printed_names(rows: tuple[dict, ...]) -> tuple[str, ...]:
+    """Collapse formatting variants without discarding their source supports."""
+    names: dict[str, str] = {}
+    for row in rows:
+        value = str(row.get("printed_name") or "").strip()
+        if row.get("fact_kind") != "person_role" or not value:
+            continue
+        names.setdefault(normalize_intent_text(value), value)
+    return tuple(names.values())
 
 
 def _metadata_fact(row: dict) -> dict:

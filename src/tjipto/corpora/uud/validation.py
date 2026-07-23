@@ -41,7 +41,7 @@ from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit, subs
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
 from tjipto.corpora.uud.policy.relations import is_deletion_provision, is_renumbering_provision, is_scope_provision
-from tjipto.core.manifest import read_json, read_jsonl
+from tjipto.core.manifest import artifact_set_digest, read_json, read_jsonl
 
 
 DECISION_LABELS = {
@@ -383,6 +383,9 @@ def build_validation_report(
         evidence=evidence,
         bbox_rows=bbox_rows,
         word_bboxes=word_bboxes,
+    )
+    validation_report["validated_artifact_set_digest"] = artifact_set_digest(
+        {"files": manifest_files}, exclude=("validation_report.json",)
     )
     return validation_report
 

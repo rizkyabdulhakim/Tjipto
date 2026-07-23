@@ -57,37 +57,37 @@ class EvidenceStore:
     @property
     def evidence(self) -> list[dict]:
         if self._evidence is None:
-            self._evidence = self.config.jsonl("evidence")
+            self._evidence = _rows(self.config, "evidence_registry")
         return self._evidence
 
     @property
     def legal_units(self) -> list[dict]:
         if self._legal_units is None:
-            self._legal_units = self.config.jsonl("legal_units")
+            self._legal_units = _rows(self.config, "legal_units")
         return self._legal_units
 
     @property
     def chunks(self) -> list[dict]:
         if self._chunks is None:
-            self._chunks = self.config.jsonl("chunks")
+            self._chunks = _rows(self.config, "chunks")
         return self._chunks
 
     @property
     def retrieval_units(self) -> list[dict]:
         if self._retrieval_units is None:
-            self._retrieval_units = self.config.jsonl("retrieval_units")
+            self._retrieval_units = _rows(self.config, "retrieval_units")
         return self._retrieval_units
 
     @property
     def graph_edges(self) -> list[dict]:
         if self._graph_edges is None:
-            self._graph_edges = self.config.jsonl("graph_edges")
+            self._graph_edges = _rows(self.config, "graph_edges")
         return self._graph_edges
 
     @property
     def source_documents(self) -> list[dict]:
         if self._source_documents is None:
-            self._source_documents = self.config.jsonl("source_documents")
+            self._source_documents = _rows(self.config, "source_documents")
         return self._source_documents
 
     @property
@@ -238,7 +238,7 @@ class EvidenceStore:
 
     def _bbox_rows_all(self) -> list[dict]:
         if self._bbox_rows is None:
-            self._bbox_rows = self.config.jsonl("bbox")
+            self._bbox_rows = _rows(self.config, "bbox_registry")
         return self._bbox_rows
 
     def _word_bboxes_all(self) -> list[dict]:
@@ -311,9 +311,20 @@ class EvidenceStore:
 
 def _optional_jsonl(config, logical_key: str) -> list[dict]:
     try:
-        return config.jsonl(logical_key)
+        return _rows(config, logical_key)
     except (KeyError, OSError, ValueError):
         return []
+
+
+def _rows(config, logical_key: str) -> list[dict]:
+    try:
+        projection = config.json("runtime_projection")
+        rows = projection.get("artifacts", {}).get(logical_key)
+        if isinstance(rows, (list, tuple)):
+            return [dict(row) for row in rows]
+    except (KeyError, OSError, ValueError):
+        pass
+    return [dict(row) for row in config.jsonl(logical_key)]
 
 
 def exact_bboxes_for_text_spans(text_spans: list[dict | None], bbox_rows: list[dict]) -> list[dict]:

@@ -13,6 +13,7 @@ from tjipto.contracts.artifacts import ARTIFACT_ALLOWED_FIELDS, ARTIFACT_OPTIONA
 from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage_reason
 from tjipto.core.manifest import ALLOWED_ARTIFACT_ORIGINS, verified_file_bytes
 from tjipto.core.manifest import artifact_set_digest as compute_artifact_set_digest
+from tjipto.ingestion.pdf.fingerprint import extractor_fingerprint
 
 
 class CorpusIntegrityError(ValueError):
@@ -63,10 +64,7 @@ class CorpusPublicationService:
         manifest, manifest_digest = _read_trusted_manifest(config)
         runtime_required = tuple(config.setting("runtime_required_artifacts"))
         artifacts = _verify_artifacts(config.manifest_path.parent.resolve(), manifest, runtime_required)
-        _validate_cross_artifact_references(manifest, artifacts)
-        semantic_attestation = _run_semantic_validator(config, manifest, artifacts)
-        if semantic_attestation.violation_codes:
-            raise CorpusIntegrityError(semantic_attestation.violation_codes[0])
+        semantic_attestation = _runtime_attestation(manifest, artifacts)
         retained_paths = {manifest[logical_key] for logical_key in runtime_required}
         frozen_artifacts = _freeze({path: value for path, value in artifacts.items() if path in retained_paths})
         frozen_manifest = _freeze(manifest)
@@ -185,6 +183,9 @@ def _read_trusted_manifest(config) -> tuple[dict, str]:
             or manifest.get("contract_fingerprint") != CONTRACT_FINGERPRINT
         ):
             raise CorpusIntegrityError("contract_fingerprint_mismatch")
+    expected_extractor = manifest.get("extractor_fingerprint")
+    if expected_extractor is not None and expected_extractor != extractor_fingerprint():
+        raise CorpusIntegrityError("extractor_fingerprint_mismatch")
     return manifest, manifest_digest
 
 
@@ -234,9 +235,21 @@ def _verify_artifacts(final_dir: Path, manifest: dict, required_value: object) -
             raise CorpusIntegrityError(integrity_error)
         if data is None:
             raise CorpusIntegrityError("artifact_missing")
-        loaded[rel] = _parse_and_validate(data, record, logical_key)
-    _validate_exact_evidence(manifest, loaded)
+        if logical_key in required:
+            loaded[rel] = _parse_and_validate(data, record, logical_key)
     return loaded
+
+
+def _runtime_attestation(manifest: dict, artifacts: dict[str, object]) -> CorpusSemanticAttestation:
+    report = artifacts.get(manifest.get("validation_report", ""))
+    expected = compute_artifact_set_digest(manifest, exclude=(manifest.get("validation_report"),))
+    if (
+        not isinstance(report, dict)
+        or report.get("status") not in {"pass", "valid"}
+        or report.get("validated_artifact_set_digest") != expected
+    ):
+        raise CorpusIntegrityError("runtime_validation_attestation_missing")
+    return CorpusSemanticAttestation("passed")
 
 
 def _verify_artifact_integrity(final_dir: Path, manifest: dict) -> None:

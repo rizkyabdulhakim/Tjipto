@@ -27,7 +27,9 @@ def handle_request(
                 str(payload.get("query", "")),
                 _limit(payload, default=10),
                 _filters(payload),
-            )
+            ),
+            service,
+            corpus_id,
         )
     if action == "citation":
         return _public_citation_response(
@@ -39,18 +41,7 @@ def handle_request(
             )
         )
     if action == "viewer":
-        return _public_viewer(
-            service.viewer(
-                corpus_id,
-                _optional_str(payload, "evidence_id"),
-                source_support_id=_optional_str(payload, "source_support_id"),
-                relation_id=_optional_str(payload, "relation_id"),
-                source_document_id=_optional_str(payload, "source_document_id"),
-                page_number=_optional_int(payload, "page_number"),
-                bbox_id=_optional_str(payload, "bbox_id"),
-                source_pdf_path=_optional_str(payload, "source_pdf_path"),
-            )
-        )
+        return _public_viewer(service.viewer_public(corpus_id, _optional_str(payload, "target")))
     if action == "ask":
         return _public_ask(
             service.ask(
@@ -58,7 +49,7 @@ def handle_request(
                 str(payload.get("query", "")),
                 _limit(payload, default=3),
                 _filters(payload),
-            )
+            ), service, corpus_id
         )
     if action == "capabilities":
         return service.capabilities(corpus_id)
@@ -75,7 +66,7 @@ def handle_request(
     return {"status": "unsupported_action"}
 
 
-def _public_search(result: dict) -> dict:
+def _public_search(result: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
     if result.get("readiness") is False:
         return _public_integrity(result) | {"results": ()}
     return {
@@ -84,11 +75,11 @@ def _public_search(result: dict) -> dict:
         "corpus_id": result.get("corpus_id"),
         "reason": _public_reason(result.get("reason")),
         "applied_filters": result.get("applied_filters", {}),
-        "results": tuple(_public_search_result(row) for row in result.get("results", ())),
+        "results": tuple(_public_search_result(row, service, corpus_id) for row in result.get("results", ())),
     }
 
 
-def _public_ask(result: dict) -> dict:
+def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
     if result.get("readiness") is False:
         return _public_integrity(result)
     support_rows = (
@@ -107,19 +98,18 @@ def _public_ask(result: dict) -> dict:
         "answer_scope": result.get("answer_scope"),
         "warnings": tuple(result.get("warnings", ())),
         "insufficient_reasons": tuple(_public_reason(row) or row for row in result.get("insufficient_reasons", ())),
-        "supports": tuple(_public_support(row, panel_section) for row, panel_section in support_rows),
+        "supports": tuple(_public_support(row, panel_section, service, corpus_id) for row, panel_section in support_rows),
     }
     if result.get("document_source") is not None:
         source = result["document_source"]
         public["answer_type"] = "source_document"
         public["document_source"] = {
-            "source_document_id": source.get("source_document_id"),
             "source_role": source.get("source_role"),
             "temporal_context": source.get("temporal_context"),
             "document_title": source.get("document_title"),
             "viewer_target": {
                 "action": "open_document",
-                "source_document_id": source.get("source_document_id"),
+                "target": service.register_public_target(corpus_id, {"evidence_id": None, "source_document_id": source.get("source_document_id")}),
             },
         }
     for key in ("requested_function", "target_reference", "legal_domain"):
@@ -155,9 +145,6 @@ def _public_viewer(result: dict) -> dict:
     public = {
         "status": result.get("status"),
         "corpus_id": result.get("corpus_id"),
-        "evidence_id": result.get("evidence_id"),
-        "legal_unit_id": result.get("legal_unit_id"),
-        "source_document_id": result.get("source_document_id"),
         "source_url": result.get("source_url"),
         "citation": result.get("citation"),
         "quoted_text": result.get("quoted_text"),
@@ -203,7 +190,6 @@ def _public_integrity(result: dict) -> dict:
 def _public_bbox(row: dict) -> dict:
     precision = _public_bbox_precision(row.get("bbox_precision"))
     return {
-        "bbox_id": row.get("bbox_id"),
         "bbox_precision": precision,
         "page_number": row.get("page_number"),
         "viewer_highlightable": _public_viewer_highlightable(precision, row.get("viewer_highlightable")),
@@ -265,16 +251,17 @@ def _public_reason(reason):
     )
 
 
-def _public_search_result(row: dict) -> dict:
+def _public_search_result(row: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
+    document = row.get("status") == "document"
+    target = service.register_public_target(
+        corpus_id,
+        {
+            "evidence_id": None if document else row.get("evidence_id"),
+            "source_document_id": row.get("source_document_id"),
+        },
+    )
     return {
         "corpus_id": row.get("corpus_id"),
-        "legal_unit_id": row.get("legal_unit_id"),
-        "evidence_id": row.get("evidence_id"),
-        "document_id": row.get("document_id"),
-        "citation_id": row.get("citation_id"),
-        "viewer_ref_id": row.get("viewer_ref_id"),
-        "source_document_id": row.get("source_document_id"),
-        "source_url": row.get("source_url"),
         "title": row.get("title"),
         "document_title": row.get("document_title"),
         "citation": row.get("citation"),
@@ -287,7 +274,7 @@ def _public_search_result(row: dict) -> dict:
         "citation_final": row.get("citation_final"),
         "page_numbers": row.get("page_numbers", ()),
         "bbox_count": row.get("bbox_count"),
-        "viewer_ref": _public_viewer_ref(row.get("viewer_ref") or {}),
+        "viewer_target": {"action": "viewer", "target": target, "can_resolve": True},
         "status": row.get("status"),
     }
 
@@ -331,10 +318,9 @@ def _public_citation(row: dict) -> dict:
     return public
 
 
-def _public_support(row: dict, panel_section: str) -> dict:
+def _public_support(row: dict, panel_section: str, service: LegalRuntimeService, corpus_id: str) -> dict:
     support_kind = row.get("support_kind") or ("metadata_source" if panel_section == "metadata" else "structural_provenance" if panel_section == "structure" else "trace_support")
     viewer_target = dict(row.get("viewer_target") or row.get("viewer_ref") or {})
-    viewer_target.setdefault("source_document_id", row.get("source_document_id"))
     labels = {
         "legal": "Kutipan Relevan",
         "metadata": "Sumber Dokumen",
@@ -343,8 +329,14 @@ def _public_support(row: dict, panel_section: str) -> dict:
     }
     legal = panel_section == "legal"
     linkable = row.get("viewer_highlightable") is True and viewer_target.get("can_resolve") is True
+    request = {
+        "evidence_id": row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
+        "relation_id": row.get("relation_id"),
+        "source_document_id": row.get("source_document_id"),
+    }
+    target = service.register_public_target(corpus_id, request) if linkable else None
     return {
-        "support_id": row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
+        "support_id": target,
         "support_kind": support_kind,
         "panel_section": labels[panel_section],
         "fact_kind": row.get("fact_kind") or ("legal_text" if legal else "document_structure" if panel_section == "structure" else "source_fact" if panel_section == "metadata" else "source_discrepancy"),
@@ -352,14 +344,14 @@ def _public_support(row: dict, panel_section: str) -> dict:
         "display_text": row.get("display_text") or row.get("quoted_text") or row.get("answer") or "",
         "layout_lines": tuple(row.get("layout_lines") or ()),
         "copy_text": row.get("copy_text") or row.get("quoted_text") or "",
-        "source_document": row.get("source_document_id"),
+        "source_document": row.get("document_title") or row.get("source_label"),
         "source_role": row.get("source_role"),
         "page_numbers": tuple(row.get("page_numbers") or ()),
         "legal_citation_available": legal and row.get("citation_final") is True,
         "relevant_quote_eligible": row.get("relevant_quote_eligible") is True,
         "linkable": linkable,
         "highlightable": linkable,
-        "viewer_target": _public_viewer_ref(viewer_target),
+        "viewer_target": {"action": "viewer", "target": target, "page_numbers": tuple(row.get("page_numbers") or ()), "can_resolve": linkable},
     }
 
 
@@ -385,7 +377,6 @@ def _public_legal_relation(row: dict) -> dict:
 def _public_viewer_ref(row: dict) -> dict:
     return {
         "action": row.get("action"),
-        "source_document_id": row.get("source_document_id"),
         "page_numbers": row.get("page_numbers", ()),
         "bbox_count": row.get("bbox_count"),
         "can_resolve": row.get("can_resolve"),

@@ -7,6 +7,15 @@
   "contract_id": "tjipto.uud.artifact-contract",
   "contract_version": 7,
   "contract_fingerprint": "b4fe9b00c712eb0a83e4d32b4ecb77be8f9f4e260b549084798b2ed4db0b9fba",
+  "extractor_fingerprint": {
+    "python": "3.12.10",
+    "pymupdf": "1.27.2.3",
+    "mupdf": "1.27.2",
+    "rawdict_sort": true,
+    "words_sort": true,
+    "page_box_basis": "media_box",
+    "unicode_normalization": "NFKC;NBSP=SPACE;SOFT_HYPHEN=REMOVE;LINE_SEPARATOR=LF"
+  },
   "counts": {
     "article_amendment_relations": 72,
     "article_versions": 218,
@@ -441,6 +450,18 @@
       "bytes": 770320,
       "sha256": "3c6de967a0dc17310d065abbc7c9f085e38e76c3a2f7d4ee85909ad33162bb7f"
     },
+    "runtime_projection.json": {
+      "origin": "generated",
+      "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
+      "producer": "runtime_projection_builder",
+      "build_stage": "runtime_projection",
+      "logical_key": "runtime_projection",
+      "artifact_kind": "runtime_projection",
+      "format": "json",
+      "artifact_schema": 7,
+      "bytes": 30089705,
+      "sha256": "1e5928d35fae4c5136c20b19f4a1151c269bf11d470c4fc6dbc5ec5d1844f12d"
+    },
     "source_conflicts.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
@@ -560,8 +581,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 23228,
-      "sha256": "1bf07beec97cb77a5e6c9cad9daccc388c804f392b3d089b0f32be98f7630d35"
+      "bytes": 23331,
+      "sha256": "2a85374ef1e794d7a80f474b9291c4b11358ed435174294c134911653e5a2430"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -705,6 +726,7 @@
   "pdf_health_report": "pdf_health_report.json",
   "promotion_decisions": "promotion_decisions.jsonl",
   "retrieval_units": "retrieval_units.jsonl",
+  "runtime_projection": "runtime_projection.json",
   "schema_version": 7,
   "source_conflicts": "source_conflicts.jsonl",
   "source_documents": "source_documents.jsonl",

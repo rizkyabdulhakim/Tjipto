@@ -7,6 +7,7 @@ from tjipto.artifacts.manifest import refresh_manifest as refresh_artifact_manif
 from tjipto.contracts.artifacts import MINIMUM_ARTIFACT_FIELDS
 from tjipto.corpora.uud.artifact_policy import UUD_ARTIFACT_ORIGIN_POLICY
 from tjipto.corpora.uud.contract import CONTRACT_FINGERPRINT, CONTRACT_ID, CONTRACT_VERSION
+from tjipto.ingestion.pdf.fingerprint import extractor_fingerprint
 
 
 ARTIFACT_FILES = (
@@ -29,6 +30,7 @@ ARTIFACT_FILES = (
     ("pdf_health_report", "pdf_health_report.json"),
     ("promotion_decisions", "promotion_decisions.jsonl"),
     ("retrieval_units", "retrieval_units.jsonl"),
+    ("runtime_projection", "runtime_projection.json"),
     ("source_conflicts", "source_conflicts.jsonl"),
     ("source_documents", "source_documents.jsonl"),
     ("source_integrity", "source_integrity.json"),
@@ -128,6 +130,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "contract_id": CONTRACT_ID,
         "contract_version": CONTRACT_VERSION,
         "contract_fingerprint": CONTRACT_FINGERPRINT,
+        "extractor_fingerprint": extractor_fingerprint(),
         "counts": {},
         "document_metadata": "document_metadata.jsonl",
         "document_relations": "document_relations.jsonl",
@@ -157,6 +160,7 @@ def build_manifest(source_documents: dict[str, dict]) -> dict:
         "pdf_health_report": "pdf_health_report.json",
         "promotion_decisions": "promotion_decisions.jsonl",
         "retrieval_units": "retrieval_units.jsonl",
+        "runtime_projection": "runtime_projection.json",
         "schema_version": UUD_ARTIFACT_SCHEMA,
         "source_conflicts": "source_conflicts.jsonl",
         "source_documents": "source_documents.jsonl",

@@ -40,8 +40,12 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def artifact_set_digest(manifest: dict) -> str:
-    rows = [(name, row.get("sha256"), row.get("bytes")) for name, row in sorted(manifest["files"].items())]
+def artifact_set_digest(manifest: dict, *, exclude: tuple[str, ...] = ()) -> str:
+    rows = [
+        (name, row.get("sha256"), row.get("bytes"))
+        for name, row in sorted(manifest["files"].items())
+        if name not in exclude
+    ]
     return hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 

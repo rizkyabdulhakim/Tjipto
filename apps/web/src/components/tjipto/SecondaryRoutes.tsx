@@ -87,12 +87,12 @@ export function SearchRoute({ onOpenCitation }: { onOpenCitation?: (citation: Ci
           <ul className="mt-3 space-y-2">
             {results.map((row, index) => {
               const citation = mapSearchResultToCitation(row, index);
-              const page = row.page_numbers?.[0] ?? row.viewer_ref?.page_numbers?.[0];
+              const page = row.page_numbers?.[0] ?? row.viewer_target?.page_numbers?.[0];
               return (
-                <li key={row.evidence_id ?? row.source_document_id} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
+                <li key={row.viewer_target?.target ?? `${row.corpus_id}:${index}`} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
                   <button
                     type="button"
-                    aria-label={`Buka viewer ${row.title ?? row.evidence_id}`}
+                    aria-label={`Buka viewer ${row.title ?? row.corpus_id}`}
                     className="w-full flex items-start gap-3 text-left disabled:cursor-not-allowed disabled:opacity-70"
                     onClick={() => citation && onOpenCitation?.(citation)}
                     disabled={!citation}

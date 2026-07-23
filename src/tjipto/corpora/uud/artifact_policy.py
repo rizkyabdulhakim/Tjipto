@@ -69,6 +69,7 @@ UUD_ARTIFACT_ORIGIN_POLICY = {
     "pdf_health_report.json": _generated("pdf_health_builder", "ingestion"),
     "promotion_decisions.jsonl": _generated("promotion_builder", "promotion_audit"),
     "retrieval_units.jsonl": _generated("retrieval_builder", "retrieval_build"),
+    "runtime_projection.json": _generated("runtime_projection_builder", "runtime_projection"),
     "source_conflicts.jsonl": _generated("source_conflict_builder", "validation"),
     "source_documents.jsonl": _generated("source_documents_builder", "source_inventory"),
     "source_integrity.json": {

@@ -10,57 +10,52 @@ import {
   mapSearchResultToCitation,
 } from "../src/lib/api.ts";
 
-test("document search result opens document viewer mode", () => {
+test("document search result opens its opaque viewer target", () => {
   const citation = mapSearchResultToCitation({
     corpus_id: "uud",
-    source_document_id: "uud::current_consolidated",
-    document_id: "uud::current_consolidated",
     document_title: "UUD 1945",
-    source_url: "https://peraturan.bpk.go.id/Details/101646/uud-no--",
     page_numbers: [1],
     snippet: "Dokumen sumber terverifikasi",
     status: "document",
+    viewer_target: { target: "search_target_1" },
   }, 0);
 
   assert.equal(citation?.viewerMode, "document");
-  assert.equal(citation?.documentId, "uud::current_consolidated");
-  assert.equal(citation?.sourceDocumentId, "uud::current_consolidated");
+  assert.equal(citation?.documentId, "search_target_1");
+  assert.equal(citation?.sourceDocumentId, undefined);
   assert.equal(citation?.pageNumber, 1);
-  assert.equal(citation?.sourceUrl, "https://peraturan.bpk.go.id/Details/101646/uud-no--");
+  assert.equal(citation?.sourceUrl, "");
 });
 
-test("evidence search result keeps evidence viewer mode", () => {
+test("evidence search result keeps its opaque viewer target", () => {
   const citation = mapSearchResultToCitation({
     corpus_id: "uud",
-    evidence_id: "evidence_1",
-    source_document_id: "uud::current_consolidated",
     snippet: "Pasal 1",
     status: "evidence",
-    viewer_ref: { page_numbers: [3] },
+    viewer_target: { target: "search_target_2", page_numbers: [3] },
   }, 0);
 
   assert.equal(citation?.viewerMode, "evidence");
-  assert.equal(citation?.documentId, "evidence_1");
+  assert.equal(citation?.documentId, "search_target_2");
   assert.equal(citation?.pageNumber, 3);
 });
 
-test("scoped source answer opens the full document without citation geometry", () => {
+test("scoped source answer uses an opaque viewer target", () => {
   const citation = mapAskResponseToDocumentSource({
     status: "answer_ready",
     answer_type: "source_document",
     document_source: {
-      source_document_id: "uud::amendment_1_historical",
       source_role: "amendment_1_historical",
       temporal_context: "amendment_1_historical",
       document_title: "Perubahan Pertama UUD 1945",
-      viewer_target: { action: "open_document", source_document_id: "uud::amendment_1_historical" },
+      viewer_target: { action: "open_document", target: "viewer_target_1" },
     },
     citations: [],
     viewer_refs: [],
   });
 
   assert.equal(citation?.viewerMode, "document");
-  assert.equal(citation?.sourceDocumentId, "uud::amendment_1_historical");
+  assert.equal(citation?.documentId, "viewer_target_1");
   assert.equal(citation?.excerpt, "");
   assert.deepEqual(mapAskResponseToCitations({ status: "answer_ready", answer_type: "source_document" }), []);
 });

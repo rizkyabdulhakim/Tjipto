@@ -54,16 +54,14 @@ class RuntimeHttpContractTest(unittest.TestCase):
             self.assertNotIn(internal, search)
         first = search["results"][0]
         self.assertEqual(first["status"], "document")
-        self.assertTrue(first["document_id"])
-        self.assertTrue(first["source_document_id"])
-        self.assertIn("viewer_ref", first)
+        self.assertTrue(first["viewer_target"]["target"])
         self.assertIn("source_role", first)
-        self.assertFalse(first["viewer_ref"]["bbox_count"])
         self.assertNotIn("route_score", first)
-        self.assertNotIn("source_sha256", first)
-        self.assertNotIn("source_pdf_path", first)
-        self.assertNotIn("source_sha256", first["viewer_ref"])
-        self.assertNotIn("source_pdf_path", first["viewer_ref"])
+        for internal in ("document_id", "source_document_id", "evidence_id", "legal_unit_id", "viewer_ref_id"):
+            self.assertNotIn(internal, first)
+        search_viewer = self._post("/legal/uud/viewer", {"target": first["viewer_target"]["target"]})
+        self.assertEqual(search_viewer["status"], "viewer_payload_ready")
+        self.assertFalse(search_viewer["bbox_rectangles"])
 
         weak = self._post("/legal/uud/search", {"query": "hak pendidikan"})
         self.assertEqual(weak["public_status"], "no_results")
@@ -80,10 +78,11 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertNotIn("source_sha256", citation["viewer_refs"][0])
         self.assertNotIn("source_pdf_path", citation["viewer_refs"][0])
         evidence_id = citation["citation_payloads"][0]["evidence_id"]
-
-        viewer = self._post("/legal/uud/viewer", {"evidence_id": evidence_id})
+        asked = self._post("/legal/uud/ask", {"query": "Pasal 1 ayat (3)"})
+        target = asked["supports"][0]["viewer_target"]["target"]
+        viewer = self._post("/legal/uud/viewer", {"target": target})
         self.assertEqual(viewer["status"], "viewer_payload_ready")
-        self.assertEqual(viewer["evidence_id"], evidence_id)
+        self.assertNotIn("evidence_id", viewer)
         self.assertTrue(viewer["pdf_access_available"])
         self.assertEqual(viewer["render_status"], "pdf_access_available")
         self.assertTrue(viewer["pdf"]["access_url"].startswith("/legal/uud/pdf?"))
@@ -102,12 +101,6 @@ class RuntimeHttpContractTest(unittest.TestCase):
         pdf_body, pdf_headers = self._get_bytes(viewer["pdf"]["access_url"])
         self.assertEqual(pdf_headers["Content-Type"], "application/pdf")
         self.assertTrue(pdf_body.startswith(b"%PDF"))
-
-        document_viewer = self._post("/legal/uud/viewer", {"source_document_id": first["source_document_id"]})
-        self.assertEqual(document_viewer["status"], "viewer_payload_ready")
-        self.assertTrue(document_viewer["pdf_access_available"])
-        self.assertFalse(document_viewer["bbox_rectangles"])
-        self.assertFalse(document_viewer["viewer_highlightable"])
 
         saved = self._post("/legal/uud/bookmarks", {"evidence_id": evidence_id, "note": "cek lagi"})
         self.assertEqual(saved["status"], "saved")
@@ -302,26 +295,26 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], "invalid_limit")
 
     def test_viewer_invalid_inputs_do_not_leak_paths_or_traces(self) -> None:
-        citation = self._post("/legal/uud/citation", {"query": "Pasal 1 ayat (3)"})
-        evidence_id = citation["citation_payloads"][0]["evidence_id"]
+        asked = self._post("/legal/uud/ask", {"query": "Pasal 1 ayat (3)"})
+        target = asked["supports"][0]["viewer_target"]["target"]
         for payload in (
-            {"evidence_id": evidence_id, "source_document_id": "uud::missing"},
-            {"evidence_id": evidence_id, "page_number": 999},
-            {"evidence_id": evidence_id, "bbox_id": "missing_bbox"},
-            {"evidence_id": evidence_id, "source_pdf_path": "../secret.pdf"},
+            {"target": target, "source_document_id": "uud::missing"},
+            {"target": target, "page_number": 999},
+            {"target": target, "bbox_id": "missing_bbox"},
+            {"target": target, "source_pdf_path": "../secret.pdf"},
         ):
             viewer = self._post("/legal/uud/viewer", payload)
             self.assertEqual(viewer["status"], "viewer_payload_ready")
-            self.assertFalse(viewer["rendering_available"])
+            self.assertTrue(viewer["rendering_available"])
             body = json.dumps(viewer)
             self.assertNotIn(str(ROOT), body)
             self.assertNotIn("Traceback", body)
         self.assertEqual(
-            self._post("/legal/unknown/viewer", {"evidence_id": evidence_id})["status"],
+            self._post("/legal/unknown/viewer", {"target": target})["status"],
             "unsupported_corpus",
         )
 
-        viewer = self._post("/legal/uud/viewer", {"evidence_id": evidence_id})
+        viewer = self._post("/legal/uud/viewer", {"target": target})
         forged = viewer["pdf"]["access_url"] + "&source_sha256=" + ("0" * 64)
         with self.assertRaises(HTTPError) as error:
             self._get(forged)

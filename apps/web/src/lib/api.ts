@@ -47,13 +47,12 @@ export interface SupportPayload {
 }
 
 export interface DocumentSourcePayload {
-  source_document_id?: string;
   source_role?: string;
   temporal_context?: string;
   document_title?: string;
   viewer_target?: {
     action?: "open_document";
-    source_document_id?: string;
+    target?: string;
   };
 }
 
@@ -64,13 +63,6 @@ export interface ClarificationOptionPayload {
 
 export interface SearchResult {
   corpus_id: string;
-  legal_unit_id?: string;
-  evidence_id?: string;
-  document_id?: string;
-  citation_id?: string;
-  viewer_ref_id?: string;
-  source_document_id?: string;
-  source_url?: string;
   title?: string;
   document_title?: string;
   citation?: string;
@@ -80,14 +72,13 @@ export interface SearchResult {
   temporal_context?: string;
   page_numbers?: number[];
   bbox_count?: number;
-  viewer_ref?: ViewerRefPayload;
+  viewer_target?: ViewerRefPayload;
   status: string;
 }
 
 export interface ViewerRefPayload {
   action?: string;
-  evidence_id?: string;
-  source_document_id?: string;
+  target?: string;
   page_numbers?: number[];
   bbox_count?: number;
   source_status_label?: string;
@@ -234,7 +225,7 @@ export async function getLegalViewerPayload(evidenceId: string, relationId?: str
   const response = await fetch(corpusEndpoint("viewer"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ evidence_id: evidenceId, ...(relationId ? { relation_id: relationId } : {}) }),
+    body: JSON.stringify({ target: evidenceId }),
   });
   if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} viewer returned ${response.status}`);
   return response.json();
@@ -244,7 +235,7 @@ export async function getDocumentViewerPayload(sourceDocumentId: string): Promis
   const response = await fetch(corpusEndpoint("viewer"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source_document_id: sourceDocumentId }),
+    body: JSON.stringify({ target: sourceDocumentId }),
   });
   if (!response.ok) throw new Error(`${DEFAULT_CORPUS_ID} viewer returned ${response.status}`);
   return response.json();
@@ -279,7 +270,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
     return [{
       id: index + 1,
       documentId: String(support.support_id),
-      sourceDocumentId: support.source_document ?? support.viewer_target.source_document_id,
+      sourceDocumentId: support.source_document,
       documentTitle: fallbackDocumentTitle("uud"),
       regulationType: "UUD" as const,
       authorityKind: support.panel_section === "Kutipan Relevan"
@@ -307,15 +298,14 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
 
 export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Citation | null {
   const source = response.document_source;
-  const sourceDocumentId = source?.source_document_id;
-  if (response.answer_type !== "source_document" || !sourceDocumentId) return null;
+  const target = source?.viewer_target?.target;
+  if (response.answer_type !== "source_document" || !target) return null;
   return {
     id: 1,
-    documentId: sourceDocumentId,
+    documentId: target,
     documentTitle: source.document_title ?? fallbackDocumentTitle("uud"),
     regulationType: "UUD",
     viewerMode: "document",
-    sourceDocumentId,
     pageNumber: 1,
     excerpt: "",
     sourceUrl: "",
@@ -347,26 +337,25 @@ export function mapAskResponseToSupportItems(response: TjiptoAskResponse): {
 }
 
 export function mapSearchResultToCitation(item: SearchResult, index: number): Citation | null {
-  if (!item?.source_document_id || !item.snippet) return null;
+  const target = item?.viewer_target?.target;
+  if (!target || !item.snippet) return null;
   const pages = Array.isArray(item.page_numbers)
     ? item.page_numbers
-    : Array.isArray(item.viewer_ref?.page_numbers)
-      ? item.viewer_ref.page_numbers
+    : Array.isArray(item.viewer_target?.page_numbers)
+      ? item.viewer_target.page_numbers
       : [];
   const pageNumber = Number(pages[0] ?? 1);
   return {
     id: index + 1,
-    documentId: String(item.evidence_id ?? item.document_id ?? item.source_document_id),
+    documentId: target,
     viewerMode: item.status === "document" ? "document" : "evidence",
-    legalUnitId: item.legal_unit_id,
-    sourceDocumentId: item.source_document_id,
-    viewerRefId: item.viewer_ref_id ?? item.viewer_ref?.evidence_id,
+    viewerRefId: target,
     documentTitle: item.document_title ?? fallbackDocumentTitle(item.corpus_id),
     regulationType: "UUD",
     article: String(item.label ?? item.citation ?? item.title ?? "UUD"),
     pageNumber: Number.isFinite(pageNumber) ? pageNumber : 1,
     excerpt: String(item.snippet),
-    sourceUrl: item.source_url ?? "",
+    sourceUrl: "",
     sourceDomain: item.source_role ?? item.corpus_id ?? "runtime",
     sourceRole: item.source_role,
     temporalContext: item.temporal_context,

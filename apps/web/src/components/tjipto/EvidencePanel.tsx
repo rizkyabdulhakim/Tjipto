@@ -16,7 +16,7 @@ import {
   Bookmark,
 } from "lucide-react";
 import type { Citation } from "../../lib/types";
-import { getDocumentViewerPayload, getLegalViewerPayload, pdfAccessUrl, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
+import { getLegalViewerPayload, pdfAccessUrl, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
 import { bboxToViewportPercent } from "../../lib/pdfBBox";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -150,9 +150,7 @@ function EvidenceContent({
     setViewer(null);
     setViewerError(false);
     setRenderFailed(false);
-    const request = citation.viewerMode === "document" && citation.sourceDocumentId
-      ? getDocumentViewerPayload(citation.sourceDocumentId)
-      : getLegalViewerPayload(citation.documentId, citation.relationId);
+    const request = getLegalViewerPayload(citation.documentId, citation.relationId);
     request
       .then((payload) => {
         if (!stale) setViewer(payload);

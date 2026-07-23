@@ -357,11 +357,11 @@
     "runtime_check_count": 0
   },
   "artifact_origin_health": {
-    "manifest_file_rows": 29,
-    "files_with_origin": 29,
+    "manifest_file_rows": 30,
+    "files_with_origin": 30,
     "files_missing_origin": 0,
     "invalid_origin_values": 0,
-    "generated_count": 24,
+    "generated_count": 25,
     "carried_forward_count": 3,
     "manual_review_artifact_count": 2,
     "deprecated_count": 0,
@@ -639,5 +639,6 @@
       "relation_reference": 72,
       "source_anomaly_trace": 4
     }
-  }
+  },
+  "validated_artifact_set_digest": "614ff544e7e37a0f574db5f5f75cec18c32b8da5cd81da7dc06ce15b017826c9"
 }

@@ -172,21 +172,26 @@ async function runEvidenceContractSmoke(browser) {
   }
 
   const relationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
-  await ask(relationPage, "UUD 1945 diubah oleh amandemen berapa");
+  await ask(relationPage, "pasal yang dihapus");
   await relationPage.locator('[data-runtime-status="answer_ready"]').waitFor();
-  await relationPage.locator('[data-support-kind="document-relations"]').waitFor();
-  await expectNoExactCitationUi(relationPage);
+  const deletionSupport = relationPage.locator('[data-support-kind="trace-support"]');
+  await deletionSupport.waitFor();
+  await deletionSupport.getByRole("button").click();
+  await relationPage.locator('[data-evidence-panel="normal"]').waitFor();
+  await relationPage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  assert((await relationPage.locator('[data-citation-footer="true"]').count()) === 0, "Relation rendered as a legal citation.");
   await relationPage.close();
 
   const articleRelationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(articleRelationPage, "Pasal 25E menjadi Pasal 25A");
   await articleRelationPage.locator('[data-runtime-status="answer_ready"]').waitFor();
-  const relationSupport = articleRelationPage.locator('[data-support-kind="article-relations"]');
+  const relationSupport = articleRelationPage.locator('[data-support-kind="trace-support"]');
   await relationSupport.waitFor();
-  await relationSupport.getByText(/Pasal 25E.*Pasal 25A/).waitFor();
-  await relationSupport.getByText(/Source proof exact/).waitFor();
-  await relationSupport.getByText(/target target_local/).waitFor();
-  await expectNoExactCitationUi(articleRelationPage);
+  await relationSupport.getByText(/Pasal 25E[\s\S]*Pasal 25A/).waitFor();
+  await relationSupport.getByRole("button").click();
+  await articleRelationPage.locator('[data-evidence-panel="normal"]').waitFor();
+  await articleRelationPage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  assert((await articleRelationPage.locator('[data-citation-footer="true"]').count()) === 0, "Relation rendered as a legal citation.");
   await articleRelationPage.close();
 
   const sourceDocumentPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
@@ -202,11 +207,12 @@ async function runEvidenceContractSmoke(browser) {
   const traceRelationPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await ask(traceRelationPage, "Pasal 3 ayat (3) menjadi Pasal 3 ayat (2)");
   await traceRelationPage.locator('[data-runtime-status="answer_ready"]').waitFor();
-  const traceRelationSupport = traceRelationPage.locator('[data-support-kind="article-relations"]');
+  const traceRelationSupport = traceRelationPage.locator('[data-support-kind="trace-support"]');
   await traceRelationSupport.waitFor();
-  await traceRelationSupport.getByText(/Source proof exact/).waitFor();
-  await traceRelationSupport.getByText(/target target_local/).waitFor();
-  await expectNoExactCitationUi(traceRelationPage);
+  await traceRelationSupport.getByRole("button").click();
+  await traceRelationPage.locator('[data-evidence-panel="normal"]').waitFor();
+  await traceRelationPage.locator('[data-bbox-highlight="active"]').first().waitFor();
+  assert((await traceRelationPage.locator('[data-citation-footer="true"]').count()) === 0, "Relation rendered as a legal citation.");
   await traceRelationPage.close();
 
   const insufficientPage = await browser.newPage({ viewport: { width: 1200, height: 800 } });
@@ -263,7 +269,7 @@ async function runSmoke() {
         body: JSON.stringify({ query: "Pasal 1 ayat (3)" }),
       });
       const body = await response.json();
-      return body.citations?.[0]?.copy_text ?? "";
+      return body.supports?.find((support) => support.panel_section === "Kutipan Relevan")?.copy_text ?? "";
     });
     assert(copiedQuote === expectedCopy, "Clipboard text differs from the validated DTO copyText.");
     assert(!copiedQuote.includes("<") && !/[*]{1,4}\)/.test(copiedQuote), "Clipboard contains markup or a source marker.");

@@ -47,7 +47,7 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             manifest = json.loads((final / "manifest.json").read_text(encoding="utf-8"))
             manifest["files"]["evidence_registry.jsonl"].update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
             _write_trusted_manifest(root, manifest)
-            with self.assertRaisesRegex(ValueError, "evidence_quote_source_mismatch|artifact_semantic_invalid"):
+            with self.assertRaisesRegex(ValueError, "runtime_validation_attestation_missing"):
                 service.repository.load("uud")
             self.assertEqual(service.repository.load_count, 1)
 
@@ -66,7 +66,7 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             _write_trusted_manifest(root, manifest)
             self.assertTrue(any(error.startswith("EVIDENCE_QUOTE_SOURCE_MISMATCH") for error in validate_uud_artifact_dir(final)))
             result = LegalRuntimeService(root).ask("uud", "Pasal 1")
-            self.assertEqual(result["reason_code"], "evidence_quote_source_mismatch")
+            self.assertEqual(result["reason_code"], "runtime_validation_attestation_missing")
             self.assertFalse(result["citations"])
 
     def test_parent_aggregate_span_mutation_fails_offline_and_runtime(self) -> None:
@@ -86,7 +86,7 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             errors = validate_uud_artifact_dir(final)
             self.assertTrue(any(error.startswith("aggregate_text_span_sequence_incomplete") for error in errors))
             result = LegalRuntimeService(root).ask("uud", "Pasal 31")
-            self.assertEqual(result["status"], "corpus_not_ready")
+            self.assertEqual(result["reason_code"], "runtime_validation_attestation_missing")
             self.assertFalse(result["citations"])
 
     def test_individual_signatory_grounding_mutation_fails_offline_and_runtime(self) -> None:
@@ -106,7 +106,7 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             errors = validate_uud_artifact_dir(final)
             self.assertTrue(any(error.startswith("signatory_grounding_unknown_name:") for error in errors))
             result = LegalRuntimeService(root).ask("uud", "Amien Rais Perubahan Pertama UUD")
-            self.assertEqual(result["status"], "corpus_not_ready")
+            self.assertEqual(result["reason_code"], "runtime_validation_attestation_missing")
             self.assertFalse(result["citations"])
 
     def test_source_sha_mutation_fails_lineage_before_answer(self) -> None:
@@ -142,7 +142,7 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             record.update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
             _write_trusted_manifest(root, manifest)
             result = LegalRuntimeService(root).ask("uud", "Pasal 1")
-            self.assertEqual(result["reason_code"], "artifact_contract_weakened")
+            self.assertEqual(result["reason_code"], "runtime_validation_attestation_missing")
             self.assertFalse(result["citations"])
 
     def test_trust_anchor_and_semantic_row_failures_are_typed(self) -> None:
@@ -200,9 +200,9 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             self.assertTrue(all(snapshot is first for snapshot in pool.map(service.repository.load, ["uud"] * 16)))
         self.assertLessEqual(service.repository.load_count, 1)
         with self.assertRaises(TypeError):
-            first.artifacts["evidence_registry.jsonl"][0]["quoted_text"] = "tampered"
+            first.artifacts["runtime_projection.json"]["artifacts"]["evidence_registry"][0]["quoted_text"] = "tampered"
         with self.assertRaises(TypeError):
-            first.artifacts["evidence_registry.jsonl"][0]["page_numbers"][0] = 999
+            first.artifacts["runtime_projection.json"]["artifacts"]["evidence_registry"][0]["page_numbers"][0] = 999
 
     def test_process_publication_cache_is_manifest_path_scoped(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -238,7 +238,7 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             record.update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
             _write_trusted_manifest(root, manifest)
             result = LegalRuntimeService(root).ask("uud", "Pasal 7")
-            self.assertEqual(result["reason_code"], "artifact_primary_id_duplicate")
+            self.assertEqual(result["reason_code"], "runtime_validation_attestation_missing")
 
     def test_cross_artifact_reference_fails_before_publication(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -254,7 +254,7 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             manifest["files"]["retrieval_units.jsonl"].update({"bytes": len(data), "sha256": sha256(data).hexdigest()})
             _write_trusted_manifest(root, manifest)
             result = LegalRuntimeService(root).ask("uud", "Pasal 7")
-            self.assertEqual(result["reason_code"], "semantic_cross_reference_unresolved")
+            self.assertEqual(result["reason_code"], "runtime_validation_attestation_missing")
 
     def test_integrity_envelope_is_consistent_across_endpoints(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
