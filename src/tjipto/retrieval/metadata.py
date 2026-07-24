@@ -393,6 +393,8 @@ def _metadata_result(store, row: dict, grounding: dict, field: str, *, value: st
             "fact_kind": "person_role",
             "printed_name": signatory.get("name_text"),
             "printed_role": signatory.get("role_text"),
+            "entity_identity": signatory.get("entity_identity"),
+            "printed_name_alias": signatory.get("printed_name_alias"),
             "institution": row.get("institution"),
             "date_context": row.get("date") or (row.get("penetapan") or {}).get("date_text"),
         }

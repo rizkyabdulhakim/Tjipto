@@ -1395,6 +1395,8 @@ def _metadata_support(store, row: dict) -> dict:
         "display_text": display_text,
         "copy_text": _copy_text(display_text),
         "printed_name": name or None,
+        "entity_identity": row.get("entity_identity"),
+        "printed_name_alias": row.get("printed_name_alias"),
         "printed_role": role or None,
         "institution": institution or None,
         "date_context": date_context or None,

@@ -263,12 +263,13 @@ def _support_groups(projected: tuple[tuple[dict, dict], ...], service: LegalRunt
             continue
         role_key = (str(support.get("source_label") or ""), str(support.get("source_role") or ""), str(support.get("role_label") or ""))
         role_counts[role_key] = role_counts.get(role_key, 0) + 1
-        identity = _entity_identity(row.get("printed_name"), row.get("printed_role"), row.get("institution"))
+        identity = row.get("entity_identity")
         if identity:
             entity_counts[identity] = entity_counts.get(identity, 0) + 1
     for support, row in projected:
         key, group_kind = _support_group_key(support, row, role_counts, entity_counts)
-        grouped.setdefault((group_kind, *key), []).append(support)
+        if group_kind:
+            grouped.setdefault((group_kind, *key), []).append(support)
     return tuple(
         {
             "public_group_id": service.public_identifier(corpus_id, "support-group", key),
@@ -298,25 +299,13 @@ def _support_group_key(
         role_key = (source, source_role, str(support.get("role_label") or ""))
         if role_counts.get(role_key, 0) > 1:
             return role_key, "role_members"
-        name = _entity_identity(row.get("printed_name"), row.get("printed_role"), row.get("institution"))
+        name = row.get("entity_identity")
         if name and entity_counts.get(name, 0) > 1:
             return (name, str(support.get("role_label") or "")), "entity_occurrences"
-        return (source, source_role, str(support.get("role_label") or "")), "atomic"
+        return (), ""
     if section == "Sumber Dokumen":
         return (source, source_role), "document_metadata"
-    return (source, section, fact_kind, str(support.get("label") or ""), source_role), "atomic"
-
-
-def _entity_identity(name: object, role: object, institution: object) -> str | None:
-    if not isinstance(name, str) or not name.strip():
-        return None
-    # Source records do not currently carry an entity ID.  This canonicalizes
-    # only typography, and binds it to role plus institution to avoid a loose
-    # cross-person text merge.
-    normalized = "".join(char for char in name.casefold() if char.isalnum())
-    if not normalized:
-        return None
-    return "|".join((normalized, str(role or "").casefold(), str(institution or "").casefold()))
+    return (), ""
 
 
 def _support_group_label(group_kind: str, members: list[dict]) -> str:

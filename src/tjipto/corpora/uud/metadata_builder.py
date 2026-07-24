@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from collections import defaultdict
 import re
 import unicodedata
@@ -967,7 +968,7 @@ def _signatories(text: str) -> list[dict]:
         )
         if marker:
             if role and name_parts:
-                rows.append({"name_text": " ".join(name_parts), "role_text": role})
+                rows.append(_signatory(" ".join(name_parts), role))
             role = VICE_CHAIR_ROLE if token == VICE_CHAIR_TOKEN else CHAIR_ROLE
             name_parts = []
             index += 2 if token == VICE_CHAIR_TOKEN else 5 if spaced_chair else 1
@@ -976,8 +977,19 @@ def _signatories(text: str) -> list[dict]:
             name_parts.append(token)
         index += 1
     if role and name_parts:
-        rows.append({"name_text": " ".join(name_parts), "role_text": role})
+        rows.append(_signatory(" ".join(name_parts), role))
     return rows
+
+
+def _signatory(name_text: str, role_text: str) -> dict:
+    """Corpus-owned identity is stable across printed punctuation variants."""
+    identity_text = re.sub(r"[^a-z0-9]+", "", compact(name_text).casefold())
+    return {
+        "name_text": name_text,
+        "role_text": role_text,
+        "entity_identity": f"uud-person-{sha256(identity_text.encode('utf-8')).hexdigest()}",
+        "printed_name_alias": name_text,
+    }
 
 
 def _signatory_source_quotes(text: str, signatories: list[dict] | tuple[dict, ...]) -> list[str]:

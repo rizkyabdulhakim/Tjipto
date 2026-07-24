@@ -155,8 +155,8 @@
       "format": "jsonl",
       "artifact_schema": 7,
       "primary_id": "document_metadata_id",
-      "bytes": 22666,
-      "sha256": "2d328ad1887545f800d132cfa3e37dcd33f52c008b10ee3febb78e4d2ad10eaa"
+      "bytes": 27307,
+      "sha256": "4fe62c850cfa3660140d110dff282bb9c8bbd35718b86c2fde9d2cc5203a392c"
     },
     "document_relations.jsonl": {
       "origin": "generated",
@@ -459,8 +459,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 30089705,
-      "sha256": "1e5928d35fae4c5136c20b19f4a1151c269bf11d470c4fc6dbc5ec5d1844f12d"
+      "bytes": 30095090,
+      "sha256": "dd25673b215b48e2bef9eb02d07000080e1046aad1faeb52bf1720211c0bc86f"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -582,7 +582,7 @@
       "format": "json",
       "artifact_schema": 7,
       "bytes": 23331,
-      "sha256": "2a85374ef1e794d7a80f474b9291c4b11358ed435174294c134911653e5a2430"
+      "sha256": "c2ff606f5b59a3c3bfb53cb13d2723c61a8fe3281ac562d8a8809941830641c3"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

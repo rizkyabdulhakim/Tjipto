@@ -62,7 +62,7 @@ export interface SupportGroupPayload {
   label: string;
   summary: string;
   member_count: number;
-  group_kind: "document_metadata" | "entity_occurrences" | "role_members" | "atomic";
+  group_kind: "document_metadata" | "entity_occurrences" | "role_members";
   members: SupportPayload[];
 }
 
@@ -179,7 +179,7 @@ export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Cit
 }
 
 export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): SupportGroup[] {
-  return (response.support_groups ?? []).flatMap((group) => {
+  const grouped = (response.support_groups ?? []).flatMap((group) => {
     const kind = group.panel_section === "Sumber Dokumen" ? "metadata" : group.panel_section === "Struktur Dokumen" ? "structure" : group.panel_section === "Catatan Sumber" ? "trace" : null;
     if (!kind) return [];
     return [{
@@ -198,6 +198,19 @@ export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): Supp
       })),
     }];
   });
+  const groupedIds = new Set((response.support_groups ?? []).flatMap((group) => group.members.map((member) => member.public_support_id)));
+  const atomic = (response.supports ?? []).flatMap((support) => {
+    if (groupedIds.has(support.public_support_id) || support.panel_section === "Kutipan Relevan") return [];
+    const kind: SupportGroup["kind"] = support.panel_section === "Sumber Dokumen" ? "metadata" : support.panel_section === "Struktur Dokumen" ? "structure" : "trace";
+    return [{
+      id: support.public_support_id,
+      title: support.panel_section,
+      summary: support.source_label ?? support.label,
+      kind,
+      members: [{ id: support.public_support_id, publicTargetId: support.viewer_target.public_target_id ?? undefined, label: support.label, detail: support.text, kind, clickable: support.viewer_target.can_resolve === true }],
+    }];
+  });
+  return [...grouped, ...atomic];
 }
 
 export function mapSearchResultToCitation(item: SearchResult, index: number): Citation | null {
