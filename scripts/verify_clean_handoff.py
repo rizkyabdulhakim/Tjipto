@@ -28,6 +28,12 @@ FORBIDDEN_PATTERNS = (
     "__pycache__/**",
     "*.pyc",
     "*.pyo",
+    "*.key",
+    "*.pem",
+    "*.p12",
+    "*.pfx",
+    "credentials*.json",
+    "id_rsa",
     "*.log",
     ".pytest_cache",
     ".pytest_cache/**",
@@ -139,6 +145,14 @@ def release_candidate(repo_root: Path, commit_sha: str, archive_path: Path) -> d
         "archive_forbidden_entries": archive_forbidden,
         "candidate_checks": checks,
     }
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from tjipto.telemetry import event_record
+    result["telemetry"] = event_record(
+        "release_validation",
+        status="passed" if not archive_forbidden and all(value == 0 for value in checks.values()) else "failed",
+        forbidden_entry_count=len(archive_forbidden),
+        archive_sha256=identity["archive_sha256"],
+    )
     sidecar = archive_path.with_suffix(archive_path.suffix + ".sidecar.json")
     sidecar.write_text(json.dumps(_release_sidecar(repo_root, archive_path, result), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     result["sidecar_path"] = str(sidecar)
@@ -192,7 +206,19 @@ def _forbidden(name: str) -> bool:
         for part in parts
     ):
         return True
-    return path.match("*.pyc") or path.match("*.pyo") or path.match("*.log") or path.match(".env") or path.match(".env.*")
+    return (
+        path.match("*.pyc")
+        or path.match("*.pyo")
+        or path.match("*.log")
+        or path.match("*.key")
+        or path.match("*.pem")
+        or path.match("*.p12")
+        or path.match("*.pfx")
+        or path.match("credentials*.json")
+        or path.name == "id_rsa"
+        or path.match(".env")
+        or path.match(".env.*")
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

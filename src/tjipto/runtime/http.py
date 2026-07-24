@@ -3,13 +3,16 @@ from __future__ import annotations
 import json
 import os
 import re
+from time import perf_counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
+from uuid import uuid4
 
 from tjipto.runtime.api import BadRequest, handle_pdf_request, handle_request
 from tjipto.runtime.service import LegalRuntimeService
+from tjipto.telemetry import DEFAULT_TELEMETRY, Telemetry
 
 
 DEFAULT_LOCAL_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
@@ -32,6 +35,7 @@ def make_server(
     class Handler(TjiptoHttpHandler):
         root = repo_root
         runtime_service = service
+        telemetry = service.telemetry
 
     return ThreadingHTTPServer((host, port), Handler)
 
@@ -39,6 +43,13 @@ def make_server(
 class TjiptoHttpHandler(BaseHTTPRequestHandler):
     root: Path | None = None
     runtime_service: LegalRuntimeService
+    telemetry: Telemetry = DEFAULT_TELEMETRY
+
+    def handle_one_request(self) -> None:
+        self._request_id = uuid4().hex
+        self._request_started = perf_counter()
+        self._request_recorded = False
+        super().handle_one_request()
 
     def do_OPTIONS(self) -> None:
         self._json(204, {})
@@ -131,6 +142,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         return {key: values[0] for key, values in parsed.items() if values}
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
+        self._record_http(status)
         body = b"" if status == 204 else json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -149,6 +161,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
             self._json(404, {"status": "not_found", "reason": "render_failed"})
             return
         self.send_response(200)
+        self._record_http(200)
         self.send_header("Content-Type", "application/pdf")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Content-Disposition", "inline")
@@ -168,6 +181,29 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: Any) -> None:
         return
+
+    def _record_http(self, status: int) -> None:
+        if getattr(self, "_request_recorded", False):
+            return
+        self._request_recorded = True
+        path = urlsplit(self.path).path
+        parts = [part for part in path.split("/") if part]
+        if path == "/health":
+            route = "health"
+        elif len(parts) >= 3 and parts[0] == "legal":
+            route = f"legal.{parts[2]}"
+        elif len(parts) >= 2 and parts[0] == "uud":
+            route = f"legacy.{parts[1]}"
+        else:
+            route = "not_found"
+        self.telemetry.emit(
+            "http_request",
+            request_id=getattr(self, "_request_id", uuid4().hex),
+            method=getattr(self, "command", "UNKNOWN"),
+            route=route,
+            status_code=status,
+            latency_ms=round((perf_counter() - getattr(self, "_request_started", perf_counter())) * 1000, 3),
+        )
 
 
 def _mode() -> str:

@@ -57,3 +57,5 @@ Tjipto is an evidence-grounded Indonesian legal research system. Keep changes so
 * Do not expose secrets, API keys, local paths, or debug-only data in public outputs or release artifacts.
 * Keep progress updates short. Report evidence checked, issues found, fixes made, commands run, exact results, remaining limitations, and final verdict.
 * Do not loop. If blocked by environment or dependencies, say so plainly.
+
+Foundation controls and current threat records: `docs/foundation.md` and `docs/threat_model.json`.

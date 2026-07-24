@@ -28,6 +28,7 @@ from tjipto.retrieval.relations import has_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.scope_guard import scope_guard_context
+from tjipto.telemetry import DEFAULT_TELEMETRY, Telemetry
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
 
 
@@ -78,9 +79,10 @@ def _has_resolved_legal_target(corpus_id: str, query: str) -> bool:
 
 
 class LegalRuntimeService:
-    def __init__(self, repo_root: Path | None = None):
+    def __init__(self, repo_root: Path | None = None, telemetry: Telemetry | None = None):
         self.registry = CorpusRegistry(repo_root)
         self.repository = VerifiedCorpusRepository(self.registry)
+        self.telemetry = telemetry or DEFAULT_TELEMETRY
         self._integrity_error: str | None = None
         self._store_cache: dict[str, EvidenceStore] = {}
         self._public_targets: OrderedDict[str, tuple[str, dict]] = OrderedDict()
@@ -97,10 +99,17 @@ class LegalRuntimeService:
             self._integrity_error = None
         except CorpusIntegrityError as error:
             self._integrity_error = error.code
+            self.telemetry.emit("integrity_failure", corpus_id=corpus_id, reason_code=error.code)
             return None
+        self.telemetry.emit("corpus_load", corpus_id=corpus_id, status="loaded")
         store = EvidenceStore.shared(config)
         self._store_cache[corpus_id] = store
         return store
+
+    def _route_retrieval(self, corpus_id: str, query: str, store: EvidenceStore, **kwargs: Any) -> dict:
+        result = route_retrieval(corpus_id, query, store, **kwargs)
+        self.telemetry.emit("retrieval_route", corpus_id=corpus_id, route=result["route"], status=result["status"])
+        return result
 
     def register_public_target(self, corpus_id: str, request: dict) -> str:
         """Return a stable opaque handle; persistence identifiers never leave this boundary."""
@@ -222,7 +231,7 @@ class LegalRuntimeService:
         requested_role = source_role or (scope.role if scope.explicit else None)
         if requested_role is not None:
             metadata_filters["source_role"] = requested_role
-        routed = route_retrieval(corpus_id, query, store, metadata_filters=metadata_filters)
+        routed = self._route_retrieval(corpus_id, query, store, metadata_filters=metadata_filters)
         if routed["intent"] != "exact_citation":
             return routed | {
                 "status": "citation_not_found",
@@ -602,7 +611,7 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": (scope["reason"],),
             }
-        routed = route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
+        routed = self._route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
         clarification = _metadata_scope_clarification(store, routed)

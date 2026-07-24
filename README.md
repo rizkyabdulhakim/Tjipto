@@ -3,7 +3,9 @@
 Local UUD runtime:
 
 ```powershell
-$env:PYTHONPATH='src'; python -m tjipto.runtime.http
+python -m pip install --require-hashes --upgrade -r requirements.lock
+python -m pip install --no-deps --no-build-isolation -e .
+python -m tjipto.runtime.http
 ```
 
 Local web app:
@@ -13,6 +15,8 @@ cd apps/web
 npm ci
 $env:VITE_TJIPTO_API_BASE='http://localhost:8000'; npm run dev
 ```
+
+The canonical environment is documented in [docs/foundation.md](docs/foundation.md).
 
 Smoke endpoints:
 

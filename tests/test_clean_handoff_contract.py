@@ -17,6 +17,14 @@ class CleanHandoffContractTest(unittest.TestCase):
         self.assertIn("node_modules/**", handoff.FORBIDDEN_PATTERNS)
         self.assertIn("apps/web/dist/**", handoff.FORBIDDEN_PATTERNS)
         self.assertIn("*.pyc", handoff.FORBIDDEN_PATTERNS)
+        self.assertIn("*.key", handoff.FORBIDDEN_PATTERNS)
+
+    def test_candidate_rejects_credential_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "credentials-prod.json").write_text("{}", encoding="utf-8")
+            (root / "private.key").write_text("secret", encoding="utf-8")
+            self.assertEqual(handoff.forbidden_entries(root), ["credentials-prod.json", "private.key"])
 
     def test_archive_uses_exact_commit_and_ignores_dirty_attributes_and_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

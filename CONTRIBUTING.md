@@ -6,20 +6,37 @@ Do not mutate source PDFs, source hashes, evidence quotes, page text, bbox coord
 
 ## Official Validation Commands
 
+Install the locked editable environment once from the repository root:
+
+```powershell
+python -m pip install --require-hashes --upgrade -r requirements.lock
+python -m pip install --no-deps --no-build-isolation -e .
+```
+
 Backend:
 
 ```powershell
 python -m compileall -q src tests scripts
-$env:PYTHONPATH='src'; python -m unittest discover -s tests -v
-$env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONPATH='src;.'; python -m pytest -q -p no:cacheprovider
+python -m unittest discover -s tests -v
+python -m pytest -q -p no:cacheprovider
 ```
 
 Artifacts:
 
 ```powershell
-$env:PYTHONPATH='src'; python -m tjipto.corpora.uud_artifact_baseline validate
-$env:PYTHONPATH='src'; python -m tjipto.corpora.uud_artifact_baseline rebuild
+python -m tjipto.corpora.uud_artifact_baseline validate
+python -m tjipto.corpora.uud_artifact_baseline rebuild
 git diff --exit-code
+```
+
+Static and dependency checks:
+
+```powershell
+ruff check src tests scripts
+mypy src
+bandit -q -r src
+python -m pip check
+python -m pip_audit --strict -r requirements.lock
 ```
 
 Frontend:
