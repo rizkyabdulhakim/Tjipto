@@ -180,7 +180,7 @@ export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Cit
 
 export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): SupportGroup[] {
   const grouped = (response.support_groups ?? []).flatMap((group) => {
-    const kind = group.panel_section === "Sumber Dokumen" ? "metadata" : group.panel_section === "Struktur Dokumen" ? "structure" : group.panel_section === "Catatan Sumber" ? "trace" : null;
+    const kind: SupportGroup["kind"] | null = group.panel_section === "Sumber Dokumen" ? "metadata" : group.panel_section === "Struktur Dokumen" ? "structure" : group.panel_section === "Catatan Sumber" ? "trace" : null;
     if (!kind) return [];
     return [{
       id: group.public_group_id,

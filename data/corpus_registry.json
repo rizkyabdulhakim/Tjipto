@@ -946,7 +946,28 @@
       "structure_detail_terms": [
         "dihapus",
         "hapus"
-      ]
+      ],
+      "structure_request_terms": {
+        "title": [
+          "judul",
+          "nama bab"
+        ],
+        "content": [
+          "isi",
+          "ketentuan"
+        ],
+        "enumerate": [
+          "pasal pasalnya",
+          "pasal-pasalnya",
+          "beserta pasal"
+        ],
+        "hierarchy": [
+          "pasal dan ayat",
+          "pasal-pasalnya dan ayatnya",
+          "beserta pasal dan ayat",
+          "beserta pasal dan ayatnya"
+        ]
+      }
     },
     "source_conflict_intent": {
       "query_terms": [

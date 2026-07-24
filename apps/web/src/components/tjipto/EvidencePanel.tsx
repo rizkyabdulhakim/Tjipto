@@ -21,11 +21,10 @@ import { bboxToViewportPercent } from "../../lib/pdfBBox";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-const SIDEBAR_MIN_WIDTH = 360;
+const SIDEBAR_MIN_WIDTH = 320;
 const SIDEBAR_DEFAULT_WIDTH = 440;
 const SIDEBAR_MAX_WIDTH = 760;
-const CHAT_MIN_WIDTH = 560;
-const DESKTOP_NAV_WIDTH = 280;
+const CHAT_MIN_WIDTH = 280;
 const PDF_NORMAL_MIN_HEIGHT = 260;
 const PDF_ONLY_MIN_HEIGHT = "calc(100vh - 112px)";
 const PDF_AREA_PADDING_CLASS = "p-4 sm:p-6";
@@ -45,23 +44,38 @@ export function EvidencePanel({
   const [isResizing, setIsResizing] = useState(false);
   const [pdfOnly, setPdfOnly] = useState(false);
   const [split, setSplit] = useState(false);
-  const [finePointer, setFinePointer] = useState(false);
+  const [availableWidth, setAvailableWidth] = useState(0);
 
   useEffect(() => {
-    const splitQuery = window.matchMedia("(min-width: 1280px)");
-    const pointerQuery = window.matchMedia("(pointer: fine)");
+    const splitQuery = window.matchMedia("(min-width: 768px)");
     const update = () => {
       setSplit(splitQuery.matches);
-      setFinePointer(pointerQuery.matches);
     };
     update();
     splitQuery.addEventListener("change", update);
-    pointerQuery.addEventListener("change", update);
     return () => {
       splitQuery.removeEventListener("change", update);
-      pointerQuery.removeEventListener("change", update);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    const update = () => {
+      const workspace = document.querySelector<HTMLElement>("[data-evidence-workspace]");
+      const navigation = document.querySelector<HTMLElement>("[data-tjipto-navigation]");
+      setAvailableWidth(Math.max(0, (workspace?.clientWidth ?? window.innerWidth) - (navigation?.getBoundingClientRect().width ?? 0)));
+    };
+    const observer = new ResizeObserver(update);
+    const workspace = document.querySelector<HTMLElement>("[data-evidence-workspace]");
+    const navigation = document.querySelector<HTMLElement>("[data-tjipto-navigation]");
+    if (workspace) observer.observe(workspace);
+    if (navigation) observer.observe(navigation);
+    window.addEventListener("resize", update);
+    update();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [citation]);
 
   const startResize = (event: PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -79,7 +93,7 @@ export function EvidencePanel({
   const resize = (event: PointerEvent<HTMLButtonElement>) => {
     if (!isResizing) return;
     const nextWidth = window.innerWidth - event.clientX;
-    setSidebarWidth(clamp(nextWidth, SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - DESKTOP_NAV_WIDTH - CHAT_MIN_WIDTH)));
+    setSidebarWidth(clamp(nextWidth, SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, availableWidth - CHAT_MIN_WIDTH)));
   };
 
   useEffect(() => {
@@ -88,6 +102,12 @@ export function EvidencePanel({
       setIsResizing(false);
     }
   }, [citation]);
+
+  useEffect(() => {
+    if (split) {
+      setSidebarWidth((width) => clamp(width, SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, availableWidth - CHAT_MIN_WIDTH)));
+    }
+  }, [availableWidth, split]);
 
   return (
     <AnimatePresence>
@@ -108,12 +128,12 @@ export function EvidencePanel({
             animate={pdfOnly ? { opacity: 1 } : { x: 0, opacity: 1 }}
             exit={pdfOnly ? { opacity: 0 } : { opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
-            className={`${pdfOnly ? "fixed inset-0 z-50 w-full max-w-none" : split ? "static z-10 w-[var(--tj-evidence-panel-width)]" : "fixed inset-y-0 right-0 z-50 w-full sm:w-[460px] sm:max-w-[95vw]"} flex flex-col shrink-0 h-full bg-[var(--tj-surface)]/80 backdrop-blur-3xl border-l border-[var(--tj-glass-border)] shadow-2xl [container-type:inline-size]`}
+            className={`${pdfOnly ? "fixed inset-0 z-50 w-full max-w-none" : split ? "static z-10 w-[var(--tj-evidence-panel-width)]" : "fixed inset-y-0 right-0 z-50 w-full sm:w-[460px] sm:max-w-[95vw]"} flex flex-col shrink-0 h-full bg-[var(--tj-surface)] border-l border-[var(--tj-glass-border)] shadow-2xl [container-type:inline-size]`}
             style={{ "--tj-evidence-panel-width": `${sidebarWidth}px` } as CSSProperties}
             data-evidence-panel={pdfOnly ? "expanded" : "normal"}
             data-evidence-mode={pdfOnly ? "expanded" : split ? "split" : "drawer"}
           >
-            {!pdfOnly && split && finePointer && (
+            {!pdfOnly && split && (
               <button
                 type="button"
                 aria-label="Resize evidence panel"
@@ -125,15 +145,6 @@ export function EvidencePanel({
                 className={`hidden md:block absolute inset-y-0 -left-1.5 z-20 w-3 cursor-col-resize touch-none transition-colors ${isResizing ? "bg-[var(--tj-accent-soft)]" : "hover:bg-[var(--tj-accent-soft)]"}`}
                 data-evidence-resize-handle="true"
               />
-            )}
-            {!pdfOnly && split && (
-              <div className="absolute -left-24 top-3 z-20 flex gap-1 rounded-lg border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-1">
-                {([SIDEBAR_MIN_WIDTH, SIDEBAR_DEFAULT_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - DESKTOP_NAV_WIDTH - CHAT_MIN_WIDTH)] as const).map((width, index) => (
-                  <button key={width} type="button" onClick={() => setSidebarWidth(width)} className="rounded px-1.5 py-1 text-[10px] hover:bg-[var(--tj-surface-hover)]" aria-label={["Panel sempit", "Panel sedang", "Panel lebar"][index]}>
-                    {["S", "M", "L"][index]}
-                  </button>
-                ))}
-              </div>
             )}
             <EvidenceContent
               citation={citation}
@@ -391,7 +402,7 @@ function EvidenceContent({
               </button>
             </div>
             <p className="sr-only" aria-live="polite">{copied ? "Kutipan relevan tersalin sebagai teks biasa." : ""}</p>
-            <div className="rounded-2xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] p-5 shadow-sm relative overflow-hidden group">
+            <div className="min-w-0 overflow-x-hidden rounded-2xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] p-5 shadow-sm relative group">
               <div className="absolute top-0 left-0 w-1 h-full bg-[var(--tj-accent)] opacity-80" />
               <blockquote
                 onCopy={normalizeSelectionCopy}
@@ -401,6 +412,7 @@ function EvidenceContent({
                   lineHeight: "24px",
                   color: "var(--tj-text-primary)",
                   whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
                 }}
               >
                 {(citation.layoutLines ?? [{ text: citation.displayText ?? citation.excerpt, line_order: 0, paragraph_id: "support", alignment: "unknown", indent: 0 }]).map((line) => (
@@ -738,19 +750,34 @@ function canonicalOffset(node: Node, offset: number): number | null {
     const container = node as HTMLElement;
     const lines = [...container.querySelectorAll<HTMLElement>("[data-canonical-start][data-canonical-end]")];
     if (lines.length) {
-      const line = offset >= container.childNodes.length ? lines[lines.length - 1] : lines[offset];
-      const field = offset >= container.childNodes.length ? "canonicalEnd" : "canonicalStart";
-      const value = Number(line?.dataset[field]);
-      return Number.isSafeInteger(value) ? value : null;
+      const first = lines[0];
+      const last = lines[lines.length - 1];
+      if (!first || !last) return null;
+      if (offset <= 0) return canonicalLineOffset(first, "canonicalStart");
+      if (offset >= container.childNodes.length) return canonicalLineOffset(last, "canonicalEnd");
+      const after = lineForNode(container.childNodes[offset]);
+      if (after) return canonicalLineOffset(after, "canonicalStart");
+      const before = lineForNode(container.childNodes[offset - 1]);
+      if (before) return canonicalLineOffset(before, "canonicalEnd");
+      return null;
     }
   }
-  const element = node.parentElement;
-  const line = element?.closest<HTMLElement>("[data-canonical-start][data-canonical-end]");
+  const line = lineForNode(node);
   if (!line) return null;
-  const start = Number(line.dataset.canonicalStart);
-  const end = Number(line.dataset.canonicalEnd);
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) return null;
+  const start = canonicalLineOffset(line, "canonicalStart");
+  const end = canonicalLineOffset(line, "canonicalEnd");
+  if (start === null || end === null) return null;
   return Math.min(end, start + offset);
+}
+
+function lineForNode(node: Node | undefined): HTMLElement | null {
+  const element = node?.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node?.parentElement;
+  return element?.closest<HTMLElement>("[data-canonical-start][data-canonical-end]") ?? null;
+}
+
+function canonicalLineOffset(line: HTMLElement, field: "canonicalStart" | "canonicalEnd"): number | null {
+  const value = Number(line.dataset[field]);
+  return Number.isSafeInteger(value) ? value : null;
 }
 
 function clamp(value: number, min: number, max: number) {

@@ -1,16 +1,28 @@
 import { spawn, spawnSync } from "node:child_process";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webRoot, "../..");
-const backendUrl = process.env.TJIPTO_SMOKE_BACKEND_URL ?? "http://127.0.0.1:8000";
-const frontendUrl = process.env.TJIPTO_SMOKE_FRONTEND_URL ?? "http://127.0.0.1:5173";
+const configuredBackendUrl = process.env.TJIPTO_SMOKE_BACKEND_URL;
+const configuredFrontendUrl = process.env.TJIPTO_SMOKE_FRONTEND_URL;
+const availablePort = () => new Promise((resolve, reject) => {
+  const server = net.createServer();
+  server.once("error", reject);
+  server.listen(0, "127.0.0.1", () => {
+    const { port } = server.address();
+    server.close((error) => error ? reject(error) : resolve(port));
+  });
+});
+const backendUrl = configuredBackendUrl ?? `http://127.0.0.1:${await availablePort()}`;
+const frontendUrl = configuredFrontendUrl ?? `http://127.0.0.1:${await availablePort()}`;
 const started = [];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const normalizedClipboardText = (text) => text.replace(/\r\n?/g, "\n");
 
 async function waitFor(url) {
   for (let attempts = 0; attempts < 50; attempts += 1) {
@@ -27,12 +39,16 @@ async function start(command, args, cwd, env, healthUrl) {
 }
 
 async function ensureServers() {
-  try { await waitFor(`${backendUrl}/health`); } catch {
+  if (configuredBackendUrl) {
+    await waitFor(`${backendUrl}/health`);
+  } else {
     await start("python", ["-m", "tjipto.runtime.http"], repoRoot, {
       ...process.env, PYTHONPATH: path.join(repoRoot, "src"), TJIPTO_PORT: new URL(backendUrl).port, TJIPTO_CORS_ORIGINS: frontendUrl,
     }, `${backendUrl}/health`);
   }
-  try { await waitFor(frontendUrl); } catch {
+  if (configuredFrontendUrl) {
+    await waitFor(frontendUrl);
+  } else {
     const command = process.platform === "win32" ? "cmd.exe" : "npm";
     const args = process.platform === "win32"
       ? ["/d", "/s", "/c", `npm run preview -- --host 127.0.0.1 --port ${new URL(frontendUrl).port}`]
@@ -76,14 +92,15 @@ async function run() {
     }
   });
   try {
-    await ask(page, "Pasal 1 ayat (3)");
+    await ask(page, "Pasal 28A");
     await page.locator('[data-citation-footer="true"] button').first().click();
     await page.locator('[data-evidence-panel="normal"]').waitFor();
     await page.locator('[data-bbox-highlight="active"]').first().waitFor();
     const quote = page.locator("blockquote").first();
     await page.getByLabel("Salin kutipan relevan").click();
     const fullCopy = await page.evaluate(() => navigator.clipboard.readText());
-    assert(fullCopy.length > 0 && !/[*]{1,4}\)/.test(fullCopy), "Full copy is not canonical legal text.");
+    const canonicalFullCopy = normalizedClipboardText(fullCopy);
+    assert(canonicalFullCopy.length > 0 && !/[*]{1,4}\)/.test(canonicalFullCopy), "Full copy is not canonical legal text.");
     await page.evaluate(() => {
       document.addEventListener("copy", (event) => {
         window.__tjiptoCopyTypes = Array.from(event.clipboardData?.types ?? []);
@@ -93,7 +110,7 @@ async function run() {
     await page.keyboard.press(process.platform === "darwin" ? "Meta+C" : "Control+C");
     const selectedCopy = await page.evaluate(() => navigator.clipboard.readText());
     const selectedTypes = await page.evaluate(() => window.__tjiptoCopyTypes);
-    assert(selectedCopy === fullCopy && !/[*]{1,4}\)/.test(selectedCopy), "Selected copy is not canonical text/plain.");
+    assert(normalizedClipboardText(selectedCopy) === canonicalFullCopy && !/[*]{1,4}\)/.test(selectedCopy), "Selected copy is not canonical text/plain.");
     assert(JSON.stringify(selectedTypes) === JSON.stringify(["text/plain"]), "Selected copy published a non-text MIME payload.");
 
     const partialSelection = await page.evaluate(() => {
@@ -118,13 +135,13 @@ async function run() {
     const partialCopy = await page.evaluate(() => navigator.clipboard.readText());
     const partialTypes = await page.evaluate(() => window.__tjiptoCopyTypes);
     const canonicalSubset = partialSelection.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trimStart()).join("\n").trim();
-    assert(partialCopy === canonicalSubset, "Selected subset copy is not the canonical selected text.");
-    assert(fullCopy.replace(/\s+/g, " ").includes(partialCopy.replace(/\s+/g, " ")), "Selected subset falls outside canonical legal text.");
+    assert(normalizedClipboardText(partialCopy) === canonicalSubset, "Selected subset copy is not the canonical selected text.");
+    assert(canonicalFullCopy.replace(/\s+/g, " ").includes(normalizedClipboardText(partialCopy).replace(/\s+/g, " ")), "Selected subset falls outside canonical legal text.");
     assert(JSON.stringify(partialTypes) === JSON.stringify(["text/plain"]), "Selected subset published a non-text MIME payload.");
 
     const crossLine = await page.evaluate(() => {
       const lines = [...document.querySelectorAll("blockquote [data-canonical-start]")];
-      if (lines.length < 2) return null;
+      if (lines.length < 2) throw new Error("Cross-line copy fixture did not render multiple source lines.");
       const first = lines[0].firstChild;
       const second = lines[1].firstChild;
       if (!first || !second) throw new Error("Canonical lines have no text nodes.");
@@ -136,17 +153,27 @@ async function run() {
       selection?.addRange(range);
       return [Number(lines[0].dataset.canonicalStart), Number(lines[1].dataset.canonicalStart) + Math.min(6, second.textContent?.length ?? 0)];
     });
-    if (crossLine) {
-      await page.keyboard.press(process.platform === "darwin" ? "Meta+C" : "Control+C");
-      const crossLineCopy = await page.evaluate(() => navigator.clipboard.readText());
-      assert(crossLineCopy === fullCopy.slice(crossLine[0], crossLine[1]), "Cross-line copy did not use canonical offsets.");
-    }
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+C" : "Control+C");
+    const crossLineCopy = await page.evaluate(() => navigator.clipboard.readText());
+    assert(normalizedClipboardText(crossLineCopy) === canonicalFullCopy.slice(crossLine[0], crossLine[1]), "Cross-line copy did not use canonical offsets.");
+
+    await ask(page, "BAB XA");
+    await page.locator('[data-citation-footer="true"] button').first().click();
+    await page.locator('[data-evidence-panel="normal"]').waitFor();
+    await page.locator('[data-bbox-highlight="active"]').first().waitFor();
+    const headingQuote = await page.locator("blockquote").innerText();
+    assert(headingQuote.includes("BAB XA") && headingQuote.includes("HAK ASASI MANUSIA") && !headingQuote.includes("Pasal 28A"), "BAB heading leaked descendant text into its quote.");
+    const headingHighlightCount = await page.locator('[data-bbox-highlight="active"]').count();
+    assert(headingHighlightCount === 2, `BAB heading did not retain its exact heading geometry (${headingHighlightCount}).`);
+
+    await ask(page, "Apa isi BAB XA?");
+    assert(await page.locator('[data-citation-footer="true"] button').count() === 10, "BAB content did not publish every direct Pasal descendant.");
 
     await ask(page, "kapan perubahan pertama ditetapkan");
     assert((await page.locator('[data-citation-footer="true"]').count()) === 0, "Metadata rendered as a legal quotation.");
     await openSupport(page, '[data-support-kind="metadata-support"]');
 
-    await ask(page, "BAB XI agama");
+    await ask(page, "Apa isi BAB XI agama?");
     await openSupport(page, '[data-support-kind="structure-support"]');
 
     await ask(page, "pasal yang dihapus");
@@ -161,13 +188,16 @@ async function run() {
     assert(await disclosure.evaluate((node) => node.open) !== wasOpen, "Support group is not keyboard-operable.");
     if (!await disclosure.evaluate((node) => node.open)) await disclosure.locator("summary").click();
     assert((await disclosure.getByRole("button").count()) === 7, "Grouped members lost exact viewer targets.");
+    await disclosure.getByRole("button").first().click();
+    await page.locator('[data-evidence-panel="normal"]').waitFor();
 
-    for (const [width, height, mode] of [[390, 844, "drawer"], [768, 1024, "drawer"], [820, 1180, "drawer"], [1024, 768, "drawer"], [1280, 900, "split"]]) {
+    for (const [width, height, mode] of [[390, 844, "drawer"], [768, 1024, "split"], [820, 1180, "split"], [1024, 768, "split"], [1280, 900, "split"]]) {
       await page.setViewportSize({ width, height });
       await page.locator(`[data-evidence-mode="${mode}"]`).waitFor();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       assert(!overflow, `Viewport ${width} has horizontal content loss.`);
     }
+    assert(await page.getByLabel("Panel sempit").count() === 0, "Legacy panel preset controls remain.");
 
     const publicText = `${(await page.locator("body").innerText())}\n${payloads.join("\n")}`;
     for (const forbidden of ["evidence_id", "legal_unit_id", "source_document_id", "source_bbox_refs", "bbox_id", "manifest_digest", "artifact_set_digest"]) {

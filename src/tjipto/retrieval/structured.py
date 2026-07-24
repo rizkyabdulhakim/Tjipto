@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
 from tjipto.corpora.parser_dispatch import (
@@ -14,6 +15,17 @@ from tjipto.corpora.parser_dispatch import (
 )
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.metadata import resolve_source_scope
+
+
+@dataclass(frozen=True)
+class StructuralRequest:
+    operation: str
+    unit: str
+    inclusion: str
+    bab: str | None
+    pasal: str | None
+    ayat: str | None
+    include_hierarchy: bool = False
 
 
 def structured_lookup(
@@ -45,49 +57,13 @@ def structured_lookup(
     requested_role = source_role
     if requested_role is None and not scope.unresolved:
         requested_role = scope.role or getattr(config, "preferred_source_role", None)
-    bab = parse_bab_reference(_corpus_id(config), query)
-    if bab:
-        dedicated_unit_ids = {
-            unit.get("legal_unit_id")
-            for unit in store.legal_units
-            if unit.get("unit_type") == "bab_record" and unit.get("unit_label", "").casefold() == bab.casefold()
-        }
-        dedicated = [
-            row
-            for row in store.evidence
-            if row.get("status") == "final"
-            and store.bboxes_for(row["evidence_id"])
-            and (requested_role is None or row.get("source_role") == requested_role)
-            and row.get("citation", "").casefold() == bab.casefold()
-            and row.get("legal_unit_id") in dedicated_unit_ids
-        ]
-        if dedicated:
-            # A resolved structural reference is detail regardless of harmless
-            # wording.  Otherwise the same BAB hides its normative children.
-            child_ids = {
-                unit.get("legal_unit_id")
-                for unit in store.legal_units
-                if unit.get("source_role") == dedicated[0].get("source_role")
-                and tuple(unit.get("hierarchy") or ())[:1] == (bab,)
-                and unit.get("unit_type") in {"pasal_record", "ayat_record"}
-            }
-            children = [
-                row for row in store.evidence
-                if row.get("legal_unit_id") in child_ids
-                and row.get("status") == "final"
-                and row.get("authority_kind") == "normative_legal_text"
-                and row.get("citation_eligibility") == "eligible"
-                and row.get("relevant_quote_eligible") is True
-                and store.bboxes_for(row["evidence_id"])
-            ]
-            children.sort(key=lambda row: (tuple(row.get("hierarchy") or ()), row.get("evidence_id", "")))
-            # The parent unit is the presentation owner when it already
-            # contains a selected descendant.  Descendant evidence remains
-            # atomic in the corpus but is not emitted as a duplicate peer.
-            children = _outermost_units(store, children)
-            return tuple(row | {"route_sources": ("structured",)} for row in (*dedicated, *children))[:limit]
+    request = _structural_request(query, intent, corpus_id)
+    if request.bab:
+        rows = _bab_request_rows(store, request, requested_role)
+        if rows:
+            return rows
     preferred_unit_ids = _preferred_unit_ids(store, targets, requested_role)
-    rows = [
+    fallback_rows = [
         row
         for row in store.evidence
         if row.get("status") == "final"
@@ -99,7 +75,7 @@ def structured_lookup(
             else row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets)
         )
     ]
-    return tuple(rows[:limit])
+    return tuple(fallback_rows[:limit])
 
 
 def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None) -> bool:
@@ -111,21 +87,181 @@ def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None
     return bool(_targets(query, intent, _corpus_id(config))) or _has_incomplete_pasal(query)
 
 
-def _outermost_units(store: EvidenceStore, rows: list[dict]) -> list[dict]:
-    """Keep one presentational legal unit per contained hierarchy branch."""
-    units = {row.get("legal_unit_id"): row for row in store.legal_units}
-    selected = {row.get("legal_unit_id") for row in rows}
+def _structural_request(query: str, intent: dict, corpus_id: str) -> StructuralRequest:
+    """Classify only the corpus-configured structural granularity request."""
+    bab = parse_bab_reference(corpus_id, query)
+    pasal = parse_pasal_reference(corpus_id, query, allow_roman=True)
+    ayat = parse_ayat_reference(corpus_id, query)
+    terms = intent.get("structure_request_terms") or {}
+    operation = (
+        "title" if _contains_any(query, terms.get("title", ()))
+        else "enumerate" if _contains_any(query, terms.get("enumerate", ()))
+        else "content" if _contains_any(query, terms.get("content", ()))
+        else "reference"
+    )
+    unit = "ayat" if ayat else "pasal" if pasal else "bab" if bab else ""
+    inclusion = "descendants" if bab and not pasal and operation in {"content", "enumerate"} else "exact"
+    return StructuralRequest(
+        operation=operation,
+        unit=unit,
+        inclusion=inclusion,
+        bab=bab,
+        pasal=pasal,
+        ayat=ayat,
+        include_hierarchy=operation == "enumerate" and _contains_any(query, terms.get("hierarchy", ())),
+    )
 
-    def has_selected_ancestor(unit_id: str | None) -> bool:
-        current = units.get(unit_id or {})
-        while current:
-            parent = current.get("parent_legal_unit_id")
-            if parent in selected:
-                return True
-            current = units.get(parent)
-        return False
 
-    return [row for row in rows if not has_selected_ancestor(row.get("legal_unit_id"))]
+def _contains_any(query: str, terms: tuple[str, ...] | list[str]) -> bool:
+    folded = f" {str(query or '').casefold()} "
+    return any(f" {str(term).casefold()} " in folded for term in terms)
+
+
+def _bab_request_rows(store: EvidenceStore, request: StructuralRequest, requested_role: str | None) -> tuple[dict, ...]:
+    units = tuple(store.legal_units)
+    headings = tuple(
+        unit for unit in units
+        if unit.get("unit_type") == "bab_record"
+        and str(unit.get("unit_label") or "").casefold() == str(request.bab).casefold()
+        and (requested_role is None or unit.get("source_role") == requested_role)
+    )
+    if not headings:
+        return ()
+    heading = headings[0]
+    heading_row = _heading_projection(store, heading)
+    if heading_row is None:
+        return ()
+    heading_is_answer = request.inclusion == "exact" and request.pasal is None
+    if heading_is_answer:
+        return (heading_row | _quote_projection(),)
+
+    children = _descendant_units(units, str(heading.get("legal_unit_id") or ""))
+    selected = _requested_units(children, request, str(heading.get("legal_unit_id") or ""))
+    legal_rows = _normative_rows(store, selected, heading.get("source_role"))
+    if not legal_rows:
+        return ()
+    return tuple(
+        row | {"route_sources": ("structured",), "candidate_type": "structural_complete_set", "presentation_order": index}
+        for index, row in enumerate((heading_row, *legal_rows))
+    )
+
+
+def _heading_projection(store: EvidenceStore, heading: dict) -> dict | None:
+    evidence = next(
+        (
+            row for row in store.evidence
+            if row.get("legal_unit_id") == heading.get("legal_unit_id")
+            and row.get("status") == "final"
+            and store.bboxes_for(row.get("evidence_id"))
+        ),
+        None,
+    )
+    if evidence is None:
+        return None
+    child_ids = {
+        unit.get("legal_unit_id")
+        for unit in store.legal_units
+        if unit.get("parent_legal_unit_id") == heading.get("legal_unit_id")
+    }
+    child_span_ids = {
+        span_id
+        for unit in store.legal_units
+        if unit.get("legal_unit_id") in child_ids
+        for span_id in unit.get("text_span_ids") or ()
+    }
+    span_ids = tuple(span_id for span_id in heading.get("text_span_ids") or () if span_id not in child_span_ids)
+    bbox_refs = tuple(evidence.get("bbox_refs") or ())[:len(span_ids)]
+    if not span_ids or len(span_ids) != len(bbox_refs):
+        return None
+    spans = {span.get("text_span_id"): span for span in store.page_text_spans}
+    heading_text = "\n".join(
+        str(spans[span_id].get("exact_quote") or spans[span_id].get("text") or "").rstrip()
+        for span_id in span_ids
+        if span_id in spans
+    )
+    if not heading_text:
+        return None
+    return evidence | {
+        "quoted_text": heading_text,
+        "display_text": heading_text,
+        "copy_text": heading_text,
+        "text_span_ids": span_ids,
+        "bbox_refs": bbox_refs,
+        "page_numbers": tuple(dict.fromkeys(
+            span.get("page_number")
+            for span in store.page_text_spans
+            if span.get("text_span_id") in set(span_ids) and span.get("page_number") is not None
+        )),
+        "route_sources": ("structured",),
+        "candidate_type": "structural_heading_candidate",
+    }
+
+
+def _quote_projection() -> dict:
+    return {
+        "authority_kind": "normative_legal_text",
+        "citation_final": True,
+        "citable": True,
+        "relevant_quote_eligible": True,
+        "presentation_as_legal_quote": True,
+        "candidate_type": "structural_heading_answer",
+        "route_sources": ("structured",),
+    }
+
+
+def _descendant_units(units: tuple[dict, ...], parent_id: str) -> tuple[dict, ...]:
+    children: dict[str, list[dict]] = {}
+    for unit in units:
+        children.setdefault(str(unit.get("parent_legal_unit_id") or ""), []).append(unit)
+    result: list[dict] = []
+    pending = list(sorted(children.get(parent_id, ()), key=_unit_order))
+    while pending:
+        unit = pending.pop(0)
+        result.append(unit)
+        pending[0:0] = sorted(children.get(str(unit.get("legal_unit_id") or ""), ()), key=_unit_order)
+    return tuple(result)
+
+
+def _requested_units(children: tuple[dict, ...], request: StructuralRequest, parent_id: str) -> tuple[dict, ...]:
+    if request.pasal:
+        matched = tuple(unit for unit in children if str(unit.get("unit_label") or "").casefold() == request.pasal.casefold())
+        if request.ayat:
+            matched_ids = {unit.get("legal_unit_id") for unit in matched}
+            return tuple(
+                unit for unit in children
+                if unit.get("parent_legal_unit_id") in matched_ids
+                and str(unit.get("unit_label") or "").casefold() == request.ayat.casefold()
+            )
+        return tuple(unit for unit in matched if unit.get("unit_type") == "pasal_record")
+    direct_children = tuple(unit for unit in children if unit.get("parent_legal_unit_id") == parent_id)
+    direct = tuple(unit for unit in direct_children if unit.get("unit_type") == "pasal_record") or direct_children
+    if not request.include_hierarchy:
+        return direct
+    parent_ids = {unit.get("parent_legal_unit_id") for unit in children}
+    return tuple(
+        unit for unit in children
+        if unit.get("unit_type") == "ayat_record" or unit.get("legal_unit_id") not in parent_ids
+    )
+
+
+def _normative_rows(store: EvidenceStore, units: tuple[dict, ...], source_role: object) -> tuple[dict, ...]:
+    unit_ids = {unit.get("legal_unit_id") for unit in units}
+    rows = [
+        row for row in store.evidence
+        if row.get("legal_unit_id") in unit_ids
+        and row.get("source_role") == source_role
+        and row.get("status") == "final"
+        and row.get("authority_kind") == "normative_legal_text"
+        and row.get("citation_eligibility") == "eligible"
+        and row.get("relevant_quote_eligible") is True
+        and store.bboxes_for(row.get("evidence_id"))
+    ]
+    order = {unit.get("legal_unit_id"): index for index, unit in enumerate(units)}
+    return tuple(sorted(rows, key=lambda row: (order.get(row.get("legal_unit_id"), len(order)), row.get("evidence_id", ""))))
+
+
+def _unit_order(unit: dict) -> tuple[int, str]:
+    return int(unit.get("sibling_order") or 0), str(unit.get("legal_unit_id") or "")
 
 
 def has_instrument_target(query: str, *, strategy: str = "uud_1945", config=None) -> bool:

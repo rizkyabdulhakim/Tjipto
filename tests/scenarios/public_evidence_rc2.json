@@ -1,9 +1,11 @@
 {
-  "version": 1,
+  "version": 2,
   "scenarios": [
     {"id": "http-closed-boundary", "owner": "runtime-api", "test": "tests/test_runtime_http_contract.py", "assertions": ["closed envelopes", "opaque targets", "unknown fields rejected"], "command": "python -m pytest tests/test_runtime_http_contract.py -q"},
     {"id": "grouped-source-facts", "owner": "runtime-api", "test": "tests/test_runtime_http_contract.py", "assertions": ["entity occurrences", "role members", "independent targets"], "command": "python -m pytest tests/test_runtime_http_contract.py -q"},
     {"id": "canonical-copy", "owner": "runtime-service", "test": "tests/test_runtime_contract.py", "assertions": ["ayat boundary", "no parent-child peer quote"], "command": "python -m pytest tests/test_runtime_contract.py -q"},
+    {"id": "bab-query-granularity", "owner": "structured-retrieval", "test": "tests/test_runtime_contract.py", "assertions": ["heading-only", "complete direct descendants", "exact mixed unit"], "command": "python -m pytest tests/test_runtime_contract.py -q"},
+    {"id": "bab-heading-viewer", "owner": "runtime-api", "test": "tests/test_runtime_contract.py", "assertions": ["heading text", "opaque target", "exact heading geometry"], "command": "python -m pytest tests/test_runtime_contract.py -q"},
     {"id": "browser-evidence", "owner": "web", "test": "apps/web/smoke.mjs", "assertions": ["viewer", "copy", "group member", "public leakage"], "command": "npm run smoke"}
   ]
 }

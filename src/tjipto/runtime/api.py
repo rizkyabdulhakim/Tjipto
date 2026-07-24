@@ -210,6 +210,16 @@ def _public_support(row: dict, panel_section: str, service: LegalRuntimeService,
         "evidence_id": row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
         "relation_id": row.get("relation_id"),
         "source_document_id": row.get("source_document_id"),
+        "bbox_refs": tuple(row.get("bbox_refs") or ()),
+        "quoted_text": row.get("display_text") or row.get("quoted_text") or "",
+        "support_projection": {
+            key: row[key]
+            for key in (
+                "display_text", "copy_text", "layout_lines", "presentation_as_legal_quote",
+                "citation_final", "relevant_quote_eligible",
+            )
+            if key in row
+        },
     }) if linkable else None
     layout = tuple(_public_layout_line(item, index) for index, item in enumerate(row.get("layout_lines") or ()))
     return {

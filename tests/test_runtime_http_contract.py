@@ -48,7 +48,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
     def test_rc2_scenario_manifest_is_complete_and_versioned(self) -> None:
         manifest = json.loads((ROOT / "tests/scenarios/public_evidence_rc2.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["version"], 1)
+        self.assertEqual(manifest["version"], 2)
         for scenario in manifest["scenarios"]:
             self.assertEqual(set(scenario), {"id", "owner", "test", "assertions", "command"})
             self.assertTrue(scenario["id"] and scenario["assertions"] and scenario["command"])

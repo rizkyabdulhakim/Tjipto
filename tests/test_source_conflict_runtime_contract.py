@@ -154,14 +154,14 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertIsNone(peralihan.get("source_conflict"))
         self.assertEqual(peralihan["citations"][0]["citation"], "Pasal III")
 
-    def test_inserted_bab_queries_use_structural_heading_owners(self) -> None:
+    def test_inserted_bab_heading_queries_publish_the_heading_as_the_answer(self) -> None:
         for label in ("BAB IXA", "BAB XA", "BAB VIIA", "BAB VIIB", "BAB VIIIA"):
             result = self.service.ask("uud", label)
             self.assertEqual(result["status"], "answer_ready", label)
-            citation = result["structural_support"][0]
+            citation = result["citations"][0]
             self.assertEqual(citation["citation"], label, label)
-            self.assertEqual(citation["authority_kind"], "structural_context", label)
-            self.assertFalse(citation["citation_final"], label)
+            self.assertEqual(citation["authority_kind"], "legal_citation", label)
+            self.assertTrue(citation["citation_final"], label)
             self.assertTrue(citation["viewer_ref"]["can_resolve"], label)
 
 

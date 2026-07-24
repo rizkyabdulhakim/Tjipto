@@ -165,6 +165,7 @@ class LegalRuntimeService:
             relation_id=request.get("relation_id"),
             source_document_id=str(request.get("source_document_id") or ""),
             page_number=int(request.get("page_number") or 1),
+            bbox_refs=tuple(request.get("bbox_refs") or ()),
         )
 
     def search(self, corpus_id: str, query: str, limit: int = 10, filters: dict | None = None) -> dict:
@@ -252,6 +253,9 @@ class LegalRuntimeService:
         source_document_id: str | None = None,
         page_number: int | None = None,
         bbox_id: str | None = None,
+        bbox_refs: tuple[str, ...] = (),
+        quoted_text: str | None = None,
+        support_projection: dict | None = None,
         source_pdf_path: str | None = None,
     ) -> dict:
         store = self._store(corpus_id)
@@ -286,6 +290,17 @@ class LegalRuntimeService:
                 "bbox_refs": tuple(relation.get("bbox_refs") or ()),
                 "quoted_text": relation.get("quoted_text") or evidence.get("quoted_text"),
             }
+        if quoted_text is not None:
+            evidence = evidence | {"quoted_text": quoted_text}
+        if support_projection:
+            evidence = evidence | {
+                key: support_projection[key]
+                for key in (
+                    "display_text", "copy_text", "layout_lines", "presentation_as_legal_quote",
+                    "citation_final", "relevant_quote_eligible",
+                )
+                if key in support_projection
+            }
         bboxes = (
             synthetic_bboxes
             if synthetic_bboxes is not None
@@ -293,6 +308,11 @@ class LegalRuntimeService:
             if evidence.get("metadata_grounding")
             else store.bboxes_for_refs(tuple(relation.get("bbox_refs") or ())) if relation is not None else store.bboxes_for(evidence_id)
         )
+        if bbox_refs:
+            bboxes = store.bboxes_for_refs(bbox_refs)
+        bboxes = _select_viewer_bboxes(bboxes, bbox_refs)
+        if bbox_refs and not bboxes:
+            return {"status": "not_found", "reason": "invalid_viewer_target", "corpus_id": corpus_id}
         return _viewer_with_authority(
             store,
             evidence,
@@ -319,6 +339,7 @@ class LegalRuntimeService:
         page_number: int,
         source_sha256: str | None = None,
         bbox_id: str | None = None,
+        bbox_refs: tuple[str, ...] = (),
         source_pdf_path: str | None = None,
     ) -> dict:
         store = self._store(corpus_id)
@@ -360,6 +381,11 @@ class LegalRuntimeService:
             if evidence.get("metadata_grounding")
             else store.bboxes_for_refs(tuple(relation.get("bbox_refs") or ())) if relation is not None else store.bboxes_for(evidence_id)
         )
+        if bbox_refs:
+            bboxes = store.bboxes_for_refs(bbox_refs)
+        bboxes = _select_viewer_bboxes(bboxes, bbox_refs)
+        if bbox_refs and not bboxes:
+            return {"status": "not_found", "reason": "invalid_viewer_target", "corpus_id": corpus_id}
         return resolve_pdf_access(
             store,
             corpus_id,
@@ -854,6 +880,15 @@ def _viewer_target(row: dict) -> dict:
     return target
 
 
+def _select_viewer_bboxes(bboxes: list[dict], bbox_refs: tuple[str, ...]) -> list[dict]:
+    """Honor the verified support subset stored behind an opaque target."""
+    if not bbox_refs:
+        return bboxes
+    expected = set(bbox_refs)
+    selected = [bbox for bbox in bboxes if bbox.get("bbox_id") in expected]
+    return selected if {bbox.get("bbox_id") for bbox in selected} == expected else []
+
+
 def _layout_lines(store, row: dict) -> tuple[dict, ...]:
     """Expose source-derived line layout without making the UI infer it."""
     configured = row.get("layout_lines")
@@ -999,6 +1034,8 @@ def _authority_kind(store, row: dict, *, can_resolve: bool | None = None, confli
         return "source_text"
     if row.get("authority_kind") == "source_anomaly_trace" and row.get("citation_final") is False:
         return "source_anomaly"
+    if row.get("presentation_as_legal_quote") is True:
+        return "legal_citation"
     if row.get("authority_kind") == "structural_context":
         return "structural_context"
     conflict_row = conflict or _source_conflict_by_evidence(store, row.get("evidence_id"))

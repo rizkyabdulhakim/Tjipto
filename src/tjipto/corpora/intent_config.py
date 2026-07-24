@@ -53,6 +53,7 @@ _GENERIC = {
     "structure_list_terms": (),
     "structure_unit_type": "",
     "structure_detail_terms": (),
+    "structure_request_terms": {},
 }
 
 
@@ -99,6 +100,9 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "structure_list_terms": tuple(raw.get("structure_list_terms") or ()),
         "structure_unit_type": str(raw.get("structure_unit_type") or ""),
         "structure_detail_terms": tuple(raw.get("structure_detail_terms") or ()),
+        "structure_request_terms": {
+            key: tuple(value) for key, value in (raw.get("structure_request_terms") or {}).items()
+        },
     }
 
 

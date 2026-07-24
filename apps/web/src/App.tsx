@@ -31,7 +31,15 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [panelCompactNav, setPanelCompactNav] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    const update = () => setPanelCompactNav(Boolean(activeCitation) && window.innerWidth >= 768 && window.innerWidth < 1280);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [activeCitation]);
 
   // Close on escape
   useEffect(() => {
@@ -66,6 +74,7 @@ export default function App() {
   const submit = async (value: string, filters?: { source_role: string }, displayValue = value) => {
     if (!hasChat) setHasChat(true);
     setRoute("chat");
+    setActiveCitation(null);
     const userMsg: TMessage = {
       id: "u_" + Date.now(),
       role: "user",
@@ -140,17 +149,18 @@ export default function App() {
 
   return (
     <div className={`tj-root size-full ${theme === "dark" ? "tj-dark" : ""}`}>
-      <div className="relative flex h-full w-full overflow-hidden bg-[var(--tj-bg)]">
+      <div className="relative flex h-full w-full overflow-hidden bg-[var(--tj-bg)]" data-evidence-workspace>
         {/* Desktop / Tablet sidebar - Collapsible to icon rail */}
         <motion.div
           initial={false}
-          animate={{ width: sidebarCollapsed ? 68 : 280 }}
+          animate={{ width: sidebarCollapsed || panelCompactNav ? 68 : 280 }}
           transition={{ type: "spring", stiffness: 360, damping: 38, mass: 0.7 }}
           className="hidden md:block h-full shrink-0 overflow-hidden"
+          data-tjipto-navigation
         >
           <Sidebar
             active={route}
-            collapsed={sidebarCollapsed}
+            collapsed={sidebarCollapsed || panelCompactNav}
             onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
             onNavigate={(r) => {
               setRoute(r);

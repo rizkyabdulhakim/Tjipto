@@ -1140,6 +1140,37 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(all(row["relevant_quote_eligible"] for row in result["citations"]))
         self.assertTrue(all(row["authority_kind"] == "legal_citation" for row in result["citations"]))
 
+    def test_bab_request_granularity_preserves_the_requested_units(self) -> None:
+        heading = self.service.ask("uud", "BAB XA", limit=1)
+        title = self.service.ask("uud", "Apa judul BAB XA?", limit=1)
+        content = self.service.ask("uud", "Apa isi BAB XA?", limit=1)
+        mixed = self.service.ask("uud", "BAB XA dan Pasal 28B ayat (1)", limit=1)
+        pasal = self.service.ask("uud", "Pasal 28B", limit=1)
+        ayat = self.service.ask("uud", "Pasal 28B ayat (1)", limit=1)
+
+        for result in (heading, title):
+            self.assertEqual([row["citation"] for row in result["citations"]], ["BAB XA"])
+            self.assertEqual(result["citations"][0]["quoted_text"].splitlines(), ["BAB XA", "HAK ASASI MANUSIA"])
+        self.assertEqual([row["citation"] for row in content["structural_support"]], ["BAB XA"])
+        self.assertEqual(
+            [row["citation"] for row in content["citations"]],
+            [f"Pasal 28{suffix}" for suffix in "ABCDEFGHIJ"],
+        )
+        self.assertEqual([row["citation"] for row in mixed["structural_support"]], ["BAB XA"])
+        self.assertEqual([row["citation"] for row in mixed["citations"]], ["(1)"])
+        self.assertEqual([row["citation"] for row in pasal["citations"]], ["Pasal 28B"])
+        self.assertEqual([row["citation"] for row in ayat["citations"]], ["(1)"])
+        self.assertFalse(any(row["legal_unit_id"] == content["structural_support"][0]["legal_unit_id"] for row in content["citations"]))
+
+    def test_bab_heading_support_uses_only_heading_text_and_geometry(self) -> None:
+        public = handle_request("uud", "ask", {"query": "BAB XA"}, service=self.service)
+        support = public["supports"][0]
+        self.assertEqual(support["panel_section"], "Kutipan Relevan")
+        self.assertEqual(support["text"].splitlines(), ["BAB XA", "HAK ASASI MANUSIA"])
+        viewer = handle_request("uud", "viewer", {"target": support["viewer_target"]["public_target_id"]}, service=self.service)
+        self.assertEqual(viewer["quoted_text"], support["text"])
+        self.assertEqual(len(viewer["bbox_rectangles"]), 2)
+
     def test_bab_detail_does_not_publish_contained_legal_units_as_peer_quotes(self) -> None:
         result = self.service.ask("uud", "BAB XI agama")
         citation_ids = {row["legal_unit_id"] for row in result["citations"]}

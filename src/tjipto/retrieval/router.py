@@ -229,6 +229,15 @@ def route_retrieval(
 
     structured = filter_evidence(structured_all, filters)
     if structured:
+        complete_set = any(row.get("candidate_type") == "structural_complete_set" for row in structured)
+        if complete_set:
+            return envelope | {
+                "status": "found",
+                "route": "structured",
+                "intent": "structured_lookup",
+                "matches": structured,
+                "expansion_trace": (),
+            }
         # A dedicated structural heading is already the authoritative owner.
         # Do not expand it through page/graph neighbors and replace the heading
         # with a child provision in a structured lookup response.
