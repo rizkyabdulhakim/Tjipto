@@ -9,7 +9,7 @@ import {
   Volume2,
   FileText,
 } from "lucide-react";
-import type { ChatMessage, Citation, SupportGroup, SupportItem } from "../../lib/types";
+import type { ChatMessage, Citation, SupportGroup } from "../../lib/types";
 import { Composer } from "./Composer";
 
 interface ChatViewProps {
@@ -282,9 +282,6 @@ function AssistantMessage({
             <SupportFooter
               citations={message.citations}
               onCitationClick={onCitationClick}
-              metadataSupport={message.metadataSupport}
-              structuralSupport={message.structuralSupport}
-              traceSupport={message.traceSupport}
               supportGroups={message.supportGroups}
             />
           )}
@@ -425,31 +422,13 @@ function legalUnitLabel(article?: string, paragraph?: string) {
 function SupportFooter({
   citations,
   onCitationClick,
-  metadataSupport,
-  structuralSupport,
-  traceSupport,
   supportGroups,
 }: {
   citations?: Citation[];
   onCitationClick: (citation: Citation) => void;
-  metadataSupport?: SupportItem[];
-  structuralSupport?: SupportItem[];
-  traceSupport?: SupportItem[];
   supportGroups?: SupportGroup[];
 }) {
-  const groups = [
-    ["structure-support", "STRUKTUR DOKUMEN", structuralSupport],
-    ["metadata-support", "SUMBER DOKUMEN", metadataSupport],
-    ["trace-support", "CATATAN SUMBER", traceSupport],
-  ] as const;
-  const visible = groups.filter(([, , rows]) => rows?.length);
-  const grouped = supportGroups?.length ? supportGroups : visible.map(([testId, title, rows]) => ({
-    id: testId,
-    title,
-    summary: title,
-    kind: testId === "structure-support" ? "structure" : testId === "metadata-support" ? "metadata" : "trace",
-    members: rows ?? [],
-  }));
+  const grouped = supportGroups ?? [];
   if (!grouped.length) return null;
   return (
     <div className="mt-4 space-y-2">
@@ -461,7 +440,7 @@ function SupportFooter({
           className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3.5 py-2.5"
         >
           <summary className="cursor-pointer list-none" aria-label={`${group.title}: ${group.summary}`}>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}>
+            <span role="heading" aria-level={3} style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}>
               {group.title} · {group.summary}
             </span>
           </summary>

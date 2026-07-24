@@ -1,4 +1,4 @@
-import type { Citation, LayoutLine, SupportGroup, SupportItem } from "./types";
+import type { Citation, LayoutLine, SupportGroup } from "./types";
 import type { PdfBBox } from "./pdfBBox";
 
 declare global {
@@ -34,6 +34,8 @@ export interface LayoutPayloadLine {
   paragraph_id: string;
   alignment: LayoutLine["alignment"];
   indent: number;
+  canonical_start: number;
+  canonical_end: number;
 }
 
 export interface SupportPayload {
@@ -60,15 +62,17 @@ export interface SupportGroupPayload {
   label: string;
   summary: string;
   member_count: number;
+  group_kind: "document_metadata" | "entity_occurrences" | "role_members" | "atomic";
   members: SupportPayload[];
 }
 
 export interface TjiptoAskResponse {
+  kind: "answer" | "document" | "clarification" | "unavailable";
   status: string;
   answer?: string;
   answer_scope?: string;
   reason?: string | null;
-  document_source?: { label?: string; source_role?: string; viewer_target?: ViewerTargetPayload };
+  document?: { label?: string; source_role?: string; viewer_target?: ViewerTargetPayload };
   clarification_options?: { source_role?: string; label?: string }[];
   supports?: SupportPayload[];
   support_groups?: SupportGroupPayload[];
@@ -159,7 +163,7 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
 }
 
 export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Citation | null {
-  const source = response.document_source;
+  const source = response.document;
   const target = source?.viewer_target?.public_target_id;
   if (!target) return null;
   return {
@@ -174,25 +178,6 @@ export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Cit
   };
 }
 
-export function mapAskResponseToSupportItems(response: TjiptoAskResponse): { metadata: SupportItem[]; structure: SupportItem[]; trace: SupportItem[] } {
-  const supports = response.supports ?? [];
-  const rows = (section: SupportPayload["panel_section"], kind: SupportItem["kind"]) => supports
-    .filter((support) => support.panel_section === section)
-    .map((support) => ({
-      id: support.public_support_id,
-      publicTargetId: support.viewer_target.public_target_id ?? undefined,
-      label: support.label,
-      detail: support.text,
-      kind,
-      clickable: support.viewer_target.can_resolve === true,
-    }));
-  return {
-    metadata: rows("Sumber Dokumen", "metadata"),
-    structure: rows("Struktur Dokumen", "structure"),
-    trace: rows("Catatan Sumber", "trace"),
-  };
-}
-
 export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): SupportGroup[] {
   return (response.support_groups ?? []).flatMap((group) => {
     const kind = group.panel_section === "Sumber Dokumen" ? "metadata" : group.panel_section === "Struktur Dokumen" ? "structure" : group.panel_section === "Catatan Sumber" ? "trace" : null;
@@ -202,6 +187,7 @@ export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): Supp
       title: group.label,
       summary: group.summary,
       kind,
+      groupKind: group.group_kind,
       members: group.members.map((support) => ({
         id: support.public_support_id,
         publicTargetId: support.viewer_target.public_target_id ?? undefined,

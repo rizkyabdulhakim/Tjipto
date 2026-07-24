@@ -24,6 +24,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const SIDEBAR_MIN_WIDTH = 360;
 const SIDEBAR_DEFAULT_WIDTH = 440;
 const SIDEBAR_MAX_WIDTH = 760;
+const CHAT_MIN_WIDTH = 560;
+const DESKTOP_NAV_WIDTH = 280;
 const PDF_NORMAL_MIN_HEIGHT = 260;
 const PDF_ONLY_MIN_HEIGHT = "calc(100vh - 112px)";
 const PDF_AREA_PADDING_CLASS = "p-4 sm:p-6";
@@ -42,6 +44,24 @@ export function EvidencePanel({
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [pdfOnly, setPdfOnly] = useState(false);
+  const [split, setSplit] = useState(false);
+  const [finePointer, setFinePointer] = useState(false);
+
+  useEffect(() => {
+    const splitQuery = window.matchMedia("(min-width: 1280px)");
+    const pointerQuery = window.matchMedia("(pointer: fine)");
+    const update = () => {
+      setSplit(splitQuery.matches);
+      setFinePointer(pointerQuery.matches);
+    };
+    update();
+    splitQuery.addEventListener("change", update);
+    pointerQuery.addEventListener("change", update);
+    return () => {
+      splitQuery.removeEventListener("change", update);
+      pointerQuery.removeEventListener("change", update);
+    };
+  }, []);
 
   const startResize = (event: PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -59,7 +79,7 @@ export function EvidencePanel({
   const resize = (event: PointerEvent<HTMLButtonElement>) => {
     if (!isResizing) return;
     const nextWidth = window.innerWidth - event.clientX;
-    setSidebarWidth(clamp(nextWidth, SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - 96)));
+    setSidebarWidth(clamp(nextWidth, SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - DESKTOP_NAV_WIDTH - CHAT_MIN_WIDTH)));
   };
 
   useEffect(() => {
@@ -80,7 +100,7 @@ export function EvidencePanel({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
             onClick={onClose}
-            className="lg:hidden fixed inset-0 z-40 bg-black/40"
+            className={`${split ? "hidden" : ""} fixed inset-0 z-40 bg-black/40`}
           />
           <motion.aside
             key="ev-panel"
@@ -88,11 +108,12 @@ export function EvidencePanel({
             animate={pdfOnly ? { opacity: 1 } : { x: 0, opacity: 1 }}
             exit={pdfOnly ? { opacity: 0 } : { opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
-            className={`${pdfOnly ? "fixed inset-0 z-50 w-full max-w-none" : "fixed lg:static inset-y-0 right-0 z-50 lg:z-10 w-full sm:w-[460px] md:w-[var(--tj-evidence-panel-width)] sm:max-w-[95vw]"} flex flex-col shrink-0 h-full bg-[var(--tj-surface)]/80 lg:bg-[var(--tj-surface)]/60 backdrop-blur-3xl border-l border-[var(--tj-glass-border)] shadow-2xl`}
+            className={`${pdfOnly ? "fixed inset-0 z-50 w-full max-w-none" : split ? "static z-10 w-[var(--tj-evidence-panel-width)]" : "fixed inset-y-0 right-0 z-50 w-full sm:w-[460px] sm:max-w-[95vw]"} flex flex-col shrink-0 h-full bg-[var(--tj-surface)]/80 backdrop-blur-3xl border-l border-[var(--tj-glass-border)] shadow-2xl [container-type:inline-size]`}
             style={{ "--tj-evidence-panel-width": `${sidebarWidth}px` } as CSSProperties}
             data-evidence-panel={pdfOnly ? "expanded" : "normal"}
+            data-evidence-mode={pdfOnly ? "expanded" : split ? "split" : "drawer"}
           >
-            {!pdfOnly && (
+            {!pdfOnly && split && finePointer && (
               <button
                 type="button"
                 aria-label="Resize evidence panel"
@@ -104,6 +125,15 @@ export function EvidencePanel({
                 className={`hidden md:block absolute inset-y-0 -left-1.5 z-20 w-3 cursor-col-resize touch-none transition-colors ${isResizing ? "bg-[var(--tj-accent-soft)]" : "hover:bg-[var(--tj-accent-soft)]"}`}
                 data-evidence-resize-handle="true"
               />
+            )}
+            {!pdfOnly && split && (
+              <div className="absolute -left-24 top-3 z-20 flex gap-1 rounded-lg border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-1">
+                {([SIDEBAR_MIN_WIDTH, SIDEBAR_DEFAULT_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - DESKTOP_NAV_WIDTH - CHAT_MIN_WIDTH)] as const).map((width, index) => (
+                  <button key={width} type="button" onClick={() => setSidebarWidth(width)} className="rounded px-1.5 py-1 text-[10px] hover:bg-[var(--tj-surface-hover)]" aria-label={["Panel sempit", "Panel sedang", "Panel lebar"][index]}>
+                    {["S", "M", "L"][index]}
+                  </button>
+                ))}
+              </div>
             )}
             <EvidenceContent
               citation={citation}
@@ -179,13 +209,16 @@ function EvidenceContent({
   };
 
   const normalizeSelectionCopy = (event: ClipboardEvent<HTMLElement>) => {
-    const selected = window.getSelection()?.toString() ?? "";
-    if (!selected.trim()) return;
+    const range = window.getSelection()?.rangeCount ? window.getSelection()!.getRangeAt(0) : null;
+    if (!range) return;
     event.preventDefault();
     event.clipboardData.clearData();
-    const fullSelection = selected.replace(/\s+/g, " ").trim() === (event.currentTarget.innerText ?? "").replace(/\s+/g, " ").trim();
-    const text = fullSelection ? citation.copyText ?? citation.excerpt : selected;
-    event.clipboardData.setData("text/plain", text.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trimStart()).join("\n").trim());
+    const start = canonicalOffset(range.startContainer, range.startOffset);
+    const end = canonicalOffset(range.endContainer, range.endOffset);
+    const text = start !== null && end !== null && end >= start
+      ? (citation.copyText ?? citation.excerpt).slice(start, end)
+      : "";
+    event.clipboardData.setData("text/plain", text.replace(/\r\n?/g, "\n"));
   };
 
   const savePointer = async () => {
@@ -374,6 +407,8 @@ function EvidenceContent({
                   <span
                     key={`${line.paragraph_id}:${line.line_order}`}
                     data-copy-line={line.line_order}
+                    data-canonical-start={line.canonical_start}
+                    data-canonical-end={line.canonical_end}
                     style={{ display: "block", textAlign: line.alignment === "unknown" ? "left" : line.alignment, paddingLeft: line.indent ? `${line.indent}px` : undefined }}
                   >
                     {line.text}
@@ -696,6 +731,26 @@ function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
   if (role?.startsWith("amendment_")) return "Historis (sumber perubahan)";
   if (role === "original_historical") return "Historis (naskah asli)";
   return "Status sumber tidak tersedia";
+}
+
+function canonicalOffset(node: Node, offset: number): number | null {
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const container = node as HTMLElement;
+    const lines = [...container.querySelectorAll<HTMLElement>("[data-canonical-start][data-canonical-end]")];
+    if (lines.length) {
+      const line = offset >= container.childNodes.length ? lines[lines.length - 1] : lines[offset];
+      const field = offset >= container.childNodes.length ? "canonicalEnd" : "canonicalStart";
+      const value = Number(line?.dataset[field]);
+      return Number.isSafeInteger(value) ? value : null;
+    }
+  }
+  const element = node.parentElement;
+  const line = element?.closest<HTMLElement>("[data-canonical-start][data-canonical-end]");
+  if (!line) return null;
+  const start = Number(line.dataset.canonicalStart);
+  const end = Number(line.dataset.canonicalEnd);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) return null;
+  return Math.min(end, start + offset);
 }
 
 function clamp(value: number, min: number, max: number) {

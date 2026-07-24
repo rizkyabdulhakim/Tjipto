@@ -81,6 +81,10 @@ def structured_lookup(
                 and store.bboxes_for(row["evidence_id"])
             ]
             children.sort(key=lambda row: (tuple(row.get("hierarchy") or ()), row.get("evidence_id", "")))
+            # The parent unit is the presentation owner when it already
+            # contains a selected descendant.  Descendant evidence remains
+            # atomic in the corpus but is not emitted as a duplicate peer.
+            children = _outermost_units(store, children)
             return tuple(row | {"route_sources": ("structured",)} for row in (*dedicated, *children))[:limit]
     preferred_unit_ids = _preferred_unit_ids(store, targets, requested_role)
     rows = [
@@ -105,6 +109,23 @@ def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None
     if _instrument_target(query, strategy=strategy, config=config):
         return True
     return bool(_targets(query, intent, _corpus_id(config))) or _has_incomplete_pasal(query)
+
+
+def _outermost_units(store: EvidenceStore, rows: list[dict]) -> list[dict]:
+    """Keep one presentational legal unit per contained hierarchy branch."""
+    units = {row.get("legal_unit_id"): row for row in store.legal_units}
+    selected = {row.get("legal_unit_id") for row in rows}
+
+    def has_selected_ancestor(unit_id: str | None) -> bool:
+        current = units.get(unit_id or {})
+        while current:
+            parent = current.get("parent_legal_unit_id")
+            if parent in selected:
+                return True
+            current = units.get(parent)
+        return False
+
+    return [row for row in rows if not has_selected_ancestor(row.get("legal_unit_id"))]
 
 
 def has_instrument_target(query: str, *, strategy: str = "uud_1945", config=None) -> bool:

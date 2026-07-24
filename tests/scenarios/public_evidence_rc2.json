@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "scenarios": [
+    {"id": "http-closed-boundary", "owner": "runtime-api", "test": "tests/test_runtime_http_contract.py", "assertions": ["closed envelopes", "opaque targets", "unknown fields rejected"], "command": "python -m pytest tests/test_runtime_http_contract.py -q"},
+    {"id": "grouped-source-facts", "owner": "runtime-api", "test": "tests/test_runtime_http_contract.py", "assertions": ["entity occurrences", "role members", "independent targets"], "command": "python -m pytest tests/test_runtime_http_contract.py -q"},
+    {"id": "canonical-copy", "owner": "runtime-service", "test": "tests/test_runtime_contract.py", "assertions": ["ayat boundary", "no parent-child peer quote"], "command": "python -m pytest tests/test_runtime_contract.py -q"},
+    {"id": "browser-evidence", "owner": "web", "test": "apps/web/smoke.mjs", "assertions": ["viewer", "copy", "group member", "public leakage"], "command": "npm run smoke"}
+  ]
+}

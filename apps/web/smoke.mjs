@@ -122,6 +122,26 @@ async function run() {
     assert(fullCopy.replace(/\s+/g, " ").includes(partialCopy.replace(/\s+/g, " ")), "Selected subset falls outside canonical legal text.");
     assert(JSON.stringify(partialTypes) === JSON.stringify(["text/plain"]), "Selected subset published a non-text MIME payload.");
 
+    const crossLine = await page.evaluate(() => {
+      const lines = [...document.querySelectorAll("blockquote [data-canonical-start]")];
+      if (lines.length < 2) return null;
+      const first = lines[0].firstChild;
+      const second = lines[1].firstChild;
+      if (!first || !second) throw new Error("Canonical lines have no text nodes.");
+      const range = document.createRange();
+      range.setStart(first, 0);
+      range.setEnd(second, Math.min(6, second.textContent?.length ?? 0));
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return [Number(lines[0].dataset.canonicalStart), Number(lines[1].dataset.canonicalStart) + Math.min(6, second.textContent?.length ?? 0)];
+    });
+    if (crossLine) {
+      await page.keyboard.press(process.platform === "darwin" ? "Meta+C" : "Control+C");
+      const crossLineCopy = await page.evaluate(() => navigator.clipboard.readText());
+      assert(crossLineCopy === fullCopy.slice(crossLine[0], crossLine[1]), "Cross-line copy did not use canonical offsets.");
+    }
+
     await ask(page, "kapan perubahan pertama ditetapkan");
     assert((await page.locator('[data-citation-footer="true"]').count()) === 0, "Metadata rendered as a legal quotation.");
     await openSupport(page, '[data-support-kind="metadata-support"]');
@@ -141,6 +161,13 @@ async function run() {
     assert(await disclosure.evaluate((node) => node.open) !== wasOpen, "Support group is not keyboard-operable.");
     if (!await disclosure.evaluate((node) => node.open)) await disclosure.locator("summary").click();
     assert((await disclosure.getByRole("button").count()) === 7, "Grouped members lost exact viewer targets.");
+
+    for (const [width, height, mode] of [[390, 844, "drawer"], [768, 1024, "drawer"], [820, 1180, "drawer"], [1024, 768, "drawer"], [1280, 900, "split"]]) {
+      await page.setViewportSize({ width, height });
+      await page.locator(`[data-evidence-mode="${mode}"]`).waitFor();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+      assert(!overflow, `Viewport ${width} has horizontal content loss.`);
+    }
 
     const publicText = `${(await page.locator("body").innerText())}\n${payloads.join("\n")}`;
     for (const forbidden of ["evidence_id", "legal_unit_id", "source_document_id", "source_bbox_refs", "bbox_id", "manifest_digest", "artifact_set_digest"]) {

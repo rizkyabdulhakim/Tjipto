@@ -12,7 +12,6 @@ import {
   mapAskResponseToCitations,
   mapAskResponseToDocumentSource,
   mapAskResponseToSupportGroups,
-  mapAskResponseToSupportItems,
 } from "./lib/api";
 import { Menu, SquarePen } from "lucide-react";
 
@@ -89,9 +88,10 @@ export default function App() {
       const response = await askLegal(value, filters);
       const citations = mapAskResponseToCitations(response);
       const documentSource = mapAskResponseToDocumentSource(response);
-      const support = mapAskResponseToSupportItems(response);
       const supportGroups = mapAskResponseToSupportGroups(response);
-      const content = answerTextOrFallback(response);
+      const content = response.kind === "document"
+        ? response.document?.label ?? "Dokumen sumber tersedia."
+        : answerTextOrFallback(response);
       setActiveCitation(documentSource);
       setMessages((prev) =>
         prev.map((m) =>
@@ -102,9 +102,6 @@ export default function App() {
                 status: "complete",
                 runtimeStatus: response.status,
                 citations: citations.length ? citations : undefined,
-                metadataSupport: support.metadata.length ? support.metadata : undefined,
-                structuralSupport: support.structure.length ? support.structure : undefined,
-                traceSupport: support.trace.length ? support.trace : undefined,
                 supportGroups: supportGroups.length ? supportGroups : undefined,
                 clarificationOptions: (response.clarification_options ?? [])
                   .filter((option) => option.label)

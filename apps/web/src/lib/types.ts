@@ -40,6 +40,8 @@ export interface LayoutLine {
   paragraph_id: string;
   alignment: "left" | "center" | "right" | "justify" | "unknown";
   indent: number;
+  canonical_start?: number;
+  canonical_end?: number;
 }
 
 export interface ChatMessage {
@@ -47,9 +49,6 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
-  metadataSupport?: SupportItem[];
-  structuralSupport?: SupportItem[];
-  traceSupport?: SupportItem[];
   supportGroups?: SupportGroup[];
   clarificationOptions?: { sourceRole?: string; label: string }[];
   clarificationQuery?: string;
@@ -71,6 +70,7 @@ export interface SupportGroup {
   title: string;
   summary: string;
   kind: SupportItem["kind"];
+  groupKind?: "document_metadata" | "entity_occurrences" | "role_members" | "atomic";
   members: SupportItem[];
 }
 

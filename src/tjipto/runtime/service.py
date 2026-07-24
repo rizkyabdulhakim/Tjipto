@@ -789,6 +789,9 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
     if non_final_conflict and authority_kind in {"source_anomaly", "source_conflict_provenance"}:
         citation_final = False
     layout_lines = _layout_lines(store, source_row)
+    copy_text, layout_lines = _canonical_text_projection(
+        row.get("copy_text") or row.get("quoted_text") or "", layout_lines
+    )
     payload = {
         "authority_kind": authority_kind,
         "authority_label": {
@@ -807,7 +810,7 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
         "relevant_quote_eligible": source_row.get("relevant_quote_eligible") is True and authority_kind == "legal_citation",
         "display_text": row.get("display_text") or row.get("quoted_text") or "",
         "source_label": row.get("document_title") or _source_label(store, row),
-        "copy_text": _copy_text(row.get("copy_text") or row.get("quoted_text") or "", layout_lines),
+        "copy_text": copy_text,
         "layout_lines": layout_lines,
         "viewer_target": _viewer_target(row),
     }
@@ -816,27 +819,31 @@ def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conf
     return payload
 
 
-def _copy_text(value: str, layout_lines: tuple[dict, ...] = ()) -> str:
-    """Copy semantic paragraphs, not PDF-width visual wrapping."""
+def _canonical_text_projection(value: str, layout_lines: tuple[dict, ...] = ()) -> tuple[str, tuple[dict, ...]]:
+    """Build semantic copy text and visual-line ranges in one ordered traversal."""
     if layout_lines:
-        paragraphs: list[list[str]] = []
-        current: list[str] = []
+        pieces: list[str] = []
+        projected: list[dict] = []
         current_id = object()
         for line in layout_lines:
             paragraph_id = line.get("paragraph_id")
             text = " ".join(str(line.get("text") or "").split())
             if not text:
                 continue
-            if current and paragraph_id != current_id:
-                paragraphs.append(current)
-                current = []
+            if pieces:
+                pieces.append("\n\n" if paragraph_id != current_id else " ")
             current_id = paragraph_id
-            current.append(text)
-        if current:
-            paragraphs.append(current)
-        if paragraphs:
-            return "\n\n".join(" ".join(paragraph) for paragraph in paragraphs).strip()
-    return "\n".join(line.lstrip(" \t") for line in str(value).replace("\r\n", "\n").replace("\r", "\n").split("\n")).strip()
+            start = sum(len(piece) for piece in pieces)
+            pieces.append(text)
+            projected.append(line | {"text": text, "canonical_start": start, "canonical_end": start + len(text)})
+        if projected:
+            return "".join(pieces), tuple(projected)
+    text = "\n".join(line.lstrip(" \t") for line in str(value).replace("\r\n", "\n").replace("\r", "\n").split("\n")).strip()
+    return text, tuple(layout_lines)
+
+
+def _copy_text(value: str, layout_lines: tuple[dict, ...] = ()) -> str:
+    return _canonical_text_projection(value, layout_lines)[0]
 
 
 def _viewer_target(row: dict) -> dict:
@@ -905,7 +912,16 @@ def _layout_lines(store, row: dict) -> tuple[dict, ...]:
             text = " ".join(str(part["text"]).strip() for part in parts if str(part["text"]).strip())
             centered = width and (x1 - x0) <= width * 0.55 and abs(((x0 + x1) / 2) - width / 2) <= max(8.0, width * 0.04)
             alignment = "center" if centered else "left"
-            if previous and (line["page"] != previous["page"] or y0 - previous["y1"] > max(20.0, 1.5 * (y1 - y0)) or alignment == "center" or previous["alignment"] == "center"):
+            # A numbered line is a semantic boundary even when its baseline
+            # follows the prior line closely (for example consecutive ayat).
+            numbered = bool(re.match(r"^\s*(?:\(\d+\)|[A-Za-z]\.|\d+[.)])\s+", text))
+            if previous and (
+                line["page"] != previous["page"]
+                or y0 - previous["y1"] > max(20.0, 1.5 * (y1 - y0))
+                or alignment == "center"
+                or previous["alignment"] == "center"
+                or numbered
+            ):
                 paragraph += 1
             result.append({
                 "text": text,

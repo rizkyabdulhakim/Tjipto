@@ -53,8 +53,9 @@ def handle_request(
 
 def _public_search(result: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
     if result.get("readiness") is False:
-        return _public_integrity(result) | {"results": ()}
+        return _public_integrity(result)
     return {
+        "kind": "document",
         "status": result.get("status"),
         "reason": _public_reason(result.get("reason")),
         "results": tuple(_public_search_result(row, service, corpus_id) for row in result.get("results", ())),
@@ -72,38 +73,50 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
         *((row, "trace") for row in result.get("relation_support", ())),
         *((row, "trace") for row in result.get("trace_support", ())),
     )
-    supports = tuple(_public_support(row, section, service, corpus_id) for row, section in support_rows)
-    public = {
-        "status": result.get("status"),
-        "answer": result.get("answer"),
-        "answer_type": "source_document" if result.get("document_source") is not None else "answer",
-        "answer_scope": result.get("answer_scope"),
-        "reason": _public_reason(result.get("reason")),
-        "supports": supports,
-        "support_groups": _support_groups(supports, service, corpus_id),
-    }
+    projected = tuple((_public_support(row, section, service, corpus_id), row) for row, section in support_rows)
+    supports = tuple(support for support, _ in projected)
     if result.get("clarification_options"):
-        public["clarification_options"] = tuple(_public_clarification_option(row) for row in result["clarification_options"])
+        return {
+            "kind": "clarification",
+            "status": result.get("status"),
+            "answer": result.get("answer"),
+            "reason": _public_reason(result.get("reason")),
+            "clarification_options": tuple(_public_clarification_option(row) for row in result["clarification_options"]),
+        }
     if result.get("document_source") is not None:
         source = result["document_source"]
         target = service.register_public_target(corpus_id, {"evidence_id": None, "source_document_id": source.get("source_document_id")})
-        public["document_source"] = {
-            "label": source.get("document_title"),
-            "source_role": source.get("source_role"),
-            "viewer_target": _public_target(target, "open_document", (1,), True),
+        return {
+            "kind": "document",
+            "status": result.get("status"),
+            "document": {
+                "label": source.get("document_title"),
+                "source_role": source.get("source_role"),
+                "viewer_target": _public_target(target, "open_document", (1,), True),
+            },
         }
-    return public
+    return {
+        "kind": "answer",
+        "status": result.get("status"),
+        "answer": result.get("answer"),
+        "answer_scope": result.get("answer_scope"),
+        "reason": _public_reason(result.get("reason")),
+        "supports": supports,
+        "support_groups": _support_groups(projected, service, corpus_id),
+    }
 
 
 def _public_citation_response(result: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
     if result.get("readiness") is False:
-        return _public_integrity(result) | {"supports": (), "support_groups": ()}
-    supports = tuple(_public_support(row, "legal", service, corpus_id) for row in result.get("citation_payloads", ()))
+        return _public_integrity(result)
+    projected = tuple((_public_support(row, "legal", service, corpus_id), row) for row in result.get("citation_payloads", ()))
+    supports = tuple(support for support, _ in projected)
     return {
+        "kind": "answer",
         "status": result.get("status"),
         "reason": _public_reason(result.get("reason")),
         "supports": supports,
-        "support_groups": _support_groups(supports, service, corpus_id),
+        "support_groups": _support_groups(projected, service, corpus_id),
     }
 
 
@@ -111,6 +124,7 @@ def _public_viewer(result: dict, corpus_id: str) -> dict:
     if result.get("readiness") is False:
         return _public_integrity(result)
     public = {
+        "kind": "document",
         "status": result.get("status"),
         "citation": result.get("citation"),
         "quoted_text": result.get("quoted_text"),
@@ -133,10 +147,9 @@ def _public_viewer(result: dict, corpus_id: str) -> dict:
 
 def _public_integrity(result: dict) -> dict:
     return {
+        "kind": "unavailable",
         "status": "unavailable",
         "reason": "service_unavailable",
-        "supports": (),
-        "support_groups": (),
     }
 
 
@@ -204,7 +217,7 @@ def _public_support(row: dict, panel_section: str, service: LegalRuntimeService,
         "support_kind": row.get("support_kind") or ("metadata_source" if panel_section == "metadata" else "structural_provenance" if panel_section == "structure" else "trace_support"),
         "panel_section": labels[panel_section],
         "fact_kind": fact_kind,
-        "label": role_label or row.get("display_label") or row.get("label") or row.get("citation") or labels[panel_section],
+        "label": row.get("printed_name") or role_label or row.get("display_label") or row.get("label") or row.get("citation") or labels[panel_section],
         "role_label": role_label,
         "text": row.get("display_text") or row.get("quoted_text") or row.get("answer") or "",
         "layout_lines": layout,
@@ -226,6 +239,8 @@ def _public_layout_line(row: dict, index: int) -> dict:
         "paragraph_id": str(row.get("paragraph_id") or index),
         "alignment": alignment,
         "indent": float(row.get("indent") or 0.0),
+        "canonical_start": int(row.get("canonical_start") or 0),
+        "canonical_end": int(row.get("canonical_end") or len(str(row.get("text") or ""))),
     }
 
 
@@ -239,28 +254,77 @@ def _public_target(target: str | None, action: str, pages: object, resolvable: b
     }
 
 
-def _support_groups(supports: tuple[dict, ...], service: LegalRuntimeService, corpus_id: str) -> tuple[dict, ...]:
+def _support_groups(projected: tuple[tuple[dict, dict], ...], service: LegalRuntimeService, corpus_id: str) -> tuple[dict, ...]:
     grouped: dict[tuple[str, ...], list[dict]] = {}
-    for support in supports:
-        key = (
-            str(support.get("source_label") or "").casefold(),
-            str(support.get("panel_section") or ""),
-            str(support.get("fact_kind") or ""),
-            str(support.get("role_label") or support.get("label") or "").casefold(),
-            str(support.get("source_role") or ""),
-        )
-        grouped.setdefault(key, []).append(support)
+    role_counts: dict[tuple[str, str, str], int] = {}
+    entity_counts: dict[str, int] = {}
+    for support, row in projected:
+        if support.get("panel_section") != "Sumber Dokumen" or support.get("fact_kind") != "person_role":
+            continue
+        role_key = (str(support.get("source_label") or ""), str(support.get("source_role") or ""), str(support.get("role_label") or ""))
+        role_counts[role_key] = role_counts.get(role_key, 0) + 1
+        identity = _entity_identity(row.get("printed_name"), row.get("printed_role"), row.get("institution"))
+        if identity:
+            entity_counts[identity] = entity_counts.get(identity, 0) + 1
+    for support, row in projected:
+        key, group_kind = _support_group_key(support, row, role_counts, entity_counts)
+        grouped.setdefault((group_kind, *key), []).append(support)
     return tuple(
         {
             "public_group_id": service.public_identifier(corpus_id, "support-group", key),
+            "group_kind": key[0],
             "panel_section": members[0]["panel_section"],
-            "label": members[0]["label"],
+            "label": _support_group_label(key[0], members),
             "summary": members[0]["source_label"] or members[0]["label"],
             "member_count": len(members),
             "members": tuple(members),
         }
-        for key, members in grouped.items()
+        for key, members in sorted(grouped.items())
     )
+
+
+def _support_group_key(
+    support: dict,
+    row: dict,
+    role_counts: dict[tuple[str, str, str], int],
+    entity_counts: dict[str, int],
+) -> tuple[tuple[str, ...], str]:
+    """Group only source facts with an explicit, deterministic common owner."""
+    section = str(support.get("panel_section") or "")
+    source = str(support.get("source_label") or "")
+    source_role = str(support.get("source_role") or "")
+    fact_kind = str(support.get("fact_kind") or "")
+    if section == "Sumber Dokumen" and fact_kind == "person_role":
+        role_key = (source, source_role, str(support.get("role_label") or ""))
+        if role_counts.get(role_key, 0) > 1:
+            return role_key, "role_members"
+        name = _entity_identity(row.get("printed_name"), row.get("printed_role"), row.get("institution"))
+        if name and entity_counts.get(name, 0) > 1:
+            return (name, str(support.get("role_label") or "")), "entity_occurrences"
+        return (source, source_role, str(support.get("role_label") or "")), "atomic"
+    if section == "Sumber Dokumen":
+        return (source, source_role), "document_metadata"
+    return (source, section, fact_kind, str(support.get("label") or ""), source_role), "atomic"
+
+
+def _entity_identity(name: object, role: object, institution: object) -> str | None:
+    if not isinstance(name, str) or not name.strip():
+        return None
+    # Source records do not currently carry an entity ID.  This canonicalizes
+    # only typography, and binds it to role plus institution to avoid a loose
+    # cross-person text merge.
+    normalized = "".join(char for char in name.casefold() if char.isalnum())
+    if not normalized:
+        return None
+    return "|".join((normalized, str(role or "").casefold(), str(institution or "").casefold()))
+
+
+def _support_group_label(group_kind: str, members: list[dict]) -> str:
+    if group_kind == "role_members" and members[0].get("role_label"):
+        return f"{members[0]['role_label']} · {len(members)} orang"
+    if group_kind == "entity_occurrences":
+        return str(members[0].get("label") or "Sumber dokumen")
+    return str(members[0].get("source_label") or members[0].get("label") or "Sumber dokumen")
 
 
 def _public_clarification_option(row: dict) -> dict:
@@ -275,7 +339,7 @@ def _public_capabilities(result: dict) -> dict:
 
 def _public_bookmarks(result: dict) -> dict:
     if result.get("readiness") is False:
-        return _public_integrity(result) | {"bookmarks": ()}
+        return _public_integrity(result)
     return {
         "status": result.get("status"),
         "bookmarks": tuple({

@@ -1140,6 +1140,16 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(all(row["relevant_quote_eligible"] for row in result["citations"]))
         self.assertTrue(all(row["authority_kind"] == "legal_citation" for row in result["citations"]))
 
+    def test_bab_detail_does_not_publish_contained_legal_units_as_peer_quotes(self) -> None:
+        result = self.service.ask("uud", "BAB XI agama")
+        citation_ids = {row["legal_unit_id"] for row in result["citations"]}
+        store = self.service._store("uud")
+        self.assertIsNotNone(store)
+        units = {row["legal_unit_id"]: row for row in store.legal_units}
+        for unit_id in citation_ids:
+            parent = units[unit_id].get("parent_legal_unit_id")
+            self.assertNotIn(parent, citation_ids)
+
     def test_bab_deletion_query_uses_normative_deletion_evidence(self) -> None:
         result = self.service.ask("uud", "Apakah BAB IV dihapus?")
         self.assertEqual(result["status"], "answer_ready")
@@ -1191,10 +1201,10 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_document_source_api_exposes_verified_document_target_only(self) -> None:
         result = handle_request("uud", "ask", {"query": "Apa isi Perubahan Pertama UUD?"}, service=self.service)
-        self.assertEqual(result["answer_type"], "source_document")
-        self.assertEqual(result["document_source"]["source_role"], "amendment_1_historical")
-        self.assertEqual(result["document_source"]["viewer_target"]["action"], "open_document")
-        self.assertFalse(result["supports"])
+        self.assertEqual(result["kind"], "document")
+        self.assertEqual(result["document"]["source_role"], "amendment_1_historical")
+        self.assertEqual(result["document"]["viewer_target"]["action"], "open_document")
+        self.assertNotIn("supports", result)
 
     def test_two_artifact_declared_document_scopes_route_to_their_document_relation(self) -> None:
         result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")

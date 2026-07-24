@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import threading
 import unittest
@@ -38,14 +39,23 @@ class RuntimeHttpContractTest(unittest.TestCase):
         capabilities = self._get("/legal/uud/capabilities")
         self.assertEqual(capabilities, {"status": "ok", "capabilities": ["search", "ask", "citation", "viewer", "bookmarks"]})
         result = self._post("/legal/uud/search", {"query": "UUD 1945", "limit": 2})
+        self.assertEqual(result["kind"], "document")
         self.assertEqual(result["status"], "found")
         self.assertTrue(result["results"])
         self._assert_public(result)
         self.assertEqual(set(result["results"][0]), {"title", "label", "snippet", "source_role", "page_numbers", "viewer_target"})
         self.assertTrue(result["results"][0]["viewer_target"]["public_target_id"])
 
+    def test_rc2_scenario_manifest_is_complete_and_versioned(self) -> None:
+        manifest = json.loads((ROOT / "tests/scenarios/public_evidence_rc2.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["version"], 1)
+        for scenario in manifest["scenarios"]:
+            self.assertEqual(set(scenario), {"id", "owner", "test", "assertions", "command"})
+            self.assertTrue(scenario["id"] and scenario["assertions"] and scenario["command"])
+
     def test_ask_citation_viewer_pdf_and_bookmark_use_only_public_targets(self) -> None:
         asked = self._post("/legal/uud/ask", {"query": "Pasal 16 UUD konsolidasi"})
+        self.assertEqual(asked["kind"], "answer")
         self.assertEqual(asked["status"], "answer_ready")
         self._assert_public(asked)
         support = asked["supports"][0]
@@ -93,6 +103,24 @@ class RuntimeHttpContractTest(unittest.TestCase):
                 if member["panel_section"] != "Kutipan Relevan":
                     self.assertFalse(member["legal_citation_available"])
                     self.assertFalse(member["relevant_quote_eligible"])
+        group = result["support_groups"][0]
+        self.assertEqual(group["group_kind"], "role_members")
+        self.assertEqual(group["member_count"], 7)
+
+    def test_entity_occurrences_use_one_group_without_losing_exact_members(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "Amien Rais"})
+        self.assertEqual(result["kind"], "answer")
+        self.assertEqual(len(result["support_groups"]), 1)
+        group = result["support_groups"][0]
+        self.assertEqual(group["group_kind"], "entity_occurrences")
+        self.assertEqual(group["member_count"], 4)
+        self.assertEqual(len({row["viewer_target"]["public_target_id"] for row in group["members"]}), 4)
+
+    def test_document_result_is_distinct_from_evidence_supports(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "Apa isi Perubahan Pertama UUD?"})
+        self.assertEqual(set(result), {"kind", "status", "document"})
+        self.assertEqual(result["kind"], "document")
+        self.assertTrue(result["document"]["viewer_target"]["can_resolve"])
 
     def test_public_payload_rejects_unknown_and_legacy_fields(self) -> None:
         for path, payload in (
@@ -113,6 +141,37 @@ class RuntimeHttpContractTest(unittest.TestCase):
             self._get("/legal/uud/pdf?evidence_id=forged")
         self.assertEqual(error.exception.code, 400)
         self._assert_public(json.loads(error.exception.read().decode("utf-8")))
+
+    def test_transport_rejects_invalid_json_oversized_body_and_unknown_routes(self) -> None:
+        for data, headers, expected in (
+            (b"{", {"Content-Type": "application/json"}, (400, "invalid_json")),
+            (b"x" * (64 * 1024 + 1), {"Content-Type": "application/json", "Content-Length": str(64 * 1024 + 1)}, (413, "request_body_too_large")),
+        ):
+            request = Request(self.base_url + "/legal/uud/ask", data=data, headers=headers, method="POST")
+            with self.assertRaises(HTTPError) as error:
+                urlopen(request, timeout=10)  # nosec B310
+            self.assertEqual(error.exception.code, expected[0])
+            self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], expected[1])
+        with self.assertRaises(HTTPError) as error:
+            self._get("/not-real")
+        self.assertEqual(error.exception.code, 404)
+
+    def test_local_cors_and_development_alias_are_explicit(self) -> None:
+        request = Request(self.base_url + "/legal/uud/ask", data=b'{"query":"Pasal 1"}', headers={"Content-Type": "application/json", "Origin": "http://localhost:5173"}, method="POST")
+        with urlopen(request, timeout=10) as response:  # nosec B310
+            self.assertEqual(response.headers["Access-Control-Allow-Origin"], "http://localhost:5173")
+        self.assertEqual(self._get("/uud/capabilities")["status"], "ok")
+        original = os.environ.get("TJIPTO_MODE")
+        os.environ["TJIPTO_MODE"] = "staging"
+        try:
+            with self.assertRaises(HTTPError) as error:
+                self._get("/uud/capabilities")
+            self.assertEqual(error.exception.code, 404)
+        finally:
+            if original is None:
+                os.environ.pop("TJIPTO_MODE", None)
+            else:
+                os.environ["TJIPTO_MODE"] = original
 
     def _assert_public(self, payload: object) -> None:
         body = json.dumps(payload)
