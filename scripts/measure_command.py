@@ -7,6 +7,8 @@ import subprocess  # nosec B404
 import sys
 import time
 
+from tjipto.core.manifest import artifact_set_digest
+from tjipto.corpora.registry import CorpusRegistry
 from tjipto.telemetry import event_record
 
 
@@ -51,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gate")
     parser.add_argument("--report", type=Path)
     parser.add_argument("--environment-report", type=Path)
+    parser.add_argument("--corpus", action="append", default=[])
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     command = args.command
@@ -75,27 +78,45 @@ def main(argv: list[str] | None = None) -> int:
                 handle.write(json.dumps(record, sort_keys=True) + "\n")
     if args.environment_report:
         args.environment_report.parent.mkdir(parents=True, exist_ok=True)
-        args.environment_report.write_text(json.dumps(_environment_report(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        args.environment_report.write_text(json.dumps(_environment_report(args.corpus), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(result, sort_keys=True))
     return process.returncode
 
 
-def _environment_report() -> dict:
-    root = Path.cwd()
-    manifest = root / "data" / "final" / "uud" / "manifest.json"
-    files = {name: _sha256(root / name) for name in ("requirements.lock", "apps/web/package-lock.json", "data/final/uud/manifest.json")}
+def _environment_report(corpus_ids: list[str] | None = None) -> dict:
+    root = Path(__file__).resolve().parents[1]
+    registry = CorpusRegistry(root)
+    selected = corpus_ids or list(registry.corpus_ids())
+    corpora = {}
+    for corpus_id in selected:
+        config = registry.resolve(corpus_id)
+        if config is None:
+            raise ValueError(f"unavailable registered corpus: {corpus_id}")
+        manifest = config.manifest
+        corpora[config.corpus_id] = {
+            "artifact_set_digest": artifact_set_digest(manifest),
+            "extractor_fingerprint": manifest.get("extractor_fingerprint"),
+            "manifest_sha256": _sha256(config.manifest_path),
+            "schema_version": manifest.get("schema_version"),
+        }
+    files = {name: _sha256(root / name) for name in ("requirements.lock", "apps/web/package-lock.json", "data/corpus_registry.json")}
     return {
         "commit_sha": _command_output(root, "git", "rev-parse", "HEAD"),
         "tree_sha": _command_output(root, "git", "rev-parse", "HEAD^{tree}"),
-        "lock_sha256": files["requirements.lock"],
+        "workflow_ref": os.environ.get("GITHUB_WORKFLOW_REF"),
+        "run_id": os.environ.get("GITHUB_RUN_ID"),
+        "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+        "event": os.environ.get("GITHUB_EVENT_NAME"),
+        "job_name": os.environ.get("GITHUB_JOB"),
+        "python_lock_sha256": files["requirements.lock"],
         "node_version": _command_output(root, "node", "--version"),
         "npm_version": _command_output(root, "npm", "--version"),
         "package_lock_sha256": files["apps/web/package-lock.json"],
-        "python_version": sys.version,
+        "corpus_registry_sha256": files["data/corpus_registry.json"],
+        "python_version": sys.version.split()[0],
         "runner_image_os": os.environ.get("ImageOS"),
         "runner_image_version": os.environ.get("ImageVersion"),
-        "artifact_manifest_sha256": files["data/final/uud/manifest.json"],
-        "artifact_files": json.loads(manifest.read_text(encoding="utf-8")).get("files", {}),
+        "corpora": corpora,
     }
 
 

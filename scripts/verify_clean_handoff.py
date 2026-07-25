@@ -136,7 +136,7 @@ def run_candidate_checks(path: Path) -> dict[str, int]:
     return {"compileall": 0, "unittest": 0}
 
 
-def release_candidate(repo_root: Path, commit_sha: str, archive_path: Path) -> dict:
+def release_candidate(repo_root: Path, commit_sha: str, archive_path: Path, corpus_ids: list[str] | None = None) -> dict:
     identity = create_archive(repo_root, commit_sha, archive_path)
     archive_forbidden = verify_candidate(archive_path)
     checks = run_candidate_checks(archive_path) if not archive_forbidden else {"compileall": 1, "unittest": 1}
@@ -154,35 +154,58 @@ def release_candidate(repo_root: Path, commit_sha: str, archive_path: Path) -> d
         archive_sha256=identity["archive_sha256"],
     )
     sidecar = archive_path.with_suffix(archive_path.suffix + ".sidecar.json")
-    sidecar.write_text(json.dumps(_release_sidecar(repo_root, archive_path, result), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    sidecar.write_text(json.dumps(_release_sidecar(repo_root, archive_path, result, corpus_ids), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     result["sidecar_path"] = str(sidecar)
     result["sidecar_sha256"] = _sha256(sidecar)
     return result
 
 
-def _release_sidecar(repo_root: Path, archive_path: Path, result: dict) -> dict:
+def _release_sidecar(repo_root: Path, archive_path: Path, result: dict, corpus_ids: list[str] | None = None) -> dict:
     """Describe immutable archive bytes; this deliberately remains outside the archive."""
     with zipfile.ZipFile(archive_path) as archive:
         files = {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist() if not name.endswith("/")}
-        manifest_bytes = archive.read("data/final/uud/manifest.json")
-    manifest = json.loads(manifest_bytes)
+        corpora = _archive_corpora(archive, corpus_ids)
     sys.path.insert(0, str(repo_root / "src"))
-    from tjipto.core.manifest import artifact_set_digest
     return {
         "archive_byte_representation": "git archive ZIP entry bytes",
         "archive_sha256": result["archive_sha256"],
-        "artifact_set_digest": artifact_set_digest(manifest),
         "candidate_checks": result["candidate_checks"],
         "commit_sha": result["commit_sha"],
-        "contract": {key: manifest[key] for key in ("contract_id", "contract_version", "contract_fingerprint")},
-        "extractor_fingerprint": manifest.get("extractor_fingerprint"),
-        "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
-        "runtime_projection_sha256": manifest.get("files", {}).get(manifest.get("runtime_projection", ""), {}).get("sha256"),
+        "corpora": corpora,
         "source_file_digests": files,
         "tree_sha": result["tree_sha"],
         "worktree_status": _git(repo_root, "status", "--porcelain").splitlines(),
         "python_version": sys.version,
     }
+
+
+def _archive_corpora(archive: zipfile.ZipFile, corpus_ids: list[str] | None = None) -> dict[str, dict]:
+    registry = json.loads(archive.read("data/corpus_registry.json"))
+    if not isinstance(registry, dict):
+        raise ValueError("archive corpus registry is malformed")
+    from tjipto.core.manifest import artifact_set_digest
+
+    corpora = {}
+    selected = corpus_ids or sorted(registry)
+    for corpus_id in selected:
+        entry = registry.get(corpus_id)
+        rel = entry.get("manifest") if isinstance(entry, dict) else entry
+        path = PurePosixPath(rel) if isinstance(rel, str) else None
+        if not isinstance(corpus_id, str) or path is None or path.is_absolute() or ".." in path.parts:
+            raise ValueError("archive corpus registry has an unsafe manifest path")
+        manifest_bytes = archive.read(path.as_posix())
+        manifest = json.loads(manifest_bytes)
+        if not isinstance(manifest, dict) or manifest.get("corpus_id") != corpus_id:
+            raise ValueError("archive manifest identity mismatch")
+        corpora[corpus_id] = {
+            "artifact_set_digest": artifact_set_digest(manifest),
+            "contract": {key: manifest.get(key) for key in ("contract_id", "contract_version", "contract_fingerprint")},
+            "extractor_fingerprint": manifest.get("extractor_fingerprint"),
+            "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            "runtime_projection_sha256": manifest.get("files", {}).get(manifest.get("runtime_projection", ""), {}).get("sha256"),
+            "schema_version": manifest.get("schema_version"),
+        }
+    return corpora
 
 
 def _directory_entries(path: Path) -> list[str]:
@@ -238,6 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     release = subparsers.add_parser("release")
     release.add_argument("commit_sha")
     release.add_argument("archive", type=Path)
+    release.add_argument("--corpus", action="append", default=[])
 
     args = parser.parse_args(argv)
     if args.command == "create-archive":
@@ -254,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "check-candidate":
         print(json.dumps(run_candidate_checks(args.path), sort_keys=True))
         return 0
-    result = release_candidate(Path.cwd(), args.commit_sha, args.archive)
+    result = release_candidate(Path.cwd(), args.commit_sha, args.archive, args.corpus)
     print(json.dumps(result, sort_keys=True))
     return 0 if not result["archive_forbidden_entries"] and all(value == 0 for value in result["candidate_checks"].values()) else 1
 

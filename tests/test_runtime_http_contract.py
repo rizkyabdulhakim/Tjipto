@@ -10,6 +10,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from tjipto.runtime.http import make_server
+from tjipto.telemetry import Telemetry
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -155,6 +156,28 @@ class RuntimeHttpContractTest(unittest.TestCase):
         with self.assertRaises(HTTPError) as error:
             self._get("/not-real")
         self.assertEqual(error.exception.code, 404)
+
+    def test_telemetry_uses_closed_routes_and_unknown_corpus_sentinel(self) -> None:
+        records: list[dict] = []
+        telemetry = Telemetry(records.append)
+        handler = self.server.RequestHandlerClass
+        previous_handler_telemetry = handler.telemetry
+        previous_service_telemetry = handler.runtime_service.telemetry
+        handler.telemetry = telemetry
+        handler.runtime_service.telemetry = telemetry
+        try:
+            self._post("/legal/external-corpus/ask", {"query": "Pasal 1"})
+            with self.assertRaises(HTTPError):
+                self._get("/legal/external-corpus/arbitrary-route")
+        finally:
+            handler.telemetry = previous_handler_telemetry
+            handler.runtime_service.telemetry = previous_service_telemetry
+        serialized = json.dumps(records)
+        self.assertNotIn("external-corpus", serialized)
+        self.assertNotIn("arbitrary-route", serialized)
+        self.assertIn({"event": "integrity_failure", "attributes": {"corpus_id": "unknown", "reason_code": "unknown_corpus"}}, records)
+        self.assertTrue(any(row["event"] == "http_request" and row["attributes"]["route"] == "legal.ask" for row in records))
+        self.assertTrue(any(row["event"] == "http_request" and row["attributes"]["route"] == "not_found" for row in records))
 
     def test_local_cors_and_development_alias_are_explicit(self) -> None:
         request = Request(self.base_url + "/legal/uud/ask", data=b'{"query":"Pasal 1"}', headers={"Content-Type": "application/json", "Origin": "http://localhost:5173"}, method="POST")

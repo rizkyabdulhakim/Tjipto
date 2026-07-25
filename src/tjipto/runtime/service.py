@@ -99,17 +99,21 @@ class LegalRuntimeService:
             self._integrity_error = None
         except CorpusIntegrityError as error:
             self._integrity_error = error.code
-            self.telemetry.emit("integrity_failure", corpus_id=corpus_id, reason_code=error.code)
+            self.telemetry.emit("integrity_failure", corpus_id=self._telemetry_corpus_id(corpus_id), reason_code=error.code)
             return None
-        self.telemetry.emit("corpus_load", corpus_id=corpus_id, status="loaded")
+        self.telemetry.emit("corpus_load", corpus_id=config.corpus_id, status="loaded")
         store = EvidenceStore.shared(config)
         self._store_cache[corpus_id] = store
         return store
 
     def _route_retrieval(self, corpus_id: str, query: str, store: EvidenceStore, **kwargs: Any) -> dict:
         result = route_retrieval(corpus_id, query, store, **kwargs)
-        self.telemetry.emit("retrieval_route", corpus_id=corpus_id, route=result["route"], status=result["status"])
+        self.telemetry.emit("retrieval_route", corpus_id=self._telemetry_corpus_id(corpus_id), route=result["route"], status=result["status"])
         return result
+
+    def _telemetry_corpus_id(self, corpus_id: str) -> str:
+        config = self.registry.resolve(corpus_id)
+        return config.corpus_id if config is not None else "unknown"
 
     def register_public_target(self, corpus_id: str, request: dict) -> str:
         """Return a stable opaque handle; persistence identifiers never leave this boundary."""

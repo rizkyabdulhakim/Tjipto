@@ -89,11 +89,18 @@ class CleanHandoffContractTest(unittest.TestCase):
             root = Path(tmp)
             self._init_git(root)
             (root / "data/final/uud").mkdir(parents=True)
+            (root / "data/final/demo").mkdir(parents=True)
             (root / "src").mkdir()
             (root / "tests").mkdir()
             (root / "tests/test_candidate.py").write_text("import unittest\n\nclass CandidateTest(unittest.TestCase):\n    def test_ok(self): self.assertTrue(True)\n", encoding="utf-8")
             (root / "data/final/uud/manifest.json").write_text(
-                '{"contract_id":"uud","contract_version":7,"contract_fingerprint":"f","files":{}}\n', encoding="utf-8"
+                '{"corpus_id":"uud","contract_id":"uud","contract_version":7,"contract_fingerprint":"f","files":{}}\n', encoding="utf-8"
+            )
+            (root / "data/final/demo/manifest.json").write_text(
+                '{"corpus_id":"demo","contract_id":"demo","contract_version":7,"contract_fingerprint":"f","files":{}}\n', encoding="utf-8"
+            )
+            (root / "data/corpus_registry.json").write_text(
+                '{"demo":{"manifest":"data/final/demo/manifest.json"},"uud":{"manifest":"data/final/uud/manifest.json"}}\n', encoding="utf-8"
             )
             self._git(root, "add", ".")
             self._git(root, "commit", "-m", "candidate")
@@ -104,6 +111,7 @@ class CleanHandoffContractTest(unittest.TestCase):
             self.assertEqual(result["sidecar_sha256"], hashlib.sha256(sidecar.read_bytes()).hexdigest())
             payload = __import__("json").loads(sidecar.read_text(encoding="utf-8"))
             self.assertEqual(payload["archive_sha256"], result["archive_sha256"])
+            self.assertEqual(set(payload["corpora"]), {"demo", "uud"})
             with zipfile.ZipFile(archive) as source:
                 self.assertNotIn(sidecar.name, source.namelist())
 

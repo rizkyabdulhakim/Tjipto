@@ -62,6 +62,14 @@ class CorpusRegistry:
         settings = {key: value for key, value in entry.items() if key != "manifest"} if isinstance(entry, dict) else {}
         return CorpusConfig(corpus_id, manifest_path, manifest, settings, self.repo_root)
 
+    def corpus_ids(self) -> tuple[str, ...]:
+        """Return the registry's closed, deterministic corpus identifier set."""
+        try:
+            registry = read_json(self.registry_path)
+        except (OSError, json.JSONDecodeError):
+            return ()
+        return tuple(sorted(corpus_id for corpus_id in registry if isinstance(corpus_id, str))) if isinstance(registry, dict) else ()
+
     def _safe_registry_path(self, rel: str) -> Path | None:
         path = Path(rel)
         if path.is_absolute():

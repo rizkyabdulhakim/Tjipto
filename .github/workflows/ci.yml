@@ -15,14 +15,21 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12.10"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.14.0"
       - name: Install canonical Python environment
         run: |
           python -m pip install --require-hashes --upgrade -r requirements.lock
           python -m pip install --no-deps --no-build-isolation -e .
       - name: Initialize reports
-        run: mkdir -p reports
+        run: |
+          rm -rf reports
+          mkdir reports
+      - name: Validate canonical toolchain
+        run: python scripts/validate_toolchain.py
       - name: Record environment identity
-        run: python scripts/measure_command.py --environment-report reports/environment.json -- python --version
+        run: python scripts/measure_command.py --environment-report reports/run-identity.json -- python --version
       - name: Compile
         run: python scripts/measure_command.py --gate compileall --report reports/ci-gates.jsonl -- python -m compileall -q src tests scripts
       - name: Unit tests
@@ -44,7 +51,7 @@ jobs:
       - name: pip check
         run: python scripts/measure_command.py --gate pip_check --report reports/ci-gates.jsonl -- python -m pip check
       - name: pip audit
-        run: python -m pip_audit --strict -r requirements.lock -f json -o reports/pip-audit.json
+        run: python scripts/measure_command.py --gate pip_audit --report reports/ci-gates.jsonl -- python -m pip_audit --strict -r requirements.lock -f json -o reports/pip-audit.json
       - name: Dependency inspection
         run: python -m pip inspect > reports/pip-inspect.json
       - name: Clean tree after rebuild
@@ -64,13 +71,13 @@ jobs:
           second_sidecar = json.loads(Path(second["sidecar_path"]).read_text())
           comparison = {
               "archive_sha256_equal": first["archive_sha256"] == second["archive_sha256"],
-              "artifact_set_digest_equal": first_sidecar["artifact_set_digest"] == second_sidecar["artifact_set_digest"],
+              "corpora_equal": first_sidecar["corpora"] == second_sidecar["corpora"],
               "first_archive_sha256": first["archive_sha256"],
               "second_archive_sha256": second["archive_sha256"],
-              "artifact_set_digest": first_sidecar["artifact_set_digest"],
+              "corpora": first_sidecar["corpora"],
           }
           Path("reports/release-comparison.json").write_text(json.dumps(comparison, indent=2, sort_keys=True) + "\n")
-          if not all(comparison[key] for key in ("archive_sha256_equal", "artifact_set_digest_equal")):
+          if not all(comparison[key] for key in ("archive_sha256_equal", "corpora_equal")):
               raise SystemExit("release reproducibility comparison failed")
           PY
       - name: Upload backend evidence
@@ -102,7 +109,15 @@ jobs:
           python -m pip install --require-hashes --upgrade -r requirements.lock
           python -m pip install --no-deps --no-build-isolation -e .
       - name: Initialize reports
-        run: mkdir -p reports
+        run: |
+          rm -rf reports
+          mkdir reports
+      - name: Validate canonical toolchain
+        working-directory: .
+        run: python scripts/validate_toolchain.py
+      - name: Record run identity
+        working-directory: .
+        run: python scripts/measure_command.py --environment-report apps/web/reports/run-identity.json -- python --version
       - name: Clean install
         run: npm ci
       - name: Unit tests
@@ -114,7 +129,7 @@ jobs:
       - name: Clean build
         run: python ../../scripts/measure_command.py --gate web_build --report reports/ci-gates.jsonl -- npm run build
       - name: Production audit
-        run: npm audit --omit=dev --audit-level=high --json > npm-audit.json
+        run: npm audit --omit=dev --audit-level=high --json > reports/npm-audit.json
       - name: Install browser
         run: npm run smoke:install
       - name: Smoke test
@@ -122,22 +137,12 @@ jobs:
       - name: Record web environment
         if: always()
         run: |
-          node --version > node-version.txt
-          npm --version > npm-version.txt
-          sha256sum package-lock.json > package-lock.sha256
-          node -e "const b=require('./node_modules/playwright-core/browsers.json').browsers.find((x)=>x.name==='chromium'); console.log(JSON.stringify(b))" > browser.json
-          printf '{"runner_image_os":"%s","runner_image_version":"%s"}\n' "$ImageOS" "$ImageVersion" > environment.json
+          node -e "const b=require('./node_modules/playwright-core/browsers.json').browsers.find((x)=>x.name==='chromium'); console.log(JSON.stringify(b))" > reports/browser.json
       - name: Upload web evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: web-evidence
           path: |
-            apps/web/npm-audit.json
-            apps/web/node-version.txt
-            apps/web/npm-version.txt
-            apps/web/package-lock.sha256
-            apps/web/environment.json
-            apps/web/browser.json
-            apps/web/reports/ci-gates.jsonl
+            apps/web/reports/
           if-no-files-found: warn

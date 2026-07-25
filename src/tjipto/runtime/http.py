@@ -186,16 +186,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         if getattr(self, "_request_recorded", False):
             return
         self._request_recorded = True
-        path = urlsplit(self.path).path
-        parts = [part for part in path.split("/") if part]
-        if path == "/health":
-            route = "health"
-        elif len(parts) >= 3 and parts[0] == "legal":
-            route = f"legal.{parts[2]}"
-        elif len(parts) >= 2 and parts[0] == "uud":
-            route = f"legacy.{parts[1]}"
-        else:
-            route = "not_found"
+        route = _telemetry_route(urlsplit(self.path).path)
         self.telemetry.emit(
             "http_request",
             request_id=getattr(self, "_request_id", uuid4().hex),
@@ -204,6 +195,17 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
             status_code=status,
             latency_ms=round((perf_counter() - getattr(self, "_request_started", perf_counter())) * 1000, 3),
         )
+
+
+def _telemetry_route(path: str) -> str:
+    if path == "/health":
+        return "health"
+    for action in ("ask", "search", "citation", "viewer", "pdf", "bookmarks", "capabilities"):
+        if re.fullmatch(rf"/legal/[^/]+/{action}/?", path):
+            return f"legal.{action}"
+        if path in {f"/uud/{action}", f"/uud/{action}/"}:
+            return f"legacy.{action}"
+    return "not_found"
 
 
 def _mode() -> str:
