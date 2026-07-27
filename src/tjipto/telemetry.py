@@ -151,6 +151,13 @@ class Telemetry:
     def from_environment(cls, registry: CorpusRegistry | None = None) -> Telemetry:
         return cls(_stderr_sink if os.environ.get("TJIPTO_TELEMETRY") == "stderr" else None, registry=registry)
 
+    def bind_registry(self, registry: CorpusRegistry) -> None:
+        """Bind this instance to one repository; reject cross-repository reuse."""
+        if self._registry is None:
+            self._registry = registry
+        elif self._registry.repo_root.resolve() != registry.repo_root.resolve():
+            raise ValueError("telemetry registry conflicts with runtime registry")
+
     def emit(self, event: str, **attributes: Any) -> None:
         if self._sink is not None:
             try:

@@ -83,6 +83,7 @@ class LegalRuntimeService:
         self.registry = CorpusRegistry(repo_root)
         self.repository = VerifiedCorpusRepository(self.registry)
         self.telemetry = telemetry or Telemetry.from_environment(self.registry)
+        self.telemetry.bind_registry(self.registry)
         self._integrity_error: str | None = None
         self._store_cache: dict[str, EvidenceStore] = {}
         self._public_targets: OrderedDict[str, tuple[str, dict]] = OrderedDict()

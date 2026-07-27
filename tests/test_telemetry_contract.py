@@ -66,9 +66,13 @@ class TelemetryContractTest(unittest.TestCase):
             (root / "data/corpus_registry.json").write_text(json.dumps({"demo": "data/demo/manifest.json"}), encoding="utf-8")
             records: list[dict] = []
 
-            Telemetry(records.append, registry=CorpusRegistry(root)).emit("corpus_load", corpus_id="demo", status="loaded")
+            service = LegalRuntimeService(root, telemetry=Telemetry(records.append))
+            service.telemetry.emit("corpus_load", corpus_id="demo", status="loaded")
 
             self.assertEqual(records, [{"event": "corpus_load", "attributes": {"corpus_id": "demo", "status": "loaded"}}])
+
+            service.telemetry.emit("integrity_failure", corpus_id=service._telemetry_corpus_id("missing"), reason_code="unknown_corpus")
+            self.assertEqual(records[-1]["attributes"]["corpus_id"], "unknown")
 
             previous = os.environ.get("TJIPTO_TELEMETRY")
             os.environ["TJIPTO_TELEMETRY"] = "stderr"
@@ -82,3 +86,18 @@ class TelemetryContractTest(unittest.TestCase):
                 else:
                     os.environ["TJIPTO_TELEMETRY"] = previous
             self.assertEqual(json.loads(output.getvalue())["attributes"]["corpus_id"], "demo")
+
+    def test_injected_compatible_registry_is_preserved_and_conflicts_fail_fast(self) -> None:
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            first_root = Path(first)
+            second_root = Path(second)
+            for root in (first_root, second_root):
+                (root / "data").mkdir()
+                (root / "data/corpus_registry.json").write_text(json.dumps({"demo": "data/demo/manifest.json"}), encoding="utf-8")
+
+            explicit_registry = CorpusRegistry(first_root)
+            telemetry = Telemetry(registry=explicit_registry)
+            service = LegalRuntimeService(first_root, telemetry=telemetry)
+            self.assertIs(service.telemetry._registry, explicit_registry)
+            with self.assertRaisesRegex(ValueError, "telemetry registry conflicts"):
+                LegalRuntimeService(second_root, telemetry=telemetry)
