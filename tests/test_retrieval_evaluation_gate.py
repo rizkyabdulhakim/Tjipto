@@ -31,6 +31,12 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
             "expected_evidence_ids",
             "forbidden_legal_unit_ids",
             "forbidden_evidence_ids",
+            "expected_claims",
+            "expected_claim_support",
+            "expected_reason_code",
+            "expected_source_role",
+            "expected_temporal_context",
+            "forbidden_support_ids",
             "risk_family",
             "notes",
         }

@@ -27,6 +27,8 @@ from tjipto.retrieval.metadata import (
 from tjipto.retrieval.relations import has_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent
+from tjipto.runtime.claim_support import all_supported, verify_claims
+from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.telemetry import Telemetry
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
@@ -490,6 +492,7 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return _integrity_failure(corpus_id, query, self._integrity_error)
+        semantics = interpret_query(store, corpus_id, query, available_corpora=self.registry.corpus_ids())
         anomaly = _source_anomaly_response(store, corpus_id, query)
         if anomaly:
             return anomaly
@@ -591,10 +594,24 @@ class LegalRuntimeService:
             }
         scope = scope_guard_context(store, query)
         if scope:
+            # Classify scope only after the same corpus has had a retrieval attempt.
+            self._route_retrieval(
+                corpus_id,
+                query,
+                store,
+                limit=limit,
+                metadata_filters=filters,
+                allow_navigation=semantics.requested_function != "temporal_quotation",
+            )
             templates = _answer_templates(store)
-            context_pack = empty_context_pack(scope["reason"])
+            missing_domain = scope.get("requested_function") == "out_of_corpus_domain"
+            reason = "missing_corpus_support" if missing_domain else scope["reason"]
+            context_pack = empty_context_pack(reason)
             return scope | {
                 "status": "insufficient_evidence",
+                "route": "missing_corpus" if reason == "missing_corpus_support" else scope["route"],
+                "reason": reason,
+                "reason_code": reason,
                 "corpus_id": corpus_id,
                 "original_query": query,
                 "normalized_query": query.strip(),
@@ -614,9 +631,23 @@ class LegalRuntimeService:
                 "legal_relations": (),
                 "answer_scope": "insufficient_evidence",
                 "warnings": (),
-                "insufficient_reasons": (scope["reason"],),
+                "insufficient_reasons": (reason,),
+                "available_corpora": semantics.available_corpora,
+                "needed_corpora": ("additional_legal_corpus",) if reason == "missing_corpus_support" else (),
+                "missing_corpora": ("additional_legal_corpus",) if reason == "missing_corpus_support" else (),
+                "retrieval_attempted": True,
             }
-        routed = self._route_retrieval(corpus_id, query, store, limit=limit, metadata_filters=filters)
+        semantic_filters = dict(filters or {})
+        if semantics.source_role and "source_role" not in semantic_filters:
+            semantic_filters["source_role"] = semantics.source_role
+        routed = self._route_retrieval(
+            corpus_id,
+            query,
+            store,
+            limit=limit,
+            metadata_filters=semantic_filters,
+            allow_navigation=semantics.requested_function != "temporal_quotation",
+        )
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
         clarification = _metadata_scope_clarification(store, routed)
@@ -674,6 +705,31 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": tuple(sorted(set(context_pack["validation_reasons"].values()))),
             }
+        claim_support = verify_claims(semantics, evidence)
+        if not all_supported(claim_support):
+            claim_reason = next(claim.reason_code for claim in claim_support if claim.reason_code)
+            return routed | {
+                "status": "insufficient_evidence",
+                "route": ask_route,
+                "answer_type": "none",
+                "answer": templates["insufficient"],
+                "context_pack": empty_context_pack(claim_reason),
+                "evidence": (),
+                "citations": (),
+                "final_citations": (),
+                "historical_citations": (),
+                "metadata_support": (),
+                "structural_support": (),
+                "trace_support": (),
+                "viewer_refs": (),
+                "metadata_facts": (),
+                "legal_relations": (),
+                "answer_scope": "insufficient_evidence",
+                "warnings": (),
+                "insufficient_reasons": (claim_reason,),
+                "reason_code": claim_reason,
+                "claim_support": tuple(claim.public() for claim in claim_support),
+            }
         status = (
             "limited_answer"
             if ask_route == "lexical_fallback" or (context_pack["trace_support"] and not context_pack["citation_payloads"])
@@ -725,6 +781,7 @@ class LegalRuntimeService:
             if any(row.get("viewer_highlightable") is not True for row in metadata_support)
             else (),
             "insufficient_reasons": (),
+            "claim_support": tuple(claim.public() for claim in claim_support),
         }
 
     def _agent_answer(self, query: str, evidence: tuple[dict, ...], fallback: str) -> str:
@@ -2138,6 +2195,12 @@ def _is_source_anomaly_query(store, query: str) -> bool:
     unresolved_terms = tuple(str(term).casefold() for term in intent.get("unresolved_query_terms") or ())
     if any(_query_contains_term(folded, term) for term in unresolved_terms):
         return True
+    discrepancy_markers = ("tapi", "tetapi", "namun", "kenapa", "mengapa", "berbeda", "beda")
+    if any(_query_contains_term(folded, marker) for marker in discrepancy_markers):
+        return any(
+            sum(_query_contains_term(folded, str(anchor).casefold()) for anchor in conflict.get("query_anchor_terms") or ()) >= 2
+            for conflict in store.source_conflicts
+        )
     return False
 
 
@@ -2185,14 +2248,18 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
     role_anchor_match = _query_contains_term(folded_query, role_label) and any(
         _query_contains_term(folded_query, anchor) for anchor in anchors
     )
+    natural_discrepancy = (
+        any(_query_contains_term(folded_query, marker) for marker in ("tapi", "tetapi", "namun", "kenapa", "mengapa", "berbeda", "beda"))
+        and sum(_query_contains_term(folded_query, anchor) for anchor in anchors) >= 2
+    )
     source_marker_context = conflict.get("source_anomaly_kind") in {"source_marker_sequence_anomaly", "typed_source_discrepancy"} and role_anchor_match
-    if required and not any(_query_contains_term(folded_query, term) for term in required) and not source_marker_context:
+    if required and not any(_query_contains_term(folded_query, term) for term in required) and not source_marker_context and not natural_discrepancy:
         return 0
     explicit_anchor_match = any(
         len(anchor.split()) > 1 and _query_contains_term(folded_query, anchor) for anchor in anchors
     )
     semantic_required = tuple(term for term in required if term not in anchors or "pasal" not in term)
-    marker_context = role_anchor_match or any(_query_contains_term(folded_query, term) for term in semantic_required)
+    marker_context = role_anchor_match or natural_discrepancy or any(_query_contains_term(folded_query, term) for term in semantic_required)
     if (
         semantic_required
         and not any(_query_contains_term(folded_query, term) for term in semantic_required)

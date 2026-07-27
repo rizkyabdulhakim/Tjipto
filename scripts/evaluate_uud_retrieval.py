@@ -94,7 +94,11 @@ def _scope_performance() -> dict[str, Any]:
     correct = 0
     leakage = 0
     for response, expected in zip(responses[: len(cases)], expected_roles):
-        roles = {row.get("source_role") for row in response.get("citations", ())}
+        roles = {
+            row.get("source_role")
+            for field in ("citations", "historical_citations", "trace_support")
+            for row in response.get(field, ())
+        }
         correct += roles == {expected}
         leakage += bool(roles - {expected})
     warm_samples.sort()
@@ -141,6 +145,11 @@ def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, A
             "citation_evidence_ids": _ids(internal.get("citations", ()), "evidence_id"),
             "citation_legal_unit_ids": _ids(internal.get("citations", ()), "legal_unit_id"),
             "final_citation_count": _final_citation_count(internal),
+            "claims": _claim_texts(internal),
+            "claim_support": _claim_statuses(internal),
+            "reason_code": _reason_code(internal),
+            "source_role": _source_attribute(internal, "source_role"),
+            "temporal_context": _source_attribute(internal, "temporal_context"),
         },
     }
 
@@ -151,6 +160,11 @@ def _validate(case: dict[str, Any], response: dict[str, Any], internal: dict[str
     _expect_equal(errors, "route", case.get("expected_route"), response.get("route"))
     _expect_equal(errors, "intent", case.get("expected_intent"), response.get("intent"))
     _expect_equal(errors, "requested_function", case.get("expected_requested_function"), response.get("requested_function"))
+    _expect_equal(errors, "claims", case.get("expected_claims"), _claim_texts(internal))
+    _expect_equal(errors, "claim_support", case.get("expected_claim_support"), _claim_statuses(internal))
+    _expect_equal(errors, "reason_code", case.get("expected_reason_code"), _reason_code(internal))
+    _expect_equal(errors, "source_role", case.get("expected_source_role"), _source_attribute(internal, "source_role"))
+    _expect_equal(errors, "temporal_context", case.get("expected_temporal_context"), _source_attribute(internal, "temporal_context"))
     _expect_equal(errors, "support_type", case.get("expected_support_type"), _support_type(internal))
     citations = tuple(internal.get("citations", ()))
     historical = tuple(internal.get("historical_citations", ()))
@@ -160,6 +174,7 @@ def _validate(case: dict[str, Any], response: dict[str, Any], internal: dict[str
     citation_evidence_ids = set(_ids(citations, "evidence_id")) | set(_ids(historical, "evidence_id"))
     citation_legal_unit_ids = set(_ids(citations, "legal_unit_id")) | set(_ids(historical, "legal_unit_id"))
     support_evidence_ids = citation_evidence_ids | set(_ids(metadata, "evidence_id")) | set(_ids(trace, "evidence_id"))
+    support_evidence_ids |= set(_claim_support_ids(internal))
     for evidence_id in case.get("expected_evidence_ids", ()):
         if evidence_id not in support_evidence_ids:
             errors.append(f"missing_expected_evidence:{evidence_id}")
@@ -169,6 +184,9 @@ def _validate(case: dict[str, Any], response: dict[str, Any], internal: dict[str
     for evidence_id in case.get("forbidden_evidence_ids", ()):
         if evidence_id in support_evidence_ids:
             errors.append(f"forbidden_evidence_returned:{evidence_id}")
+    for evidence_id in case.get("forbidden_support_ids", ()):
+        if evidence_id in support_evidence_ids:
+            errors.append(f"forbidden_support_returned:{evidence_id}")
     for legal_unit_id in case.get("forbidden_legal_unit_ids", ()):
         if legal_unit_id in citation_legal_unit_ids:
             errors.append(f"forbidden_legal_unit_returned:{legal_unit_id}")
@@ -220,6 +238,40 @@ def _ids(rows: Any, key: str) -> tuple[str, ...]:
 
 def _final_citation_count(response: dict[str, Any]) -> int:
     return sum(1 for row in response.get("citations", ()) if isinstance(row, dict) and row.get("citation_final") is True)
+
+
+def _claim_texts(response: dict[str, Any]) -> list[str]:
+    return [str(row.get("claim_text")) for row in response.get("claim_support", ()) if isinstance(row, dict)]
+
+
+def _claim_statuses(response: dict[str, Any]) -> list[str]:
+    return [str(row.get("status")) for row in response.get("claim_support", ()) if isinstance(row, dict)]
+
+
+def _claim_support_ids(response: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(
+        str(evidence_id)
+        for row in response.get("claim_support", ())
+        if isinstance(row, dict)
+        for evidence_id in row.get("support_evidence_ids", ())
+    )
+
+
+def _reason_code(response: dict[str, Any]) -> str | None:
+    if response.get("reason_code"):
+        return str(response["reason_code"])
+    return next(
+        (str(row["reason_code"]) for row in response.get("claim_support", ()) if isinstance(row, dict) and row.get("reason_code")),
+        None,
+    )
+
+
+def _source_attribute(response: dict[str, Any], field: str) -> str | None:
+    for rows in (response.get("citations", ()), response.get("historical_citations", ()), response.get("claim_support", ())):
+        for row in rows:
+            if isinstance(row, dict) and row.get(field):
+                return str(row[field])
+    return None
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

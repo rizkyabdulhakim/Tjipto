@@ -29,7 +29,13 @@ class StructuralRequest:
 
 
 def structured_lookup(
-    store: EvidenceStore, query: str, limit: int = 10, *, strategy: str = "uud_1945", source_role: str | None = None
+    store: EvidenceStore,
+    query: str,
+    limit: int = 10,
+    *,
+    strategy: str = "uud_1945",
+    source_role: str | None = None,
+    allow_navigation: bool = True,
 ) -> tuple[dict, ...]:
     config = getattr(store, "config", None)
     intent = intent_config_for(strategy, config)
@@ -42,7 +48,7 @@ def structured_lookup(
     instrument = _instrument_rows(store, query, limit, strategy=strategy, config=config)
     if instrument:
         return instrument
-    navigation = _navigation_rows(store, query, limit, corpus_id)
+    navigation = _navigation_rows(store, query, limit, corpus_id) if allow_navigation else ()
     if navigation:
         return navigation
     targets = _targets(query, intent, corpus_id)

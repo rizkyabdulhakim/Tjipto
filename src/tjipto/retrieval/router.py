@@ -24,6 +24,7 @@ def route_retrieval(
     *,
     limit: int = 10,
     allow_bm25_after_citation_miss: bool = False,
+    allow_navigation: bool = True,
     route: str = "auto",
     metadata_filters: dict | None = None,
 ) -> dict:
@@ -144,6 +145,7 @@ def route_retrieval(
             len(store.evidence),
             strategy=structured_strategy,
             source_role=filters.get("source_role"),
+            allow_navigation=allow_navigation,
         )
     )
     navigation_all = tuple(row for row in structured_all if row.get("candidate_type") == "structural_navigation_candidate")
