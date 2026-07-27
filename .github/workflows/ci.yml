@@ -59,16 +59,18 @@ jobs:
       - name: Verify exact archive (first build)
         run: |
           set -euo pipefail
-          python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" | tee reports/release-one.json'
-          test -s reports/release-one.json
+          python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" | tee "$RUNNER_TEMP/tjipto-release-one.json"'
+          test -s "$RUNNER_TEMP/tjipto-release-one.json"
           test -s "$RUNNER_TEMP/tjipto-release-one.zip.sidecar.json"
+          cp "$RUNNER_TEMP/tjipto-release-one.json" reports/release-one.json
           cp "$RUNNER_TEMP/tjipto-release-one.zip.sidecar.json" reports/release-one.sidecar.json
       - name: Verify exact archive (second build)
         run: |
           set -euo pipefail
-          python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" | tee reports/release-two.json'
-          test -s reports/release-two.json
+          python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" | tee "$RUNNER_TEMP/tjipto-release-two.json"'
+          test -s "$RUNNER_TEMP/tjipto-release-two.json"
           test -s "$RUNNER_TEMP/tjipto-release-two.zip.sidecar.json"
+          cp "$RUNNER_TEMP/tjipto-release-two.json" reports/release-two.json
           cp "$RUNNER_TEMP/tjipto-release-two.zip.sidecar.json" reports/release-two.sidecar.json
       - name: Compare release identities
         run: |
