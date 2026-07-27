@@ -57,18 +57,38 @@ jobs:
       - name: Clean tree after rebuild
         run: python scripts/measure_command.py --gate clean_tree --report reports/ci-gates.jsonl -- git diff --exit-code
       - name: Verify exact archive (first build)
-        run: python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" > reports/release-one.json && cp "$RUNNER_TEMP/tjipto-release-one.zip.sidecar.json" reports/release-one.sidecar.json'
+        run: |
+          set -euo pipefail
+          python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" | tee reports/release-one.json'
+          test -s reports/release-one.json
+          test -s "$RUNNER_TEMP/tjipto-release-one.zip.sidecar.json"
+          cp "$RUNNER_TEMP/tjipto-release-one.zip.sidecar.json" reports/release-one.sidecar.json
       - name: Verify exact archive (second build)
-        run: python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" > reports/release-two.json && cp "$RUNNER_TEMP/tjipto-release-two.zip.sidecar.json" reports/release-two.sidecar.json'
+        run: |
+          set -euo pipefail
+          python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" | tee reports/release-two.json'
+          test -s reports/release-two.json
+          test -s "$RUNNER_TEMP/tjipto-release-two.zip.sidecar.json"
+          cp "$RUNNER_TEMP/tjipto-release-two.zip.sidecar.json" reports/release-two.sidecar.json
       - name: Compare release identities
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          first = json.loads(Path("reports/release-one.json").read_text())
-          second = json.loads(Path("reports/release-two.json").read_text())
-          first_sidecar = json.loads(Path(first["sidecar_path"]).read_text())
-          second_sidecar = json.loads(Path(second["sidecar_path"]).read_text())
+
+          def load_report(path):
+              text = Path(path).read_text(encoding="utf-8")
+              if not text.strip():
+                  raise SystemExit(f"empty release evidence: {path}")
+              try:
+                  return json.loads(text)
+              except json.JSONDecodeError as error:
+                  raise SystemExit(f"invalid release evidence: {path}: {error}") from error
+
+          first = load_report("reports/release-one.json")
+          second = load_report("reports/release-two.json")
+          first_sidecar = load_report("reports/release-one.sidecar.json")
+          second_sidecar = load_report("reports/release-two.sidecar.json")
           comparison = {
               "archive_sha256_equal": first["archive_sha256"] == second["archive_sha256"],
               "corpora_equal": first_sidecar["corpora"] == second_sidecar["corpora"],
