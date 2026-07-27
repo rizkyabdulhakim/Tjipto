@@ -28,7 +28,7 @@ from tjipto.retrieval.relations import has_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.scope_guard import scope_guard_context
-from tjipto.telemetry import DEFAULT_TELEMETRY, Telemetry
+from tjipto.telemetry import Telemetry
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
 
 
@@ -82,7 +82,7 @@ class LegalRuntimeService:
     def __init__(self, repo_root: Path | None = None, telemetry: Telemetry | None = None):
         self.registry = CorpusRegistry(repo_root)
         self.repository = VerifiedCorpusRepository(self.registry)
-        self.telemetry = telemetry or DEFAULT_TELEMETRY
+        self.telemetry = telemetry or Telemetry.from_environment(self.registry)
         self._integrity_error: str | None = None
         self._store_cache: dict[str, EvidenceStore] = {}
         self._public_targets: OrderedDict[str, tuple[str, dict]] = OrderedDict()

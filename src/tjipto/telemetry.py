@@ -8,7 +8,10 @@ import os
 import re
 import sys
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from tjipto.corpora.registry import CorpusRegistry
 
 
 EVENT_ATTRIBUTES = {
@@ -86,14 +89,14 @@ _CI_GATES = frozenset(
 )
 
 
-def event_record(event: str, **attributes: Any) -> dict[str, Any]:
+def event_record(event: str, *, registry: CorpusRegistry | None = None, **attributes: Any) -> dict[str, Any]:
     """Return a bounded record containing only the event's approved fields."""
     allowed = EVENT_ATTRIBUTES[event]
     values = {key: value for key, value in attributes.items() if key in allowed and key not in SENSITIVE_ATTRIBUTES and _safe_value(value)}
     if set(values) != allowed:
         missing = sorted(allowed - set(values))
         raise ValueError(f"telemetry attributes missing or unsafe: {', '.join(missing)}")
-    if not all(_valid_attribute(event, key, value) for key, value in values.items()):
+    if not all(_valid_attribute(event, key, value, registry) for key, value in values.items()):
         raise ValueError("telemetry attributes are outside their approved values")
     return {"event": event, "attributes": values}
 
@@ -106,11 +109,11 @@ def _safe_value(value: Any) -> bool:
     )
 
 
-def _valid_attribute(event: str, key: str, value: Any) -> bool:
+def _valid_attribute(event: str, key: str, value: Any, registry: CorpusRegistry | None = None) -> bool:
     if key == "corpus_id":
         from tjipto.corpora.registry import CorpusRegistry
 
-        return value == "unknown" or value in CorpusRegistry().corpus_ids()
+        return value == "unknown" or value in (registry or CorpusRegistry()).corpus_ids()
     if event == "http_request":
         return {
             "request_id": type(value) is str and bool(_REQUEST_ID.fullmatch(value)),
@@ -133,18 +136,25 @@ def _valid_attribute(event: str, key: str, value: Any) -> bool:
 class Telemetry:
     """Disabled by default; when enabled, sends JSON-safe records to one local sink."""
 
-    def __init__(self, sink: Callable[[dict[str, Any]], None] | None = None, *, strict: bool = False):
+    def __init__(
+        self,
+        sink: Callable[[dict[str, Any]], None] | None = None,
+        *,
+        strict: bool = False,
+        registry: CorpusRegistry | None = None,
+    ):
         self._sink = sink
         self._strict = strict
+        self._registry = registry
 
     @classmethod
-    def from_environment(cls) -> Telemetry:
-        return cls(_stderr_sink if os.environ.get("TJIPTO_TELEMETRY") == "stderr" else None)
+    def from_environment(cls, registry: CorpusRegistry | None = None) -> Telemetry:
+        return cls(_stderr_sink if os.environ.get("TJIPTO_TELEMETRY") == "stderr" else None, registry=registry)
 
     def emit(self, event: str, **attributes: Any) -> None:
         if self._sink is not None:
             try:
-                self._sink(event_record(event, **attributes))
+                self._sink(event_record(event, registry=self._registry, **attributes))
             except Exception:
                 if self._strict:
                     raise

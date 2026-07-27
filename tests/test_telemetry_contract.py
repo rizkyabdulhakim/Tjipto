@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-import unittest
+from contextlib import redirect_stderr
+import io
 import math
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
 
+from tjipto.corpora.registry import CorpusRegistry
+from tjipto.runtime.service import LegalRuntimeService
 from tjipto.telemetry import EVENT_ATTRIBUTES, Telemetry, event_record
 
 
@@ -50,3 +58,27 @@ class TelemetryContractTest(unittest.TestCase):
         Telemetry(fail).emit("corpus_load", corpus_id="uud", status="loaded")
         with self.assertRaises(RuntimeError):
             Telemetry(fail, strict=True).emit("corpus_load", corpus_id="uud", status="loaded")
+
+    def test_registered_custom_root_corpus_is_retained(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "data").mkdir()
+            (root / "data/corpus_registry.json").write_text(json.dumps({"demo": "data/demo/manifest.json"}), encoding="utf-8")
+            records: list[dict] = []
+
+            Telemetry(records.append, registry=CorpusRegistry(root)).emit("corpus_load", corpus_id="demo", status="loaded")
+
+            self.assertEqual(records, [{"event": "corpus_load", "attributes": {"corpus_id": "demo", "status": "loaded"}}])
+
+            previous = os.environ.get("TJIPTO_TELEMETRY")
+            os.environ["TJIPTO_TELEMETRY"] = "stderr"
+            try:
+                output = io.StringIO()
+                with redirect_stderr(output):
+                    LegalRuntimeService(root).telemetry.emit("corpus_load", corpus_id="demo", status="loaded")
+            finally:
+                if previous is None:
+                    os.environ.pop("TJIPTO_TELEMETRY", None)
+                else:
+                    os.environ["TJIPTO_TELEMETRY"] = previous
+            self.assertEqual(json.loads(output.getvalue())["attributes"]["corpus_id"], "demo")
