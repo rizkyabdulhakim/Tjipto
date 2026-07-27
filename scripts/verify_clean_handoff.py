@@ -126,12 +126,16 @@ def run_candidate_checks(path: Path) -> dict[str, int]:
             cwd=candidate,
             check=True,
             env=environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         subprocess.run(  # nosec B603 B607 - fixed Python module commands.
             [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
             cwd=candidate,
             check=True,
             env=environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
     return {"compileall": 0, "unittest": 0}
 
