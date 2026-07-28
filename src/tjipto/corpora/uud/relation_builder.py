@@ -61,7 +61,7 @@ def _reference_units(text: str, start: int, end: int) -> list[dict]:
             )
             continue
         for ayat_index, ayat in enumerate(ayats):
-            prefix = str(reference["reference"])
+            prefix = str(reference["reference"]).partition(" ayat ")[0]
             rows.append(
                 {
                     "reference": f"{prefix} ayat ({ayat.group(1)})",
@@ -71,6 +71,50 @@ def _reference_units(text: str, start: int, end: int) -> list[dict]:
                 }
             )
     return rows
+
+
+def resolve_relation_unit(
+    legal_units: list[dict],
+    reference: str,
+    *,
+    source_role: str | None = None,
+    source_document_id: str | None = None,
+) -> dict | None:
+    """Resolve a UUD relation reference without collapsing an Ayat to its Pasal."""
+    article_label, separator, ayat_label = str(reference).partition(" ayat ")
+    candidates = (
+        row
+        for row in legal_units
+        if (source_role is None or row.get("source_role") == source_role)
+        and (source_document_id is None or row.get("source_document_id") == source_document_id)
+    )
+    article = next((row for row in candidates if row.get("unit_label") == article_label), None)
+    if article is None or not separator or not re.fullmatch(r"\(\d+\)", ayat_label.strip()):
+        return article
+    return next(
+        (
+            row
+            for row in legal_units
+            if (source_role is None or row.get("source_role") == source_role)
+            and (source_document_id is None or row.get("source_document_id") == source_document_id)
+            and row.get("unit_label") == ayat_label.strip()
+            and article["legal_unit_id"] in (row.get("parent_legal_unit_ids") or ())
+        ),
+        None,
+    )
+
+
+def legal_unit_reference(unit: dict | None, units_by_id: dict[str, dict]) -> str | None:
+    """Return the complete relation reference represented by a legal unit."""
+    if unit is None:
+        return None
+    label = str(unit.get("unit_label") or "")
+    if label.startswith("Pasal "):
+        return label
+    parent = units_by_id.get(str(unit.get("parent_legal_unit_id") or ""))
+    if parent and str(parent.get("unit_label") or "").startswith("Pasal ") and re.fullmatch(r"\(\d+\)", label):
+        return f"{parent['unit_label']} ayat {label}"
+    return label or None
 
 
 def _source_role_for_ordinal(ordinal: str) -> str:
@@ -157,13 +201,13 @@ def build_article_amendment_relations(
         target_unit_id = _legal_unit_id(edge.get("target_id"))
         source_unit = units.get(source_unit_id or "")
         target = units.get(target_unit_id or "")
-        target_citation = target.get("unit_label") if target else None
-        if not str(target_citation or "").startswith(("Pasal ", "Ayat ")):
+        mapping = edge.get("reference_mapping") or {}
+        target_citation = str(mapping.get("new_reference") or legal_unit_reference(target, units) or "")
+        if not target_citation.startswith("Pasal "):
             continue
         if not evidence_row or not target or not all(ref in bbox_ids for ref in evidence_row.get("bbox_refs") or ()):
             continue
-        mapping = edge.get("reference_mapping") or {}
-        target_phrase = str(mapping.get("new_reference") or target_citation or "")
+        target_phrase = target_citation
         target_span_ids = _target_span_ids(evidence_row, target_phrase, spans_by_id)
         relation_span_ids, relation_bbox_refs = _relation_support_refs(
             evidence_row,
@@ -230,7 +274,7 @@ def build_article_amendment_relations(
                 "source_legal_unit_id": source_unit_id,
                 "source_legal_unit_role": source_unit.get("source_role") if source_unit else None,
                 "source_label": source_unit.get("unit_label") if source_unit else None,
-                "target_label": target_citation,
+                "target_label": target.get("unit_label"),
                 "target_source_role": target.get("source_role") if target else None,
                 "old_reference": old_reference,
                 "new_reference": target_reference,

@@ -6,7 +6,7 @@ import re
 from tjipto.corpora.uud.specs import UUD_INSERTED_BAB_PREDECESSORS, UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.parser_dispatch import parse_legal_references
 from tjipto.corpora.uud.policy.relations import is_deletion_provision, is_renumbering_provision, is_scope_provision
-from tjipto.corpora.uud.relation_builder import parse_renumbering_mappings
+from tjipto.corpora.uud.relation_builder import legal_unit_reference, parse_renumbering_mappings, resolve_relation_unit
 
 
 def build_graph_artifacts(
@@ -225,12 +225,13 @@ def build_graph_artifacts(
         if is_scope_provision(row):
             source_node = unit_node_ids.get(row["legal_unit_id"])
             for label in _scope_target_labels(row.get("quoted_text")):
-                target = _resolve_legal_unit_by_label(
+                target = resolve_relation_unit(
                     legal_units,
-                    row["source_document_id"],
                     label,
+                    source_document_id=row["source_document_id"],
                 )
                 if source_node and target:
+                    target_citation = legal_unit_reference(target, legal_units_by_id)
                     add_edge(
                         source_node,
                         unit_node_ids[target["legal_unit_id"]],
@@ -239,9 +240,9 @@ def build_graph_artifacts(
                         supporting_evidence_ids=[row["evidence_id"]],
                         source_legal_unit_id=row["legal_unit_id"],
                         target_legal_unit_id=target["legal_unit_id"],
-                        target_citation=target.get("unit_label"),
+                        target_citation=target_citation,
                         article_relation_ref=_article_relation_ref(
-                            "MODIFIES", row["evidence_id"], target["legal_unit_id"], target.get("unit_label")
+                            "MODIFIES", row["evidence_id"], target["legal_unit_id"], target_citation
                         ),
                         runtime_loadable=True,
                         validation_status="accepted_instrument_scope",
@@ -252,8 +253,9 @@ def build_graph_artifacts(
     if delete_clause:
         source_node = unit_node_ids[delete_clause["legal_unit_id"]]
         for label in ("BAB IV", "Pasal 16"):
-            target = _resolve_legal_unit_by_label(legal_units, delete_clause["source_document_id"], label)
+            target = resolve_relation_unit(legal_units, label, source_document_id=delete_clause["source_document_id"])
             if target and str(target.get("unit_label") or "").startswith(("Pasal ", "Ayat ")):
+                target_citation = legal_unit_reference(target, legal_units_by_id)
                 add_edge(
                     source_node,
                     unit_node_ids[target["legal_unit_id"]],
@@ -262,9 +264,9 @@ def build_graph_artifacts(
                     supporting_evidence_ids=[delete_clause["evidence_id"]],
                     source_legal_unit_id=delete_clause["legal_unit_id"],
                     target_legal_unit_id=target["legal_unit_id"],
-                    target_citation=target.get("unit_label"),
+                    target_citation=target_citation,
                     article_relation_ref=_article_relation_ref(
-                        "DELETES", delete_clause["evidence_id"], target["legal_unit_id"], target.get("unit_label")
+                        "DELETES", delete_clause["evidence_id"], target["legal_unit_id"], target_citation
                     ),
                     runtime_loadable=True,
                     validation_status="accepted_instrument_clause",
@@ -276,16 +278,8 @@ def build_graph_artifacts(
         source_node = unit_node_ids.get(renumber_clause["legal_unit_id"])
         for mapping in parse_renumbering_mappings(str(renumber_clause.get("quoted_text") or "")):
             source_role = mapping["source_role"]
-            source_label = str(mapping["old_reference"]).split(" ayat", 1)[0]
-            target_label = str(mapping["new_reference"]).split(" ayat", 1)[0]
-            source_unit = next(
-                (row for row in legal_units if row.get("source_role") == source_role and row.get("unit_label") == source_label),
-                None,
-            )
-            target_unit = next(
-                (row for row in legal_units if row.get("source_role") == "current_consolidated" and row.get("unit_label") == target_label),
-                None,
-            )
+            source_unit = resolve_relation_unit(legal_units, str(mapping["old_reference"]), source_role=source_role)
+            target_unit = resolve_relation_unit(legal_units, str(mapping["new_reference"]), source_role="current_consolidated")
             if source_node and source_unit and target_unit:
                 mapping_key = f"{mapping['old_reference']}->{mapping['new_reference']}"
                 relation_type = (
@@ -302,14 +296,14 @@ def build_graph_artifacts(
                     supporting_evidence_ids=[renumber_clause["evidence_id"]],
                     source_legal_unit_id=source_unit["legal_unit_id"],
                     target_legal_unit_id=target_unit["legal_unit_id"],
-                    target_citation=target_unit.get("unit_label"),
+                    target_citation=mapping["new_reference"],
                     source_legal_unit_role=source_unit.get("source_role"),
                     reference_mapping=mapping,
                     article_relation_ref=_article_relation_ref(
                         relation_type,
                         renumber_clause["evidence_id"],
                         target_unit["legal_unit_id"],
-                        target_unit.get("unit_label"),
+                        mapping["new_reference"],
                         mapping_key,
                     ),
                     _identity_evidence_id=f"{renumber_clause['evidence_id']}::{mapping_key}",
@@ -437,13 +431,6 @@ def _scope_target_labels(text: str | None) -> list[str]:
             seen.add(label)
             labels.append(label)
     return labels
-
-
-def _resolve_legal_unit_by_label(legal_units: list[dict], source_document_id: str, label: str) -> dict | None:
-    return next(
-        (row for row in legal_units if row["source_document_id"] == source_document_id and row.get("unit_label") == label),
-        None,
-    )
 
 
 def _source_role_for_ordinal(ordinal: str) -> str:

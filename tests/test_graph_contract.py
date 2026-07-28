@@ -395,7 +395,10 @@ class GraphContractTest(unittest.TestCase):
         self.assertTrue(rows)
         self.assertEqual(len({row["relation_id"] for row in rows}), len(rows))
         renumber_rows = [row for row in rows if row["relation_type"] in {"RENAMES", "RENUMBERED_TO"}]
-        self.assertEqual({row["target_citation"] for row in renumber_rows}, {"Pasal 3", "Pasal 25A"})
+        self.assertEqual(
+            {row["target_citation"] for row in renumber_rows},
+            {"Pasal 3 ayat (2)", "Pasal 3 ayat (3)", "Pasal 25A"},
+        )
         self.assertEqual(
             {(row["old_reference"], row["new_reference"]) for row in renumber_rows},
             {
@@ -408,12 +411,12 @@ class GraphContractTest(unittest.TestCase):
             [row["relation_type"] for row in renumber_rows if row["old_reference"] == "Pasal 25E"],
             ["RENUMBERED_TO"],
         )
-        pasal3_rows = [row for row in renumber_rows if row["target_citation"] == "Pasal 3"]
+        pasal3_rows = [row for row in renumber_rows if row["target_citation"].startswith("Pasal 3 ayat ")]
         self.assertTrue(all(row["target_precision"] == "target_local" for row in pasal3_rows if row["support_class"] == "exact_article_relation"))
         self.assertTrue(all(row["target_bbox_refs"] for row in pasal3_rows if row["support_class"] == "exact_article_relation"))
         self.assertTrue(all(row["trace_only_reason"] for row in pasal3_rows if row["support_class"] == "trace_article_relation"))
         for row in renumber_rows:
-            if row["target_citation"] == "Pasal 3":
+            if row["target_citation"].startswith("Pasal 3 ayat "):
                 self.assertIn("Pasal 3", row["quoted_text"][row["old_reference_range"][0] : row["old_reference_range"][1]])
                 self.assertIn(row["old_reference_range_kind"], {"literal", "contextual"})
         self.assertEqual(

@@ -28,6 +28,9 @@ class AnswerDecision:
     insufficient_reasons: tuple[str, ...] = ()
     reason_code: str | None = None
     claim_support: tuple[dict, ...] = ()
+    document_relations: tuple[dict, ...] | None = None
+    article_amendment_relations: tuple[dict, ...] | None = None
+    relation_support: tuple[dict, ...] | None = None
 
 
 def project_response(base: dict[str, Any], decision: AnswerDecision) -> dict[str, Any]:
@@ -35,4 +38,7 @@ def project_response(base: dict[str, Any], decision: AnswerDecision) -> dict[str
     response = base | decision.__dict__
     if decision.reason_code is None:
         response.pop("reason_code", None)
+    for key in ("document_relations", "article_amendment_relations", "relation_support"):
+        if response[key] is None:
+            response.pop(key)
     return response

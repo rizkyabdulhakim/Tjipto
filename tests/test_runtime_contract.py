@@ -676,7 +676,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(unsupported["historical_citations"])
         self.assertFalse(unsupported["citations"])
         self.assertFalse(unsupported["viewer_refs"])
-        self.assertEqual({row["target_citation"] for row in unsupported["article_amendment_relations"]}, {"Pasal 31"})
+        self.assertEqual({row["target_citation"] for row in unsupported["article_amendment_relations"]}, {"Pasal 31 ayat (1)"})
         self.assertFalse(unsupported["trace_support"])
 
         exact = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
@@ -703,7 +703,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertNotEqual({row["target_citation"] for row in reverse.get("article_amendment_relations", ())}, {"Pasal 16"})
         self.assertNotIn("Pasal 16", reverse.get("answer", ""))
         if reverse["status"] == "answer_ready":
-            self.assertEqual({row["target_citation"] for row in reverse["article_amendment_relations"]}, {"Pasal 31"})
+            self.assertEqual({row["target_citation"] for row in reverse["article_amendment_relations"]}, {"Pasal 31 ayat (1)"})
         else:
             self.assertEqual(reverse["route"], "document_relation")
             self.assertFalse(reverse["citations"])
@@ -730,7 +730,8 @@ class RuntimeContractTest(unittest.TestCase):
             [(row["source_reference"], row["target_reference"]) for row in paragraph["article_amendment_relations"]],
             [("Pasal 3 ayat (3)", "Pasal 3 ayat (2)")],
         )
-        self.assertEqual(paragraph["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00483")
+        self.assertEqual(paragraph["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00485")
+        self.assertEqual(paragraph["article_amendment_relations"][0]["target_legal_unit_id"], "uud_legal_unit_00014")
         self.assertEqual(paragraph["article_amendment_relations"][0]["source_reference_range_kind"], "literal")
         self.assertTrue(all(row["viewer_highlightable"] for row in paragraph["article_amendment_relations"]))
         self.assertIn("dukungan sumber exact", paragraph["answer"].casefold())

@@ -39,7 +39,7 @@ def resolve_capability(
 ) -> CapabilityDecision:
     """Return only requirements declared by this corpus's trusted policy."""
     guard = config.setting("scope_guard", {}) or {}
-    if contains_intent_phrase(query, tuple(guard.get("current_fact_subjects") or ())) and (
+    if requested_operation != "structural_navigation" and contains_intent_phrase(query, tuple(guard.get("current_fact_subjects") or ())) and (
         contains_intent_phrase(query, tuple(guard.get("current_fact_terms") or ()))
         or contains_intent_phrase(query, tuple(guard.get("identity_question_terms") or ()))
     ):

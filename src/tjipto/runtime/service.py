@@ -674,13 +674,7 @@ class LegalRuntimeService:
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
         if routed.get("route") == "document_relation":
-            return _document_relation_response(
-                store,
-                corpus_id,
-                query,
-                routed.get("relation_target") or {"mode": None},
-                tuple(routed.get("matches") or ()),
-            )
+            return _document_relation_response(store, routed)
         clarification = _metadata_scope_clarification(store, routed)
         if clarification:
             return routed | clarification
@@ -1564,73 +1558,50 @@ def _metadata_grounding_evidence(store, metadata_grounding_id: str | None) -> di
     return None
 
 
-def _document_relation_response(store, corpus_id: str, query: str, target: dict, graph_edges: tuple[dict, ...]) -> dict:
+def _document_relation_response(store, routed: dict) -> dict:
     templates = _answer_templates(store)
+    target = routed.get("relation_target") or {"mode": None}
+    graph_edges = tuple(routed.get("matches") or ())
     if target["mode"] == "article":
-        return _article_relation_response(store, corpus_id, query, target, templates, _article_relation_support(store, graph_edges))
+        return _article_relation_response(store, routed, target, templates, _article_relation_support(store, graph_edges))
     if target["mode"] == "unsupported":
-        return _relation_not_promoted(corpus_id, query, templates)
+        return _relation_not_promoted(routed, templates)
     support = _document_relation_support(store, graph_edges)
     if not support:
         reason = "document_relation_not_found"
-        return {
-            "status": "insufficient_evidence",
-            "route": "document_relation",
-            "intent": "document_amendment_relation",
-            "corpus_id": corpus_id,
-            "original_query": query,
-            "normalized_query": query.strip(),
-            "matches": (),
-            "reason": reason,
-            "answer_type": "none",
-            "answer": templates["insufficient"],
-            "context_pack": empty_context_pack(reason),
-            "evidence": (),
-            "citations": (),
-            "final_citations": (),
-            "historical_citations": (),
-            "metadata_support": (),
-            "structural_support": (),
-            "viewer_refs": (),
-            "metadata_facts": (),
-            "legal_relations": (),
-            "document_relations": (),
-            "answer_scope": "insufficient_evidence",
-            "warnings": (),
-            "insufficient_reasons": (reason,),
-        }
+        return project_response(
+            routed | {"matches": (), "reason": reason},
+            AnswerDecision(
+                "insufficient_evidence",
+                "document_relation",
+                "none",
+                templates["insufficient"],
+                empty_context_pack(reason),
+                document_relations=(),
+                insufficient_reasons=(reason,),
+            ),
+        )
     relations = tuple(_public_document_relation(row) for row in support)
-    return {
-        "status": "answer_ready",
-        "route": "document_relation",
-        "intent": "document_amendment_relation",
-        "corpus_id": corpus_id,
-        "original_query": query,
-        "normalized_query": query.strip(),
-        "matches": support,
-        "reason": None,
-        "answer_type": "document_relation",
-        "answer": _document_relation_answer(store, relations),
-        "context_pack": empty_context_pack("document_relation_source_role_trace"),
-        "evidence": (),
-        "citations": (),
-        "viewer_refs": (),
-        "metadata_facts": (),
-        "legal_relations": (),
-        "document_relations": relations,
-        "answer_scope": "source_role_document_relation",
-        "warnings": ("document_relation_not_exact_highlightable",),
-        "insufficient_reasons": (),
-    }
+    return project_response(
+        routed | {"matches": support},
+        AnswerDecision(
+            "answer_ready",
+            "document_relation",
+            "document_relation",
+            _document_relation_answer(store, relations),
+            empty_context_pack("document_relation_source_role_trace"),
+            document_relations=relations,
+            answer_scope="source_role_document_relation",
+            warnings=("document_relation_not_exact_highlightable",),
+        ),
+    )
 
 
-def _article_relation_response(
-    store, corpus_id: str, query: str, target: dict, templates: dict[str, str], support: tuple[dict, ...]
-) -> dict:
+def _article_relation_response(store, routed: dict, target: dict, templates: dict[str, str], support: tuple[dict, ...]) -> dict:
     if not support:
         if target.get("target_citation"):
-            return _relation_not_promoted(corpus_id, query, templates, reason="relation_target_not_found")
-        return _relation_not_promoted(corpus_id, query, templates)
+            return _relation_not_promoted(routed, templates, reason="relation_target_not_found")
+        return _relation_not_promoted(routed, templates)
     exact_support = tuple(row for row in support if _is_exact_article_relation(row))
     exact_targets = {row.get("target_legal_unit_id") for row in exact_support}
     trace_support = tuple(row for row in support if not _is_exact_article_relation(row) and row.get("target_legal_unit_id") not in exact_targets)
@@ -1638,36 +1609,22 @@ def _article_relation_response(
     answer_evidence = tuple(row for row in (_article_relation_evidence(store, row) for row in exact_support) if row)
     if not answer_evidence:
         if not trace_support:
-            return _relation_not_promoted(corpus_id, query, templates)
-        return {
-            "status": "limited_answer",
-            "route": "document_relation",
-            "intent": "document_amendment_relation",
-            "corpus_id": corpus_id,
-            "original_query": query,
-            "normalized_query": query.strip(),
-            "matches": support,
-            "reason": "relation_trace_only",
-            "answer_type": "article_amendment_relation",
-            "answer": _article_relation_answer(store, (), trace_support),
-            "context_pack": empty_context_pack("relation_trace_only"),
-            "evidence": (),
-            "citations": (),
-            "final_citations": (),
-            "historical_citations": (),
-            "metadata_support": (),
-            "structural_support": (),
-            "viewer_refs": (),
-            "metadata_facts": (),
-            "legal_relations": (),
-            "document_relations": (),
-            "article_amendment_relations": public_relations,
-            "relation_support": (),
-            "trace_support": tuple(_public_article_relation(row) for row in trace_support),
-            "answer_scope": "trace_article_relation",
-            "warnings": ("article_relation_trace_only_not_citable",),
-            "insufficient_reasons": (),
-        }
+            return _relation_not_promoted(routed, templates)
+        return project_response(
+            routed | {"matches": support, "reason": "relation_trace_only"},
+            AnswerDecision(
+                "limited_answer",
+                "document_relation",
+                "article_amendment_relation",
+                _article_relation_answer(store, (), trace_support),
+                empty_context_pack("relation_trace_only"),
+                article_amendment_relations=public_relations,
+                relation_support=(),
+                trace_support=tuple(_public_article_relation(row) for row in trace_support),
+                answer_scope="trace_article_relation",
+                warnings=("article_relation_trace_only_not_citable",),
+            ),
+        )
     citations = _deduplicated_article_relation_citations(store, answer_evidence)
     final_citations = tuple(row for row in citations if row.get("citation_final") is True)
     historical_citations = tuple(row for row in citations if row.get("citation_final") is False)
@@ -1683,66 +1640,42 @@ def _article_relation_response(
         "viewer_refs": viewer_refs,
         "validation_reasons": {row["evidence_id"]: "article_amendment_relation_exact_source_text" for row in public_evidence},
     }
-    return {
-        "status": "limited_answer" if partial else "answer_ready",
-        "route": "document_relation",
-        "intent": "document_amendment_relation",
-        "corpus_id": corpus_id,
-        "original_query": query,
-        "normalized_query": query.strip(),
-        "matches": support,
-        "reason": None,
-        "answer_type": "article_amendment_relation",
-        "answer": _article_relation_answer(store, exact_support, trace_support),
-        "context_pack": context_pack,
-        "evidence": public_evidence,
-        "citations": final_citations,
-        "final_citations": final_citations,
-        "historical_citations": historical_citations,
-        "metadata_support": (),
-        "structural_support": (),
-        "viewer_refs": viewer_refs,
-        "metadata_facts": (),
-        "legal_relations": (),
-        "document_relations": (),
-        "article_amendment_relations": public_relations,
-        "relation_support": answer_evidence,
-        "trace_support": tuple(_public_article_relation(row) for row in trace_support),
-        "answer_scope": "partial_exact_article_relation" if partial else "exact_article_relation",
-        "warnings": ("article_relation_exact_support_partial_trace_omitted",) if trace_support else (),
-        "insufficient_reasons": (),
-    }
+    return project_response(
+        routed | {"matches": support},
+        AnswerDecision(
+            "limited_answer" if partial else "answer_ready",
+            "document_relation",
+            "article_amendment_relation",
+            _article_relation_answer(store, exact_support, trace_support),
+            context_pack,
+            evidence=public_evidence,
+            citations=final_citations,
+            final_citations=final_citations,
+            historical_citations=historical_citations,
+            viewer_refs=viewer_refs,
+            article_amendment_relations=public_relations,
+            relation_support=answer_evidence,
+            trace_support=tuple(_public_article_relation(row) for row in trace_support),
+            answer_scope="partial_exact_article_relation" if partial else "exact_article_relation",
+            warnings=("article_relation_exact_support_partial_trace_omitted",) if trace_support else (),
+        ),
+    )
 
 
-def _relation_not_promoted(corpus_id: str, query: str, templates: dict[str, str], *, reason: str = "relation_not_promoted") -> dict:
-    return {
-        "status": "insufficient_evidence",
-        "route": "document_relation",
-        "intent": "document_amendment_relation",
-        "corpus_id": corpus_id,
-        "original_query": query,
-        "normalized_query": query.strip(),
-        "matches": (),
-        "reason": reason,
-        "answer_type": "none",
-        "answer": templates["insufficient"],
-        "context_pack": empty_context_pack(reason),
-        "evidence": (),
-        "citations": (),
-        "final_citations": (),
-        "historical_citations": (),
-        "metadata_support": (),
-        "structural_support": (),
-        "trace_support": (),
-        "viewer_refs": (),
-        "metadata_facts": (),
-        "legal_relations": (),
-        "document_relations": (),
-        "article_amendment_relations": (),
-        "answer_scope": "insufficient_evidence",
-        "warnings": (),
-        "insufficient_reasons": (reason,),
-    }
+def _relation_not_promoted(routed: dict, templates: dict[str, str], *, reason: str = "relation_not_promoted") -> dict:
+    return project_response(
+        routed | {"matches": (), "reason": reason},
+        AnswerDecision(
+            "insufficient_evidence",
+            "document_relation",
+            "none",
+            templates["insufficient"],
+            empty_context_pack(reason),
+            document_relations=(),
+            article_amendment_relations=(),
+            insufficient_reasons=(reason,),
+        ),
+    )
 
 
 def _document_relation_support(store, graph_edges: tuple[dict, ...]) -> tuple[dict, ...]:

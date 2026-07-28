@@ -373,6 +373,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 propositions=read_jsonl(FINAL / "propositions.jsonl"),
                 metadata_grounding=read_jsonl(FINAL / "metadata_grounding.jsonl"),
                 metadata_grounding_registry=read_jsonl(FINAL / "metadata_grounding_registry.jsonl"),
+                source_objects=read_jsonl(FINAL / "source_objects.jsonl"),
                 word_bboxes=read_jsonl(FINAL / "word_bboxes.jsonl"),
                 manifest_files=read_json(FINAL / "manifest.json")["files"],
                 graph_nodes=read_jsonl(FINAL / "graph_nodes.jsonl"),
