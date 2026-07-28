@@ -12,7 +12,7 @@ from tjipto.retrieval.metadata import (
 )
 from tjipto.corpora.source_arbitration import resolve_source_scope
 from tjipto.retrieval.query import classify_intent, normalize_query
-from tjipto.retrieval.relations import has_relation_target, relation_lookup
+from tjipto.retrieval.relations import amendment_relation_lookup, has_relation_target, relation_lookup
 from tjipto.retrieval.service import RetrievalService
 from tjipto.retrieval.structured import has_instrument_target, has_structured_target, structured_failure_reason, structured_lookup
 
@@ -107,6 +107,16 @@ def route_retrieval(
         return envelope | dense_search(store, normalized["normalized_query"], limit)
 
     service = RetrievalService(store)
+    amendment_target, amendment_edges = amendment_relation_lookup(store, normalized["normalized_query"])
+    if amendment_target.get("mode") is not None and allow_relation:
+        return envelope | {
+            "status": "found",
+            "route": "document_relation",
+            "intent": "document_amendment_relation",
+            "matches": amendment_edges,
+            "relation_target": amendment_target,
+            "expansion_trace": (),
+        }
     relation_all = tuple(relation_lookup(store, normalized["normalized_query"], len(store.evidence)))
     relation = filter_evidence(relation_all, filters)
     if relation and allow_relation:

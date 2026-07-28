@@ -23,6 +23,7 @@ class CorpusConfig:
     verified_artifacts: Mapping[str, object] | None = None
     manifest_digest: str | None = None
     artifact_set_digest: str | None = None
+    strategy: object | None = None
 
     def setting(self, key: str, default=None):
         return (self.settings or {}).get(key, default)

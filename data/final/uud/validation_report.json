@@ -29,7 +29,8 @@
     "word_bboxes.jsonl",
     "pdf_health_report.json",
     "promotion_decisions.jsonl",
-    "propositions.jsonl"
+    "propositions.jsonl",
+    "source_objects.jsonl"
   ],
   "status": "valid",
   "structure_fidelity": {
@@ -44,11 +45,12 @@
     "bbox_records": 1827,
     "retrieval_units": 650,
     "promotion_decisions": 77,
-    "propositions": 2063,
+    "propositions": 1019,
     "graph_nodes": 3209,
-    "graph_edges": 7918,
+    "graph_edges": 8007,
     "page_text_spans": 2070,
-    "word_bboxes": 11766
+    "word_bboxes": 11766,
+    "source_objects": 705
   },
   "bbox_precision_counts": {
     "exact": 1827,
@@ -66,6 +68,18 @@
     "marker_geometry_mismatch_count": 0,
     "whole_line_geometry_fallback_count": 0,
     "status": "pass"
+  },
+  "source_object_disposition_health": {
+    "source_object_count": 705,
+    "terminal_disposition_count": 705,
+    "duplicate_source_object_id_count": 0,
+    "missing_source_object_id_count": 0,
+    "invalid_disposition_count": 0,
+    "unresolved_text_span_ref_count": 0,
+    "missing_lineage_count": 0,
+    "extraction_failed_count": 0,
+    "needs_review_count": 34,
+    "status": "complete"
   },
   "chunk_self_contained_health": {
     "chunk_rows": 653,
@@ -359,11 +373,11 @@
     "runtime_check_count": 0
   },
   "artifact_origin_health": {
-    "manifest_file_rows": 31,
-    "files_with_origin": 31,
+    "manifest_file_rows": 32,
+    "files_with_origin": 32,
     "files_missing_origin": 0,
     "invalid_origin_values": 0,
-    "generated_count": 26,
+    "generated_count": 27,
     "carried_forward_count": 3,
     "manual_review_artifact_count": 2,
     "deprecated_count": 0,
@@ -550,9 +564,16 @@
   "legal_graph_baseline": {
     "status": "authority_aware_evidence_gated",
     "actual_edge_type_counts": {
+      "AMENDED_BY": 4,
+      "AMENDS": 4,
       "BELONGS_TO_SOURCE_ROLE": 650,
+      "CONSOLIDATED_BY": 4,
+      "CONSOLIDATES": 4,
       "CONTAINS": 530,
+      "DELETED_BY": 1,
       "DELETES": 1,
+      "DERIVED_FROM": 1,
+      "DERIVES": 1,
       "FOLLOWS": 7,
       "HAS_BBOX": 4095,
       "HAS_DECISION_SESSION": 3,
@@ -561,16 +582,22 @@
       "HAS_SIGNATORY": 4,
       "HAS_SOURCE_ANOMALY": 4,
       "INSERTED_AFTER": 7,
+      "MODIFIED_BY": 68,
       "MODIFIES": 68,
       "PAGE_GROUNDED_AT": 706,
       "PART_OF": 530,
       "PRECEDES": 7,
+      "RENAMED_FROM": 1,
       "RENAMES": 2,
+      "RENUMBERED_FROM": 1,
       "RENUMBERED_TO": 1,
       "USES_SOURCE_PDF": 650
     },
     "actual_promoted_legal_edge_type_counts": {
+      "AMENDED_BY": 4,
+      "AMENDS": 4,
       "CONTAINS": 530,
+      "DELETED_BY": 1,
       "DELETES": 1,
       "FOLLOWS": 7,
       "HAS_DECISION_SESSION": 3,
@@ -578,20 +605,29 @@
       "HAS_SIGNATORY": 4,
       "HAS_SOURCE_ANOMALY": 4,
       "INSERTED_AFTER": 7,
+      "MODIFIED_BY": 68,
       "MODIFIES": 68,
       "PART_OF": 530,
       "PRECEDES": 7,
+      "RENAMED_FROM": 1,
       "RENAMES": 2,
+      "RENUMBERED_FROM": 1,
       "RENUMBERED_TO": 1
     },
     "runtime_loadable_legal_edge_type_counts": {
+      "AMENDED_BY": 4,
+      "AMENDS": 4,
       "CONTAINS": 530,
+      "DELETED_BY": 1,
       "DELETES": 1,
       "HAS_DECISION_SESSION": 3,
       "HAS_SIGNATORY": 4,
+      "MODIFIED_BY": 68,
       "MODIFIES": 68,
       "PART_OF": 530,
+      "RENAMED_FROM": 1,
       "RENAMES": 2,
+      "RENUMBERED_FROM": 1,
       "RENUMBERED_TO": 1
     },
     "schema_edge_types": [
@@ -599,6 +635,7 @@
       "AMENDED_BY",
       "AMENDS",
       "CONTAINS",
+      "DELETED_BY",
       "DELETES",
       "FOLLOWS",
       "HAS_DECISION_SESSION",
@@ -606,44 +643,47 @@
       "HAS_SIGNATORY",
       "HAS_SOURCE_ANOMALY",
       "INSERTED_AFTER",
+      "INSERTED_BY",
+      "MODIFIED_BY",
       "MODIFIES",
       "PART_OF",
       "PRECEDES",
+      "RENAMED_FROM",
       "RENAMES",
+      "RENUMBERED_FROM",
       "RENUMBERED_TO",
       "SUPPLEMENTS"
     ],
     "not_promoted_edge_types": [
       "ADDS",
-      "AMENDED_BY",
-      "AMENDS",
+      "INSERTED_BY",
       "SUPPLEMENTS"
     ],
-    "runtime_loadable_legal_edges": 1139
+    "runtime_loadable_legal_edges": 1218
   },
   "legal_graph_authority_health": {
-    "status": "incomplete",
-    "graph_edge_count": 7918,
+    "status": "complete",
+    "graph_edge_count": 8007,
     "article_relation_count": 72,
     "article_relation_graph_ref_count": 72,
     "evidence_backed_relation_edge_count": 70,
     "trace_only_relation_edge_count": 2,
-    "non_citable_edge_count": 72,
+    "non_citable_edge_count": 161,
     "authority_without_evidence_count": 0,
     "authority_without_bbox_count": 0,
     "trace_promoted_count": 0,
     "graph_final_citation_edge_count": 0,
     "invalid_finality_policy_count": 0,
-    "missing_authority_field_count": 7846,
+    "missing_authority_field_count": 0,
     "authority_kind_counts": {
-      "relation_reference": 7918
+      "relation_reference": 8007
     },
     "support_kind_counts": {
       "deterministic_structure": 1081,
-      "endpoint_provenance": 6761,
-      "exact_source_relation": 72,
+      "endpoint_provenance": 6779,
+      "exact_source_relation": 143,
       "source_anomaly_trace": 4
     }
   },
-  "validated_artifact_set_digest": "7b614ad8c81011ac781b3d644d95d04fb10b2df820316a371d403152eec7387b"
+  "validated_artifact_set_digest": "89cc5886fc2e2c7732d99016a3fbced3cb30ec5873e7587d0f2b542cbbaca7d3"
 }

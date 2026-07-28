@@ -171,6 +171,10 @@ MINIMUM_ARTIFACT_FIELDS: dict[str, tuple[str, ...]] = {
         "page_locator",
     ),
     "source_documents": ("source_document_id", "sha256", "path", "source_page_url", "download_url"),
+    "source_objects": (
+        "source_object_id", "source_document_id", "source_sha256", "page_number", "pdf_block_type",
+        "payload_sha256", "text_span_ids", "target_refs", "disposition", "reason", "object_role",
+    ),
     "word_bboxes": (
         "word_bbox_id",
         "source_document_id",
@@ -248,7 +252,7 @@ COMMON_ARTIFACT_FIELDS = frozenset(
     "authority_kind bbox_precision bbox_refs citation citation_available citation_final corpus_id evidence_id grounding_level relation_id relation_type runtime_loadable source_document_id source_role text_span_ids recovery_capability recovery_status page_number page_range quoted_text quote source_pdf_sha256 target_bbox_refs target_citation target_legal_unit_id target_precision target_source_role source_legal_unit_role source_label target_label old_reference new_reference old_reference_range new_reference_range old_reference_range_kind new_reference_range_kind bbox_id bbox_ids citable citable_status citation_finality_reason citation_eligibility relevant_quote_eligible coordinate_origin coordinate_space evidence_exists exactness page_box_basis page_height page_rotation page_width promotion_candidate reason_code source_pdf source_pdf_path source_sha256 status artifact_status text transform_version viewer_highlightable x0 x1 y0 y1 ancestor_legal_unit_ids canonical_label canonical_unit_ref canonical_use_allowed chunk_id chunk_type contributing_child_legal_unit_ids current_resolution_state evidence_ids evidence_summary exclusion_ref failure_reason grounding_status hierarchy historical_label sibling_order stable_unit_id structural_depth structural_role temporal_context validation_basis validation_status date decision_date decision_session document_metadata_id document_type effective_rule enactment evidence_refs field_statuses grounded_fields grounding_refs institution ln_tln official_title officials penetapan pengesahan pengundangan place promulgation source_anomaly_status source_publication signatories article_level reason support_refs support_type target_document_id target_source_role classification exclusion_reason field_bbox_feasibility legal_force metadata_field promotion_status promotion_target_id promotion_target_type review_status semantic_classification span_bbox_ids text_span_id span_role bbox_registry_coverage_status bbox_registry_coverage_reason bbox_registry_coverage_bucket word_bbox_candidate_count word_bbox_distance_to_existing_span_bbox word_bbox_match_confidence word_bbox_match_method bbox_sample_refs bbox_total_count parent_legal_unit_id rejection_reason retrieval_trace content_fingerprint file_size file_size_match filename final_download_url http_content_type http_last_modified http_status page_count page_count_match path redownload_sha256 reproducibility_status source_authority source_integrity_status affected_pages anchor_terms authoritative_evidence_id blocked_raw_provenance_reason blocked_raw_provenance_text_span_ids blocked_raw_provenance_text_span_reasons final_authority_policy final_evidence_available page_numbers provenance provenance_bbox_status provenance_exception_category provenance_highlight_scope provenance_review_status provenance_summary query_anchor_terms query_exclusion_terms query_required_terms resolution_decision raw_provenance_bbox_ids raw_provenance_text_span_ids source_anomaly_kind source_anomaly_policy source_conflict_id source_mapping_kind type edge_type derivation_method derivation_reason derivation_basis confidence_policy object_role linked_authority is_citation_object metadata_grounding_ids support_relation_ids support_evidence_ids support_exception_ids support_kind page_locator retrieval_terms metadata_grounding_ref_id char_start char_end page_text_hash text_start text_end unresolved_chunk_reference source_id target_id sha256_match word_index block_index line_index word_no normalized_text bbox_source extractor extractor_version characters recovery_method failure_code promotion_attempted decision candidate_status current_grounding_status exact_bbox_available exact_quote_available exact_span_available can_be_exact_citation can_be_exact_highlight highlightable matched_page_numbers matched_span_ids matched_text_excerpt quote_match_status span_match_status subspan_match_status bbox_union_status blocker_evidence metadata_exact_promotion_feasibility policy_reason raw_source_span_id raw_text raw_quote raw_stream_id raw_stream_sha256 raw_text_start raw_text_end extraction_order legal_text default_highlight_eligible normalization_actions disposition_reason".split()
 )
 COMMON_ARTIFACT_FIELDS = COMMON_ARTIFACT_FIELDS | {"page_start", "page_end", "parent_legal_unit_ids", "unit_label", "unit_type", "source_text_span_ids", "source_bbox_refs", "source_node_type", "target_node_type", "bbox_status", "final_evidence_id", "rectangle_index", "hierarchy_path", "orphan_policy", "conflict_type", "target_text_span_ids", "trace_only_reason", "validator_status", "provenance_ref", "provenance_ref_kind", "provenance_support", "legal_unit_id"}
-COMMON_ARTIFACT_FIELDS = COMMON_ARTIFACT_FIELDS | {"proposition_id", "claim_type", "subject", "predicate", "object", "polarity", "modality", "conditions", "exceptions", "text_segment_id", "source_selectors", "terminal_boundary"}
+COMMON_ARTIFACT_FIELDS = COMMON_ARTIFACT_FIELDS | {"proposition_id", "claim_type", "subject", "predicate", "object", "polarity", "modality", "conditions", "exceptions", "text_segment_id", "source_selectors", "terminal_boundary", "source_object_id", "pdf_block_type", "payload_sha256", "source_line_refs", "text_span_ids", "target_refs", "disposition", "extraction_error", "bbox", "line_count", "derived_from_edge_id"}
 
 # Schema 6 is intentionally closed.  These fields are legacy truth owners or
 # ambiguous aliases and must never reappear in a published snapshot.
@@ -324,7 +328,7 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "exact_quote", "field_bbox_feasibility", "legal_force", "linked_authority", "metadata_grounding_ids",
         "normalization_contract", "object_role", "page_number", "page_text_hash", "promotion_status",
         "promotion_target_id", "promotion_target_type", "reason", "reason_code", "review_status", "semantic_classification",
-        "source_document_id", "source_pdf", "source_pdf_path", "source_role", "source_sha256", "span_bbox_ids",
+        "source_document_id", "source_object_id", "source_pdf", "source_pdf_path", "source_role", "source_sha256", "span_bbox_ids",
         "span_role", "status", "stream_id", "temporal_context", "text", "text_end", "text_prefix", "text_start",
         "text_suffix", "text_span_id", "unicode_offset_basis", "validation_basis", "viewer_highlightable",
         "word_bbox_candidate_count", "word_bbox_distance_to_existing_span_bbox", "word_bbox_match_confidence",
@@ -350,7 +354,7 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
     }),
     "graph_edges": frozenset({
         "artifact_status", "confidence_policy", "derivation_basis", "derivation_method", "derivation_reason", "edge_id", "edge_type",
-        "object_role", "provenance_ref", "provenance_ref_kind", "provenance_support", "reason_code", "relation_id", "relation_type",
+        "object_role", "provenance_ref", "provenance_ref_kind", "provenance_support", "reason_code", "relation_id", "relation_type", "derived_from_edge_id",
         "runtime_loadable", "source_document_id", "source_id", "source_node_type", "source_role", "support_evidence_ids",
         "support_exception_ids", "support_kind", "support_relation_ids", "target_id", "target_node_type", "temporal_context", "validation_status",
     }),
@@ -399,6 +403,11 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "query_anchor_terms", "query_exclusion_terms", "query_required_terms", "raw_provenance_bbox_ids", "raw_provenance_text_span_ids", "recovery_capability",
         "recovery_status", "resolution_decision", "runtime_loadable", "source_anomaly_kind", "source_anomaly_policy", "source_conflict_id",
         "source_document_id", "source_mapping_kind", "status", "target_precision", "text_span_ids", "type", "validation_status", "failure_reason", "recovery_failure_code", "source_sha256", "source_quote", "comparison_source_document_id", "comparison_source_sha256", "comparison_quote", "comparison_anchor_terms", "comparison_pages", "review_evidence",
+    }),
+    "source_objects": frozenset({
+        "source_object_id", "source_document_id", "source_sha256", "source_pdf_path", "page_number", "block_index",
+        "pdf_block_type", "bbox", "payload_sha256", "line_count", "source_line_refs", "extraction_error",
+        "object_role", "text_span_ids", "target_refs", "disposition", "reason",
     }),
     "source_documents": frozenset({
         "content_fingerprint", "corpus_id", "download_url", "file_size", "file_size_match", "filename", "final_download_url", "http_content_type",

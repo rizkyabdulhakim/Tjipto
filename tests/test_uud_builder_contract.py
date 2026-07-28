@@ -11,7 +11,7 @@ import unittest
 from tjipto.core.manifest import read_json, read_jsonl
 from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
-from tjipto.corpora.uud.bbox_builder import pdf_lines
+from tjipto.corpora.uud.bbox_builder import extract_pdf
 from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
 from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
 from tjipto.corpora.uud.legal_unit_builder import build_legal_units_from_sources
@@ -254,7 +254,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 legal_units=legal_units,
                 chunks=chunks,
                 source_documents=source_documents,
-                pdf_lines_by_source={source_id: pdf_lines(doc) for source_id, doc in docs.items()},
+                pdf_lines_by_source={source_id: extract_pdf(doc, source_id).lines for source_id, doc in docs.items()},
                 word_bboxes=word_bboxes,
             )
         finally:

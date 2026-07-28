@@ -343,9 +343,15 @@ class GraphContractTest(unittest.TestCase):
         self.assertTrue(all(edge["status"] == "accepted" for edge in edges))
         self.assertTrue(all(edge["runtime_loadable"] is False for edge in edges))
 
-    def test_amends_edges_are_preserved_as_not_promoted_exceptions(self) -> None:
+    def test_amends_edges_are_persisted_as_non_citable_document_relations(self) -> None:
         graph_edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
-        self.assertFalse([row for row in graph_edges if row["edge_type"] in {"AMENDS", "AMENDED_BY"}])
+        graph_rows = [row for row in graph_edges if row["edge_type"] in {"AMENDS", "AMENDED_BY"}]
+        self.assertEqual(len(graph_rows), 8)
+        self.assertTrue(all(row["runtime_loadable"] is True for row in graph_rows))
+        self.assertTrue(all(row["source_id"].startswith("source_role::") for row in graph_rows))
+        self.assertTrue(all(row["target_id"].startswith("source_role::") for row in graph_rows))
+        self.assertTrue(all(row["support_kind"] == "endpoint_provenance" for row in graph_rows))
+        self.assertTrue(all(not row["support_evidence_ids"] for row in graph_rows))
         exceptions = read_jsonl(ROOT / "data/final/uud/validation_exceptions.jsonl")
         amends = [row for row in exceptions if row.get("edge_type") in {"AMENDS", "AMENDED_BY"}]
         self.assertEqual(len(amends), 8)
@@ -481,10 +487,10 @@ class GraphContractTest(unittest.TestCase):
         self.assertFalse([row for row in edges if any(key in row for key in ("evidence_ref", "bbox_refs", "text_span_ids", "support_refs"))])
         self.assertTrue(all({"support_relation_ids", "support_evidence_ids", "support_exception_ids", "support_kind"} <= set(row) for row in edges))
         self.assertNotIn("legal_edge_types", report)
-        self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "AMENDED_BY", "AMENDS", "SUPPLEMENTS"})
+        self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "INSERTED_BY", "SUPPLEMENTS"})
         for edge_type in report["not_promoted_edge_types"]:
             self.assertNotIn(edge_type, report["actual_edge_type_counts"])
-        for edge_type in {"ADDS", "AMENDED_BY", "AMENDS", "SUPPLEMENTS"}:
+        for edge_type in {"ADDS", "INSERTED_BY", "SUPPLEMENTS"}:
             self.assertNotIn(edge_type, report["actual_promoted_legal_edge_type_counts"])
             self.assertIn(edge_type, report["schema_edge_types"])
         legal_edges = [
@@ -509,9 +515,10 @@ class GraphContractTest(unittest.TestCase):
         self.assertTrue(any(row["edge_type"] == "HAS_DECISION_SESSION" for row in legal_edges))
         self.assertTrue(any(row["edge_type"] == "HAS_EFFECTIVE_RULE" for row in legal_edges))
         self.assertTrue(any(row["edge_type"] == "HAS_SOURCE_ANOMALY" for row in legal_edges))
-        self.assertFalse(
-            [row for row in legal_edges if row["edge_type"] in {"AMENDS", "AMENDED_BY"} and row["source_id"].startswith("source_role::")]
-        )
+        document_edges = [row for row in edges if row["edge_type"] in {"AMENDS", "AMENDED_BY"}]
+        self.assertEqual(len(document_edges), 8)
+        self.assertTrue(all(row["support_kind"] == "endpoint_provenance" for row in document_edges))
+        self.assertTrue(all(not row["support_evidence_ids"] for row in document_edges))
         for row in legal_edges:
             self.assertIn(row["source_id"], nodes)
             self.assertIn(row["target_id"], nodes)

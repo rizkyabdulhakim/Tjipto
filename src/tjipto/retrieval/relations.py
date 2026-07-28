@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
-from tjipto.corpora.source_arbitration import resolve_source_scope
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
+from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
 from tjipto.corpora.parser_dispatch import (
     parse_bab_reference,
     parse_pasal_reference,
+    parse_legal_references,
 )
 
 
@@ -66,6 +67,136 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
             }
         )
     return tuple(rows[:limit])
+
+
+def amendment_relation_lookup(store, query: str) -> tuple[dict, tuple[dict, ...]]:
+    """Select amendment relations from persisted graph edges, never a sidecar scan."""
+    target = amendment_relation_target(store, query)
+    mode = target.get("mode")
+    if mode is None or mode == "unsupported":
+        return target, ()
+    if mode == "document":
+        role = target["role"]
+        edge_type = "AMENDED_BY" if role == "original_historical" else "AMENDS"
+        source_id = f"source_role::{role}"
+        return target, tuple(
+            row | {"route_sources": ("document_relation_graph",)}
+            for row in store.graph_edges
+            if row.get("edge_type") == edge_type and row.get("source_id") == source_id
+        )
+    relation_types = set(target.get("relation_types") or ())
+    role = target.get("role")
+    relation_by_id = {row.get("relation_id"): row for row in store.article_amendment_relations}
+    rows = []
+    for edge in store.graph_edges:
+        if edge.get("edge_type") not in relation_types or not edge.get("relation_id"):
+            continue
+        relation = relation_by_id.get(edge["relation_id"])
+        if relation is None or relation.get("runtime_loadable") is not True:
+            continue
+        if role and relation.get("source_role") != role:
+            continue
+        if not _article_relation_matches_target(store, relation, target.get("target_citation")):
+            continue
+        rows.append(edge | {"route_sources": ("article_amendment_relation_graph",)})
+    return target, tuple(rows)
+
+
+def amendment_relation_target(store, query: str) -> dict:
+    config = getattr(store, "config", None)
+    if getattr(config, "strategy", None) is None:
+        return {"mode": None}
+    strategy = getattr(config, "query_strategy", "generic")
+    intent = intent_config_for(strategy, config)
+    relation_config = intent.get("document_relation", {})
+    if not normalize_intent_text(query):
+        return {"mode": None}
+    relation_type = _amendment_relation_type(store, query)
+    relation_family = (relation_config.get("relation_families") or {}).get(relation_type, {})
+    relation_types = tuple(relation_family.get("relation_types") or ())
+    source_scope = resolve_source_scope(query, strategy=strategy, config=config)
+    references = parse_legal_references(getattr(config, "corpus_id", ""), query, config=config)
+    relation_signal = bool(relation_family) or contains_intent_phrase(query, relation_config.get("change_terms", ()))
+    add_signal = contains_intent_phrase(query, relation_config.get("add_terms", ()))
+    if source_scope.explicit and len(references) == 1 and not relation_signal and not add_signal:
+        return {"mode": None}
+    mentioned_roles = source_roles_for_query(query, strategy=strategy, config=config)
+    amendment_role = next((role for role in mentioned_roles if role.startswith("amendment_")), None)
+    amendment_signal = amendment_role in set(getattr(config, "source_roles", ()) or ()) or contains_intent_phrase(
+        query, relation_config.get("source_terms", ())
+    )
+    if relation_type == "RENAME_PROVISION":
+        amendment_signal = True
+    target_original = contains_intent_phrase(query, relation_config.get("target_document_terms", ()))
+    article_detail = contains_intent_phrase(query, relation_config.get("article_detail_terms", ()))
+    source_less_delete = relation_type == "DELETE_OR_REMOVE_PROVISION" and article_detail
+    if relation_type == "DELETE_OR_REMOVE_PROVISION" and not article_detail:
+        return {"mode": None}
+    if not references and amendment_role and "original_historical" in mentioned_roles:
+        return {"mode": "document", "role": amendment_role}
+    if not (relation_signal or add_signal) or (not amendment_signal and not source_less_delete):
+        return {"mode": None}
+    target_citation = _article_relation_target_citation(
+        getattr(config, "corpus_id", None), query, prefer_last=relation_type == "RENAME_PROVISION", config=config
+    )
+    if add_signal:
+        return {
+            "mode": "article",
+            "role": amendment_role,
+            "relation_types": tuple(
+                value for value in relation_config.get("schema_only_relation_types", ()) if value not in {"RENAMES", "RENUMBERED_TO"}
+            ),
+            "target_citation": target_citation,
+        }
+    if relation_type == "RENAME_PROVISION":
+        return {"mode": "article", "role": amendment_role, "relation_types": ("RENAMES", "RENUMBERED_TO"), "target_citation": target_citation}
+    if contains_intent_phrase(query, relation_config.get("unsupported_detail_terms", ())):
+        return {"mode": "unsupported"}
+    if article_detail:
+        if relation_type == "MODIFY_PROVISION":
+            relation_types = ("MODIFIES",)
+        return {"mode": "article", "role": amendment_role, "relation_types": relation_types or ("MODIFIES", "DELETES"), "target_citation": target_citation}
+    if amendment_role and amendment_role.startswith("amendment_"):
+        return {"mode": "document", "role": amendment_role}
+    if target_original:
+        return {"mode": "document", "role": "original_historical"}
+    return {"mode": None}
+
+
+def _amendment_relation_type(store, query: str) -> str | None:
+    config = getattr(store, "config", None)
+    relation_config = intent_config_for(getattr(config, "query_strategy", "generic"), config).get("document_relation", {})
+    for name, row in (relation_config.get("relation_families") or {}).items():
+        explicit_mapping = name == "RENAME_PROVISION" and "menjadi" in (query or "").casefold() and len(
+            parse_legal_references(getattr(config, "corpus_id", ""), query, config=config)
+        ) >= 2
+        if contains_intent_phrase(query, tuple(row.get("terms") or ())) or explicit_mapping:
+            return str(name)
+    return None
+
+
+def _article_relation_target_citation(corpus_id: str | None, query: str, *, prefer_last: bool = False, config=None) -> str | None:
+    if not corpus_id:
+        return None
+    references = parse_legal_references(corpus_id, query, config=config)
+    if not references:
+        return None
+    return str(references[-1 if prefer_last else 0].get("reference") or "") or None
+
+
+def _article_relation_matches_target(store, row: dict, target_citation: str | None) -> bool:
+    if not target_citation:
+        return True
+    target = _normalize_article_target(target_citation)
+    citation = _normalize_article_target(row.get("target_reference") or row.get("new_reference") or row.get("target_citation"))
+    if target == citation:
+        return True
+    unit: dict = next((unit for unit in store.legal_units if unit.get("legal_unit_id") == row.get("target_legal_unit_id")), {})
+    return target in {_normalize_article_target(label) for label in [unit.get("unit_label"), *(unit.get("hierarchy") or ())]}
+
+
+def _normalize_article_target(value: object) -> str:
+    return " ".join(str(value or "").casefold().replace("(", "").replace(")", "").split())
 
 
 def has_relation_target(query: str, *, strategy: str = "generic", config=None) -> bool:

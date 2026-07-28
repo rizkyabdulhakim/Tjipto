@@ -73,6 +73,7 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
         self.assertEqual(data["counts"]["pass"], expected)
         self.assertEqual(data["counts"]["fail"], 0)
         self.assertEqual(data["counts"]["known_gap"], 0)
+        self.assertTrue(all(value == 0 for value in data["acceptance_counters"].values()))
 
     def test_strict_known_gap_mode_passes(self) -> None:
         output = io.StringIO()

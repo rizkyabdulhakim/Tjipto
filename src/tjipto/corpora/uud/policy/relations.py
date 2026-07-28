@@ -99,7 +99,11 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
                         *(row.get("source_document_id") for row in supports),
                     ]
                 ),
-                "source_role": _source_role_class(source.get("source_role") or target.get("source_role") or edge.get("source_role")),
+                "source_role": (
+                    source.get("source_role")
+                    if descriptor.query_eligible
+                    else _source_role_class(source.get("source_role") or target.get("source_role") or edge.get("source_role"))
+                ),
                 "page_numbers": sorted(
                     {
                         page

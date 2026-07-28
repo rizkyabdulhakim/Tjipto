@@ -73,6 +73,7 @@ UUD_ARTIFACT_ORIGIN_POLICY = {
     "runtime_projection.json": _generated("runtime_projection_builder", "runtime_projection"),
     "source_conflicts.jsonl": _generated("source_conflict_builder", "validation"),
     "source_documents.jsonl": _generated("source_documents_builder", "source_inventory"),
+    "source_objects.jsonl": _generated("pdf_source_object_inventory", "ingestion"),
     "source_integrity.json": {
         "origin": "carried_forward",
         "origin_reason": "source integrity audit retained from the reviewed final artifact set; current builders verify source hashes against it",

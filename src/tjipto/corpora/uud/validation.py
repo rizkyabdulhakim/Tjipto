@@ -26,6 +26,8 @@ from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
 from tjipto.corpora.uud.artifact_policy import RECOVERY_CAPABILITIES, RECOVERY_STATUSES, UUD_ARTIFACT_SCHEMA
 from tjipto.contracts.artifacts import ARTIFACT_ALLOWED_FIELDS, ARTIFACT_OPTIONAL_FIELDS, COMMON_ARTIFACT_FIELDS, FORBIDDEN_ARTIFACT_FIELDS, MINIMUM_ARTIFACT_FIELDS
+from tjipto.contracts.relations import descriptor_for
+from tjipto.ingestion.pdf.source_objects import TERMINAL_DISPOSITIONS
 from tjipto.corpora.uud.contract import CONTRACT_FINGERPRINT, CONTRACT_ID, CONTRACT_VERSION
 from tjipto.corpora.uud.provenance_exceptions import (
     ACCEPTED_FALSE_POSITIVE_SEGMENTATION_PUNCTUATION,
@@ -78,6 +80,11 @@ LEGAL_EDGE_TYPES = {
     "HAS_SIGNATORY",
     "HAS_DECISION_SESSION",
     "HAS_SOURCE_ANOMALY",
+    "MODIFIED_BY",
+    "RENAMED_FROM",
+    "RENUMBERED_FROM",
+    "DELETED_BY",
+    "INSERTED_BY",
 }
 
 
@@ -102,6 +109,7 @@ def build_validation_report(
     article_amendment_relations: list[dict],
     page_text_spans: list[dict],
     raw_source_spans: list[dict] | None = None,
+    source_objects: list[dict] | None = None,
     pdf_health_report: dict | None = None,
     pages: list[dict] | None = None,
     intent_config: dict | None = None,
@@ -138,6 +146,7 @@ def build_validation_report(
             "pdf_health_report.json",
             "promotion_decisions.jsonl",
             "propositions.jsonl",
+            "source_objects.jsonl",
         ],
         "status": "valid",
         "structure_fidelity": {
@@ -160,6 +169,7 @@ def build_validation_report(
         "graph_edges": len(graph_edges),
         "page_text_spans": len(page_text_spans),
         "word_bboxes": len(word_bboxes),
+        "source_objects": len(source_objects or ()),
     }
     validation_report["bbox_precision_counts"] = bbox_precision_counts(bbox_rows)
     validation_report["bbox_highlightability_counts"] = {
@@ -170,6 +180,7 @@ def build_validation_report(
         fallback_path = Path("data/final/uud/raw_source_spans.jsonl")
         raw_source_spans = read_jsonl(fallback_path) if fallback_path.exists() else []
     validation_report["raw_source_geometry_health"] = _raw_source_geometry_health(raw_source_spans)
+    validation_report["source_object_disposition_health"] = _source_object_disposition_health(source_objects or [], page_text_spans)
     validation_report["chunk_self_contained_health"] = _chunk_self_contained_health(
         chunks,
         {row["legal_unit_id"]: row for row in legal_units},
@@ -662,7 +673,12 @@ def _schema6_id_field(artifact: str) -> str:
 
 def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> tuple[str, ...]:
     if UUD_ARTIFACT_SCHEMA == 7:
-        return _validate_schema7_contract(artifacts)
+        schema7_errors = list(_validate_schema7_contract(artifacts))
+        report = artifacts.get("validation_report")
+        for health_key in ("legal_graph_authority_health", "source_object_disposition_health"):
+            if not isinstance(report, Mapping) or report.get(health_key, {}).get("status") != "complete":
+                schema7_errors.append(f"validation_report_incomplete:{health_key}")
+        return tuple(dict.fromkeys(schema7_errors))
     if UUD_ARTIFACT_SCHEMA == 6:
         return _validate_schema6_contract(artifacts)
     def rows(key: str, *, optional: bool = False) -> list[dict]:
@@ -1311,6 +1327,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
     article_relation_ids = {row["relation_id"] for row in article_amendment_relations}
     article_relations_by_id = {row["relation_id"]: row for row in article_amendment_relations}
     graph_edge_keys = {(row.get("edge_type"), row.get("source_id"), row.get("target_id")) for row in graph_edges}
+    graph_edges_by_id = {row.get("edge_id"): row for row in graph_edges}
     for row in graph_edges:
         if row["edge_id"] in seen_ids["edge_id"]:
             errors.append(f"duplicate_graph_edge_id:{row['edge_id']}")
@@ -1320,6 +1337,14 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         edge_type = row.get("edge_type")
         if edge_type not in PROVENANCE_EDGE_TYPES | LEGAL_EDGE_TYPES:
             errors.append(f"invalid_graph_edge_type:{row['edge_id']}:{edge_type}")
+        if row.get("derived_from_edge_id"):
+            origin = graph_edges_by_id.get(row["derived_from_edge_id"])
+            descriptor = descriptor_for(origin.get("edge_type") if origin else None)
+            if origin is None or descriptor is None or descriptor.inverse != edge_type:
+                errors.append(f"graph_inverse_origin_invalid:{row['edge_id']}")
+            elif row.get("source_id") != origin.get("target_id") or row.get("target_id") != origin.get("source_id"):
+                errors.append(f"graph_inverse_direction_invalid:{row['edge_id']}")
+            continue
         if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
             relation = article_relations_by_id.get(row.get("relation_id"))
             if relation is None:
@@ -1728,6 +1753,42 @@ def _raw_source_geometry_health(rows: list[dict]) -> dict:
     }
 
 
+def _source_object_disposition_health(rows: list[dict], page_text_spans: list[dict]) -> dict:
+    ids = [str(row.get("source_object_id") or "") for row in rows]
+    known_span_ids = {str(row.get("text_span_id") or "") for row in page_text_spans}
+    invalid_dispositions = [row for row in rows if row.get("disposition") not in TERMINAL_DISPOSITIONS]
+    unresolved_spans = [
+        span_id
+        for row in rows
+        for span_id in row.get("text_span_ids") or ()
+        if str(span_id) not in known_span_ids
+    ]
+    missing_lineage = [
+        row
+        for row in rows
+        if not row.get("source_document_id") or not row.get("source_sha256") or not isinstance(row.get("page_number"), int)
+    ]
+    return {
+        "source_object_count": len(rows),
+        "terminal_disposition_count": sum(row.get("disposition") in TERMINAL_DISPOSITIONS for row in rows),
+        "duplicate_source_object_id_count": len(ids) - len(set(ids)),
+        "missing_source_object_id_count": sum(not value for value in ids),
+        "invalid_disposition_count": len(invalid_dispositions),
+        "unresolved_text_span_ref_count": len(unresolved_spans),
+        "missing_lineage_count": len(missing_lineage),
+        "extraction_failed_count": sum(row.get("disposition") == "extraction_failed" for row in rows),
+        "needs_review_count": sum(row.get("disposition") == "needs_review" for row in rows),
+        "status": "complete"
+        if rows
+        and not invalid_dispositions
+        and not unresolved_spans
+        and not missing_lineage
+        and len(ids) == len(set(ids))
+        and all(ids)
+        else "incomplete",
+    }
+
+
 def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ...]:
     """Closed UUD contract shared by offline rebuild validation and runtime publication."""
     errors: list[str] = []
@@ -1754,6 +1815,22 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
                     errors.append(f"invalid_type:{artifact}:{row_id}:{field}")
 
     raw_rows = rows("raw_source_spans")
+    source_object_rows = rows("source_objects")
+    source_object_ids: set[str] = set()
+    known_span_ids = {str(row.get("text_span_id") or "") for row in rows("page_text_spans")}
+    for row in source_object_rows:
+        object_id = str(row.get("source_object_id") or "")
+        if not object_id:
+            errors.append("missing_required_field:source_objects:<missing>:source_object_id")
+        elif object_id in source_object_ids:
+            errors.append(f"duplicate_source_object_id:{object_id}")
+        else:
+            source_object_ids.add(object_id)
+        if row.get("disposition") not in TERMINAL_DISPOSITIONS:
+            errors.append(f"invalid_source_object_disposition:{object_id}")
+        for span_id in row.get("text_span_ids") or ():
+            if str(span_id) not in known_span_ids:
+                errors.append(f"source_object_span_unresolved:{object_id}:{span_id}")
     source_support_ids: set[str] = set()
     semantic_stream_rows: dict[str, list[dict]] = defaultdict(list)
     for row in raw_rows:
@@ -2831,15 +2908,20 @@ def _legal_graph_authority_health(
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     bbox_ids = {str(row.get("bbox_id") or row.get("word_bbox_id")) for row in (*bbox_rows, *word_bboxes)}
     bbox_ids |= {character["character_bbox_id"] for word in word_bboxes for character in word.get("characters") or ()}
-    relation_edges = [row for row in graph_edges if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}]
-    article_relation_refs = {row.get("relation_id") for row in relation_edges if row.get("relation_id")}
-    relations_by_id = {row.get("relation_id"): row for row in article_amendment_relations}
-    exact_edges = [row for row in relation_edges if relations_by_id.get(row.get("relation_id"), {}).get("support_class") == "exact_article_relation"]
-    trace_edges = [row for row in relation_edges if relations_by_id.get(row.get("relation_id"), {}).get("support_class") != "exact_article_relation"]
-    authority_without_evidence = [
+    relation_edges = [
         row
         for row in graph_edges
-        if row.get("supporting_evidence_ids") and any(evidence_id not in evidence_by_id for evidence_id in row["supporting_evidence_ids"])
+        if descriptor_for(row.get("edge_type")) and descriptor_for(row.get("edge_type")).authority_bearing
+    ]
+    article_relation_refs = {row.get("relation_id") for row in relation_edges if row.get("relation_id")}
+    relations_by_id = {row.get("relation_id"): row for row in article_amendment_relations}
+    forward_relation_edges = [row for row in relation_edges if not row.get("derived_from_edge_id")]
+    exact_edges = [row for row in forward_relation_edges if relations_by_id.get(row.get("relation_id"), {}).get("support_class") == "exact_article_relation"]
+    trace_edges = [row for row in forward_relation_edges if relations_by_id.get(row.get("relation_id"), {}).get("support_class") != "exact_article_relation"]
+    authority_without_evidence = [
+        row
+        for row in relation_edges
+        if row.get("support_evidence_ids") and any(evidence_id not in evidence_by_id for evidence_id in row["support_evidence_ids"])
     ]
     authority_without_bbox = [
         row for row in exact_edges if any(bbox_id not in bbox_ids for bbox_id in relations_by_id[row["relation_id"]].get("bbox_refs") or ())
@@ -2847,20 +2929,8 @@ def _legal_graph_authority_health(
     trace_promoted = [row for row in trace_edges if relations_by_id.get(row.get("relation_id"), {}).get("citation_final") is True]
     missing_fields = [
         row
-        for row in graph_edges
-        if not row.get("relation_id") and {
-            "authority_kind",
-            "support_kind",
-            "citation_final",
-            "derivation_method",
-            "derivation_reason",
-            "supporting_evidence_ids",
-            "source_document_ids",
-            "page_numbers",
-            "text_span_ids",
-            "bbox_refs",
-        }
-        - set(row)
+        for row in relation_edges
+        if not {"relation_id", "support_relation_ids", "support_evidence_ids", "support_kind"} <= set(row)
     ]
     return {
         "status": "complete"
@@ -2881,8 +2951,8 @@ def _legal_graph_authority_health(
         "authority_without_evidence_count": len(authority_without_evidence),
         "authority_without_bbox_count": len(authority_without_bbox),
         "trace_promoted_count": len(trace_promoted),
-        "graph_final_citation_edge_count": sum(1 for row in graph_edges if not row.get("relation_id") and row.get("citation_final") is True),
-        "invalid_finality_policy_count": sum(1 for row in graph_edges if not row.get("relation_id") and row.get("citation_final") is True),
+        "graph_final_citation_edge_count": sum(1 for row in graph_edges if row.get("citation_final") is True),
+        "invalid_finality_policy_count": sum(1 for row in graph_edges if row.get("citation_final") is True),
         "missing_authority_field_count": len(missing_fields),
         "authority_kind_counts": dict(sorted(Counter(row.get("authority_kind") or "relation_reference" for row in graph_edges).items())),
         "support_kind_counts": dict(sorted(Counter(row.get("support_kind") or "relation_reference" for row in graph_edges).items())),

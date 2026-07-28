@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tjipto.contracts.relations import descriptor_for, is_authority_relation, is_relevance_relation
+from tjipto.contracts.relations import is_authority_relation, is_relevance_relation
 
 ROUTE_WEIGHT = {
     "exact": 1000.0,
@@ -110,11 +110,6 @@ def _connect(graph: dict[str, list[dict]], edge: dict) -> None:
         return
     source, target = edge["source_id"], edge["target_id"]
     graph.setdefault(source, []).append(edge | {"target_id": target})
-    descriptor = descriptor_for(edge.get("edge_type"))
-    if descriptor and descriptor.inverse:
-        graph.setdefault(target, []).append(
-            edge | {"source_id": target, "target_id": source, "edge_type": descriptor.inverse, "relation_type": descriptor.inverse}
-        )
 
 
 def _usable(store, row: dict | None, filters: dict) -> bool:

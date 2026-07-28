@@ -30,9 +30,13 @@ def main(argv: list[str] | None = None) -> int:
         "fail": sum(row["outcome"] == "FAIL" for row in results),
         "known_gap": sum(row["outcome"] == "KNOWN_GAP" for row in results),
     }
+    acceptance_counters = _acceptance_counters(results) | _artifact_acceptance_counters()
     report = {
-        "status": "fail" if counts["fail"] or (args.strict_known_gaps and counts["known_gap"]) else "pass",
+        "status": "fail"
+        if counts["fail"] or (args.strict_known_gaps and counts["known_gap"]) or any(acceptance_counters.values())
+        else "pass",
         "counts": counts,
+        "acceptance_counters": acceptance_counters,
         "results": results,
     }
     if args.scope_performance:
@@ -49,6 +53,64 @@ def main(argv: list[str] | None = None) -> int:
         if row["outcome"] != "PASS":
             print(f"{row['outcome']}: {row['id']} :: {'; '.join(row['errors'])}")
     return 1 if report["status"] == "fail" else 0
+
+
+def _acceptance_counters(results: list[dict[str, Any]]) -> dict[str, int]:
+    """Aggregate only invariants demonstrated by the versioned case catalog."""
+    counters = {
+        "unsupported_answer_ready": 0,
+        "claim_without_exact_grounded_segment": 0,
+        "false_support_or_contradiction": 0,
+        "source_precedence_or_navigation_error": 0,
+        "capability_payload_inconsistency": 0,
+    }
+    for row in results:
+        actual = row["actual"]
+        expected_support = row["expected_claim_support"]
+        if actual["status"] == "answer_ready" and expected_support == ["insufficient"]:
+            counters["unsupported_answer_ready"] += 1
+        if any(error.startswith(("claim_support:", "predicate:", "polarity:", "modality:")) for error in row["errors"]):
+            counters["false_support_or_contradiction"] += 1
+        if row["risk_family"] in {"temporal_arbitration", "explicit_navigation"} and row["errors"]:
+            counters["source_precedence_or_navigation_error"] += 1
+        if row["expected_needed_corpora"] is not None and row["expected_needed_corpora"] != actual["needed_corpora"]:
+            counters["capability_payload_inconsistency"] += 1
+        for claim in row["claim_records"]:
+            if claim.get("status") == "supported" and not claim.get("support_segments"):
+                counters["claim_without_exact_grounded_segment"] += 1
+    return counters
+
+
+def _artifact_acceptance_counters() -> dict[str, int]:
+    report = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))
+    source = report.get("source_object_disposition_health", {})
+    graph = report.get("legal_graph_authority_health", {})
+    generic_files = (
+        ROOT / "src/tjipto/corpora/parser_dispatch.py",
+        ROOT / "src/tjipto/runtime/query_semantics.py",
+        ROOT / "src/tjipto/runtime/service.py",
+        ROOT / "src/tjipto/retrieval/router.py",
+    )
+    generic_text = "\n".join(path.read_text(encoding="utf-8") for path in generic_files)
+    duplicate_owner_count = sum(
+        generic_text.count(symbol)
+        for symbol in ("classify_legal_intent", "_missing_corpus_requirements")
+    )
+    return {
+        "graph_authority_incomplete": int(
+            graph.get("status") != "complete"
+            or graph.get("authority_without_evidence_count", 0) != 0
+            or graph.get("authority_without_bbox_count", 0) != 0
+            or graph.get("trace_promoted_count", 0) != 0
+        ),
+        "unclassified_or_silent_source_objects": int(
+            source.get("status") != "complete"
+            or source.get("source_object_count") != source.get("terminal_disposition_count")
+            or any(source.get(key, 0) != 0 for key in ("duplicate_source_object_id_count", "missing_source_object_id_count", "invalid_disposition_count"))
+        ),
+        "generic_uud_fallback": int("tjipto.corpora.uud" in generic_text),
+        "duplicate_policy_owner": duplicate_owner_count,
+    }
 
 
 def _scope_performance() -> dict[str, Any]:
@@ -136,6 +198,10 @@ def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, A
         "case_status": case.get("case_status", "accepted"),
         "outcome": outcome,
         "errors": errors,
+        "expected_claim_support": case.get("expected_claim_support"),
+        "expected_needed_corpora": case.get("expected_needed_corpora"),
+        "risk_family": case.get("risk_family"),
+        "claim_records": [dict(row) for row in response.get("claim_support", ()) if isinstance(row, dict)],
         "actual": {
             "status": response.get("status"),
             "route": response.get("route"),

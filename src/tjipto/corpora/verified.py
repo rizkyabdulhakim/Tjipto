@@ -13,7 +13,6 @@ from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage
 from tjipto.core.manifest import ALLOWED_ARTIFACT_ORIGINS, verified_file_bytes
 from tjipto.core.manifest import artifact_set_digest as compute_artifact_set_digest
 from tjipto.ingestion.pdf.fingerprint import extractor_fingerprint
-from tjipto.corpora.strategy import strategy_for
 
 
 class CorpusIntegrityError(ValueError):
@@ -173,10 +172,10 @@ def _read_trusted_manifest(config) -> tuple[dict, str]:
     manifest, manifest_digest = _read_manifest(config)
     if not isinstance(manifest, dict) or manifest.get("corpus_id") != config.corpus_id:
         raise CorpusIntegrityError("manifest_identity_mismatch")
-    try:
-        contract = strategy_for(config.corpus_id).contract
-    except ValueError:
-        contract = None
+    strategy = getattr(config, "strategy", None)
+    if strategy is None:
+        raise CorpusIntegrityError("unsupported_corpus_strategy")
+    contract = strategy.contract
     if contract and (
         manifest.get("schema_version") != contract.schema_version
         or manifest.get("contract_id") != contract.contract_id
@@ -195,10 +194,7 @@ def _manifest_digest(config) -> str:
 
 
 def _run_semantic_validator(config, manifest: dict, artifacts: dict[str, object]) -> CorpusSemanticAttestation:
-    try:
-        validator = strategy_for(config.corpus_id).semantic_validator
-    except ValueError:
-        validator = None
+    validator = getattr(config.strategy, "semantic_validator", None)
     if validator is None:
         return CorpusSemanticAttestation("not_configured")
     try:

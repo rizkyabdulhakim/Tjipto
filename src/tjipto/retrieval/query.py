@@ -17,7 +17,7 @@ def normalize_query(query: str, *, strategy: str = "generic", config=None) -> di
     normalized = _apply_alias_rules(normalized, config)
     corpus_id = str(getattr(config, "corpus_id", "") or "")
     if corpus_id:
-        normalized = normalize_query_reference(corpus_id, normalized)
+        normalized = normalize_query_reference(corpus_id, normalized, config=config)
     return {"original_query": original, "normalized_query": normalized}
 
 

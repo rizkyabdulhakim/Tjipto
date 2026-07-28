@@ -44,6 +44,20 @@ class AtomicArtifactWriterContractTest(unittest.TestCase):
 
             self.assertEqual((final / "rows.jsonl").read_bytes(), b'{"id": "new"}\n')
 
+    def test_promote_clears_abandoned_stage_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            final = Path(tmp) / "final"
+            final.mkdir()
+            stale = Path(tmp) / ".artifact-stage-empty"
+            stale.mkdir()
+            write_jsonl(stale / "partial.jsonl", [{"id": "partial"}])
+            atomic_promote_artifacts(
+                final_dir=final,
+                build=lambda stage: write_jsonl(stage / "rows.jsonl", [{"id": "new"}]),
+                validate=lambda _: (),
+            )
+            self.assertFalse(stale.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

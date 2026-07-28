@@ -5,7 +5,7 @@ from hashlib import sha256
 import json
 import sys
 
-from tjipto.corpora.uud.bbox_builder import pdf_lines
+from tjipto.corpora.uud.bbox_builder import extract_pdf
 from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
 from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
@@ -22,9 +22,13 @@ from tjipto.corpora.uud.metadata_builder import (
     rebuild_metadata_grounding,
 )
 from tjipto.corpora.uud.pages_builder import build_pages
-from tjipto.corpora.uud.proposition_builder import build_textual_propositions
+from tjipto.corpora.uud.proposition_builder import build_propositions
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
-from tjipto.corpora.uud.relation_builder import build_article_amendment_relations, build_document_relations
+from tjipto.corpora.uud.relation_builder import (
+    build_article_amendment_relations,
+    build_document_relations,
+    materialize_document_relation_edges,
+)
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, build_retrieval_units
 from tjipto.corpora.uud.runtime_projection import build_runtime_projection
 from tjipto.corpora.uud.specs import FINAL_DIR
@@ -35,10 +39,12 @@ from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import build_validation_report, validate_uud_artifact_dir
 from tjipto.corpora.uud.policy.authority import apply_authority_contract, apply_retrieval_semantics
 from tjipto.corpora.uud.policy.relations import apply_graph_relation_policy
+from tjipto.contracts.relations import materialize_inverse_edges
 from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.grounding.promotion import build_promotion_decisions
 from tjipto.ingestion.pdf.health import build_pdf_health_report
+from tjipto.ingestion.pdf.source_objects import build_source_object_inventory
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
 
 
@@ -81,7 +87,8 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
     docs = {source_id: fitz.open(repo_root / meta["path"]) for source_id, meta in source_documents.items()}
     try:
-        pdf_lines_by_source = {source_id: pdf_lines(doc) for source_id, doc in docs.items()}
+        extracted_pdfs = {source_id: extract_pdf(doc, source_id) for source_id, doc in docs.items()}
+        pdf_lines_by_source = {source_id: extraction.lines for source_id, extraction in extracted_pdfs.items()}
         word_bboxes = [
             row
             for source_id, doc in docs.items()
@@ -178,7 +185,12 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         metadata_grounding=metadata_grounding,
         source_conflicts=source_conflicts,
     )
-    propositions = build_textual_propositions(
+    source_objects = build_source_object_inventory(
+        source_objects=tuple(item for extraction in extracted_pdfs.values() for item in extraction.source_objects),
+        page_text_spans=page_text_spans,
+        source_documents=source_documents,
+    )
+    propositions = build_propositions(
         legal_units=legal_units,
         evidence=evidence,
         page_text_spans=page_text_spans,
@@ -201,6 +213,8 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
         metadata_grounding=metadata_grounding,
     )
+    document_relations = build_document_relations(list(source_documents.values()))
+    graph_edges.extend(materialize_document_relation_edges(document_relations))
     article_amendment_relations = build_article_amendment_relations(
         graph_edges=graph_edges,
         legal_units=legal_units,
@@ -215,6 +229,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         evidence=evidence,
         article_relations=article_amendment_relations,
     )
+    materialize_inverse_edges(graph_edges)
     apply_authority_contract(
         spans=page_text_spans,
         evidence=evidence,
@@ -225,7 +240,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         edges=graph_edges,
     )
     apply_retrieval_semantics(retrieval_units, evidence)
-    document_relations = build_document_relations(list(source_documents.values()))
     promotion_decisions = build_promotion_decisions(
         evidence=evidence,
         metadata_grounding=metadata_grounding,
@@ -277,6 +291,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "article_amendment_relations.jsonl", article_amendment_relations)
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
     write_jsonl(final_dir / "raw_source_spans.jsonl", raw_source_spans)
+    write_jsonl(final_dir / "source_objects.jsonl", source_objects)
     write_jsonl(final_dir / "word_bboxes.jsonl", word_bboxes)
     write_jsonl(final_dir / "propositions.jsonl", propositions)
     write_json(final_dir / "runtime_projection.json", build_runtime_projection(
@@ -322,6 +337,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         propositions=propositions,
         page_text_spans=page_text_spans,
         raw_source_spans=raw_source_spans,
+        source_objects=source_objects,
         word_bboxes=word_bboxes,
         pdf_health_report=pdf_health_report,
         pages=pages,
@@ -338,6 +354,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         "retrieval_units": len(retrieval_units),
         "graph_nodes": len(graph_nodes),
         "graph_edges": len(graph_edges),
+        "source_objects": len(source_objects),
     }
 
 

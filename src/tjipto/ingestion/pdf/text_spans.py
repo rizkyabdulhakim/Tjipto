@@ -76,6 +76,7 @@ def build_pdf_text_spans(
                         "text_prefix": stream[max(0, start - 32):start],
                         "text_suffix": stream[end:end + 32],
                         "text_span_id": f"{text_span_id_prefix}::{source_role}::{page_number:04d}::{semantic_index:04d}",
+                        "source_object_id": line.get("source_object_id"),
                         "viewer_highlightable": False,
                         "x0": line["x0"],
                         "x1": line["x1"],

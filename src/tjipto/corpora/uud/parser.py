@@ -141,17 +141,31 @@ def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
     return None
 
 
-def parser_adapter():
-    from tjipto.corpora.strategy import CorpusParser
+def query_normalizer():
+    from tjipto.corpora.strategy import QueryNormalizer
 
-    return CorpusParser(
+    return QueryNormalizer(
         normalize_query_reference=normalize_uud_query_reference,
         normalize_metadata_intent=normalize_uud_metadata_intent,
+    )
+
+
+def reference_parser():
+    from tjipto.corpora.strategy import ReferenceParser
+
+    return ReferenceParser(
         parse_legal_reference=parse_uud_legal_reference,
         parse_legal_references=parse_uud_legal_references,
         parse_bab_reference=parse_uud_bab_reference,
         parse_pasal_reference=parse_uud_pasal_reference,
         parse_ayat_reference=parse_uud_ayat_reference,
         label_keys=uud_label_keys,
+    )
+
+
+def navigation_resolver():
+    from tjipto.corpora.strategy import NavigationResolver
+
+    return NavigationResolver(
         resolve_navigation=resolve_uud_navigation,
     )

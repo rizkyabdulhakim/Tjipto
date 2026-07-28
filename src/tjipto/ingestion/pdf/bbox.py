@@ -4,6 +4,7 @@ import re
 import unicodedata
 from hashlib import sha256
 import json
+from dataclasses import dataclass
 from typing import Any, cast
 
 from tjipto.contracts.coordinates import coordinate_metadata
@@ -109,20 +110,67 @@ def _matching_sequence(rows: list[dict], text: str) -> list[dict]:
     return []
 
 
-def pdf_lines(doc) -> dict[int, list[dict]]:
+@dataclass(frozen=True)
+class PdfExtraction:
+    """Raw PDF extraction with both usable text and an object inventory."""
+
+    lines: dict[int, list[dict]]
+    source_objects: tuple[dict, ...]
+
+
+def extract_pdf(doc, source_document_id: str) -> PdfExtraction:
+    """Extract text lines without discarding non-text PDF objects from audit."""
     pages: dict[int, list[dict]] = {}
+    source_objects: list[dict] = []
     for page_number in range(1, doc.page_count + 1):
         page = doc[page_number - 1]
-        entries = []
+        entries: list[dict[str, Any]] = []
         # rawdict is the only extraction mode that preserves the character
         # lineage needed by source-segment provenance.  The dict/text modes
         # flatten spans and make an exact sub-line geometry impossible.
         # Preserve the PDF extraction order used by the corpus builders.  The
         # rawdict payload still supplies character lineage; sorting here would
         # silently reorder repeated source occurrences.
-        raw_payload = cast(dict[str, Any], page.get_text("rawdict"))
-        legacy_payload = cast(dict[str, Any], page.get_text("dict"))
+        try:
+            raw_payload = cast(dict[str, Any], page.get_text("rawdict"))
+            legacy_payload = cast(dict[str, Any], page.get_text("dict"))
+        except Exception as exc:
+            source_objects.append(
+                {
+                    "source_object_id": f"pdf_object::{source_document_id}::{page_number:04d}::extraction_error",
+                    "source_document_id": source_document_id,
+                    "page_number": page_number,
+                    "block_index": None,
+                    "pdf_block_type": None,
+                    "bbox": (),
+                    "payload_sha256": sha256(str(exc).encode("utf-8")).hexdigest(),
+                    "line_count": 0,
+                    "source_line_refs": (),
+                    "extraction_error": type(exc).__name__,
+                }
+            )
+            pages[page_number] = entries
+            continue
         for block_index, block in enumerate(raw_payload.get("blocks", [])):
+            object_id = f"pdf_object::{source_document_id}::{page_number:04d}::{block_index:04d}"
+            source_objects.append(
+                {
+                    "source_object_id": object_id,
+                    "source_document_id": source_document_id,
+                    "page_number": page_number,
+                    "block_index": block_index,
+                    "pdf_block_type": block.get("type"),
+                    "bbox": tuple(block.get("bbox") or ()),
+                    "payload_sha256": sha256(
+                        json.dumps(block, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+                    ).hexdigest(),
+                    "line_count": len(block.get("lines") or ()),
+                    "source_line_refs": tuple(
+                        f"pdf_line::{source_document_id}::{page_number:04d}::{block_index:04d}::{line_index:04d}"
+                        for line_index, _ in enumerate(block.get("lines") or ())
+                    ),
+                }
+            )
             if block.get("type") != 0:
                 continue
             for line_index, line in enumerate(block.get("lines", [])):
@@ -187,9 +235,9 @@ def pdf_lines(doc) -> dict[int, list[dict]]:
                 y0 = min(box[1] for box in legacy_boxes) if legacy_boxes else min(character["y0"] for character in characters)
                 x1 = max(box[2] for box in legacy_boxes) if legacy_boxes else max(character["x1"] for character in characters)
                 y1 = max(box[3] for box in legacy_boxes) if legacy_boxes else max(character["y1"] for character in characters)
-                entries.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "width": page.rect.width, "height": page.rect.height, "block_index": block_index, "line_index": line_index, "characters": characters})
+                entries.append({"text": text, "x0": x0, "y0": y0, "x1": x1, "y1": y1, "width": page.rect.width, "height": page.rect.height, "block_index": block_index, "line_index": line_index, "source_object_id": object_id, "characters": characters})
         pages[page_number] = entries
-    return pages
+    return PdfExtraction(pages, tuple(source_objects))
 
 
 def aggregate_bbox_precision(rows: list[dict]) -> str:

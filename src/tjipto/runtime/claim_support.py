@@ -22,6 +22,8 @@ class ClaimSupport:
     predicate: str
     polarity: str
     modality: str
+    conditions: tuple[str, ...] = ()
+    exceptions: tuple[str, ...] = ()
     text_span_ids: tuple[str, ...] = ()
     support_segments: tuple[dict[str, Any], ...] = ()
 
@@ -38,6 +40,8 @@ class ClaimSupport:
             "predicate": self.predicate,
             "polarity": self.polarity,
             "modality": self.modality,
+            "conditions": self.conditions,
+            "exceptions": self.exceptions,
             "text_span_ids": self.text_span_ids,
             "support_segments": self.support_segments,
         }
@@ -51,12 +55,11 @@ def verify_claims(semantics: QuerySemantics, evidence: tuple[dict, ...], store) 
         return ()
     propositions = _grounded_propositions(store, evidence)
     support = tuple(proposition for proposition in propositions if _supports(claim, proposition))
-    first = support[0] if support else (propositions[0] if propositions else None)
-    # Absence is never an opposite proposition.  A future corpus parser may
-    # emit an explicit opposite ClauseProposition; this conservative baseline
-    # fails closed until it does.
-    status = "supported" if support else "insufficient"
-    support_ids = tuple(str(proposition["evidence_id"]) for proposition in support)
+    contradiction = () if support else tuple(proposition for proposition in propositions if _contradicts(claim, proposition))
+    selected = support or contradiction
+    first = selected[0] if selected else (propositions[0] if propositions else None)
+    status = "supported" if support else "contradicted" if contradiction else "insufficient"
+    support_ids = tuple(str(proposition["evidence_id"]) for proposition in selected)
     return (
         ClaimSupport(
             claim_id="proposition:0",
@@ -66,10 +69,12 @@ def verify_claims(semantics: QuerySemantics, evidence: tuple[dict, ...], store) 
             source_role=first.get("source_role") if first else claim.source_role,
             temporal_context=first.get("temporal_context") if first else claim.temporal_context,
             validation_method="artifact_backed_atomic_proposition",
-            reason_code=None if support else "claim_support_insufficient",
+            reason_code=None if support else "claim_explicitly_contradicted" if contradiction else "claim_support_insufficient",
             predicate=claim.predicate,
             polarity=claim.polarity,
             modality=claim.modality,
+            conditions=claim.conditions,
+            exceptions=claim.exceptions,
             text_span_ids=tuple(str(item) for item in support[0].get("text_span_ids") or ()) if support else (),
             support_segments=tuple(_public_segment(item) for item in support),
         ),
@@ -95,6 +100,7 @@ def _grounded_propositions(store, evidence: tuple[dict, ...]) -> tuple[dict, ...
         and row.get("evidence_id")
         and row.get("bbox_refs")
         and row.get("text_span_ids")
+        and row.get("source_selectors")
     )
 
 
@@ -114,15 +120,52 @@ def _public_segment(proposition: dict) -> dict[str, Any]:
 
 
 def _supports(claim: PropositionClaim, proposition: dict) -> bool:
-    # Normative parsing is deliberately not inferred from article words. Until
-    # a strategy publishes a compatible structured proposition, it fails closed.
-    return (
-        claim.predicate == proposition.get("predicate")
-        and claim.polarity == proposition.get("polarity")
-        and claim.modality == proposition.get("modality")
-        and claim.modality == "textual"
-        and _contains_tokens(_tokens(claim.object), _tokens(str(proposition.get("object") or "")))
-    )
+    return _compatible(claim, proposition) and _content_matches(claim, proposition)
+
+
+def _contradicts(claim: PropositionClaim, proposition: dict) -> bool:
+    if not _compatible(claim, proposition, allow_opposite=True) or not _content_matches(claim, proposition):
+        return False
+    return (claim.predicate, proposition.get("predicate")) in {
+        ("requires", "prohibits"),
+        ("prohibits", "requires"),
+    } or claim.polarity != proposition.get("polarity")
+
+
+def _compatible(claim: PropositionClaim, proposition: dict, *, allow_opposite: bool = False) -> bool:
+    predicate_matches = claim.predicate == proposition.get("predicate")
+    if allow_opposite:
+        predicate_matches = predicate_matches or (claim.predicate, proposition.get("predicate")) in {
+            ("requires", "prohibits"),
+            ("prohibits", "requires"),
+        }
+    modality_matches = claim.modality == proposition.get("modality")
+    if allow_opposite and {claim.modality, proposition.get("modality")} == {"obligation", "prohibition"}:
+        modality_matches = True
+    if not predicate_matches or not modality_matches:
+        return False
+    if not allow_opposite and claim.polarity != proposition.get("polarity"):
+        return False
+    if claim.source_role and claim.source_role != proposition.get("source_role"):
+        return False
+    if claim.temporal_context and claim.temporal_context != proposition.get("temporal_context"):
+        return False
+    if tuple(proposition.get("conditions") or ()) != claim.conditions:
+        return False
+    if tuple(proposition.get("exceptions") or ()) != claim.exceptions:
+        return False
+    return not claim.subject or _contains_tokens(_tokens(claim.subject), _tokens(str(proposition.get("subject") or "")))
+
+
+def _content_matches(claim: PropositionClaim, proposition: dict) -> bool:
+    query_tokens = _tokens(claim.object)
+    if not query_tokens:
+        return False
+    source_text = str(proposition.get("object") or "")
+    if proposition.get("claim_type") == "normative_proposition":
+        source_text = f"{proposition.get('subject') or ''} {source_text}"
+        return _ordered_subsequence(query_tokens, _tokens(source_text))
+    return _contains_tokens(query_tokens, _tokens(source_text))
 
 
 def _tokens(text: str) -> tuple[str, ...]:
@@ -131,3 +174,9 @@ def _tokens(text: str) -> tuple[str, ...]:
 
 def _contains_tokens(needle: tuple[str, ...], haystack: tuple[str, ...]) -> bool:
     return bool(needle) and any(haystack[index : index + len(needle)] == needle for index in range(len(haystack)))
+
+
+def _ordered_subsequence(needle: tuple[str, ...], haystack: tuple[str, ...]) -> bool:
+    """Allow omitted modifiers without reversing a grounded proposition's roles."""
+    iterator = iter(haystack)
+    return bool(needle) and all(any(token == candidate for candidate in iterator) for token in needle)

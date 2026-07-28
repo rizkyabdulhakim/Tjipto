@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 import re
 
 from tjipto.corpora.parser_dispatch import parse_legal_references
@@ -94,6 +95,29 @@ def build_document_relations(source_documents: list[dict]) -> list[dict]:
         rows.append(_document_relation("DERIVED_FROM", consolidated, original))
         rows.extend(_document_relation("CONSOLIDATES", consolidated, source_by_role[role]) for role in amendment_roles)
     return sorted(rows, key=lambda row: row["relation_id"])
+
+
+def materialize_document_relation_edges(document_relations: list[dict]) -> list[dict]:
+    """Project audited document relations into the single runtime graph."""
+    rows = []
+    for relation in document_relations:
+        relation_id = str(relation["relation_id"])
+        rows.append(
+            {
+                "edge_id": f"edge::{sha256(relation_id.encode('utf-8')).hexdigest()}",
+                "source_id": f"source_role::{relation['source_role']}",
+                "target_id": f"source_role::{relation['target_source_role']}",
+                "edge_type": relation["relation_type"],
+                "relation_type": relation["relation_type"],
+                "relation_id": relation_id,
+                "runtime_loadable": relation.get("runtime_loadable") is True,
+                "support_kind": relation.get("support_kind") or "provenance_only",
+                "support_relation_ids": [relation_id],
+                "support_evidence_ids": list(relation.get("support_evidence_ids") or ()),
+                "support_exception_ids": list(relation.get("support_exception_ids") or ()),
+            }
+        )
+    return rows
 
 
 def build_article_amendment_relations(

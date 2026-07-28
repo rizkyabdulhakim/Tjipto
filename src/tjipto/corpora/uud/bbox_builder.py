@@ -6,7 +6,7 @@ from tjipto.ingestion.pdf.bbox import (
     aggregate_bbox_precision,
     bbox_precision_counts,
     build_text_bbox_rows,
-    pdf_lines,
+    extract_pdf,
 )
 
 
@@ -16,7 +16,7 @@ __all__ = [
     "apply_inserted_bab_heading_bbox_policy",
     "bbox_precision_counts",
     "build_bbox_rows",
-    "pdf_lines",
+    "extract_pdf",
 ]
 
 

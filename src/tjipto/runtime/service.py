@@ -11,8 +11,9 @@ from typing import Any
 from uuid import uuid4
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
-from tjipto.corpora.parser_dispatch import parse_legal_reference, parse_legal_references
+from tjipto.corpora.parser_dispatch import parse_legal_reference
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.strategy import StrategyRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
@@ -22,12 +23,12 @@ from tjipto.retrieval.metadata import (
     normalize_filters,
     public_filters,
 )
-from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
-from tjipto.retrieval.relations import has_relation_target
+from tjipto.corpora.source_arbitration import resolve_source_scope
+from tjipto.retrieval.relations import amendment_relation_target, has_relation_target
 from tjipto.retrieval.router import route_retrieval
-from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.claim_support import all_supported, verify_claims
 from tjipto.runtime.query_semantics import interpret_query
+from tjipto.runtime.response import AnswerDecision, project_response
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.telemetry import Telemetry
 from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
@@ -74,14 +75,18 @@ def _integrity_failure(corpus_id: str, query: str, error_code: str | None) -> di
     }
 
 
-def _has_resolved_legal_target(corpus_id: str, query: str) -> bool:
-    parsed = parse_legal_reference(corpus_id, query, allow_roman_pasal=True)
-    return any(parsed.values())
+def _has_resolved_legal_target(corpus_id: str, query: str, *, config=None) -> bool:
+    try:
+        return any(parse_legal_reference(corpus_id, query, allow_roman_pasal=True, config=config).values())
+    except ValueError:
+        return False
 
 
 class LegalRuntimeService:
-    def __init__(self, repo_root: Path | None = None, telemetry: Telemetry | None = None):
-        self.registry = CorpusRegistry(repo_root)
+    def __init__(
+        self, repo_root: Path | None = None, telemetry: Telemetry | None = None, strategy_registry: StrategyRegistry | None = None
+    ):
+        self.registry = CorpusRegistry(repo_root, strategies=strategy_registry)
         self.repository = VerifiedCorpusRepository(self.registry)
         self.telemetry = telemetry or Telemetry.from_environment(self.registry)
         self.telemetry.bind_registry(self.registry)
@@ -495,15 +500,17 @@ class LegalRuntimeService:
         anomaly = _source_anomaly_response(store, corpus_id, query)
         if anomaly:
             return anomaly
-        document_relation = None if semantics.requested_function == "temporal_quotation" else _document_relation_response(store, corpus_id, query)
-        if document_relation:
-            return document_relation
         source_document = _source_document_response(store, corpus_id, query)
         if source_document:
             return source_document
         # A resolved legal target has precedence over the instrument classifier.
         # Amendment wording then scopes the structured lookup to that source role.
-        instrument = None if semantics.requested_function == "temporal_quotation" or _has_resolved_legal_target(corpus_id, query) else _instrument_intent_context(store, query)
+        amendment_target = amendment_relation_target(store, query)
+        instrument = None if (
+            semantics.requested_function == "temporal_quotation"
+            or _has_resolved_legal_target(corpus_id, query, config=store.config)
+            or amendment_target.get("mode") is not None
+        ) else _instrument_intent_context(store, query)
         if instrument:
             row, route, reason = instrument
             templates = _answer_templates(store)
@@ -591,7 +598,7 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": (),
             }
-        scope = scope_guard_context(store, query)
+        scope = scope_guard_context(store, query, capability=semantics.capability_decision)
         scoped_routed = None
         if scope:
             # Scope is a conclusion from the retrieved candidates, never a
@@ -605,18 +612,21 @@ class LegalRuntimeService:
                 allow_navigation=semantics.requested_function != "temporal_quotation",
                 allow_relation=semantics.requested_function != "temporal_quotation",
             )
-            if scope["requested_function"] != "land_regulation" or not _scope_has_verified_support(store, scoped_routed):
+            if (
+                scope["route"] == "current_fact_unsupported"
+                or semantics.capability_decision.missing_capabilities
+                or not _scope_has_verified_support(store, scoped_routed)
+            ):
                 templates = _answer_templates(store)
-                requirements = _missing_corpus_requirements(store, scope["requested_function"], scope.get("required_capabilities", ()))
-                missing_corpora = tuple(requirements.get("needed_corpora") or ())
-                missing_capabilities = tuple(requirements.get("required_capabilities") or ())
+                capability = semantics.capability_decision
+                missing_corpora = capability.missing_corpora
+                missing_capabilities = capability.missing_capabilities
                 missing_domain = bool(missing_corpora)
-                capability_unavailable = bool(missing_capabilities) and not missing_domain
-                reason = "missing_corpus_support" if missing_domain else "missing_capability" if capability_unavailable else scope["reason"]
+                reason = "missing_corpus_support" if missing_domain else scope["reason"]
                 context_pack = empty_context_pack(reason)
                 return scope | {
                     "status": "insufficient_evidence",
-                    "route": "missing_corpus" if missing_domain else "capability_unavailable" if capability_unavailable else scope["route"],
+                    "route": "missing_corpus" if missing_domain else scope["route"],
                     "reason": reason,
                     "reason_code": reason,
                     "corpus_id": corpus_id,
@@ -639,10 +649,11 @@ class LegalRuntimeService:
                     "answer_scope": "insufficient_evidence",
                     "warnings": (),
                     "insufficient_reasons": (reason,),
+                    "capability_decision": capability.public(),
                     "available_corpora": semantics.available_corpora,
                     "needed_corpora": missing_corpora,
                     "missing_corpora": missing_corpora,
-                    "required_capabilities": missing_capabilities,
+                    "required_capabilities": capability.required_capabilities,
                     "missing_capabilities": missing_capabilities,
                     "retrieval_attempted": True,
                     "retrieval_route": scoped_routed["route"],
@@ -662,6 +673,14 @@ class LegalRuntimeService:
         )
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
+        if routed.get("route") == "document_relation":
+            return _document_relation_response(
+                store,
+                corpus_id,
+                query,
+                routed.get("relation_target") or {"mode": None},
+                tuple(routed.get("matches") or ()),
+            )
         clarification = _metadata_scope_clarification(store, routed)
         if clarification:
             return routed | clarification
@@ -673,21 +692,17 @@ class LegalRuntimeService:
                 else routed["status"]
             )
             context_pack = empty_context_pack(routed.get("reason") or routed["status"])
-            return routed | {
-                "status": public_status,
-                "route": ask_route,
-                "answer_type": "none",
-                "answer": templates["insufficient"],
-                "context_pack": context_pack,
-                "evidence": (),
-                "citations": (),
-                "viewer_refs": (),
-                "metadata_facts": (),
-                "legal_relations": (),
-                "answer_scope": "insufficient_evidence",
-                "warnings": (),
-                "insufficient_reasons": (routed.get("reason") or routed["status"],),
-            }
+            return project_response(
+                routed,
+                AnswerDecision(
+                    public_status,
+                    ask_route,
+                    "none",
+                    templates["insufficient"],
+                    context_pack,
+                    insufficient_reasons=(routed.get("reason") or routed["status"],),
+                ),
+            )
         answer_matches = routed["matches"]
         if ask_route == "lexical_fallback":
             # BM25 may rank several independently relevant rows, but one
@@ -702,46 +717,33 @@ class LegalRuntimeService:
         context_pack = assemble_context_pack(store, answer_matches)
         evidence = context_pack["answer_evidence"]
         if not evidence:
-            return routed | {
-                "status": "insufficient_evidence",
-                "route": ask_route,
-                "answer_type": "none",
-                "answer": templates["insufficient"],
-                "context_pack": context_pack,
-                "evidence": (),
-                "citations": (),
-                "viewer_refs": (),
-                "metadata_facts": (),
-                "legal_relations": (),
-                "answer_scope": "insufficient_evidence",
-                "warnings": (),
-                "insufficient_reasons": tuple(sorted(set(context_pack["validation_reasons"].values()))),
-            }
+            return project_response(
+                routed,
+                AnswerDecision(
+                    "insufficient_evidence",
+                    ask_route,
+                    "none",
+                    templates["insufficient"],
+                    context_pack,
+                    insufficient_reasons=tuple(sorted(set(context_pack["validation_reasons"].values()))),
+                ),
+            )
         claim_support = verify_claims(semantics, evidence, store)
         if not all_supported(claim_support):
             claim_reason = next(claim.reason_code for claim in claim_support if claim.reason_code)
-            return routed | {
-                "status": "insufficient_evidence",
-                "route": ask_route,
-                "answer_type": "none",
-                "answer": templates["insufficient"],
-                "context_pack": empty_context_pack(claim_reason),
-                "evidence": (),
-                "citations": (),
-                "final_citations": (),
-                "historical_citations": (),
-                "metadata_support": (),
-                "structural_support": (),
-                "trace_support": (),
-                "viewer_refs": (),
-                "metadata_facts": (),
-                "legal_relations": (),
-                "answer_scope": "insufficient_evidence",
-                "warnings": (),
-                "insufficient_reasons": (claim_reason,),
-                "reason_code": claim_reason,
-                "claim_support": tuple(claim.public() for claim in claim_support),
-            }
+            return project_response(
+                routed,
+                AnswerDecision(
+                    "insufficient_evidence",
+                    ask_route,
+                    "none",
+                    templates["insufficient"],
+                    empty_context_pack(claim_reason),
+                    insufficient_reasons=(claim_reason,),
+                    reason_code=claim_reason,
+                    claim_support=tuple(claim.public() for claim in claim_support),
+                ),
+            )
         status = (
             "limited_answer"
             if ask_route == "lexical_fallback" or (context_pack["trace_support"] and not context_pack["citation_payloads"])
@@ -772,29 +774,31 @@ class LegalRuntimeService:
                 if labels:
                     deterministic_answer = ", ".join(labels)
         answer = self._agent_answer(query, evidence, deterministic_answer)
-        return routed | {
-            "status": status,
-            "route": ask_route,
-            "answer_type": _answer_type(ask_route, status),
-            "answer": answer,
-            "context_pack": context_pack,
-            "evidence": evidence,
-            "citations": citations,
-            "final_citations": citations,
-            "historical_citations": context_pack.get("historical_citations", ()),
-            "viewer_refs": viewer_refs,
-            "metadata_facts": tuple(_metadata_fact(row) for row in evidence if row.get("metadata_field")),
-            "metadata_support": metadata_support,
-            "structural_support": tuple(_citation_with_authority(store, row) for row in context_pack.get("structural_support", ())),
-            "trace_support": tuple(_citation_with_authority(store, row) for row in context_pack.get("trace_support", ())),
-            "legal_relations": tuple(row["legal_relation"] for row in evidence if row.get("legal_relation")),
-            "answer_scope": "direct_evidence" if status == "answer_ready" else "limited_evidence",
-            "warnings": ("metadata_support_not_exact_highlightable",)
-            if any(row.get("viewer_highlightable") is not True for row in metadata_support)
-            else (),
-            "insufficient_reasons": (),
-            "claim_support": tuple(claim.public() for claim in claim_support),
-        }
+        return project_response(
+            routed,
+            AnswerDecision(
+                status,
+                ask_route,
+                _answer_type(ask_route, status),
+                answer,
+                context_pack,
+                evidence=evidence,
+                citations=citations,
+                final_citations=citations,
+                historical_citations=context_pack.get("historical_citations", ()),
+                viewer_refs=viewer_refs,
+                metadata_facts=tuple(_metadata_fact(row) for row in evidence if row.get("metadata_field")),
+                metadata_support=metadata_support,
+                structural_support=tuple(_citation_with_authority(store, row) for row in context_pack.get("structural_support", ())),
+                trace_support=tuple(_citation_with_authority(store, row) for row in context_pack.get("trace_support", ())),
+                legal_relations=tuple(row["legal_relation"] for row in evidence if row.get("legal_relation")),
+                answer_scope="direct_evidence" if status == "answer_ready" else "limited_evidence",
+                warnings=("metadata_support_not_exact_highlightable",)
+                if any(row.get("viewer_highlightable") is not True for row in metadata_support)
+                else (),
+                claim_support=tuple(claim.public() for claim in claim_support),
+            ),
+        )
 
     def _agent_answer(self, query: str, evidence: tuple[dict, ...], fallback: str) -> str:
         return fallback
@@ -893,13 +897,6 @@ def _scope_has_verified_support(store, routed: dict) -> bool:
         row.get("lexical_relevance_ok") is not False and validate_answer_candidate(store, row)[0]
         for row in routed.get("matches", ())
     )
-
-
-def _missing_corpus_requirements(store, requested_function: str, required_capabilities: tuple[str, ...] = ()) -> dict:
-    if required_capabilities:
-        return {"needed_corpora": (), "required_capabilities": required_capabilities}
-    guard = store.config.setting("scope_guard", {}) or {}
-    return dict((guard.get("missing_corpus_requirements", {}) or {}).get(requested_function) or {})
 
 
 def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> dict:
@@ -1567,18 +1564,13 @@ def _metadata_grounding_evidence(store, metadata_grounding_id: str | None) -> di
     return None
 
 
-def _document_relation_response(store, corpus_id: str, query: str) -> dict | None:
-    if store is None:
-        return None
-    target = _document_relation_target(store, query)
-    if target["mode"] is None:
-        return None
+def _document_relation_response(store, corpus_id: str, query: str, target: dict, graph_edges: tuple[dict, ...]) -> dict:
     templates = _answer_templates(store)
     if target["mode"] == "article":
-        return _article_relation_response(store, corpus_id, query, target, templates)
+        return _article_relation_response(store, corpus_id, query, target, templates, _article_relation_support(store, graph_edges))
     if target["mode"] == "unsupported":
         return _relation_not_promoted(corpus_id, query, templates)
-    support = _document_relation_support(store, target["role"])
+    support = _document_relation_support(store, graph_edges)
     if not support:
         reason = "document_relation_not_found"
         return {
@@ -1632,8 +1624,9 @@ def _document_relation_response(store, corpus_id: str, query: str) -> dict | Non
     }
 
 
-def _article_relation_response(store, corpus_id: str, query: str, target: dict, templates: dict[str, str]) -> dict:
-    support = _article_relation_support(store, target)
+def _article_relation_response(
+    store, corpus_id: str, query: str, target: dict, templates: dict[str, str], support: tuple[dict, ...]
+) -> dict:
     if not support:
         if target.get("target_citation"):
             return _relation_not_promoted(corpus_id, query, templates, reason="relation_target_not_found")
@@ -1752,137 +1745,22 @@ def _relation_not_promoted(corpus_id: str, query: str, templates: dict[str, str]
     }
 
 
-def _document_relation_target(store, query: str) -> dict:
-    config = getattr(store, "config", None)
-    intent = intent_config_for(getattr(config, "query_strategy", "generic"), config)
-    relation_config = intent.get("document_relation", {})
-    normalized = normalize_intent_text(query)
-    if not normalized:
-        return {"mode": None}
-    relation_intent = classify_relation_intent(store, query)
-    relation_family = (relation_config.get("relation_families") or {}).get(relation_intent.relation_type, {})
-    relation_types = tuple(relation_family.get("relation_types") or ())
-    source_scope = resolve_source_scope(query, strategy=getattr(config, "query_strategy", "generic"), config=config)
-    references = parse_legal_references(getattr(config, "corpus_id", ""), query)
-    relation_signal = bool(relation_family) or contains_intent_phrase(query, relation_config.get("change_terms", ()))
-    add_signal = contains_intent_phrase(query, relation_config.get("add_terms", ()))
-    if source_scope.explicit and len(references) == 1 and not relation_signal and not add_signal:
-        return {"mode": None}
-    mentioned_roles = source_roles_for_query(query, strategy=getattr(config, "query_strategy", "generic"), config=config)
-    amendment_role = next((role for role in mentioned_roles if role.startswith("amendment_")), None)
-    amendment_signal = amendment_role in set(getattr(config, "source_roles", ()) or ()) or contains_intent_phrase(
-        query, relation_config.get("source_terms", ())
-    )
-    if relation_intent.relation_type == "RENAME_PROVISION":
-        amendment_signal = True
-    target_original = contains_intent_phrase(query, relation_config.get("target_document_terms", ()))
-    article_detail = contains_intent_phrase(query, relation_config.get("article_detail_terms", ()))
-    source_less_delete = relation_intent.relation_type == "DELETE_OR_REMOVE_PROVISION" and article_detail
-    if relation_intent.relation_type == "DELETE_OR_REMOVE_PROVISION" and not article_detail:
-        return {"mode": None}
-    if not references and amendment_role and "original_historical" in mentioned_roles:
-        return {"mode": "document", "role": amendment_role}
-    if not (relation_signal or add_signal) or (not amendment_signal and not source_less_delete):
-        return {"mode": None}
-    target_citation = _article_relation_target_citation(
-        getattr(config, "corpus_id", None), query, prefer_last=relation_intent.relation_type == "RENAME_PROVISION"
-    )
-    if add_signal:
-        return {
-            "mode": "article",
-            "role": amendment_role,
-            "relation_types": tuple(
-                relation_type for relation_type in relation_config.get("schema_only_relation_types", ()) if relation_type not in {"RENAMES", "RENUMBERED_TO"}
-            ),
-            "target_citation": target_citation,
-        }
-    if relation_intent.relation_type == "RENAME_PROVISION":
-        return {
-            "mode": "article",
-            "role": amendment_role,
-                "relation_types": ("RENAMES", "RENUMBERED_TO"),
-            "target_citation": target_citation,
-        }
-    if contains_intent_phrase(query, relation_config.get("unsupported_detail_terms", ())):
-        return {"mode": "unsupported"}
-    if article_detail:
-        if relation_intent.relation_type == "MODIFY_PROVISION":
-            relation_types = ("MODIFIES",)
-        return {
-            "mode": "article",
-            "role": amendment_role,
-            "relation_types": relation_types or ("MODIFIES", "DELETES"),
-            "target_citation": target_citation,
-        }
-    if amendment_role and amendment_role.startswith("amendment_"):
-        return {"mode": "document", "role": amendment_role}
-    if target_original:
-        return {"mode": "document", "role": "original_historical"}
-    return {"mode": None}
-
-
-def _document_relation_support(store, target: str) -> tuple[dict, ...]:
-    if target == "original_historical":
-        return tuple(
-            row | {"route_sources": ("document_relation",)}
-            for row in store.document_relations
-            if row.get("relation_type") == "AMENDED_BY" and row.get("source_role") == "original_historical"
-        )
+def _document_relation_support(store, graph_edges: tuple[dict, ...]) -> tuple[dict, ...]:
+    by_id = {row.get("relation_id"): row for row in store.document_relations}
     return tuple(
-        row | {"route_sources": ("document_relation",)}
-        for row in store.document_relations
-        if row.get("relation_type") == "AMENDS" and row.get("source_role") == target
+        by_id[edge["relation_id"]] | {"route_sources": edge.get("route_sources") or ("document_relation_graph",)}
+        for edge in graph_edges
+        if edge.get("relation_id") in by_id
     )
 
 
-def _article_relation_support(store, target: dict) -> tuple[dict, ...]:
-    role = target.get("role")
-    relation_types = set(target.get("relation_types") or ())
-    roles = {role} if role else {row for row in getattr(store.config, "source_roles", ()) if str(row).startswith("amendment_")}
-    if not roles:
-        return ()
+def _article_relation_support(store, graph_edges: tuple[dict, ...]) -> tuple[dict, ...]:
+    by_id = {row.get("relation_id"): row for row in store.article_amendment_relations}
     return tuple(
-        row | {"route_sources": ("article_amendment_relation",)}
-        for row in store.article_amendment_relations
-        if row.get("source_role") in roles
-        and row.get("relation_type") in relation_types
-        and row.get("runtime_loadable") is True
-        and _article_relation_matches_target(store, row, target.get("target_citation"))
+        by_id[edge["relation_id"]] | {"route_sources": edge.get("route_sources") or ("article_amendment_relation_graph",)}
+        for edge in graph_edges
+        if edge.get("relation_id") in by_id
     )
-
-
-def _article_relation_target_citation(corpus_id: str | None, query: str, *, prefer_last: bool = False) -> str | None:
-    if not corpus_id:
-        return None
-    if prefer_last:
-        references = parse_legal_references(corpus_id, query)
-        if references:
-            matches = list(re.finditer(r"\bpasal\s*([0-9]+[A-Za-z]?)(?:\s*ayat\s*\(\s*(\d+)\s*\))?", query or "", re.IGNORECASE))
-            if matches:
-                match = matches[-1]
-                reference = f"Pasal {match.group(1)}"
-                return f"{reference} ayat ({match.group(2)})" if match.group(2) else reference
-            return str(references[-1]["reference"])
-    ref = parse_legal_reference(corpus_id, query)
-    pasal = ref.get("pasal")
-    ayat = ref.get("ayat")
-    return f"{pasal} ayat {ayat}" if pasal and ayat else pasal
-
-
-def _article_relation_matches_target(store, row: dict, target_citation: str | None) -> bool:
-    if not target_citation:
-        return True
-    target = _normalize_article_target(target_citation)
-    citation = _normalize_article_target(row.get("target_reference") or row.get("new_reference") or row.get("target_citation"))
-    if target == citation:
-        return True
-    unit: dict = next((unit for unit in store.legal_units if unit.get("legal_unit_id") == row.get("target_legal_unit_id")), {})
-    labels = [unit.get("unit_label"), *(unit.get("hierarchy") or ())]
-    return target in {_normalize_article_target(label) for label in labels}
-
-
-def _normalize_article_target(value: object) -> str:
-    return " ".join(str(value or "").casefold().replace("(", "").replace(")", "").split())
 
 
 def _article_relation_evidence(store, relation: dict) -> dict | None:

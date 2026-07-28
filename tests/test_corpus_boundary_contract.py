@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 from pathlib import Path
+from hashlib import sha256
+import json
 import re
+import tempfile
 import unittest
 
 from tjipto.corpora import parser_dispatch
-from tjipto.corpora.strategy import CorpusParser, CorpusStrategy, StrategyRegistry
+from tjipto.corpora.strategy import (
+    CorpusStrategy,
+    NavigationResolver,
+    QueryNormalizer,
+    ReferenceParser,
+    StrategyRegistry,
+)
 from tjipto.corpora.uud import parser as uud_parser
 from tjipto.corpora.uud.relation_builder import parse_renumbering_mappings
+from tjipto.contracts.artifacts import CURRENT_ARTIFACT_SCHEMA
+from tjipto.core.manifest import artifact_set_digest
+from tjipto.runtime.service import LegalRuntimeService
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,8 +47,8 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         )
 
     def test_parser_dispatch_resolves_uud_and_fails_safely(self) -> None:
-        parser = parser_dispatch.get_parser("uud")
-        self.assertIs(parser.normalize_query_reference, uud_parser.normalize_uud_query_reference)
+        strategy = parser_dispatch.get_strategy("uud")
+        self.assertIs(strategy.normalizer.normalize_query_reference, uud_parser.normalize_uud_query_reference)
         self.assertEqual(parser_dispatch.normalize_query_reference("uud", "pasal 28 (1)"), "Pasal 28 ayat (1)")
         self.assertEqual(
             parser_dispatch.parse_legal_reference("uud", "BAB XA Pasal 28 ayat (1)"),
@@ -44,23 +56,108 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         )
         self.assertIn("bab xa", parser_dispatch.label_keys("uud", "BAB X A"))
         with self.assertRaisesRegex(ValueError, "unsupported_corpus_parser:unknown"):
-            parser_dispatch.get_parser("unknown")
+            parser_dispatch.get_strategy("unknown")
 
     def test_second_strategy_uses_its_own_reference_syntax(self) -> None:
-        parser = CorpusParser(
+        normalizer = QueryNormalizer(
             normalize_query_reference=lambda text: text.strip(),
             normalize_metadata_intent=lambda text: text.casefold(),
+        )
+        references = ReferenceParser(
             parse_legal_reference=lambda text, **_: {"rule": text if text.startswith("Rule ") else None},
             parse_legal_references=lambda text: [{"reference": text}] if text.startswith("Rule ") else [],
             parse_bab_reference=lambda _: None,
             parse_pasal_reference=lambda *_args, **_kwargs: None,
             parse_ayat_reference=lambda _: None,
             label_keys=lambda value: {str(value).casefold()},
+        )
+        navigation = NavigationResolver(
             resolve_navigation=lambda _: None,
         )
-        strategy = StrategyRegistry({"demo": CorpusStrategy("demo", parser, lambda _: None)}).require("demo")
-        self.assertEqual(strategy.parser.parse_legal_reference("Rule 1"), {"rule": "Rule 1"})
+        strategy = StrategyRegistry({"demo": CorpusStrategy("demo", normalizer, references, navigation, lambda _: None)}).require("demo")
+        self.assertEqual(strategy.references.parse_legal_reference("Rule 1"), {"rule": "Rule 1"})
         self.assertIsNone(strategy.proposition_operator("Rule 1 requires payment"))
+
+    def test_second_strategy_executes_verified_runtime_retrieval(self) -> None:
+        normalizer = QueryNormalizer(
+            normalize_query_reference=lambda text: text.replace("RULE-", "Rule "),
+            normalize_metadata_intent=lambda text: text.casefold(),
+        )
+        references = ReferenceParser(
+            parse_legal_reference=lambda text, **_: {"rule": text if text.startswith("Rule ") else None},
+            parse_legal_references=lambda text: [{"reference": text}] if text.startswith("Rule ") else [],
+            parse_bab_reference=lambda _: None,
+            parse_pasal_reference=lambda *_args, **_kwargs: None,
+            parse_ayat_reference=lambda _: None,
+            label_keys=lambda value: {str(value).casefold()},
+        )
+        navigation = NavigationResolver(
+            resolve_navigation=lambda _: None,
+        )
+        strategies = StrategyRegistry({"demo": CorpusStrategy("demo", normalizer, references, navigation, lambda _: None)})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            final = root / "data/final/demo"
+            final.mkdir(parents=True)
+            source_id, span_id, bbox_id = "demo::published", "demo_span_1", "demo_bbox_1"
+            evidence = {
+                "evidence_id": "demo_evidence_1", "corpus_id": "demo", "legal_unit_id": "demo_rule_1",
+                "citation": "Rule 1", "quoted_text": "Rule 1 requires payment.", "hierarchy": ["Rule 1"],
+                "source_document_id": source_id, "source_pdf_path": "data/sources/demo.pdf", "source_sha256": "demo-sha",
+                "source_role": "published", "temporal_context": "current", "page_numbers": [1], "status": "final",
+                "runtime_loadable": True, "bbox_precision": "exact", "viewer_highlightable": True,
+                "bbox_refs": [bbox_id], "bbox_ids": [bbox_id], "text_span_ids": [span_id],
+                "authority_kind": "normative_legal_text", "citation_final": True, "citable": True,
+                "evidence_owner_kind": "legal_unit_source", "relevant_quote_eligible": True,
+            }
+            source = {"source_document_id": source_id, "sha256": "demo-sha", "path": "data/sources/demo.pdf", "source_role": "published", "temporal_context": "current"}
+            span = {"text_span_id": span_id, "source_document_id": source_id, "source_sha256": "demo-sha", "page_number": 1, "text": evidence["quoted_text"]}
+            bbox = {"bbox_id": bbox_id, "source_document_id": source_id, "source_sha256": "demo-sha", "page_number": 1, "text": evidence["quoted_text"]}
+            projection = {"schema": 1, "artifacts": {
+                "evidence_registry": [evidence], "bbox_registry": [bbox], "legal_units": [], "chunks": [], "retrieval_units": [],
+                "graph_edges": [], "source_documents": [source], "page_text_spans": [span], "document_metadata": [],
+                "metadata_grounding": [], "metadata_grounding_registry": [], "document_relations": [],
+                "article_amendment_relations": [], "source_conflicts": [],
+            }}
+            payloads = {"runtime_projection.json": json.dumps(projection).encode(), "propositions.jsonl": b""}
+            for name, data in payloads.items():
+                (final / name).write_bytes(data)
+            files = {
+                name: {
+                    "logical_key": key, "artifact_kind": key, "format": "json" if name.endswith(".json") else "jsonl",
+                    "artifact_schema": CURRENT_ARTIFACT_SCHEMA, "origin": "generated", "producer": "test", "build_stage": "test",
+                    "sha256": sha256(data).hexdigest(), "bytes": len(data), "primary_id": "proposition_id" if key == "propositions" else None,
+                }
+                for name, key, data in (
+                    ("runtime_projection.json", "runtime_projection", payloads["runtime_projection.json"]),
+                    ("propositions.jsonl", "propositions", payloads["propositions.jsonl"]),
+                    ("validation_report.json", "validation_report", b""),
+                )
+            }
+            manifest = {
+                "corpus_id": "demo", "schema_version": CURRENT_ARTIFACT_SCHEMA,
+                "runtime_projection": "runtime_projection.json", "propositions": "propositions.jsonl", "validation_report": "validation_report.json", "files": files,
+            }
+            report = {"status": "pass", "validated_artifact_set_digest": artifact_set_digest(manifest, exclude=("validation_report.json",))}
+            report_data = json.dumps(report).encode()
+            (final / "validation_report.json").write_bytes(report_data)
+            files["validation_report.json"].update({"sha256": sha256(report_data).hexdigest(), "bytes": len(report_data)})
+            manifest_data = json.dumps(manifest).encode()
+            (final / "manifest.json").write_bytes(manifest_data)
+            (root / "data/corpus_registry.json").write_text(json.dumps({"demo": {
+                "manifest": "data/final/demo/manifest.json", "manifest_sha256": sha256(manifest_data).hexdigest(),
+                "runtime_required_artifacts": ["runtime_projection", "validation_report", "propositions"],
+                "query_normalization_enabled": True, "exact_citation_intent_enabled": False,
+                "source_roles": ["published"], "temporal_contexts": ["current"], "preferred_source_role": "published",
+            }}), encoding="utf-8")
+            result = LegalRuntimeService(root, strategy_registry=strategies).ask("demo", "RULE-1 payment")
+            self.assertEqual(result["status"], "limited_answer")
+            self.assertEqual(result["normalized_query"], "Rule 1 payment")
+            self.assertEqual(result["evidence"][0]["citation"], "Rule 1")
+            service = LegalRuntimeService(root, strategy_registry=strategies)
+            for query in ("RULE-1 requires payment", "RULE-1 amended by Rule 2"):
+                with self.subTest(query=query):
+                    self.assertNotEqual(service.ask("demo", query)["status"], "answer_ready")
 
     def test_parser_dispatch_preserves_all_reference_ranges(self) -> None:
         text = "Pasal19, Pasal\n28C, dan pasal 28G."

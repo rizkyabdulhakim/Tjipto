@@ -3,8 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
+from tjipto.corpora.capabilities import resolve_capability
 from tjipto.evidence.store import EvidenceStore
-from tjipto.runtime.intent import classify_legal_intent, classify_relation_intent
+from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -34,9 +35,9 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
             "hukuman korupsi Presiden menurut Pasal 7A",
             "korupsi dalam pasal 7A hukuman apa",
         ):
-            intent = classify_legal_intent(self.store, query)
-            self.assertEqual(intent.requested_function, "criminal_punishment", query)
-            self.assertEqual(intent.answerability, "unsupported", query)
+            decision = resolve_capability(self.store.config, query, "direct_quotation", ("uud",))
+            self.assertEqual(decision.requested_operation, "external_legal_domain_research", query)
+            self.assertEqual(decision.missing_capabilities, ("criminal_punishment",), query)
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "insufficient_evidence", query)
             self.assertEqual(result["route"], "unsupported_scope", query)
@@ -52,7 +53,7 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
             "tindak pidana berat dalam Pasal 7A maksudnya apa?",
             "alasan Presiden dapat diberhentikan menurut Pasal 7A",
         ):
-            self.assertNotEqual(classify_legal_intent(self.store, query).answerability, "unsupported", query)
+            self.assertIsNone(resolve_capability(self.store.config, query, "direct_quotation", ("uud",)).reason_code, query)
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "answer_ready", query)
             self.assertEqual(result["route"], "legal_reference", query)

@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "a068d8d256eeaeabe96692f7b53478fce084141be8df58d4e11c689c8e5f3b03",
+    "manifest_sha256": "472f8a8ae7963e65a5522ebac8383f548c1b0f64f43659130044ab1a41dc665c",
     "runtime_required_artifacts": [
       "runtime_projection",
       "validation_report",

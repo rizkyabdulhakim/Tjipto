@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tjipto.contracts.relations import is_relevance_relation
+from tjipto.contracts.relations import is_relevance_relation, is_query_relation
 
 RUNTIME_ARTIFACTS = (
     "evidence_registry",
@@ -21,7 +21,7 @@ RUNTIME_ARTIFACTS = (
 
 _GRAPH_EDGE_FIELDS = (
     "edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id",
-    "runtime_loadable", "support_kind", "support_relation_ids", "support_evidence_ids",
+    "runtime_loadable", "support_kind", "support_relation_ids", "support_evidence_ids", "derived_from_edge_id",
     "text_span_ids", "bbox_refs", "source_role", "temporal_context",
 )
 
@@ -58,7 +58,10 @@ def build_runtime_projection(**artifacts: list[dict]) -> dict:
         {key: row[key] for key in _GRAPH_EDGE_FIELDS if key in row}
         for row in artifacts.get("graph_edges", ())
         if row.get("edge_type") in {"HAS_FINAL_EVIDENCE", "PAGE_GROUNDED_AT"}
-        or (row.get("runtime_loadable") is True and is_relevance_relation(row.get("edge_type")))
+        or (
+            row.get("runtime_loadable") is True
+            and (is_relevance_relation(row.get("edge_type")) or is_query_relation(row.get("edge_type")))
+        )
     ]
     refs = _bbox_refs(rows.values())
     words = []

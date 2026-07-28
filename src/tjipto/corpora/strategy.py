@@ -7,15 +7,23 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class CorpusParser:
+class QueryNormalizer:
     normalize_query_reference: Callable[[str], str]
     normalize_metadata_intent: Callable[[str], str]
+
+
+@dataclass(frozen=True)
+class ReferenceParser:
     parse_legal_reference: Callable[..., dict[str, str | None]]
     parse_legal_references: Callable[[str], list[dict[str, object]]]
     parse_bab_reference: Callable[[str], str | None]
     parse_pasal_reference: Callable[..., str | None]
     parse_ayat_reference: Callable[[str], str | None]
     label_keys: Callable[[object], set[str]]
+
+
+@dataclass(frozen=True)
+class NavigationResolver:
     resolve_navigation: Callable[[str], tuple[str, str] | None]
 
 
@@ -30,8 +38,11 @@ class CorpusContract:
 @dataclass(frozen=True)
 class CorpusStrategy:
     corpus_id: str
-    parser: CorpusParser
+    normalizer: QueryNormalizer
+    references: ReferenceParser
+    navigation: NavigationResolver
     proposition_operator: Callable[[str], tuple[str, str, str] | None]
+    capability_resolver: Callable[..., object] | None = None
     contract: CorpusContract | None = None
     provenance_adapter: object | None = None
     semantic_validator: Callable[[object, dict[str, object]], tuple[str, ...]] | None = None

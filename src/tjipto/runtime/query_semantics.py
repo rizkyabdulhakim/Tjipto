@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from tjipto.corpora.capabilities import CapabilityDecision, resolve_capability
 from tjipto.corpora.intent_config import contains_intent_phrase
 from tjipto.corpora.parser_dispatch import parse_legal_references, proposition_operator, resolve_navigation
 from tjipto.corpora.source_arbitration import resolve_source_scope
@@ -38,6 +39,7 @@ class QuerySemantics:
     available_corpora: tuple[str, ...]
     needed_corpora: tuple[str, ...]
     missing_corpora: tuple[str, ...]
+    capability_decision: CapabilityDecision
     answer_permission: str
     reason_code: str | None
     trace: tuple[str, ...]
@@ -51,13 +53,13 @@ def interpret_query(
     available_corpora: tuple[str, ...] | None = None,
 ) -> QuerySemantics:
     config = getattr(store, "config", None)
-    references = _references(corpus_id, query)
+    references = _references(corpus_id, query, config=config)
     scope = resolve_source_scope(query, strategy=getattr(config, "query_strategy", "generic"), config=config)
     temporal = scope.temporal
     source_role = scope.role if scope.temporal or scope.explicit else None
     temporal_context = source_role if temporal else None
-    navigation = resolve_navigation(corpus_id, query) if references and not temporal else None
-    proposition = _proposition(corpus_id, query, references, source_role, temporal_context)
+    navigation = resolve_navigation(corpus_id, query, config=config) if references and not temporal else None
+    proposition = _proposition(corpus_id, query, references, source_role, temporal_context, config=config)
     discrepancy = len(references) >= 2 and contains_intent_phrase(query, discrepancy_terms(config))
     relation_intent = None if scope.state == "generic_post_amendment" else classify_relation_intent(store, query).relation_type
     requested_function = (
@@ -75,6 +77,9 @@ def interpret_query(
         if references
         else "retrieval"
     )
+    strategy = getattr(config, "strategy", None)
+    resolver = getattr(strategy, "capability_resolver", None) or resolve_capability
+    capability = resolver(config, query, requested_function, available_corpora or ((corpus_id,) if store is not None else ()))
     trace = (
         (f"function:{requested_function}",)
         + ((f"source_role:{source_role}",) if source_role else ())
@@ -90,10 +95,11 @@ def interpret_query(
         relation_intent=relation_intent,
         discrepancy_intent=discrepancy,
         available_corpora=available_corpora if available_corpora is not None else ((corpus_id,) if store is not None else ()),
-        needed_corpora=(),
-        missing_corpora=(),
+        needed_corpora=capability.missing_corpora,
+        missing_corpora=capability.missing_corpora,
+        capability_decision=capability,
         answer_permission="verify" if proposition else "quote" if references else "retrieve",
-        reason_code=None,
+        reason_code=capability.reason_code,
         trace=trace,
     )
 
@@ -102,9 +108,9 @@ def discrepancy_terms(config) -> tuple[str, ...]:
     return tuple(config.setting("source_conflict_intent", {}).get("discrepancy_terms") or ()) if config else ()
 
 
-def _references(corpus_id: str, query: str) -> tuple[str, ...]:
+def _references(corpus_id: str, query: str, *, config=None) -> tuple[str, ...]:
     try:
-        parsed = parse_legal_references(corpus_id, query)
+        parsed = parse_legal_references(corpus_id, query, config=config)
     except ValueError:
         return ()
     labels = []
@@ -127,10 +133,13 @@ def _proposition(
     references: tuple[str, ...],
     source_role: str | None,
     temporal_context: str | None,
+    *,
+    config=None,
 ) -> PropositionClaim | None:
     normalized = " ".join(re.findall(r"[a-z0-9]+", str(query or "").casefold()))
     try:
-        parsed = proposition_operator(corpus_id, normalized)
+        strategy = getattr(config, "strategy", None)
+        parsed = strategy.proposition_operator(normalized) if strategy is not None else proposition_operator(corpus_id, normalized)
     except ValueError:
         parsed = None
     if parsed is None:
@@ -144,7 +153,9 @@ def _proposition(
         return None
     return PropositionClaim(
         predicate=predicate,
-        subject=references[0] if len(references) == 1 else None,
+        # A legal reference scopes retrieval; it is not the grammatical
+        # subject of the proposition asserted by the source clause.
+        subject=None,
         object=" ".join(object_tokens),
         polarity="negative" if re.search(rf"\btidak\s+{re.escape(operator)}\b", normalized) else "positive",
         modality=modality,

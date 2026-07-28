@@ -7,7 +7,7 @@ from tjipto.corpora.parser_dispatch import parse_legal_reference, parse_legal_re
 
 
 @dataclass(frozen=True)
-class LegalIntent:
+class RelationIntent:
     requested_function: str = "unknown"
     target_reference: str | None = None
     relation_type: str | None = None
@@ -19,43 +19,9 @@ class LegalIntent:
     required_capabilities: tuple[str, ...] = ()
 
 
-def classify_legal_intent(store, query: str) -> LegalIntent:
-    guard = store.config.setting("scope_guard", {}) or {}
-    current = contains_intent_phrase(query, tuple(guard.get("current_fact_terms") or ()))
-    subject = contains_intent_phrase(query, tuple(guard.get("current_fact_subjects") or ()))
-    identity = contains_intent_phrase(query, tuple(guard.get("identity_question_terms") or ()))
-    if subject and (current or identity):
-        return LegalIntent(
-            "current_fact",
-            answerability="unsupported",
-            rejection_reason="current_fact_unsupported",
-            route="current_fact_unsupported",
-            intent="current_fact_query",
-        )
-    for row in (guard.get("legal_intent_policy", {}) or {}).get("unsupported_functions", ()):
-        topic = contains_intent_phrase(query, tuple(row.get("topic_terms") or ()))
-        unsupported = contains_intent_phrase(query, tuple(row.get("unsupported_function_terms") or ()))
-        ambiguous = contains_intent_phrase(query, tuple(row.get("ambiguous_criminal_terms") or ()))
-        supported = contains_intent_phrase(query, tuple(row.get("supported_function_terms") or ()))
-        target = contains_intent_phrase(query, tuple(row.get("target_reference_terms") or ()))
-        if unsupported and (topic or target) or (topic and ambiguous and not supported):
-            return LegalIntent(
-                str(row.get("requested_function") or "out_of_corpus_domain"),
-                _target_reference(store, query),
-                legal_domain=row.get("legal_domain"),
-                answerability="unsupported",
-                rejection_reason=str(row.get("rejection_reason") or "unsupported_scope"),
-                route="unsupported_scope",
-                intent="out_of_corpus",
-            )
-    if contains_intent_phrase(query, tuple(guard.get("in_corpus_discovery_terms") or ())):
-        return LegalIntent("text_occurrence_discovery", answerability="answerable", intent="text_occurrence_discovery")
-    return LegalIntent()
-
-
-def classify_relation_intent(store, query: str) -> LegalIntent:
+def classify_relation_intent(store, query: str) -> RelationIntent:
     if store is None:
-        return LegalIntent()
+        return RelationIntent()
     intent = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
     relation_config = intent.get("document_relation", {})
     for name, row in (relation_config.get("relation_families") or {}).items():
@@ -63,14 +29,14 @@ def classify_relation_intent(store, query: str) -> LegalIntent:
             _explicit_renumbering_mapping(query, getattr(store.config, "corpus_id", "")) if name == "RENAME_PROVISION" else False
         )
         if contains_intent_phrase(query, tuple(row.get("terms") or ())) or explicit_mapping:
-            return LegalIntent(
+            return RelationIntent(
                 "amendment_relation",
                 _target_reference(store, query),
                 relation_type=str(name),
                 legal_domain="constitutional_amendment",
                 answerability="answerable",
             )
-    return LegalIntent()
+    return RelationIntent()
 
 
 def _explicit_renumbering_mapping(query: str, corpus_id: str) -> bool:

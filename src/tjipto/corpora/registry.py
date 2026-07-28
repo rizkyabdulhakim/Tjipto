@@ -7,15 +7,17 @@ import os
 from tjipto.core.config import CorpusConfig
 from tjipto.core.manifest import read_json
 from tjipto.contracts.artifacts import CURRENT_ARTIFACT_SCHEMA
+from tjipto.corpora.strategy import StrategyRegistry, builtin_strategy_registry
 
 SUPPORTED_ARTIFACT_SCHEMA_VERSIONS = {5, CURRENT_ARTIFACT_SCHEMA}
 
 
 class CorpusRegistry:
-    def __init__(self, repo_root: Path | None = None):
+    def __init__(self, repo_root: Path | None = None, strategies: StrategyRegistry | None = None):
         env_root = os.environ.get("TJIPTO_REPO_ROOT")
         self.repo_root = repo_root or (Path(env_root) if env_root else Path(__file__).resolve().parents[3])
         self.registry_path = self.repo_root / "data" / "corpus_registry.json"
+        self.strategies = strategies or builtin_strategy_registry()
         self.error_code: str | None = None
 
     def resolve(self, corpus_id: str) -> CorpusConfig | None:
@@ -58,7 +60,7 @@ class CorpusRegistry:
             self.error_code = "unsupported_schema"
             return None
         settings = {key: value for key, value in entry.items() if key != "manifest"} if isinstance(entry, dict) else {}
-        return CorpusConfig(corpus_id, manifest_path, manifest, settings, self.repo_root)
+        return CorpusConfig(corpus_id, manifest_path, manifest, settings, self.repo_root, strategy=self.strategies.strategies.get(corpus_id))
 
     def corpus_ids(self) -> tuple[str, ...]:
         """Return the registry's closed, deterministic corpus identifier set."""

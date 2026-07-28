@@ -6,7 +6,7 @@ import unittest
 
 import fitz
 
-from tjipto.ingestion.pdf.bbox import pdf_lines
+from tjipto.ingestion.pdf.bbox import extract_pdf
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,7 +24,7 @@ class RawSourceGeometryContractTest(unittest.TestCase):
         documents = {source_id: fitz.open(ROOT / source["path"]) for source_id, source in sources.items()}
         try:
             for source_id, document in documents.items():
-                line_cache.update({(source_id, page): lines for page, lines in pdf_lines(document).items()})
+                line_cache.update({(source_id, page): lines for page, lines in extract_pdf(document, source_id).lines.items()})
             for row in rows:
                 lines = line_cache[(row["source_document_id"], row["page_number"])]
                 line = next(item for item in lines if item["block_index"] == row["block_index"] and item["line_index"] == row["line_index"])
