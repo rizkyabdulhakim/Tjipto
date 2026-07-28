@@ -130,9 +130,13 @@ def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
     if not target:
         return None
     normalized = normalize_uud_query_reference(text).casefold()
-    if re.search(r"\b(?:pasal\s+)?berikutnya\s+(?:setelah|sesudah)\b", normalized):
+    if re.search(
+        r"\b(?:pasal\s+(?:apa\s+)?)?berikutnya\s+(?:setelah|sesudah)\b|"
+        r"\b(?:setelah|sesudah)\s+pasal\s+\d+[a-z]?\s+(?:pasal\s+berapa|apa)\b",
+        normalized,
+    ):
         return target, "next"
-    if re.search(r"\bsebelum\b", normalized):
+    if re.search(r"\b(?:pasal\s+)?sebelumnya\s+sebelum\b", normalized):
         return target, "previous"
     return None
 

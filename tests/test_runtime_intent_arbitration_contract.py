@@ -86,6 +86,19 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
             ("answer_ready", "structural_navigation", "Pasal 7A"),
         )
 
+    def test_navigation_requires_an_explicit_adjacency_operation(self) -> None:
+        for query in (
+            "Pasal berikutnya setelah Pasal 7",
+            "Pasal apa berikutnya setelah Pasal 7",
+            "Setelah Pasal 7 pasal berapa?",
+            "Sesudah Pasal 7 apa?",
+        ):
+            with self.subTest(query=query):
+                self.assertEqual(self.service.ask("uud", query)["route"], "structural_navigation")
+        for query in ("Pasal 7 setelah Pasal 6", "Siapa Presiden setelah Pasal 7?"):
+            with self.subTest(query=query):
+                self.assertNotEqual(self.service.ask("uud", query)["route"], "structural_navigation")
+
 
 if __name__ == "__main__":
     unittest.main()

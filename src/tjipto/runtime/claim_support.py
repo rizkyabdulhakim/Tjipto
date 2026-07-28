@@ -106,34 +106,59 @@ def _grounded_clauses(store, evidence: tuple[dict, ...]) -> tuple[ClauseProposit
         if unit.get("legal_unit_id") not in target_units:
             continue
         spans = tuple(unit.get("text_span_ids") or ())
-        bboxes = store.exact_bboxes_for_text_spans(spans)
         evidence_id = next((str(item) for item in unit.get("evidence_ids") or () if store.get(item)), None)
         record = store.get(evidence_id) if evidence_id else None
-        if not isinstance(evidence_id, str) or not record or not spans or not bboxes:
+        if not isinstance(evidence_id, str) or not record or not spans:
             continue
-        text = _normalized(str(unit.get("text") or ""))
-        if not text:
-            continue
-        out.append(
-            ClauseProposition(
-                subject=None,
-                predicate="textual",
-                object=text,
-                polarity="positive",
-                modality="textual",
-                conditions=(),
-                exceptions=(),
-                source_role=record.get("source_role"),
-                temporal_context=record.get("temporal_context"),
-                evidence_id=evidence_id,
-                text_span_ids=spans,
+        for segment_spans, text in _sentence_segments(store, spans):
+            if not store.exact_bboxes_for_text_spans(segment_spans):
+                continue
+            out.append(
+                ClauseProposition(
+                    subject=None,
+                    predicate="textual",
+                    object=text,
+                    polarity="positive",
+                    modality="textual",
+                    conditions=(),
+                    exceptions=(),
+                    source_role=record.get("source_role"),
+                    temporal_context=record.get("temporal_context"),
+                    evidence_id=evidence_id,
+                    text_span_ids=segment_spans,
+                )
             )
-        )
     return tuple(out)
 
 
 def _normalized(text: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", text.casefold()))
+
+
+def _sentence_segments(store, spans: tuple[str, ...]) -> tuple[tuple[tuple[str, ...], str], ...]:
+    """Keep adjacent selectors together only through one source sentence."""
+    by_id = {str(row.get("text_span_id")): row for row in store.page_text_spans}
+    segments: list[tuple[tuple[str, ...], str]] = []
+    current_ids: list[str] = []
+    current_text: list[str] = []
+    for span_id in spans:
+        span = by_id.get(span_id)
+        if span is None:
+            return ()
+        text = str(span.get("text") or "")
+        for sentence_part in re.findall(r"[^.!?]+(?:[.!?]|$)", text):
+            current_ids.append(span_id)
+            current_text.append(sentence_part)
+            if re.search(r"[.!?]\s*$", sentence_part):
+                normalized = _normalized(" ".join(current_text))
+                if normalized:
+                    segments.append((tuple(dict.fromkeys(current_ids)), normalized))
+                current_ids, current_text = [], []
+    if current_ids:
+        normalized = _normalized(" ".join(current_text))
+        if normalized:
+            segments.append((tuple(current_ids), normalized))
+    return tuple(segments)
 
 
 def _supports(claim: PropositionClaim, clause: ClauseProposition) -> bool:
