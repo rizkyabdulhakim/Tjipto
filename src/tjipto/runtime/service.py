@@ -496,7 +496,7 @@ class LegalRuntimeService:
         anomaly = _source_anomaly_response(store, corpus_id, query)
         if anomaly:
             return anomaly
-        document_relation = _document_relation_response(store, corpus_id, query)
+        document_relation = None if semantics.temporal_context else _document_relation_response(store, corpus_id, query)
         if document_relation:
             return document_relation
         source_document = _source_document_response(store, corpus_id, query)
@@ -504,7 +504,7 @@ class LegalRuntimeService:
             return source_document
         # A resolved legal target has precedence over the instrument classifier.
         # Amendment wording then scopes the structured lookup to that source role.
-        instrument = None if _has_resolved_legal_target(corpus_id, query) else _instrument_intent_context(store, query)
+        instrument = None if semantics.temporal_context or _has_resolved_legal_target(corpus_id, query) else _instrument_intent_context(store, query)
         if instrument:
             row, route, reason = instrument
             templates = _answer_templates(store)
@@ -593,60 +593,69 @@ class LegalRuntimeService:
                 "insufficient_reasons": (),
             }
         scope = scope_guard_context(store, query)
+        scoped_routed = None
         if scope:
-            # Classify scope only after the same corpus has had a retrieval attempt.
-            self._route_retrieval(
+            # Scope is a conclusion from the retrieved candidates, never a
+            # placeholder retrieval attempt.
+            scoped_routed = self._route_retrieval(
                 corpus_id,
                 query,
                 store,
                 limit=limit,
                 metadata_filters=filters,
                 allow_navigation=semantics.requested_function != "temporal_quotation",
+                allow_relation=semantics.requested_function != "temporal_quotation",
             )
-            templates = _answer_templates(store)
-            missing_domain = scope.get("requested_function") == "out_of_corpus_domain"
-            reason = "missing_corpus_support" if missing_domain else scope["reason"]
-            context_pack = empty_context_pack(reason)
-            return scope | {
-                "status": "insufficient_evidence",
-                "route": "missing_corpus" if reason == "missing_corpus_support" else scope["route"],
-                "reason": reason,
-                "reason_code": reason,
-                "corpus_id": corpus_id,
-                "original_query": query,
-                "normalized_query": query.strip(),
-                "matches": (),
-                "answer_type": "none",
-                "answer": templates["insufficient"],
-                "context_pack": context_pack,
-                "evidence": (),
-                "citations": (),
-                "final_citations": (),
-                "historical_citations": context_pack.get("historical_citations", ()),
-                "metadata_support": context_pack.get("metadata_support", ()),
-                "structural_support": context_pack.get("structural_support", ()),
-                "trace_support": context_pack.get("trace_support", ()),
-                "viewer_refs": (),
-                "metadata_facts": (),
-                "legal_relations": (),
-                "answer_scope": "insufficient_evidence",
-                "warnings": (),
-                "insufficient_reasons": (reason,),
-                "available_corpora": semantics.available_corpora,
-                "needed_corpora": ("additional_legal_corpus",) if reason == "missing_corpus_support" else (),
-                "missing_corpora": ("additional_legal_corpus",) if reason == "missing_corpus_support" else (),
-                "retrieval_attempted": True,
-            }
+            if scope["requested_function"] != "out_of_corpus_domain" or not _scope_has_verified_support(store, scoped_routed):
+                templates = _answer_templates(store)
+                requirements = _missing_corpus_requirements(store, scope["requested_function"])
+                missing_domain = bool(requirements)
+                reason = "missing_corpus_support" if missing_domain else scope["reason"]
+                context_pack = empty_context_pack(reason)
+                return scope | {
+                    "status": "insufficient_evidence",
+                    "route": "missing_corpus" if missing_domain else scope["route"],
+                    "reason": reason,
+                    "reason_code": reason,
+                    "corpus_id": corpus_id,
+                    "original_query": query,
+                    "normalized_query": query.strip(),
+                    "matches": (),
+                    "answer_type": "none",
+                    "answer": templates["insufficient"],
+                    "context_pack": context_pack,
+                    "evidence": (),
+                    "citations": (),
+                    "final_citations": (),
+                    "historical_citations": context_pack.get("historical_citations", ()),
+                    "metadata_support": context_pack.get("metadata_support", ()),
+                    "structural_support": context_pack.get("structural_support", ()),
+                    "trace_support": context_pack.get("trace_support", ()),
+                    "viewer_refs": (),
+                    "metadata_facts": (),
+                    "legal_relations": (),
+                    "answer_scope": "insufficient_evidence",
+                    "warnings": (),
+                    "insufficient_reasons": (reason,),
+                    "available_corpora": semantics.available_corpora,
+                    "needed_corpora": tuple(requirements.get("needed_corpora") or ()),
+                    "missing_corpora": tuple(requirements.get("needed_corpora") or ()),
+                    "required_capabilities": tuple(requirements.get("required_capabilities") or ()),
+                    "retrieval_attempted": True,
+                    "retrieval_route": scoped_routed["route"],
+                    "retrieval_candidate_count": len(scoped_routed["matches"]),
+                }
         semantic_filters = dict(filters or {})
         if semantics.source_role and "source_role" not in semantic_filters:
             semantic_filters["source_role"] = semantics.source_role
-        routed = self._route_retrieval(
+        routed = scoped_routed or self._route_retrieval(
             corpus_id,
             query,
             store,
             limit=limit,
             metadata_filters=semantic_filters,
             allow_navigation=semantics.requested_function != "temporal_quotation",
+            allow_relation=semantics.requested_function != "temporal_quotation",
         )
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
@@ -874,6 +883,18 @@ def _is_entity_support_query(store, routed: dict) -> bool:
     vocabulary.update(normalize_intent_text(value) for values in intent.get("metadata_rules", {}).values() for value in values)
     vocabulary.update({"siapa", "yang", "apa", "dengan", "dan", "atau"})
     return any(token not in vocabulary and token not in {"menandatangani", "menandatangi", "penandatangan"} for token in query.split())
+
+
+def _scope_has_verified_support(store, routed: dict) -> bool:
+    return any(
+        row.get("lexical_relevance_ok") is not False and validate_answer_candidate(store, row)[0]
+        for row in routed.get("matches", ())
+    )
+
+
+def _missing_corpus_requirements(store, requested_function: str) -> dict:
+    guard = store.config.setting("scope_guard", {}) or {}
+    return dict((guard.get("missing_corpus_requirements", {}) or {}).get(requested_function) or {})
 
 
 def _authority_policy(store, row: dict, *, can_resolve: bool | None = None, conflict: dict | None = None) -> dict:
@@ -2195,7 +2216,7 @@ def _is_source_anomaly_query(store, query: str) -> bool:
     unresolved_terms = tuple(str(term).casefold() for term in intent.get("unresolved_query_terms") or ())
     if any(_query_contains_term(folded, term) for term in unresolved_terms):
         return True
-    discrepancy_markers = ("tapi", "tetapi", "namun", "kenapa", "mengapa", "berbeda", "beda")
+    discrepancy_markers = tuple(str(marker).casefold() for marker in intent.get("discrepancy_terms") or ())
     if any(_query_contains_term(folded, marker) for marker in discrepancy_markers):
         return any(
             sum(_query_contains_term(folded, str(anchor).casefold()) for anchor in conflict.get("query_anchor_terms") or ()) >= 2
@@ -2249,7 +2270,7 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
         _query_contains_term(folded_query, anchor) for anchor in anchors
     )
     natural_discrepancy = (
-        any(_query_contains_term(folded_query, marker) for marker in ("tapi", "tetapi", "namun", "kenapa", "mengapa", "berbeda", "beda"))
+        any(_query_contains_term(folded_query, str(marker).casefold()) for marker in intent.get("discrepancy_terms") or ())
         and sum(_query_contains_term(folded_query, anchor) for anchor in anchors) >= 2
     )
     source_marker_context = conflict.get("source_anomaly_kind") in {"source_marker_sequence_anomaly", "typed_source_discrepancy"} and role_anchor_match

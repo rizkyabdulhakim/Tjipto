@@ -124,6 +124,16 @@
         "tanah",
         "jakarta"
       ],
+      "missing_corpus_requirements": {
+        "out_of_corpus_domain": {
+          "needed_corpora": [
+            "land_law"
+          ],
+          "required_capabilities": [
+            "land_regulation"
+          ]
+        }
+      },
       "legal_intent_policy": {
         "unsupported_functions": [
           {
@@ -791,6 +801,57 @@
         "amendment_3_historical": "Ketiga",
         "amendment_4_historical": "Keempat"
       },
+      "temporal_current_terms": [
+        "setelah perubahan",
+        "sesudah perubahan",
+        "pasca perubahan",
+        "setelah diubah",
+        "sesudah diubah",
+        "setelah diamandemen",
+        "sesudah diamandemen",
+        "pasca amandemen",
+        "saat ini",
+        "naskah konsolidasi"
+      ],
+      "proposition_operators": {
+        "mengatur": {
+          "predicate": "regulates",
+          "modality": "legal_rule",
+          "evidence_terms": [
+            "mengatur",
+            "diatur"
+          ]
+        },
+        "melarang": {
+          "predicate": "prohibits",
+          "modality": "prohibition",
+          "evidence_terms": [
+            "melarang",
+            "dilarang"
+          ]
+        },
+        "mewajibkan": {
+          "predicate": "requires",
+          "modality": "obligation",
+          "evidence_terms": [
+            "mewajibkan",
+            "wajib"
+          ]
+        },
+        "memperbolehkan": {
+          "predicate": "permits",
+          "modality": "permission",
+          "evidence_terms": [
+            "memperbolehkan",
+            "boleh"
+          ]
+        },
+        "menyebut": {
+          "predicate": "mentions",
+          "modality": "textual",
+          "evidence_terms": []
+        }
+      },
       "document_relation": {
         "relation_families": {
           "RENAME_PROVISION": {
@@ -927,8 +988,7 @@
       ],
       "structural_navigation": {
         "next": [
-          "berikutnya setelah",
-          "sesudah"
+          "berikutnya setelah"
         ],
         "previous": [
           "sebelumnya sebelum",
@@ -970,6 +1030,15 @@
       }
     },
     "source_conflict_intent": {
+      "discrepancy_terms": [
+        "tapi",
+        "tetapi",
+        "namun",
+        "kenapa",
+        "mengapa",
+        "berbeda",
+        "beda"
+      ],
       "query_terms": [
         "konflik",
         "anomali",

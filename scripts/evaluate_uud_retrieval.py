@@ -147,9 +147,13 @@ def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, A
             "final_citation_count": _final_citation_count(internal),
             "claims": _claim_texts(internal),
             "claim_support": _claim_statuses(internal),
+            "predicate": _claim_attributes(internal, "predicate"),
+            "polarity": _claim_attributes(internal, "polarity"),
+            "modality": _claim_attributes(internal, "modality"),
             "reason_code": _reason_code(internal),
             "source_role": _source_attribute(internal, "source_role"),
             "temporal_context": _source_attribute(internal, "temporal_context"),
+            "needed_corpora": list(response.get("needed_corpora", ())),
         },
     }
 
@@ -162,9 +166,13 @@ def _validate(case: dict[str, Any], response: dict[str, Any], internal: dict[str
     _expect_equal(errors, "requested_function", case.get("expected_requested_function"), response.get("requested_function"))
     _expect_equal(errors, "claims", case.get("expected_claims"), _claim_texts(internal))
     _expect_equal(errors, "claim_support", case.get("expected_claim_support"), _claim_statuses(internal))
+    _expect_equal(errors, "predicate", case.get("expected_predicate"), _claim_attributes(internal, "predicate"))
+    _expect_equal(errors, "polarity", case.get("expected_polarity"), _claim_attributes(internal, "polarity"))
+    _expect_equal(errors, "modality", case.get("expected_modality"), _claim_attributes(internal, "modality"))
     _expect_equal(errors, "reason_code", case.get("expected_reason_code"), _reason_code(internal))
     _expect_equal(errors, "source_role", case.get("expected_source_role"), _source_attribute(internal, "source_role"))
     _expect_equal(errors, "temporal_context", case.get("expected_temporal_context"), _source_attribute(internal, "temporal_context"))
+    _expect_equal(errors, "needed_corpora", case.get("expected_needed_corpora"), list(response.get("needed_corpora", ())))
     _expect_equal(errors, "support_type", case.get("expected_support_type"), _support_type(internal))
     citations = tuple(internal.get("citations", ()))
     historical = tuple(internal.get("historical_citations", ()))
@@ -246,6 +254,10 @@ def _claim_texts(response: dict[str, Any]) -> list[str]:
 
 def _claim_statuses(response: dict[str, Any]) -> list[str]:
     return [str(row.get("status")) for row in response.get("claim_support", ()) if isinstance(row, dict)]
+
+
+def _claim_attributes(response: dict[str, Any], field: str) -> list[str]:
+    return [str(row.get(field)) for row in response.get("claim_support", ()) if isinstance(row, dict) and row.get(field)]
 
 
 def _claim_support_ids(response: dict[str, Any]) -> tuple[str, ...]:

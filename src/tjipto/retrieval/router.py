@@ -25,6 +25,7 @@ def route_retrieval(
     limit: int = 10,
     allow_bm25_after_citation_miss: bool = False,
     allow_navigation: bool = True,
+    allow_relation: bool = True,
     route: str = "auto",
     metadata_filters: dict | None = None,
 ) -> dict:
@@ -108,8 +109,8 @@ def route_retrieval(
     service = RetrievalService(store)
     relation_all = tuple(relation_lookup(store, normalized["normalized_query"], len(store.evidence)))
     relation = filter_evidence(relation_all, filters)
-    if relation:
-        ranked, trace = merge_ranked(store, {"relation": relation}, filters)
+    if relation and allow_relation:
+        ranked, trace = merge_ranked(store, {"relation": relation}, filters, semantic=True)
         return envelope | {
             "status": "found",
             "route": "relation",
@@ -117,7 +118,7 @@ def route_retrieval(
             "matches": ranked if all(row.get("metadata_field") == "signatories" for row in ranked) else ranked[:limit],
             "expansion_trace": trace,
         }
-    if relation_all:
+    if relation_all and allow_relation:
         return envelope | {
             "status": "no_results",
             "route": "no_results",
@@ -128,7 +129,7 @@ def route_retrieval(
     # relation-shaped query (for example a deleted chapter).  Only fail the
     # generic legal-relation route after that configured structured operation
     # has had a chance to resolve it.
-    if has_relation_target(normalized["normalized_query"], strategy=query_strategy, config=config) and not has_instrument_target(
+    if allow_relation and has_relation_target(normalized["normalized_query"], strategy=query_strategy, config=config) and not has_instrument_target(
         normalized["normalized_query"], strategy=structured_strategy, config=config
     ):
         return envelope | {
@@ -152,7 +153,7 @@ def route_retrieval(
     if navigation_all:
         navigation = filter_evidence(navigation_all, filters)
         if navigation:
-            ranked, trace = merge_ranked(store, {"structured": navigation}, filters)
+            ranked, trace = merge_ranked(store, {"structured": navigation}, filters, semantic=True)
             return envelope | {
                 "status": "found",
                 "route": "structural_navigation",
@@ -205,7 +206,7 @@ def route_retrieval(
                 "matches": metadata,
                 "metadata_source_roles": tuple(sorted({row.get("source_role") for row in metadata if row.get("source_role")})),
             }
-        ranked, trace = merge_ranked(store, {"metadata": metadata}, filters)
+        ranked, trace = merge_ranked(store, {"metadata": metadata}, filters, expand_graph=False)
         return envelope | {
             "status": "found",
             "route": "metadata",

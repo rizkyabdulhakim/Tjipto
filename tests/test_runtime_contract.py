@@ -26,6 +26,7 @@ from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candi
 from tjipto.runtime.api import _public_bbox, handle_request
 from tjipto.runtime.gemini import GeminiAnswerProvider
 from tjipto.runtime.service import LegalRuntimeService
+from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.viewer import viewer_payload
 from tests.test_source_conflict_runtime_contract import _source_conflict_cases
 
@@ -1414,6 +1415,42 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(empty, ())
         self.assertEqual(empty_trace, ())
 
+    def test_semantic_graph_expansion_requires_relation_provenance_and_preserves_source_role(self) -> None:
+        class Store:
+            evidence = [
+                {"evidence_id": "source", "legal_unit_id": "source_unit", "status": "final", "source_role": "current_consolidated"},
+                {"evidence_id": "target", "legal_unit_id": "target_unit", "status": "final", "source_role": "current_consolidated"},
+                {"evidence_id": "historical", "legal_unit_id": "target_unit", "status": "final", "source_role": "amendment_1_historical"},
+            ]
+            graph_edges = [
+                {"edge_type": "HAS_FINAL_EVIDENCE", "source_id": "legal_unit::source_unit", "target_id": "final_evidence::source"},
+                {"edge_type": "HAS_FINAL_EVIDENCE", "source_id": "legal_unit::target_unit", "target_id": "final_evidence::target"},
+                {"edge_type": "HAS_FINAL_EVIDENCE", "source_id": "legal_unit::target_unit", "target_id": "final_evidence::historical"},
+            ]
+            article_amendment_relations = [
+                {
+                    "relation_id": "valid-modifies",
+                    "relation_type": "MODIFIES",
+                    "source_legal_unit_id": "source_unit",
+                    "target_legal_unit_id": "target_unit",
+                    "evidence_id": "source",
+                    "bbox_refs": ["bbox-source"],
+                    "runtime_loadable": True,
+                    "validator_status": "valid",
+                }
+            ]
+
+            def get(self, evidence_id):
+                return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)
+
+            def bboxes_for(self, evidence_id):
+                return [{"bbox_id": evidence_id}]
+
+        ranked, trace = merge_ranked(Store(), {"relation": (Store.evidence[0],)}, {}, semantic=True)
+        self.assertEqual([row["evidence_id"] for row in ranked], ["source", "target"])
+        self.assertEqual(trace[0]["relation_ids"], ("valid-modifies",))
+        self.assertIn("MODIFIES", trace[0]["edge_types"])
+
     def test_runtime_bm25_exposes_ranked_route_signals(self) -> None:
         result = self.service.ask("uud", "negara hukum", limit=3)
         self.assertEqual(result["status"], "limited_answer")
@@ -2156,6 +2193,8 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(response["status"], "corpus_not_ready")
             self.assertFalse(response["readiness"])
             self.assertEqual(config.query_strategy, "generic")
+            semantics = interpret_query(store, "demo", "Pasal 1")
+            self.assertEqual((semantics.requested_function, semantics.legal_references), ("retrieval", ()))
             self.assertEqual(route_retrieval("demo", "Pasal 1", store)["intent"], "natural_language")
             self.assertNotEqual(route_retrieval("demo", "Jakarta", store)["intent"], "metadata_lookup")
             self.assertNotEqual(route_retrieval("demo", "Amien Rais", store)["intent"], "metadata_lookup")

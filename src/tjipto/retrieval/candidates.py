@@ -24,12 +24,13 @@ def merge_ranked(
     filters: dict,
     *,
     expand_graph: bool = True,
+    semantic: bool = False,
 ) -> tuple[tuple[dict, ...], tuple[dict, ...]]:
     rows_by_id: dict[str, dict] = {}
     for route, rows in route_rows.items():
         for order, row in enumerate(rows):
             _add(rows_by_id, store, row, route, order, None)
-    trace = graph_expand(store, tuple(rows_by_id.values()), filters) if expand_graph else ()
+    trace = graph_expand(store, tuple(rows_by_id.values()), filters, semantic=semantic) if expand_graph else ()
     for order, item in enumerate(trace):
         row = store.get(item["evidence_id"])
         if row is not None:
@@ -38,11 +39,11 @@ def merge_ranked(
     return tuple(ranked), trace
 
 
-def graph_expand(store, seeds: tuple[dict, ...], filters: dict, per_seed: int = 2) -> tuple[dict, ...]:
+def graph_expand(store, seeds: tuple[dict, ...], filters: dict, per_seed: int = 2, *, semantic: bool = False) -> tuple[dict, ...]:
     if not seeds:
         return ()
     evidence_by_id = {row["evidence_id"]: row for row in store.evidence}
-    neighbors = _neighbors(store.graph_edges)
+    neighbors = _neighbors(store, semantic=semantic)
     out = []
     seen = {row["evidence_id"] for row in seeds}
     for seed in seeds[:5]:
@@ -50,43 +51,93 @@ def graph_expand(store, seeds: tuple[dict, ...], filters: dict, per_seed: int = 
             continue
         seed_node = f"final_evidence::{seed['evidence_id']}"
         added = 0
-        for node in sorted(neighbors.get(seed_node, ())):
-            if not (node.startswith("legal_unit::") or node.startswith("page::")):
+        queue: list[tuple[str, tuple[dict, ...], tuple[str, ...]]] = [(seed_node, (), (seed_node,))]
+        while queue and added < per_seed:
+            node, path, nodes = queue.pop(0)
+            if len(path) >= 3:
                 continue
-            for candidate_node in sorted(neighbors.get(node, ())):
-                if not candidate_node.startswith("final_evidence::"):
+            for edge in neighbors.get(node, ()):
+                target = edge["target_id"]
+                if target in nodes:
                     continue
-                evidence_id = candidate_node.split("::", 1)[1]
-                row = evidence_by_id.get(evidence_id)
-                if evidence_id in seen or not _usable(store, row, filters):
+                next_path = (*path, edge)
+                if target.startswith("final_evidence::") and target != seed_node:
+                    evidence_id = target.split("::", 1)[1]
+                    row = evidence_by_id.get(evidence_id)
+                    crosses_source = any(item["edge_type"] in _AUTHORITY_RELATION_EDGE_TYPES for item in next_path)
+                    if evidence_id in seen or not _usable(store, row, filters):
+                        continue
+                    if crosses_source and row is not None and row.get("source_role") != seed.get("source_role"):
+                        continue
+                    seen.add(evidence_id)
+                    added += 1
+                    out.append(
+                        {
+                            "evidence_id": evidence_id,
+                            "from_evidence_id": seed["evidence_id"],
+                            "via": next_path[-1]["edge_type"],
+                            "edge_types": tuple(item["edge_type"] for item in next_path),
+                            "edge_ids": tuple(item["edge_id"] for item in next_path if item.get("edge_id")),
+                            "relation_ids": tuple(item["relation_id"] for item in next_path if item.get("relation_id")),
+                            "reason": "validated_semantic_graph_relation" if crosses_source else "shared_validated_graph_relation",
+                        }
+                    )
                     continue
-                seen.add(evidence_id)
-                added += 1
-                out.append(
-                    {
-                        "evidence_id": evidence_id,
-                        "from_evidence_id": seed["evidence_id"],
-                        "via": node.split("::", 1)[0],
-                        "reason": "shared_validated_graph_relation",
-                    }
-                )
-                if added >= per_seed:
-                    break
-            if added >= per_seed:
-                break
+                queue.append((target, next_path, (*nodes, target)))
     return tuple(out)
 
 
-def _neighbors(edges: list[dict]) -> dict[str, set[str]]:
-    accepted = {"HAS_FINAL_EVIDENCE", "PAGE_GROUNDED_AT"}
-    graph: dict[str, set[str]] = {}
-    for edge in edges:
-        if edge.get("edge_type") not in accepted:
+_SEMANTIC_EDGE_TYPES = {
+    "CONTAINS", "PART_OF", "MODIFIES", "RENAMES", "RENUMBERED_TO", "DELETES", "INSERTS",
+    "HAS_FINAL_EVIDENCE", "PAGE_GROUNDED_AT",
+}
+_AUTHORITY_RELATION_EDGE_TYPES = _SEMANTIC_EDGE_TYPES - {"HAS_FINAL_EVIDENCE", "PAGE_GROUNDED_AT"}
+
+
+def _neighbors(store, *, semantic: bool) -> dict[str, tuple[dict, ...]]:
+    graph: dict[str, list[dict]] = {}
+    for edge in store.graph_edges:
+        edge_type = edge.get("edge_type")
+        if edge_type not in {"HAS_FINAL_EVIDENCE", "PAGE_GROUNDED_AT"} and not (
+            semantic and edge_type in _SEMANTIC_EDGE_TYPES and edge.get("runtime_loadable") is True
+        ):
             continue
-        source, target = edge["source_id"], edge["target_id"]
-        graph.setdefault(source, set()).add(target)
-        graph.setdefault(target, set()).add(source)
-    return graph
+        _connect(graph, edge)
+    if semantic:
+        for relation in getattr(store, "article_amendment_relations", ()):
+            if not _valid_relation(store, relation):
+                continue
+            _connect(
+                graph,
+                {
+                    "edge_id": f"relation::{relation['relation_id']}",
+                    "source_id": f"legal_unit::{relation['source_legal_unit_id']}",
+                    "target_id": f"legal_unit::{relation['target_legal_unit_id']}",
+                    "edge_type": relation["relation_type"],
+                    "relation_id": relation["relation_id"],
+                },
+            )
+    return {node: tuple(sorted(items, key=lambda item: (item["target_id"], item["edge_type"], item.get("edge_id", "")))) for node, items in graph.items()}
+
+
+def _connect(graph: dict[str, list[dict]], edge: dict) -> None:
+    source, target = edge["source_id"], edge["target_id"]
+    graph.setdefault(source, []).append(edge | {"target_id": target})
+    graph.setdefault(target, []).append(edge | {"source_id": target, "target_id": source})
+
+
+def _valid_relation(store, relation: dict) -> bool:
+    evidence_id = relation.get("evidence_id")
+    evidence = store.get(evidence_id) if evidence_id else None
+    return (
+        relation.get("runtime_loadable") is True
+        and relation.get("validator_status") == "valid"
+        and relation.get("relation_type") in _SEMANTIC_EDGE_TYPES
+        and bool(relation.get("bbox_refs"))
+        and evidence is not None
+        and evidence.get("status") == "final"
+        and bool(store.bboxes_for(evidence_id))
+    )
 
 
 def _usable(store, row: dict | None, filters: dict) -> bool:

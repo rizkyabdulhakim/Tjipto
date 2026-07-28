@@ -24,17 +24,40 @@ class R1SemanticsContractTest(unittest.TestCase):
         self.assertFalse(result["citations"])
         self.assertEqual(result["claim_support"][0]["status"], "insufficient")
 
-    def test_negated_proposition_is_contradicted_by_normative_text(self) -> None:
+    def test_negated_proposition_without_matching_predicate_is_insufficient(self) -> None:
         result = self.service.ask("uud", "Pasal 7 tidak mengatur masa jabatan?")
-        self.assertEqual((result["status"], result["reason_code"]), ("insufficient_evidence", "claim_support_contradicted"))
-        self.assertEqual(result["claim_support"][0]["status"], "contradicted")
+        self.assertEqual((result["status"], result["reason_code"]), ("insufficient_evidence", "claim_support_insufficient"))
+        self.assertEqual(result["claim_support"][0]["status"], "insufficient")
         self.assertFalse(result["citations"])
 
+    def test_shared_object_does_not_support_a_different_normative_predicate(self) -> None:
+        cases = (
+            ("Pasal 28A melarang hidup?", "prohibits", "prohibition"),
+            ("Pasal 28A mewajibkan hidup?", "requires", "obligation"),
+            ("Pasal 28A memperbolehkan hidup?", "permits", "permission"),
+            ("Pasal 7 melarang presiden?", "prohibits", "prohibition"),
+        )
+        for query, predicate, modality in cases:
+            with self.subTest(query=query):
+                result = self.service.ask("uud", query)
+                claim = result["claim_support"][0]
+                self.assertEqual((result["status"], claim["status"]), ("insufficient_evidence", "insufficient"))
+                self.assertEqual((claim["predicate"], claim["polarity"], claim["modality"]), (predicate, "positive", modality))
+                self.assertFalse(result["citations"])
+
     def test_temporal_qualification_precedes_navigation(self) -> None:
-        result = self.service.ask("uud", "Apa isi Pasal 7 setelah perubahan?")
-        self.assertEqual((result["status"], result["route"]), ("answer_ready", "legal_reference"))
-        self.assertEqual(result["citations"][0]["citation"], "Pasal 7")
-        self.assertEqual(result["citations"][0]["source_role"], "current_consolidated")
+        for suffix in (
+            "setelah perubahan", "sesudah perubahan", "pasca perubahan", "setelah diubah",
+            "sesudah diubah", "setelah diamandemen", "sesudah diamandemen", "pasca amandemen", "saat ini", "naskah konsolidasi",
+        ):
+            with self.subTest(suffix=suffix):
+                result = self.service.ask("uud", f"Apa isi Pasal 7 {suffix}?")
+                self.assertEqual((result["status"], result["route"]), ("answer_ready", "legal_reference"))
+                self.assertEqual(result["citations"][0]["citation"], "Pasal 7")
+                self.assertEqual(result["citations"][0]["source_role"], "current_consolidated")
+        navigation = self.service.ask("uud", "Pasal berikutnya setelah Pasal 7")
+        self.assertEqual((navigation["status"], navigation["route"]), ("answer_ready", "structural_navigation"))
+        self.assertEqual(navigation["citations"][0]["citation"], "Pasal 7A")
 
     def test_scope_follows_retrieval_and_reports_missing_corpus(self) -> None:
         result = self.service.ask("uud", "Apa aturan tentang tanah di Jakarta?")
@@ -43,7 +66,15 @@ class R1SemanticsContractTest(unittest.TestCase):
         ))
         self.assertTrue(result["retrieval_attempted"])
         self.assertEqual(result["available_corpora"], ("uud",))
-        self.assertEqual(result["missing_corpora"], ("additional_legal_corpus",))
+        self.assertEqual(result["missing_corpora"], ("land_law",))
+        self.assertEqual(result["required_capabilities"], ("land_regulation",))
+        self.assertGreater(result["retrieval_candidate_count"], 0)
+
+    def test_partial_land_retrieval_is_evaluated_before_missing_corpus(self) -> None:
+        result = self.service.ask("uud", "Apa aturan tentang bumi dan tanah?")
+        self.assertEqual((result["status"], result["route"]), ("insufficient_evidence", "missing_corpus"))
+        self.assertEqual(result["missing_corpora"], ("land_law",))
+        self.assertEqual(result["retrieval_route"], "bm25")
 
     def test_source_discrepancy_uses_trace_not_substantive_authority(self) -> None:
         result = self.service.ask(
