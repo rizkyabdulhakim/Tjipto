@@ -4,6 +4,7 @@ from hashlib import sha256
 import re
 
 from tjipto.corpora.parser_dispatch import parse_legal_references
+from tjipto.corpora.uud.parser import matches_uud_contextual_reference
 
 
 _AYAT_RE = re.compile(r"\bayat\s*\(\s*(\d+)\s*\)", re.IGNORECASE)
@@ -560,11 +561,7 @@ def _range_matches_reference(text: str, reference: object, kind: object) -> bool
     actual = _normalize_reference(text)
     if kind != "contextual":
         return actual == expected
-    parsed = parse_legal_references("uud", text)
-    if not parsed or not expected.startswith(_normalize_reference(parsed[0]["reference"])):
-        return False
-    ayat = re.search(r"\bayat\s*\(\s*(\d+)\s*\)", expected, re.IGNORECASE)
-    return bool(ayat and any(match.group(1) == ayat.group(1) for match in _AYAT_RE.finditer(text)))
+    return matches_uud_contextual_reference(text, reference)
 
 
 def _relation_id(relation_type: str, evidence_id: str, target_unit_id: str | None, mapping: dict) -> str:

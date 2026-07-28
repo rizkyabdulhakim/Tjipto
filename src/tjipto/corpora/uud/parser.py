@@ -9,6 +9,10 @@ UUD_LEGAL_TOKEN_RE = re.compile(
 
 UUD_BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s*([a-z]?)\b", re.IGNORECASE)
 UUD_PASAL_RE = re.compile(r"\bpasal[ \t\r\n]*([0-9]+)(?:[ \t\r\n]*([a-z]))?\b", re.IGNORECASE)
+UUD_PASAL_WITH_AYAT_RE = re.compile(
+    r"\bpasal[ \t\r\n]*([0-9]+)(?:[ \t\r\n]*([a-z]))?\b(?:[ \t\r\n]+ayat\s*\(?\s*([0-9]+)\s*\)?)?",
+    re.IGNORECASE,
+)
 UUD_PASAL_OR_ROMAN_RE = re.compile(r"\bpasal[ \t\r\n]*(?:(\d+)(?:[ \t\r\n]*([a-z]))?|([ivxlcdm]+))\b", re.IGNORECASE)
 UUD_PASAL_LETTER_RE = re.compile(r"\bpasal\s+([0-9]+)\s+([a-z])\b", re.IGNORECASE)
 UUD_PASAL_SHORTHAND_AYAT_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\s*\(\s*([0-9]+)\s*\)", re.IGNORECASE)
@@ -86,8 +90,10 @@ def parse_uud_pasal_reference(text: str, *, allow_roman: bool = False) -> str | 
 def parse_uud_legal_references(text: str) -> list[dict[str, object]]:
     """Parse all Pasal references and retain their source character ranges."""
     rows: list[dict[str, object]] = []
-    for match in UUD_PASAL_RE.finditer(text or ""):
+    for match in UUD_PASAL_WITH_AYAT_RE.finditer(text or ""):
         reference = f"Pasal {match.group(1)}{(match.group(2) or '').upper()}"
+        if match.group(3):
+            reference = f"{reference} ayat ({match.group(3)})"
         rows.append(
             {
                 "reference": reference,
@@ -97,6 +103,21 @@ def parse_uud_legal_references(text: str) -> list[dict[str, object]]:
             }
         )
     return rows
+
+
+def matches_uud_contextual_reference(text: str, reference: object) -> bool:
+    """Validate one article/paragraph reference inside its source clause."""
+    expected_rows = parse_uud_legal_references(str(reference or ""))
+    if len(expected_rows) != 1:
+        return False
+    expected = str(expected_rows[0]["reference"])
+    expected_article, _, expected_ayat = expected.partition(" ayat ")
+    actual_rows = parse_uud_legal_references(text)
+    if not any(str(row["reference"]).partition(" ayat ")[0] == expected_article for row in actual_rows):
+        return False
+    if not expected_ayat:
+        return True
+    return any(f"({number})" == expected_ayat for number in UUD_AYAT_RE.findall(text or ""))
 
 
 def parse_uud_ayat_reference(text: str) -> str | None:

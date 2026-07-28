@@ -22,6 +22,7 @@ from tjipto.corpora.disposition import (
 )
 from tjipto.corpora.intent_config import contains_intent_phrase, resolve_instrument_intent
 from tjipto.corpora.parser_dispatch import parse_legal_references
+from tjipto.corpora.uud.parser import matches_uud_contextual_reference
 from tjipto.corpora.uud.bbox_builder import bbox_precision_counts
 from tjipto.corpora.uud.artifact_policy import ALLOWED_ARTIFACT_ORIGINS
 from tjipto.corpora.uud.artifact_policy import RECOVERY_CAPABILITIES, RECOVERY_STATUSES, UUD_ARTIFACT_SCHEMA
@@ -2292,11 +2293,7 @@ def _validator_range_matches_reference(text: str, reference: object, kind: objec
     actual = normalize_source_text(text)
     if kind != "contextual":
         return actual == expected
-    parsed = parse_legal_references("uud", text)
-    if not parsed or not expected.startswith(normalize_source_text(parsed[0]["reference"])):
-        return False
-    ayat = re.search(r"\bayat\s*\(\s*(\d+)\s*\)", expected, re.IGNORECASE)
-    return bool(ayat and any(match.group(1) == ayat.group(1) for match in re.finditer(r"\bayat\s*\(\s*(\d+)\s*\)", text, re.IGNORECASE)))
+    return matches_uud_contextual_reference(text, reference)
 
 
 def _independent_renumbering_mappings(text: str) -> list[dict[str, str]]:
