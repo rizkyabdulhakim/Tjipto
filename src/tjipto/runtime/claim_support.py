@@ -205,5 +205,13 @@ def _supports(claim: PropositionClaim, clause: ClauseProposition) -> bool:
     return (
         claim.modality == "textual"
         and claim.polarity == "positive"
-        and _normalized(claim.object) in clause.object
+        and _contains_tokens(_tokens(claim.object), _tokens(clause.object))
     )
+
+
+def _tokens(text: str) -> tuple[str, ...]:
+    return tuple(re.findall(r"[a-z0-9]+", text.casefold()))
+
+
+def _contains_tokens(needle: tuple[str, ...], haystack: tuple[str, ...]) -> bool:
+    return bool(needle) and any(haystack[index : index + len(needle)] == needle for index in range(len(haystack)))

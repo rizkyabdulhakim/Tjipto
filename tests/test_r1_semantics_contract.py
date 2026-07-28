@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 
 from tjipto.runtime.query_semantics import interpret_query
+from tjipto.runtime.claim_support import _contains_tokens, _tokens
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -23,6 +24,11 @@ class R1SemanticsContractTest(unittest.TestCase):
         self.assertEqual((result["status"], result["reason_code"]), ("insufficient_evidence", "claim_support_insufficient"))
         self.assertFalse(result["citations"])
         self.assertEqual(result["claim_support"][0]["status"], "insufficient")
+
+    def test_mentions_match_complete_tokens_only(self) -> None:
+        for needle, text in (("hakim", "kehakiman"), ("adil", "peradilan"), ("kerja", "pekerjaan")):
+            with self.subTest(needle=needle):
+                self.assertFalse(_contains_tokens(_tokens(needle), _tokens(text)))
 
     def test_negated_proposition_without_matching_predicate_is_insufficient(self) -> None:
         result = self.service.ask("uud", "Pasal 7 tidak mengatur masa jabatan?")
