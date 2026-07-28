@@ -8,9 +8,13 @@ def exact_citation(
     query: str,
     source_role: str | None = None,
     *,
+    corpus_id: str,
     preferred_source_role: str | None = None,
 ) -> list[dict]:
-    pasal, ayat = parse_citation(query)
+    try:
+        pasal, ayat = parse_citation(corpus_id, query)
+    except ValueError:
+        return []
     matches = [
         row
         for row in evidence

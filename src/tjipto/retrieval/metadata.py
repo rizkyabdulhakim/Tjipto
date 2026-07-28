@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
-from tjipto.corpora.parser_dispatch import DEFAULT_CORPUS_ID, normalize_metadata_intent, parse_legal_reference
+from tjipto.corpora.parser_dispatch import normalize_metadata_intent, parse_legal_reference
 
 
 @dataclass(frozen=True)
@@ -14,7 +14,11 @@ class SourceScopeDecision:
 
     @property
     def explicit(self) -> bool:
-        return self.state == "explicit_resolved"
+        return self.state in {"explicit_resolved", "explicit_current"}
+
+    @property
+    def temporal(self) -> bool:
+        return self.state in {"explicit_resolved", "explicit_current", "generic_post_amendment"}
 
     @property
     def unresolved(self) -> bool:
@@ -90,6 +94,8 @@ def resolve_source_scope(query: str, *, strategy: str = "generic", config=None) 
     if explicit_role is not None:
         return SourceScopeDecision(explicit_role, "explicit_resolved")
     intent = intent_config_for(strategy, config)
+    if contains_intent_phrase(query, intent.get("temporal_current_terms", ())):
+        return SourceScopeDecision(getattr(config, "preferred_source_role", None), "generic_post_amendment")
     if any(pattern.search(query or "") for pattern in intent["unresolved_source_scope_patterns"]):
         return SourceScopeDecision(None, "unresolved")
     if contains_intent_phrase(query, intent.get("instrument_source_signals", ())):
@@ -183,13 +189,14 @@ def has_metadata_target(query: str, *, strategy: str = "generic", config=None, s
 
 def _has_legal_reference(query: str, config) -> bool:
     try:
-        return any(parse_legal_reference(getattr(config, "corpus_id", DEFAULT_CORPUS_ID), query).values())
+        corpus_id = getattr(config, "corpus_id", None)
+        return bool(corpus_id and any(parse_legal_reference(corpus_id, query).values()))
     except ValueError:
         return False
 
 
 def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
-    corpus_id = getattr(config, "corpus_id", DEFAULT_CORPUS_ID)
+    corpus_id = getattr(config, "corpus_id", "")
     folded = normalize_metadata_intent(corpus_id, query)
     intent = intent_config_for(strategy, config)
     intent = intent | {

@@ -45,6 +45,29 @@ class R1SemanticsContractTest(unittest.TestCase):
                 self.assertEqual((claim["predicate"], claim["polarity"], claim["modality"]), (predicate, "positive", modality))
                 self.assertFalse(result["citations"])
 
+    def test_clause_grounding_preserves_internal_negation(self) -> None:
+        for query in (
+            "Pasal 27 menyebut tidak ada kecualinya?",
+            "Apakah Pasal 28I menyebut tidak dapat dikurangi?",
+        ):
+            with self.subTest(query=query):
+                result = self.service.ask("uud", query)
+                claim = result["claim_support"][0]
+                self.assertEqual((result["status"], claim["status"]), ("answer_ready", "supported"))
+                self.assertTrue(claim["text_span_ids"])
+
+    def test_subject_object_and_cross_clause_tokens_cannot_create_support(self) -> None:
+        for query in (
+            "Pasal 27 mewajibkan pekerjaan?",
+            "Pasal 28J mewajibkan agama?",
+            "Pasal 20 memperbolehkan rancangan undangundang diajukan?",
+            "Pasal 27 mewajibkan hukum menjunjung warga negara?",
+        ):
+            with self.subTest(query=query):
+                result = self.service.ask("uud", query)
+                self.assertEqual(result["claim_support"][0]["status"], "insufficient")
+                self.assertFalse(result["citations"])
+
     def test_temporal_qualification_precedes_navigation(self) -> None:
         for suffix in (
             "setelah perubahan", "sesudah perubahan", "pasca perubahan", "setelah diubah",
@@ -59,6 +82,12 @@ class R1SemanticsContractTest(unittest.TestCase):
         self.assertEqual((navigation["status"], navigation["route"]), ("answer_ready", "structural_navigation"))
         self.assertEqual(navigation["citations"][0]["citation"], "Pasal 7A")
 
+    def test_named_source_precedes_generic_post_amendment_scope(self) -> None:
+        result = self.service.ask("uud", "Apa isi Pasal 7 setelah Perubahan Pertama?")
+        self.assertEqual(result["citations"][0]["source_role"], "amendment_1_historical")
+        semantics = interpret_query(self.store, "uud", "Pasal 7 setelah Pasal 6")
+        self.assertNotEqual(semantics.requested_function, "structural_navigation")
+
     def test_scope_follows_retrieval_and_reports_missing_corpus(self) -> None:
         result = self.service.ask("uud", "Apa aturan tentang tanah di Jakarta?")
         self.assertEqual((result["status"], result["route"], result["reason_code"]), (
@@ -66,14 +95,18 @@ class R1SemanticsContractTest(unittest.TestCase):
         ))
         self.assertTrue(result["retrieval_attempted"])
         self.assertEqual(result["available_corpora"], ("uud",))
-        self.assertEqual(result["missing_corpora"], ("land_law",))
+        self.assertEqual(result["missing_corpora"], ())
         self.assertEqual(result["required_capabilities"], ("land_regulation",))
         self.assertGreater(result["retrieval_candidate_count"], 0)
+
+    def test_location_is_not_a_legal_domain(self) -> None:
+        result = self.service.ask("uud", "Apa harga makanan di Jakarta?")
+        self.assertNotEqual(result["route"], "missing_corpus")
 
     def test_partial_land_retrieval_is_evaluated_before_missing_corpus(self) -> None:
         result = self.service.ask("uud", "Apa aturan tentang bumi dan tanah?")
         self.assertEqual((result["status"], result["route"]), ("insufficient_evidence", "missing_corpus"))
-        self.assertEqual(result["missing_corpora"], ("land_law",))
+        self.assertEqual(result["missing_corpora"], ())
         self.assertEqual(result["retrieval_route"], "bm25")
 
     def test_source_discrepancy_uses_trace_not_substantive_authority(self) -> None:

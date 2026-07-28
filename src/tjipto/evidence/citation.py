@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from tjipto.corpora.parser_dispatch import DEFAULT_CORPUS_ID, parse_ayat_reference, parse_pasal_reference
+from tjipto.corpora.parser_dispatch import parse_ayat_reference, parse_pasal_reference
 
 
-def parse_citation(text: str) -> tuple[str | None, str | None]:
-    return parse_pasal_reference(DEFAULT_CORPUS_ID, text), parse_ayat_reference(DEFAULT_CORPUS_ID, text)
+def parse_citation(corpus_id: str, text: str) -> tuple[str | None, str | None]:
+    return parse_pasal_reference(corpus_id, text), parse_ayat_reference(corpus_id, text)
 
 
 def evidence_matches_citation(row: dict, pasal: str | None, ayat: str | None) -> bool:

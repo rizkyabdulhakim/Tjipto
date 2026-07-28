@@ -119,21 +119,14 @@
         "wewenang",
         "hak"
       ],
-      "out_of_corpus_terms": [
-        "harga",
-        "tanah",
-        "jakarta"
-      ],
-      "missing_corpus_requirements": {
-        "out_of_corpus_domain": {
-          "needed_corpora": [
-            "land_law"
-          ],
-          "required_capabilities": [
-            "land_regulation"
-          ]
+      "domain_capability_policy": [
+        {
+          "domain": "land",
+          "terms": ["tanah", "bumi"],
+          "requested_function": "land_regulation",
+          "required_capabilities": ["land_regulation"]
         }
-      },
+      ],
       "legal_intent_policy": {
         "unsupported_functions": [
           {
@@ -813,45 +806,6 @@
         "saat ini",
         "naskah konsolidasi"
       ],
-      "proposition_operators": {
-        "mengatur": {
-          "predicate": "regulates",
-          "modality": "legal_rule",
-          "evidence_terms": [
-            "mengatur",
-            "diatur"
-          ]
-        },
-        "melarang": {
-          "predicate": "prohibits",
-          "modality": "prohibition",
-          "evidence_terms": [
-            "melarang",
-            "dilarang"
-          ]
-        },
-        "mewajibkan": {
-          "predicate": "requires",
-          "modality": "obligation",
-          "evidence_terms": [
-            "mewajibkan",
-            "wajib"
-          ]
-        },
-        "memperbolehkan": {
-          "predicate": "permits",
-          "modality": "permission",
-          "evidence_terms": [
-            "memperbolehkan",
-            "boleh"
-          ]
-        },
-        "menyebut": {
-          "predicate": "mentions",
-          "modality": "textual",
-          "evidence_terms": []
-        }
-      },
       "document_relation": {
         "relation_families": {
           "RENAME_PROVISION": {

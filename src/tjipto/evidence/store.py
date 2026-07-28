@@ -44,6 +44,7 @@ class EvidenceStore:
         self._metadata_bbox_by_grounding: dict[str, list[dict]] | None = None
         self._source_conflicts: list[dict] | None = None
         self._graph_edges: list[dict] | None = None
+        self._semantic_graph_edges: list[dict] | None = None
         self._bbox_by_evidence: dict[str, list[dict]] | None = None
         self._bbox_rows: list[dict] | None = None
         self._bbox_by_id: dict[str, dict] | None = None
@@ -83,6 +84,38 @@ class EvidenceStore:
         if self._graph_edges is None:
             self._graph_edges = _rows(self.config, "graph_edges")
         return self._graph_edges
+
+    @property
+    def semantic_graph_edges(self) -> list[dict]:
+        """Validated semantic projection; provenance rows are intentionally absent."""
+        if self._semantic_graph_edges is None:
+            allowed = {"CONTAINS", "PART_OF", "MODIFIES", "RENAMES", "RENUMBERED_TO", "DELETES", "INSERTS"}
+            rows = [
+                dict(row)
+                for row in self.graph_edges
+                if row.get("runtime_loadable") is True and row.get("edge_type") in allowed
+            ]
+            for relation in self.article_amendment_relations:
+                evidence = self.get(str(relation.get("evidence_id") or ""))
+                if (
+                    relation.get("runtime_loadable") is True
+                    and relation.get("validator_status") == "valid"
+                    and relation.get("relation_type") in allowed
+                    and evidence is not None
+                    and evidence.get("status") == "final"
+                    and bool(relation.get("bbox_refs"))
+                    and bool(self.bboxes_for(evidence["evidence_id"]))
+                ):
+                    rows.append({
+                        "edge_id": f"relation::{relation['relation_id']}",
+                        "source_id": f"legal_unit::{relation['source_legal_unit_id']}",
+                        "target_id": f"legal_unit::{relation['target_legal_unit_id']}",
+                        "edge_type": relation["relation_type"],
+                        "relation_id": relation["relation_id"],
+                        "runtime_loadable": True,
+                    })
+            self._semantic_graph_edges = sorted(rows, key=lambda row: (row["edge_id"], row["source_id"], row["target_id"]))
+        return self._semantic_graph_edges
 
     @property
     def source_documents(self) -> list[dict]:

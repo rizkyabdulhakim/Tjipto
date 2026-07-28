@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
 from tjipto.corpora.parser_dispatch import (
-    DEFAULT_CORPUS_ID,
     label_keys,
     parse_ayat_reference,
     parse_bab_reference,
@@ -57,7 +56,7 @@ def structured_lookup(
     legal_unit_ids = {
         row["legal_unit_id"]
         for row in (*getattr(store, "legal_units", ()), *getattr(store, "chunks", ()))
-        if row.get("legal_unit_id") and _matches_unit(row, targets)
+        if row.get("legal_unit_id") and _matches_unit(row, targets, corpus_id)
     }
     scope = resolve_source_scope(query, strategy=strategy, config=config)
     requested_role = source_role
@@ -68,7 +67,7 @@ def structured_lookup(
         rows = _bab_request_rows(store, request, requested_role)
         if rows:
             return rows
-    preferred_unit_ids = _preferred_unit_ids(store, targets, requested_role)
+    preferred_unit_ids = _preferred_unit_ids(store, targets, requested_role, corpus_id)
     fallback_rows = [
         row
         for row in store.evidence
@@ -78,7 +77,7 @@ def structured_lookup(
         and (
             row.get("legal_unit_id") in preferred_unit_ids
             if preferred_unit_ids
-            else row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets)
+            else row.get("legal_unit_id") in legal_unit_ids or _matches(row, targets, corpus_id)
         )
     ]
     return tuple(fallback_rows[:limit])
@@ -481,37 +480,37 @@ def _with_pasal(section: str, text: str, corpus_id: str) -> tuple[str, ...]:
     return (section, pasal.casefold()) if pasal else (section,)
 
 
-def _matches(row: dict, targets: tuple[str, ...]) -> bool:
+def _matches(row: dict, targets: tuple[str, ...], corpus_id: str) -> bool:
     values = [row.get("citation", ""), *(row.get("hierarchy") or ())]
-    haystack = {key for value in values for key in _label_keys(value)}
+    haystack = {key for value in values for key in _label_keys(value, corpus_id)}
     return all(target in haystack for target in targets)
 
 
-def _matches_unit(row: dict, targets: tuple[str, ...]) -> bool:
+def _matches_unit(row: dict, targets: tuple[str, ...], corpus_id: str) -> bool:
     values = [row.get("unit_label", ""), *(row.get("hierarchy") or ())]
-    haystack = {key for value in values for key in _label_keys(value)}
+    haystack = {key for value in values for key in _label_keys(value, corpus_id)}
     return all(target in haystack for target in targets)
 
 
-def _preferred_unit_ids(store: EvidenceStore, targets: tuple[str, ...], requested_role: str | None) -> set[str]:
+def _preferred_unit_ids(store: EvidenceStore, targets: tuple[str, ...], requested_role: str | None, corpus_id: str) -> set[str]:
     if not targets:
         return set()
     leaf = targets[-1]
     return {
         row["legal_unit_id"]
         for row in getattr(store, "legal_units", ())
-        if leaf in _label_keys(row.get("unit_label"))
-        and _matches_unit(row, targets)
+        if leaf in _label_keys(row.get("unit_label"), corpus_id)
+        and _matches_unit(row, targets, corpus_id)
         and (requested_role is None or not row.get("source_role") or row.get("source_role") == requested_role)
     }
 
 
-def _label_keys(value: object) -> set[str]:
-    return label_keys(DEFAULT_CORPUS_ID, value)
+def _label_keys(value: object, corpus_id: str) -> set[str]:
+    return label_keys(corpus_id, value)
 
 
 def _corpus_id(config) -> str:
-    return getattr(config, "corpus_id", DEFAULT_CORPUS_ID)
+    return str(getattr(config, "corpus_id", ""))
 
 
 def _instrument_evidence(store: EvidenceStore | None, source_role: str, citation: str) -> dict | None:

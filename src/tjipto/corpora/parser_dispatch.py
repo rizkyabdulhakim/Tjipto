@@ -1,37 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-
-from tjipto.corpora.uud import parser as uud_parser
-
-
-DEFAULT_CORPUS_ID = "uud"
-
-
-@dataclass(frozen=True)
-class CorpusParser:
-    normalize_query_reference: Callable[[str], str]
-    normalize_metadata_intent: Callable[[str], str]
-    parse_legal_reference: Callable[..., dict[str, str | None]]
-    parse_legal_references: Callable[[str], list[dict[str, object]]]
-    parse_bab_reference: Callable[[str], str | None]
-    parse_pasal_reference: Callable[..., str | None]
-    parse_ayat_reference: Callable[[str], str | None]
-    label_keys: Callable[[object], set[str]]
-    resolve_navigation: Callable[[str], tuple[str, str] | None]
-
-
-_PARSERS: dict[str, CorpusParser] = {
-    "uud": uud_parser.parser_adapter(),
-}
+from tjipto.corpora.strategy import CorpusParser, strategy_for
 
 
 def get_parser(corpus_id: str) -> CorpusParser:
-    try:
-        return _PARSERS[corpus_id]
-    except KeyError as exc:
-        raise ValueError(f"unsupported_corpus_parser:{corpus_id}") from exc
+    return strategy_for(corpus_id).parser
+
+
+def proposition_operator(corpus_id: str, query: str) -> tuple[str, str, str] | None:
+    return strategy_for(corpus_id).proposition_operator(query)
 
 
 def normalize_query_reference(corpus_id: str, text: str) -> str:

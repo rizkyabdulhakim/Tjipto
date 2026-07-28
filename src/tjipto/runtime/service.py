@@ -496,7 +496,7 @@ class LegalRuntimeService:
         anomaly = _source_anomaly_response(store, corpus_id, query)
         if anomaly:
             return anomaly
-        document_relation = None if semantics.temporal_context else _document_relation_response(store, corpus_id, query)
+        document_relation = None if semantics.requested_function == "temporal_quotation" else _document_relation_response(store, corpus_id, query)
         if document_relation:
             return document_relation
         source_document = _source_document_response(store, corpus_id, query)
@@ -504,7 +504,7 @@ class LegalRuntimeService:
             return source_document
         # A resolved legal target has precedence over the instrument classifier.
         # Amendment wording then scopes the structured lookup to that source role.
-        instrument = None if semantics.temporal_context or _has_resolved_legal_target(corpus_id, query) else _instrument_intent_context(store, query)
+        instrument = None if semantics.requested_function == "temporal_quotation" or _has_resolved_legal_target(corpus_id, query) else _instrument_intent_context(store, query)
         if instrument:
             row, route, reason = instrument
             templates = _answer_templates(store)
@@ -606,9 +606,9 @@ class LegalRuntimeService:
                 allow_navigation=semantics.requested_function != "temporal_quotation",
                 allow_relation=semantics.requested_function != "temporal_quotation",
             )
-            if scope["requested_function"] != "out_of_corpus_domain" or not _scope_has_verified_support(store, scoped_routed):
+            if scope["requested_function"] != "land_regulation" or not _scope_has_verified_support(store, scoped_routed):
                 templates = _answer_templates(store)
-                requirements = _missing_corpus_requirements(store, scope["requested_function"])
+                requirements = _missing_corpus_requirements(store, scope["requested_function"], scope.get("required_capabilities", ()))
                 missing_domain = bool(requirements)
                 reason = "missing_corpus_support" if missing_domain else scope["reason"]
                 context_pack = empty_context_pack(reason)
@@ -714,7 +714,7 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": tuple(sorted(set(context_pack["validation_reasons"].values()))),
             }
-        claim_support = verify_claims(semantics, evidence)
+        claim_support = verify_claims(semantics, evidence, store)
         if not all_supported(claim_support):
             claim_reason = next(claim.reason_code for claim in claim_support if claim.reason_code)
             return routed | {
@@ -892,7 +892,9 @@ def _scope_has_verified_support(store, routed: dict) -> bool:
     )
 
 
-def _missing_corpus_requirements(store, requested_function: str) -> dict:
+def _missing_corpus_requirements(store, requested_function: str, required_capabilities: tuple[str, ...] = ()) -> dict:
+    if required_capabilities:
+        return {"needed_corpora": (), "required_capabilities": required_capabilities}
     guard = store.config.setting("scope_guard", {}) or {}
     return dict((guard.get("missing_corpus_requirements", {}) or {}).get(requested_function) or {})
 

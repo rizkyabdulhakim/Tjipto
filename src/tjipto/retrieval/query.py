@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from tjipto.corpora.parser_dispatch import DEFAULT_CORPUS_ID, normalize_query_reference
+from tjipto.corpora.parser_dispatch import normalize_query_reference
 from tjipto.evidence.citation import parse_citation
 
 
@@ -15,7 +15,9 @@ def normalize_query(query: str, *, strategy: str = "generic", config=None) -> di
             "normalized_query": re.sub(r"\s+", " ", normalized).strip(),
         }
     normalized = _apply_alias_rules(normalized, config)
-    normalized = normalize_query_reference(getattr(config, "corpus_id", DEFAULT_CORPUS_ID), normalized)
+    corpus_id = str(getattr(config, "corpus_id", "") or "")
+    if corpus_id:
+        normalized = normalize_query_reference(corpus_id, normalized)
     return {"original_query": original, "normalized_query": normalized}
 
 
@@ -39,7 +41,10 @@ def classify_intent(
         return {"intent": "unsupported_corpus"}
     if not _setting_enabled(config, "exact_citation_intent_enabled"):
         return {"intent": "natural_language"}
-    pasal, _ = parse_citation(query)
+    corpus_id = str(getattr(config, "corpus_id", "") or "")
+    if not corpus_id:
+        return {"intent": "natural_language"}
+    pasal, _ = parse_citation(corpus_id, query)
     return {"intent": "exact_citation" if pasal else "natural_language"}
 
 

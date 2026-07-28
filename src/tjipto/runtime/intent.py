@@ -16,6 +16,7 @@ class LegalIntent:
     rejection_reason: str | None = None
     route: str | None = None
     intent: str | None = None
+    required_capabilities: tuple[str, ...] = ()
 
 
 def classify_legal_intent(store, query: str) -> LegalIntent:
@@ -48,15 +49,18 @@ def classify_legal_intent(store, query: str) -> LegalIntent:
                 route="unsupported_scope",
                 intent="out_of_corpus",
             )
-    out_of_corpus_terms = tuple(guard.get("out_of_corpus_terms") or ())
-    if out_of_corpus_terms and not _target_reference(store, query) and contains_intent_phrase(query, out_of_corpus_terms):
-        return LegalIntent(
-            "out_of_corpus_domain",
-            answerability="unsupported",
-            rejection_reason="unsupported_scope",
-            route="unsupported_scope",
-            intent="out_of_corpus",
-        )
+    for row in guard.get("domain_capability_policy", ()) or ():
+        if contains_intent_phrase(query, tuple(row.get("terms") or ())):
+            return LegalIntent(
+                str(row.get("requested_function") or "capability_unavailable"),
+                _target_reference(store, query),
+                legal_domain=str(row.get("domain") or "") or None,
+                answerability="unsupported",
+                rejection_reason="missing_corpus_support",
+                route="missing_corpus",
+                intent="capability_unavailable",
+                required_capabilities=tuple(str(item) for item in row.get("required_capabilities") or ()),
+            )
     return LegalIntent()
 
 

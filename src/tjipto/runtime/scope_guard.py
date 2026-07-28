@@ -40,6 +40,7 @@ def scope_guard_context(store, query: str) -> dict | None:
             "requested_function": intent.requested_function,
             "target_reference": intent.target_reference,
             "legal_domain": intent.legal_domain,
+            "required_capabilities": intent.required_capabilities,
             "reason": intent.rejection_reason,
         }
     return None

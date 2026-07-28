@@ -14,6 +14,7 @@ class RetrievalService:
             self.store.evidence,
             query,
             source_role,
+            corpus_id=self.store.config.corpus_id,
             preferred_source_role=getattr(self.store.config, "preferred_source_role", None),
         )
 

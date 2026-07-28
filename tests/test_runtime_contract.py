@@ -1405,11 +1405,10 @@ class RuntimeContractTest(unittest.TestCase):
             },
             {"status": "final", "source_role": "current_consolidated"},
         )
-        self.assertEqual([row["evidence_id"] for row in ranked], ["e1", "e2", "e4"])
+        self.assertEqual([row["evidence_id"] for row in ranked], ["e1", "e2"])
         self.assertEqual(ranked[0]["route_sources"], ("bm25", "structured"))
         self.assertIn("pass", ranked[0]["rank_reasons"])
-        self.assertTrue(trace)
-        self.assertTrue(all(item["evidence_id"] != "no_box" for item in trace))
+        self.assertFalse(trace)
 
         empty, empty_trace = merge_ranked(store, {}, {"status": "final"})
         self.assertEqual(empty, ())
@@ -1437,6 +1436,15 @@ class RuntimeContractTest(unittest.TestCase):
                     "bbox_refs": ["bbox-source"],
                     "runtime_loadable": True,
                     "validator_status": "valid",
+                }
+            ]
+            semantic_graph_edges = [
+                {
+                    "edge_id": "relation::valid-modifies",
+                    "edge_type": "MODIFIES",
+                    "source_id": "legal_unit::source_unit",
+                    "target_id": "legal_unit::target_unit",
+                    "relation_id": "valid-modifies",
                 }
             ]
 

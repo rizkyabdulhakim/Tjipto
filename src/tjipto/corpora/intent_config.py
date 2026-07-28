@@ -48,7 +48,6 @@ _GENERIC = {
     "instrument_change_signals": (),
     "source_role_labels": {},
     "temporal_current_terms": (),
-    "proposition_operators": {},
     "structured_sections": (),
     "structural_navigation": {},
     "structured_lookup_enabled": False,
@@ -97,9 +96,6 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "instrument_change_signals": tuple(raw.get("instrument_change_signals") or ()),
         "source_role_labels": dict(raw.get("source_role_labels") or {}),
         "temporal_current_terms": tuple(raw.get("temporal_current_terms") or ()),
-        "proposition_operators": {
-            str(key): dict(value) for key, value in (raw.get("proposition_operators") or {}).items()
-        },
         "structured_sections": tuple(raw.get("structured_sections") or ()),
         "structural_navigation": {key: tuple(value) for key, value in (raw.get("structural_navigation") or {}).items()},
         "structured_lookup_enabled": bool(raw.get("structured_lookup_enabled")),

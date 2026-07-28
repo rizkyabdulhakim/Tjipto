@@ -3,7 +3,6 @@ from __future__ import annotations
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
 from tjipto.retrieval.metadata import resolve_source_scope
 from tjipto.corpora.parser_dispatch import (
-    DEFAULT_CORPUS_ID,
     parse_bab_reference,
     parse_pasal_reference,
 )
@@ -201,7 +200,7 @@ def _has_bab(query: str, corpus_id: str) -> bool:
 
 
 def _corpus_id(config) -> str:
-    return getattr(config, "corpus_id", DEFAULT_CORPUS_ID)
+    return str(getattr(config, "corpus_id", ""))
 
 
 def _evidence_for_unit(

@@ -15,6 +15,18 @@ UUD_PASAL_SHORTHAND_AYAT_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\s*\(\s*([0-9
 UUD_AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
 UUD_COMPACT_BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s+([a-z])\b", re.IGNORECASE)
 UUD_METADATA_TOKEN_RE = re.compile(r"[0-9a-z]+", re.IGNORECASE)
+UUD_PROPOSITION_OPERATORS = (
+    ("memperbolehkan", "permits", "permission"),
+    ("mewajibkan", "requires", "obligation"),
+    ("melarang", "prohibits", "prohibition"),
+    ("mengatur", "regulates", "legal_rule"),
+    ("menyebut", "mentions", "textual"),
+)
+
+
+def uud_proposition_operator(text: str) -> tuple[str, str, str] | None:
+    normalized = " ".join(re.findall(r"[a-z0-9]+", str(text or "").casefold()))
+    return next((row for row in UUD_PROPOSITION_OPERATORS if re.search(rf"\b{row[0]}\b", normalized)), None)
 
 
 def normalize_uud_query_reference(text: str) -> str:
@@ -118,7 +130,7 @@ def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
     if not target:
         return None
     normalized = normalize_uud_query_reference(text).casefold()
-    if re.search(r"\b(?:setelah|sesudah)\b", normalized):
+    if re.search(r"\b(?:pasal\s+)?berikutnya\s+(?:setelah|sesudah)\b", normalized):
         return target, "next"
     if re.search(r"\bsebelum\b", normalized):
         return target, "previous"
@@ -126,7 +138,7 @@ def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
 
 
 def parser_adapter():
-    from tjipto.corpora.parser_dispatch import CorpusParser
+    from tjipto.corpora.strategy import CorpusParser
 
     return CorpusParser(
         normalize_query_reference=normalize_uud_query_reference,
