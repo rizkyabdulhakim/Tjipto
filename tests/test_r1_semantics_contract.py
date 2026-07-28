@@ -55,6 +55,22 @@ class R1SemanticsContractTest(unittest.TestCase):
                 claim = result["claim_support"][0]
                 self.assertEqual((result["status"], claim["status"]), ("answer_ready", "supported"))
                 self.assertTrue(claim["text_span_ids"])
+                segment = claim["support_segments"][0]
+                self.assertTrue(segment["segment_id"])
+                self.assertTrue(segment["exact_quote"])
+                self.assertTrue(segment["bbox_refs"])
+                self.assertEqual(segment["start_selector"], segment["text_span_ids"][0])
+
+    def test_textual_claim_cannot_cross_selector_boundaries(self) -> None:
+        for query in (
+            "Pasal 12 menyebut keadaan bahaya syaratsyarat dan?",
+            "Pasal 7B menyebut perbuatan tercela dan atau pendapat?",
+            "Pasal 9 menyebut sebagai berikut sumpah presiden?",
+        ):
+            with self.subTest(query=query):
+                result = self.service.ask("uud", query)
+                self.assertEqual(result["status"], "insufficient_evidence")
+                self.assertEqual(result["claim_support"][0]["status"], "insufficient")
 
     def test_subject_object_and_cross_clause_tokens_cannot_create_support(self) -> None:
         for query in (

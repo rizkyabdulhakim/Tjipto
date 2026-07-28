@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 import re
+from typing import Any
 
 from tjipto.runtime.query_semantics import PropositionClaim, QuerySemantics
 
@@ -22,6 +24,7 @@ class ClaimSupport:
     polarity: str
     modality: str
     text_span_ids: tuple[str, ...] = ()
+    support_segments: tuple[dict[str, Any], ...] = ()
 
     def public(self) -> dict:
         return {
@@ -37,6 +40,7 @@ class ClaimSupport:
             "polarity": self.polarity,
             "modality": self.modality,
             "text_span_ids": self.text_span_ids,
+            "support_segments": self.support_segments,
         }
 
 
@@ -55,6 +59,25 @@ class ClauseProposition:
     temporal_context: str | None
     evidence_id: str
     text_span_ids: tuple[str, ...]
+    segment_id: str
+    exact_quote: str
+    bbox_refs: tuple[str, ...]
+    page_numbers: tuple[int, ...]
+    source_document_id: str | None
+    terminal_boundary: str
+
+    def public(self) -> dict[str, Any]:
+        return {
+            "segment_id": self.segment_id,
+            "exact_quote": self.exact_quote,
+            "start_selector": self.text_span_ids[0],
+            "end_selector": self.text_span_ids[-1],
+            "text_span_ids": self.text_span_ids,
+            "bbox_refs": self.bbox_refs,
+            "page_numbers": self.page_numbers,
+            "source_document_id": self.source_document_id,
+            "terminal_boundary": self.terminal_boundary,
+        }
 
 
 def verify_claims(semantics: QuerySemantics, evidence: tuple[dict, ...], store) -> tuple[ClaimSupport, ...]:
@@ -85,6 +108,7 @@ def verify_claims(semantics: QuerySemantics, evidence: tuple[dict, ...], store) 
             polarity=claim.polarity,
             modality=claim.modality,
             text_span_ids=support[0].text_span_ids if support else (),
+            support_segments=tuple(item.public() for item in support),
         ),
     )
 
@@ -110,8 +134,9 @@ def _grounded_clauses(store, evidence: tuple[dict, ...]) -> tuple[ClauseProposit
         record = store.get(evidence_id) if evidence_id else None
         if not isinstance(evidence_id, str) or not record or not spans:
             continue
-        for segment_spans, text in _sentence_segments(store, spans):
-            if not store.exact_bboxes_for_text_spans(segment_spans):
+        for segment_spans, exact_quote, text, terminal_boundary in _sentence_segments(store, spans):
+            bboxes = store.exact_bboxes_for_text_spans(segment_spans)
+            if not bboxes:
                 continue
             out.append(
                 ClauseProposition(
@@ -126,6 +151,12 @@ def _grounded_clauses(store, evidence: tuple[dict, ...]) -> tuple[ClauseProposit
                     temporal_context=record.get("temporal_context"),
                     evidence_id=evidence_id,
                     text_span_ids=segment_spans,
+                    segment_id=_segment_id(evidence_id, segment_spans, exact_quote),
+                    exact_quote=exact_quote,
+                    bbox_refs=tuple(str(item.get("bbox_id")) for item in bboxes if item.get("bbox_id")),
+                    page_numbers=tuple(sorted({int(item["page_number"]) for item in bboxes if item.get("page_number") is not None})),
+                    source_document_id=record.get("source_document_id"),
+                    terminal_boundary=terminal_boundary,
                 )
             )
     return tuple(out)
@@ -135,10 +166,10 @@ def _normalized(text: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", text.casefold()))
 
 
-def _sentence_segments(store, spans: tuple[str, ...]) -> tuple[tuple[tuple[str, ...], str], ...]:
+def _sentence_segments(store, spans: tuple[str, ...]) -> tuple[tuple[tuple[str, ...], str, str, str], ...]:
     """Keep adjacent selectors together only through one source sentence."""
     by_id = {str(row.get("text_span_id")): row for row in store.page_text_spans}
-    segments: list[tuple[tuple[str, ...], str]] = []
+    segments: list[tuple[tuple[str, ...], str, str, str]] = []
     current_ids: list[str] = []
     current_text: list[str] = []
     for span_id in spans:
@@ -146,19 +177,25 @@ def _sentence_segments(store, spans: tuple[str, ...]) -> tuple[tuple[tuple[str, 
         if span is None:
             return ()
         text = str(span.get("text") or "")
-        for sentence_part in re.findall(r"[^.!?]+(?:[.!?]|$)", text):
+        for sentence_part in re.findall(r"[^.!?;:]+(?:[.!?;:]|$)", text):
             current_ids.append(span_id)
             current_text.append(sentence_part)
-            if re.search(r"[.!?]\s*$", sentence_part):
+            if re.search(r"[.!?;:]\s*$", sentence_part):
                 normalized = _normalized(" ".join(current_text))
                 if normalized:
-                    segments.append((tuple(dict.fromkeys(current_ids)), normalized))
+                    exact_quote = " ".join(current_text).strip()
+                    segments.append((tuple(dict.fromkeys(current_ids)), exact_quote, normalized, sentence_part.rstrip()[-1]))
                 current_ids, current_text = [], []
     if current_ids:
         normalized = _normalized(" ".join(current_text))
         if normalized:
-            segments.append((tuple(current_ids), normalized))
+            segments.append((tuple(current_ids), " ".join(current_text).strip(), normalized, "source_end"))
     return tuple(segments)
+
+
+def _segment_id(evidence_id: str, span_ids: tuple[str, ...], exact_quote: str) -> str:
+    value = "\x1f".join((evidence_id, *span_ids, exact_quote)).encode("utf-8")
+    return f"segment::{sha256(value).hexdigest()}"
 
 
 def _supports(claim: PropositionClaim, clause: ClauseProposition) -> bool:
