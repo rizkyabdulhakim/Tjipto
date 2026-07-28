@@ -88,14 +88,15 @@ class R1SemanticsContractTest(unittest.TestCase):
         semantics = interpret_query(self.store, "uud", "Pasal 7 setelah Pasal 6")
         self.assertNotEqual(semantics.requested_function, "structural_navigation")
 
-    def test_scope_follows_retrieval_and_reports_missing_corpus(self) -> None:
+    def test_scope_follows_retrieval_and_reports_missing_capability(self) -> None:
         result = self.service.ask("uud", "Apa aturan tentang tanah di Jakarta?")
         self.assertEqual((result["status"], result["route"], result["reason_code"]), (
-            "insufficient_evidence", "missing_corpus", "missing_corpus_support"
+            "insufficient_evidence", "capability_unavailable", "missing_capability"
         ))
         self.assertTrue(result["retrieval_attempted"])
         self.assertEqual(result["available_corpora"], ("uud",))
         self.assertEqual(result["missing_corpora"], ())
+        self.assertEqual(result["missing_capabilities"], ("land_regulation",))
         self.assertEqual(result["required_capabilities"], ("land_regulation",))
         self.assertGreater(result["retrieval_candidate_count"], 0)
 
@@ -103,10 +104,11 @@ class R1SemanticsContractTest(unittest.TestCase):
         result = self.service.ask("uud", "Apa harga makanan di Jakarta?")
         self.assertNotEqual(result["route"], "missing_corpus")
 
-    def test_partial_land_retrieval_is_evaluated_before_missing_corpus(self) -> None:
+    def test_partial_land_retrieval_is_evaluated_before_capability_decision(self) -> None:
         result = self.service.ask("uud", "Apa aturan tentang bumi dan tanah?")
-        self.assertEqual((result["status"], result["route"]), ("insufficient_evidence", "missing_corpus"))
+        self.assertEqual((result["status"], result["route"]), ("insufficient_evidence", "capability_unavailable"))
         self.assertEqual(result["missing_corpora"], ())
+        self.assertEqual(result["missing_capabilities"], ("land_regulation",))
         self.assertEqual(result["retrieval_route"], "bm25")
 
     def test_source_discrepancy_uses_trace_not_substantive_authority(self) -> None:

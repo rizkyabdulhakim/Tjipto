@@ -609,12 +609,15 @@ class LegalRuntimeService:
             if scope["requested_function"] != "land_regulation" or not _scope_has_verified_support(store, scoped_routed):
                 templates = _answer_templates(store)
                 requirements = _missing_corpus_requirements(store, scope["requested_function"], scope.get("required_capabilities", ()))
-                missing_domain = bool(requirements)
-                reason = "missing_corpus_support" if missing_domain else scope["reason"]
+                missing_corpora = tuple(requirements.get("needed_corpora") or ())
+                missing_capabilities = tuple(requirements.get("required_capabilities") or ())
+                missing_domain = bool(missing_corpora)
+                capability_unavailable = bool(missing_capabilities) and not missing_domain
+                reason = "missing_corpus_support" if missing_domain else "missing_capability" if capability_unavailable else scope["reason"]
                 context_pack = empty_context_pack(reason)
                 return scope | {
                     "status": "insufficient_evidence",
-                    "route": "missing_corpus" if missing_domain else scope["route"],
+                    "route": "missing_corpus" if missing_domain else "capability_unavailable" if capability_unavailable else scope["route"],
                     "reason": reason,
                     "reason_code": reason,
                     "corpus_id": corpus_id,
@@ -638,9 +641,10 @@ class LegalRuntimeService:
                     "warnings": (),
                     "insufficient_reasons": (reason,),
                     "available_corpora": semantics.available_corpora,
-                    "needed_corpora": tuple(requirements.get("needed_corpora") or ()),
-                    "missing_corpora": tuple(requirements.get("needed_corpora") or ()),
-                    "required_capabilities": tuple(requirements.get("required_capabilities") or ()),
+                    "needed_corpora": missing_corpora,
+                    "missing_corpora": missing_corpora,
+                    "required_capabilities": missing_capabilities,
+                    "missing_capabilities": missing_capabilities,
                     "retrieval_attempted": True,
                     "retrieval_route": scoped_routed["route"],
                     "retrieval_candidate_count": len(scoped_routed["matches"]),

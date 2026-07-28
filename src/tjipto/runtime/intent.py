@@ -24,8 +24,7 @@ def classify_legal_intent(store, query: str) -> LegalIntent:
     current = contains_intent_phrase(query, tuple(guard.get("current_fact_terms") or ()))
     subject = contains_intent_phrase(query, tuple(guard.get("current_fact_subjects") or ()))
     identity = contains_intent_phrase(query, tuple(guard.get("identity_question_terms") or ()))
-    legal_scope = contains_intent_phrase(query, tuple(guard.get("legal_scope_terms") or ()))
-    if subject and (current or (identity and not legal_scope)):
+    if subject and (current or identity):
         return LegalIntent(
             "current_fact",
             answerability="unsupported",
@@ -49,6 +48,8 @@ def classify_legal_intent(store, query: str) -> LegalIntent:
                 route="unsupported_scope",
                 intent="out_of_corpus",
             )
+    if contains_intent_phrase(query, tuple(guard.get("in_corpus_discovery_terms") or ())):
+        return LegalIntent("text_occurrence_discovery", answerability="answerable", intent="text_occurrence_discovery")
     for row in guard.get("domain_capability_policy", ()) or ():
         if contains_intent_phrase(query, tuple(row.get("terms") or ())):
             return LegalIntent(

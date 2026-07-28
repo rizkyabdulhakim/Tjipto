@@ -99,6 +99,15 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
             with self.subTest(query=query):
                 self.assertNotEqual(self.service.ask("uud", query)["route"], "structural_navigation")
 
+    def test_current_fact_precedes_legal_reference_and_discovery_precedes_domain(self) -> None:
+        for query in ("siapa Presiden setelah Pasal 7?", "siapa presiden menurut Pasal 7?"):
+            with self.subTest(query=query):
+                result = self.service.ask("uud", query)
+                self.assertEqual((result["route"], result["reason_code"]), ("current_fact_unsupported", "current_fact_unsupported"))
+                self.assertFalse(result["citations"])
+        result = self.service.ask("uud", "Tanah disebut dalam pasal berapa?")
+        self.assertNotEqual(result["route"], "capability_unavailable")
+
 
 if __name__ == "__main__":
     unittest.main()

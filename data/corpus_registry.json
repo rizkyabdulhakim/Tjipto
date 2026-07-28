@@ -119,6 +119,11 @@
         "wewenang",
         "hak"
       ],
+      "in_corpus_discovery_terms": [
+        "disebut",
+        "menyebut",
+        "pasal berapa"
+      ],
       "domain_capability_policy": [
         {
           "domain": "land",
