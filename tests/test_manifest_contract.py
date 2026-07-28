@@ -111,6 +111,7 @@ def _expected_manifest_counts() -> dict[str, int]:
         "retrieval_units": _jsonl_count("retrieval_units.jsonl"),
         "source_conflicts": _jsonl_count("source_conflicts.jsonl"),
         "source_documents": _jsonl_count("source_documents.jsonl"),
+        "source_objects": _jsonl_count("source_objects.jsonl"),
         "validation_alignment_results": _jsonl_count("validation_alignment_results.jsonl"),
         "validation_exception_review_labels": _jsonl_count("validation_exception_review_labels.jsonl"),
         "validation_exceptions": _jsonl_count("validation_exceptions.jsonl"),
