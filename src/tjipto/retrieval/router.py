@@ -9,8 +9,8 @@ from tjipto.retrieval.metadata import (
     metadata_lookup,
     normalize_filters,
     public_filters,
-    resolve_source_scope,
 )
+from tjipto.corpora.source_arbitration import resolve_source_scope
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.relations import has_relation_target, relation_lookup
 from tjipto.retrieval.service import RetrievalService

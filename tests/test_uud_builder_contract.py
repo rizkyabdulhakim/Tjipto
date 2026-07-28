@@ -370,6 +370,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 bbox_rows=read_jsonl(FINAL / "bbox_registry.jsonl"),
                 retrieval_units=read_jsonl(FINAL / "retrieval_units.jsonl"),
                 promotion_decisions=read_jsonl(FINAL / "promotion_decisions.jsonl"),
+                propositions=read_jsonl(FINAL / "propositions.jsonl"),
                 metadata_grounding=read_jsonl(FINAL / "metadata_grounding.jsonl"),
                 metadata_grounding_registry=read_jsonl(FINAL / "metadata_grounding_registry.jsonl"),
                 word_bboxes=read_jsonl(FINAL / "word_bboxes.jsonl"),

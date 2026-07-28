@@ -1,14 +1,6 @@
 from __future__ import annotations
 
-STRUCTURAL_EDGES = {"CONTAINS", "PART_OF", "PRECEDES", "FOLLOWS", "INSERTED_AFTER"}
-ENDPOINT_EDGES = {
-    "HAS_BBOX",
-    "PAGE_GROUNDED_AT",
-    "USES_SOURCE_PDF",
-    "BELONGS_TO_SOURCE_ROLE",
-    "HAS_FINAL_EVIDENCE",
-}
-INSTRUMENT_EDGES = {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO", "HAS_SIGNATORY", "HAS_DECISION_SESSION", "HAS_EFFECTIVE_RULE"}
+from tjipto.contracts.relations import descriptor_for
 
 
 def is_renumbering_provision(row: dict) -> bool:
@@ -35,7 +27,10 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
     relations_by_id = {row["relation_id"]: row for row in article_relations}
     for edge in edges:
         edge_type = edge["edge_type"]
-        if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
+        descriptor = descriptor_for(edge_type)
+        if descriptor is None:
+            raise ValueError(f"unknown_uud_graph_edge:{edge_type}")
+        if descriptor.authority_bearing:
             relation_id = str(edge.get("article_relation_ref") or "")
             relation = relations_by_id.get(relation_id)
             if relation is None:
@@ -50,6 +45,16 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
                     "edge_type": edge_type,
                     "relation_type": relation["relation_type"],
                     "relation_id": relation_id,
+                    "runtime_loadable": True,
+                    "support_kind": "exact_source_relation",
+                    "support_relation_ids": [relation_id],
+                    "support_evidence_ids": list(relation.get("supporting_evidence_ids") or [relation.get("evidence_id")]),
+                    "support_exception_ids": [],
+                    "text_span_ids": list(relation.get("text_span_ids") or ()),
+                    "bbox_refs": list(relation.get("bbox_refs") or ()),
+                    "source_role": relation.get("source_role"),
+                    "temporal_context": relation.get("source_role"),
+                    "citation_final": False,
                 }
             )
             continue
@@ -66,30 +71,20 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
         target = nodes_by_id[edge["target_id"]]
         evidence_ids = _direct_evidence_ids(edge, source, target, evidence_by_id)
         supports = [evidence_by_id[evidence_id] for evidence_id in evidence_ids]
-        if edge_type in STRUCTURAL_EDGES:
+        if descriptor.relevance_eligible and not descriptor.authority_bearing:
             support_kind = "deterministic_structure"
             derivation_method = "deterministic_structural_rule"
             evidence_ids = []
             supports = []
-        elif edge_type in ENDPOINT_EDGES:
+        elif not descriptor.relevance_eligible and edge_type not in {"HAS_SOURCE_ANOMALY", "EXCLUDED_BECAUSE"}:
             support_kind = "endpoint_provenance"
             derivation_method = "endpoint_metadata"
-        elif edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
-            relation = relations_by_id.get(str(edge.get("article_relation_ref") or ""), {})
-            exact_relation = relation.get("support_class") == "exact_article_relation"
-            support_kind = "exact_source_relation" if exact_relation else "instrument_provenance"
-            derivation_method = "explicit_source_text" if exact_relation else "reviewed_corpus_spec"
-        elif edge_type in INSTRUMENT_EDGES:
-            support_kind = "instrument_provenance"
-            derivation_method = "explicit_source_text" if supports else "reviewed_corpus_spec"
         elif edge_type == "HAS_SOURCE_ANOMALY":
             support_kind = "source_anomaly_trace"
             derivation_method = "reviewed_corpus_spec"
         elif edge_type == "EXCLUDED_BECAUSE":
             support_kind = "nonlegal"
             derivation_method = "reviewed_corpus_spec"
-        else:
-            raise ValueError(f"unknown_uud_graph_edge:{edge_type}")
         edge.update(
             {
                 "relation_type": edge_type,

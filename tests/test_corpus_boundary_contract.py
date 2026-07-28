@@ -5,6 +5,7 @@ import re
 import unittest
 
 from tjipto.corpora import parser_dispatch
+from tjipto.corpora.strategy import CorpusParser, CorpusStrategy, StrategyRegistry
 from tjipto.corpora.uud import parser as uud_parser
 from tjipto.corpora.uud.relation_builder import parse_renumbering_mappings
 
@@ -44,6 +45,22 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         self.assertIn("bab xa", parser_dispatch.label_keys("uud", "BAB X A"))
         with self.assertRaisesRegex(ValueError, "unsupported_corpus_parser:unknown"):
             parser_dispatch.get_parser("unknown")
+
+    def test_second_strategy_uses_its_own_reference_syntax(self) -> None:
+        parser = CorpusParser(
+            normalize_query_reference=lambda text: text.strip(),
+            normalize_metadata_intent=lambda text: text.casefold(),
+            parse_legal_reference=lambda text, **_: {"rule": text if text.startswith("Rule ") else None},
+            parse_legal_references=lambda text: [{"reference": text}] if text.startswith("Rule ") else [],
+            parse_bab_reference=lambda _: None,
+            parse_pasal_reference=lambda *_args, **_kwargs: None,
+            parse_ayat_reference=lambda _: None,
+            label_keys=lambda value: {str(value).casefold()},
+            resolve_navigation=lambda _: None,
+        )
+        strategy = StrategyRegistry({"demo": CorpusStrategy("demo", parser, lambda _: None)}).require("demo")
+        self.assertEqual(strategy.parser.parse_legal_reference("Rule 1"), {"rule": "Rule 1"})
+        self.assertIsNone(strategy.proposition_operator("Rule 1 requires payment"))
 
     def test_parser_dispatch_preserves_all_reference_ranges(self) -> None:
         text = "Pasal19, Pasal\n28C, dan pasal 28G."

@@ -28,7 +28,8 @@
     "page_text_spans.jsonl",
     "word_bboxes.jsonl",
     "pdf_health_report.json",
-    "promotion_decisions.jsonl"
+    "promotion_decisions.jsonl",
+    "propositions.jsonl"
   ],
   "status": "valid",
   "structure_fidelity": {
@@ -43,6 +44,7 @@
     "bbox_records": 1827,
     "retrieval_units": 650,
     "promotion_decisions": 77,
+    "propositions": 2063,
     "graph_nodes": 3209,
     "graph_edges": 7918,
     "page_text_spans": 2070,
@@ -357,11 +359,11 @@
     "runtime_check_count": 0
   },
   "artifact_origin_health": {
-    "manifest_file_rows": 30,
-    "files_with_origin": 30,
+    "manifest_file_rows": 31,
+    "files_with_origin": 31,
     "files_missing_origin": 0,
     "invalid_origin_values": 0,
-    "generated_count": 25,
+    "generated_count": 26,
     "carried_forward_count": 3,
     "manual_review_artifact_count": 2,
     "deprecated_count": 0,
@@ -584,9 +586,13 @@
     },
     "runtime_loadable_legal_edge_type_counts": {
       "CONTAINS": 530,
+      "DELETES": 1,
       "HAS_DECISION_SESSION": 3,
       "HAS_SIGNATORY": 4,
-      "PART_OF": 530
+      "MODIFIES": 68,
+      "PART_OF": 530,
+      "RENAMES": 2,
+      "RENUMBERED_TO": 1
     },
     "schema_edge_types": [
       "ADDS",
@@ -613,7 +619,7 @@
       "AMENDS",
       "SUPPLEMENTS"
     ],
-    "runtime_loadable_legal_edges": 1067
+    "runtime_loadable_legal_edges": 1139
   },
   "legal_graph_authority_health": {
     "status": "incomplete",
@@ -634,11 +640,10 @@
     },
     "support_kind_counts": {
       "deterministic_structure": 1081,
-      "endpoint_provenance": 6751,
-      "instrument_provenance": 10,
-      "relation_reference": 72,
+      "endpoint_provenance": 6761,
+      "exact_source_relation": 72,
       "source_anomaly_trace": 4
     }
   },
-  "validated_artifact_set_digest": "a2ffbe583c4c34ec981a0e180a249009a081ec5fea712a66cf4a1119afadae28"
+  "validated_artifact_set_digest": "7b614ad8c81011ac781b3d644d95d04fb10b2df820316a371d403152eec7387b"
 }

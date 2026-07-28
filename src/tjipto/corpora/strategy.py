@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-
-from tjipto.corpora.uud import parser as uud_parser
 
 
 @dataclass(frozen=True)
@@ -22,17 +20,42 @@ class CorpusParser:
 
 
 @dataclass(frozen=True)
+class CorpusContract:
+    schema_version: int
+    contract_id: str
+    contract_version: int
+    contract_fingerprint: str
+
+
+@dataclass(frozen=True)
 class CorpusStrategy:
     corpus_id: str
     parser: CorpusParser
     proposition_operator: Callable[[str], tuple[str, str, str] | None]
+    contract: CorpusContract | None = None
+    provenance_adapter: object | None = None
+    semantic_validator: Callable[[object, dict[str, object]], tuple[str, ...]] | None = None
 
 
-_STRATEGIES = {"uud": CorpusStrategy("uud", uud_parser.parser_adapter(), uud_parser.uud_proposition_operator)}
+@dataclass(frozen=True)
+class StrategyRegistry:
+    """Closed, code-owned strategy map; manifests never select imports."""
+
+    strategies: Mapping[str, CorpusStrategy]
+
+    def require(self, corpus_id: str) -> CorpusStrategy:
+        try:
+            return self.strategies[corpus_id]
+        except KeyError as exc:
+            raise ValueError(f"unsupported_corpus_parser:{corpus_id}") from exc
+
+
+def builtin_strategy_registry() -> StrategyRegistry:
+    # This is the only composition boundary allowed to import corpus modules.
+    from tjipto.corpora.builtin import BUILTIN_STRATEGIES
+
+    return StrategyRegistry(BUILTIN_STRATEGIES)
 
 
 def strategy_for(corpus_id: str) -> CorpusStrategy:
-    try:
-        return _STRATEGIES[corpus_id]
-    except KeyError as exc:
-        raise ValueError(f"unsupported_corpus_parser:{corpus_id}") from exc
+    return builtin_strategy_registry().require(corpus_id)

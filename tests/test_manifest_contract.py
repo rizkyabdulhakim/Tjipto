@@ -44,6 +44,7 @@ class ManifestContractTest(unittest.TestCase):
             "graph_edges": len((FINAL / "graph_edges.jsonl").read_text(encoding="utf-8").splitlines()),
             "page_text_spans": len((FINAL / "page_text_spans.jsonl").read_text(encoding="utf-8").splitlines()),
             "promotion_decisions": len((FINAL / "promotion_decisions.jsonl").read_text(encoding="utf-8").splitlines()),
+            "propositions": len((FINAL / "propositions.jsonl").read_text(encoding="utf-8").splitlines()),
             "word_bboxes": len((FINAL / "word_bboxes.jsonl").read_text(encoding="utf-8").splitlines()),
         }
         for key, value in actual_counts.items():
@@ -106,6 +107,7 @@ def _expected_manifest_counts() -> dict[str, int]:
         "raw_source_spans": _jsonl_count("raw_source_spans.jsonl"),
         "pages": _jsonl_count("pages.jsonl"),
         "promotion_decisions": _jsonl_count("promotion_decisions.jsonl"),
+        "propositions": _jsonl_count("propositions.jsonl"),
         "retrieval_units": _jsonl_count("retrieval_units.jsonl"),
         "source_conflicts": _jsonl_count("source_conflicts.jsonl"),
         "source_documents": _jsonl_count("source_documents.jsonl"),

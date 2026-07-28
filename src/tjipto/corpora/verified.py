@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from hashlib import sha256
-from importlib import import_module
 import json
 from pathlib import Path
 from threading import RLock
@@ -14,6 +13,7 @@ from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage
 from tjipto.core.manifest import ALLOWED_ARTIFACT_ORIGINS, verified_file_bytes
 from tjipto.core.manifest import artifact_set_digest as compute_artifact_set_digest
 from tjipto.ingestion.pdf.fingerprint import extractor_fingerprint
+from tjipto.corpora.strategy import strategy_for
 
 
 class CorpusIntegrityError(ValueError):
@@ -173,16 +173,17 @@ def _read_trusted_manifest(config) -> tuple[dict, str]:
     manifest, manifest_digest = _read_manifest(config)
     if not isinstance(manifest, dict) or manifest.get("corpus_id") != config.corpus_id:
         raise CorpusIntegrityError("manifest_identity_mismatch")
-    if manifest.get("schema_version") != CURRENT_ARTIFACT_SCHEMA and config.corpus_id == "uud":
-        raise CorpusIntegrityError("unsupported_schema")
-    if config.corpus_id == "uud":
-        from tjipto.corpora.uud.contract import CONTRACT_FINGERPRINT, CONTRACT_ID, CONTRACT_VERSION
-        if (
-            manifest.get("contract_id") != CONTRACT_ID
-            or manifest.get("contract_version") != CONTRACT_VERSION
-            or manifest.get("contract_fingerprint") != CONTRACT_FINGERPRINT
-        ):
-            raise CorpusIntegrityError("contract_fingerprint_mismatch")
+    try:
+        contract = strategy_for(config.corpus_id).contract
+    except ValueError:
+        contract = None
+    if contract and (
+        manifest.get("schema_version") != contract.schema_version
+        or manifest.get("contract_id") != contract.contract_id
+        or manifest.get("contract_version") != contract.contract_version
+        or manifest.get("contract_fingerprint") != contract.contract_fingerprint
+    ):
+        raise CorpusIntegrityError("contract_fingerprint_mismatch")
     expected_extractor = manifest.get("extractor_fingerprint")
     if expected_extractor is not None and expected_extractor != extractor_fingerprint():
         raise CorpusIntegrityError("extractor_fingerprint_mismatch")
@@ -194,19 +195,20 @@ def _manifest_digest(config) -> str:
 
 
 def _run_semantic_validator(config, manifest: dict, artifacts: dict[str, object]) -> CorpusSemanticAttestation:
-    dotted_path = config.setting("semantic_validator")
-    if not isinstance(dotted_path, str) or ":" not in dotted_path:
-        return CorpusSemanticAttestation("not_configured")
-    module_name, function_name = dotted_path.split(":", 1)
     try:
-        validator = getattr(import_module(module_name), function_name)
+        validator = strategy_for(config.corpus_id).semantic_validator
+    except ValueError:
+        validator = None
+    if validator is None:
+        return CorpusSemanticAttestation("not_configured")
+    try:
         logical_artifacts = {
             record["logical_key"]: artifacts[rel]
             for rel, record in manifest["files"].items()
             if rel in artifacts
         }
         violations = tuple(validator(config.manifest_path.parent.resolve(), logical_artifacts))
-    except (AttributeError, ImportError, KeyError, TypeError, ValueError) as error:
+    except (KeyError, TypeError, ValueError) as error:
         raise CorpusIntegrityError("semantic_validator_unavailable") from error
     return CorpusSemanticAttestation("passed" if not violations else "failed", violations)
 

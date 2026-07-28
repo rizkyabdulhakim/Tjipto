@@ -91,6 +91,7 @@ def build_validation_report(
     bbox_rows: list[dict],
     retrieval_units: list[dict],
     promotion_decisions: list[dict],
+    propositions: list[dict],
     metadata_grounding: list[dict],
     metadata_grounding_registry: list[dict],
     word_bboxes: list[dict],
@@ -136,6 +137,7 @@ def build_validation_report(
             "word_bboxes.jsonl",
             "pdf_health_report.json",
             "promotion_decisions.jsonl",
+            "propositions.jsonl",
         ],
         "status": "valid",
         "structure_fidelity": {
@@ -153,6 +155,7 @@ def build_validation_report(
         "bbox_records": len(bbox_rows),
         "retrieval_units": len(retrieval_units),
         "promotion_decisions": len(promotion_decisions),
+        "propositions": len(propositions),
         "graph_nodes": len(graph_nodes),
         "graph_edges": len(graph_edges),
         "page_text_spans": len(page_text_spans),
@@ -1318,8 +1321,6 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         if edge_type not in PROVENANCE_EDGE_TYPES | LEGAL_EDGE_TYPES:
             errors.append(f"invalid_graph_edge_type:{row['edge_id']}:{edge_type}")
         if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
-            if set(row) != {"edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id"}:
-                errors.append(f"graph_relation_contains_noncanonical_truth:{row['edge_id']}")
             relation = article_relations_by_id.get(row.get("relation_id"))
             if relation is None:
                 errors.append(f"graph_relation_missing_authoritative_row:{row['edge_id']}")
@@ -1330,6 +1331,12 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
                     errors.append(f"graph_relation_target_mismatch:{row['edge_id']}")
                 if row.get("relation_type") != relation.get("relation_type"):
                     errors.append(f"graph_relation_type_mismatch:{row['edge_id']}")
+                if row.get("runtime_loadable") is not True:
+                    errors.append(f"graph_relation_not_runtime_loadable:{row['edge_id']}")
+                if list(row.get("support_evidence_ids") or ()) != [relation.get("evidence_id")]:
+                    errors.append(f"graph_relation_evidence_mismatch:{row['edge_id']}")
+                if not row.get("bbox_refs") or not row.get("text_span_ids"):
+                    errors.append(f"graph_relation_missing_provenance:{row['edge_id']}")
             continue
         if row.get("citation_final") is not False:
             errors.append(f"graph_edge_false_final_citation:{row['edge_id']}")

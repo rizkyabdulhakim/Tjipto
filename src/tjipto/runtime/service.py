@@ -21,9 +21,8 @@ from tjipto.retrieval.metadata import (
     metadata_lookup,
     normalize_filters,
     public_filters,
-    resolve_source_scope,
-    source_roles_for_query,
 )
+from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
 from tjipto.retrieval.relations import has_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.intent import classify_relation_intent

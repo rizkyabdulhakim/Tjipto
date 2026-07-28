@@ -54,9 +54,7 @@ class CorpusRegistry:
         if manifest.get("corpus_id") != corpus_id:
             self.error_code = "corpus_id_mismatch"
             return None
-        if manifest.get("schema_version") not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS or (
-            corpus_id == "uud" and manifest.get("schema_version") != CURRENT_ARTIFACT_SCHEMA
-        ):
+        if manifest.get("schema_version") not in SUPPORTED_ARTIFACT_SCHEMA_VERSIONS:
             self.error_code = "unsupported_schema"
             return None
         settings = {key: value for key, value in entry.items() if key != "manifest"} if isinstance(entry, dict) else {}

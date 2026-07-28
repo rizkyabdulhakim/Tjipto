@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
 import re
 from typing import Any
 
@@ -44,71 +43,35 @@ class ClaimSupport:
         }
 
 
-@dataclass(frozen=True)
-class ClauseProposition:
-    """A BBox-backed clause is the smallest authority used for a claim."""
-
-    subject: str | None
-    predicate: str
-    object: str
-    polarity: str
-    modality: str
-    conditions: tuple[str, ...]
-    exceptions: tuple[str, ...]
-    source_role: str | None
-    temporal_context: str | None
-    evidence_id: str
-    text_span_ids: tuple[str, ...]
-    segment_id: str
-    exact_quote: str
-    bbox_refs: tuple[str, ...]
-    page_numbers: tuple[int, ...]
-    source_document_id: str | None
-    terminal_boundary: str
-
-    def public(self) -> dict[str, Any]:
-        return {
-            "segment_id": self.segment_id,
-            "exact_quote": self.exact_quote,
-            "start_selector": self.text_span_ids[0],
-            "end_selector": self.text_span_ids[-1],
-            "text_span_ids": self.text_span_ids,
-            "bbox_refs": self.bbox_refs,
-            "page_numbers": self.page_numbers,
-            "source_document_id": self.source_document_id,
-            "terminal_boundary": self.terminal_boundary,
-        }
-
-
 def verify_claims(semantics: QuerySemantics, evidence: tuple[dict, ...], store) -> tuple[ClaimSupport, ...]:
     if semantics.requested_function != "proposition_verification":
         return ()
     claim = semantics.requested_proposition
     if claim is None:
         return ()
-    clauses = _grounded_clauses(store, evidence)
-    support = tuple(clause for clause in clauses if _supports(claim, clause))
-    first = support[0] if support else (clauses[0] if clauses else None)
+    propositions = _grounded_propositions(store, evidence)
+    support = tuple(proposition for proposition in propositions if _supports(claim, proposition))
+    first = support[0] if support else (propositions[0] if propositions else None)
     # Absence is never an opposite proposition.  A future corpus parser may
     # emit an explicit opposite ClauseProposition; this conservative baseline
     # fails closed until it does.
     status = "supported" if support else "insufficient"
-    support_ids = tuple(clause.evidence_id for clause in support)
+    support_ids = tuple(str(proposition["evidence_id"]) for proposition in support)
     return (
         ClaimSupport(
             claim_id="proposition:0",
             claim_text=claim.object,
             status=status,
             support_evidence_ids=support_ids,
-            source_role=first.source_role if first else claim.source_role,
-            temporal_context=first.temporal_context if first else claim.temporal_context,
-            validation_method="bbox_backed_clause_exact_text",
+            source_role=first.get("source_role") if first else claim.source_role,
+            temporal_context=first.get("temporal_context") if first else claim.temporal_context,
+            validation_method="artifact_backed_atomic_proposition",
             reason_code=None if support else "claim_support_insufficient",
             predicate=claim.predicate,
             polarity=claim.polarity,
             modality=claim.modality,
-            text_span_ids=support[0].text_span_ids if support else (),
-            support_segments=tuple(item.public() for item in support),
+            text_span_ids=tuple(str(item) for item in support[0].get("text_span_ids") or ()) if support else (),
+            support_segments=tuple(_public_segment(item) for item in support),
         ),
     )
 
@@ -117,7 +80,7 @@ def all_supported(claims: tuple[ClaimSupport, ...]) -> bool:
     return all(claim.status == "supported" for claim in claims)
 
 
-def _grounded_clauses(store, evidence: tuple[dict, ...]) -> tuple[ClauseProposition, ...]:
+def _grounded_propositions(store, evidence: tuple[dict, ...]) -> tuple[dict, ...]:
     units = {row.get("legal_unit_id") for row in evidence if row.get("legal_unit_id")}
     children = {
         row["legal_unit_id"]
@@ -125,87 +88,40 @@ def _grounded_clauses(store, evidence: tuple[dict, ...]) -> tuple[ClauseProposit
         if row.get("parent_legal_unit_id") in units and row.get("unit_type") == "ayat_record"
     }
     target_units = children or units
-    out = []
-    for unit in store.legal_units:
-        if unit.get("legal_unit_id") not in target_units:
-            continue
-        spans = tuple(unit.get("text_span_ids") or ())
-        evidence_id = next((str(item) for item in unit.get("evidence_ids") or () if store.get(item)), None)
-        record = store.get(evidence_id) if evidence_id else None
-        if not isinstance(evidence_id, str) or not record or not spans:
-            continue
-        for segment_spans, exact_quote, text, terminal_boundary in _sentence_segments(store, spans):
-            bboxes = store.exact_bboxes_for_text_spans(segment_spans)
-            if not bboxes:
-                continue
-            out.append(
-                ClauseProposition(
-                    subject=None,
-                    predicate="textual",
-                    object=text,
-                    polarity="positive",
-                    modality="textual",
-                    conditions=(),
-                    exceptions=(),
-                    source_role=record.get("source_role"),
-                    temporal_context=record.get("temporal_context"),
-                    evidence_id=evidence_id,
-                    text_span_ids=segment_spans,
-                    segment_id=_segment_id(evidence_id, segment_spans, exact_quote),
-                    exact_quote=exact_quote,
-                    bbox_refs=tuple(str(item.get("bbox_id")) for item in bboxes if item.get("bbox_id")),
-                    page_numbers=tuple(sorted({int(item["page_number"]) for item in bboxes if item.get("page_number") is not None})),
-                    source_document_id=record.get("source_document_id"),
-                    terminal_boundary=terminal_boundary,
-                )
-            )
-    return tuple(out)
+    return tuple(
+        row
+        for row in store.propositions
+        if row.get("legal_unit_id") in target_units
+        and row.get("evidence_id")
+        and row.get("bbox_refs")
+        and row.get("text_span_ids")
+    )
 
 
-def _normalized(text: str) -> str:
-    return " ".join(re.findall(r"[a-z0-9]+", text.casefold()))
+def _public_segment(proposition: dict) -> dict[str, Any]:
+    spans = tuple(str(item) for item in proposition.get("text_span_ids") or ())
+    return {
+        "segment_id": proposition.get("text_segment_id"),
+        "exact_quote": proposition.get("exact_quote"),
+        "start_selector": spans[0] if spans else None,
+        "end_selector": spans[-1] if spans else None,
+        "text_span_ids": spans,
+        "bbox_refs": tuple(str(item) for item in proposition.get("bbox_refs") or ()),
+        "page_numbers": tuple(proposition.get("page_numbers") or ()),
+        "source_document_id": proposition.get("source_document_id"),
+        "terminal_boundary": proposition.get("terminal_boundary"),
+    }
 
 
-def _sentence_segments(store, spans: tuple[str, ...]) -> tuple[tuple[tuple[str, ...], str, str, str], ...]:
-    """Keep adjacent selectors together only through one source sentence."""
-    by_id = {str(row.get("text_span_id")): row for row in store.page_text_spans}
-    segments: list[tuple[tuple[str, ...], str, str, str]] = []
-    current_ids: list[str] = []
-    current_text: list[str] = []
-    for span_id in spans:
-        span = by_id.get(span_id)
-        if span is None:
-            return ()
-        text = str(span.get("text") or "")
-        for sentence_part in re.findall(r"[^.!?;:]+(?:[.!?;:]|$)", text):
-            current_ids.append(span_id)
-            current_text.append(sentence_part)
-            if re.search(r"[.!?;:]\s*$", sentence_part):
-                normalized = _normalized(" ".join(current_text))
-                if normalized:
-                    exact_quote = " ".join(current_text).strip()
-                    segments.append((tuple(dict.fromkeys(current_ids)), exact_quote, normalized, sentence_part.rstrip()[-1]))
-                current_ids, current_text = [], []
-    if current_ids:
-        normalized = _normalized(" ".join(current_text))
-        if normalized:
-            segments.append((tuple(current_ids), " ".join(current_text).strip(), normalized, "source_end"))
-    return tuple(segments)
-
-
-def _segment_id(evidence_id: str, span_ids: tuple[str, ...], exact_quote: str) -> str:
-    value = "\x1f".join((evidence_id, *span_ids, exact_quote)).encode("utf-8")
-    return f"segment::{sha256(value).hexdigest()}"
-
-
-def _supports(claim: PropositionClaim, clause: ClauseProposition) -> bool:
-    # Normative parsing is deliberately not inferred from article words.  Until
-    # a strategy supplies a compatible structured clause proposition, only an
-    # exact textual assertion may be published.
+def _supports(claim: PropositionClaim, proposition: dict) -> bool:
+    # Normative parsing is deliberately not inferred from article words. Until
+    # a strategy publishes a compatible structured proposition, it fails closed.
     return (
-        claim.modality == "textual"
-        and claim.polarity == "positive"
-        and _contains_tokens(_tokens(claim.object), _tokens(clause.object))
+        claim.predicate == proposition.get("predicate")
+        and claim.polarity == proposition.get("polarity")
+        and claim.modality == proposition.get("modality")
+        and claim.modality == "textual"
+        and _contains_tokens(_tokens(claim.object), _tokens(str(proposition.get("object") or "")))
     )
 
 

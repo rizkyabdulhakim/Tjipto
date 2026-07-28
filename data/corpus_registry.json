@@ -1,11 +1,11 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "7ed14bed05c148b0e4c1b1fb42d9accf5039a96298345de9b4d4cb77d6e8c9d5",
-    "semantic_validator": "tjipto.corpora.uud.validation:validate_uud_artifacts",
+    "manifest_sha256": "a068d8d256eeaeabe96692f7b53478fce084141be8df58d4e11c689c8e5f3b03",
     "runtime_required_artifacts": [
       "runtime_projection",
-      "validation_report"
+      "validation_report",
+      "propositions"
     ],
     "query_strategy": "uud_1945",
     "structured_strategy": "uud_1945",
@@ -123,14 +123,6 @@
         "disebut",
         "menyebut",
         "pasal berapa"
-      ],
-      "domain_capability_policy": [
-        {
-          "domain": "land",
-          "terms": ["tanah", "bumi"],
-          "requested_function": "land_regulation",
-          "required_capabilities": ["land_regulation"]
-        }
       ],
       "legal_intent_policy": {
         "unsupported_functions": [

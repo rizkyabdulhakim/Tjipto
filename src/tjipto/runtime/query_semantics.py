@@ -7,7 +7,7 @@ import re
 
 from tjipto.corpora.intent_config import contains_intent_phrase
 from tjipto.corpora.parser_dispatch import parse_legal_references, proposition_operator, resolve_navigation
-from tjipto.retrieval.metadata import resolve_source_scope
+from tjipto.corpora.source_arbitration import resolve_source_scope
 from tjipto.runtime.intent import classify_relation_intent
 
 

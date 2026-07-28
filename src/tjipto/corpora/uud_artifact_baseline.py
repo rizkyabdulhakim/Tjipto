@@ -22,6 +22,7 @@ from tjipto.corpora.uud.metadata_builder import (
     rebuild_metadata_grounding,
 )
 from tjipto.corpora.uud.pages_builder import build_pages
+from tjipto.corpora.uud.proposition_builder import build_textual_propositions
 from tjipto.corpora.uud.pipeline import run_staged_uud_pipeline
 from tjipto.corpora.uud.relation_builder import build_article_amendment_relations, build_document_relations
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, build_retrieval_units
@@ -177,6 +178,11 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         metadata_grounding=metadata_grounding,
         source_conflicts=source_conflicts,
     )
+    propositions = build_textual_propositions(
+        legal_units=legal_units,
+        evidence=evidence,
+        page_text_spans=page_text_spans,
+    )
     pdf_health_report = build_pdf_health_report(
         repo_root=repo_root,
         corpus_id="uud",
@@ -272,6 +278,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "page_text_spans.jsonl", page_text_spans)
     write_jsonl(final_dir / "raw_source_spans.jsonl", raw_source_spans)
     write_jsonl(final_dir / "word_bboxes.jsonl", word_bboxes)
+    write_jsonl(final_dir / "propositions.jsonl", propositions)
     write_json(final_dir / "runtime_projection.json", build_runtime_projection(
         evidence_registry=evidence,
         bbox_registry=bbox_rows,
@@ -312,6 +319,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         document_relations=document_relations,
         article_amendment_relations=article_amendment_relations,
         promotion_decisions=promotion_decisions,
+        propositions=propositions,
         page_text_spans=page_text_spans,
         raw_source_spans=raw_source_spans,
         word_bboxes=word_bboxes,

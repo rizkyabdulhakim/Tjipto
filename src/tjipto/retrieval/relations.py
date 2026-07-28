@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for
-from tjipto.retrieval.metadata import resolve_source_scope
+from tjipto.corpora.source_arbitration import resolve_source_scope
 from tjipto.corpora.parser_dispatch import (
     parse_bab_reference,
     parse_pasal_reference,

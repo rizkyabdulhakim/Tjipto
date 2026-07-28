@@ -6,7 +6,7 @@
   "corpus_id": "uud",
   "contract_id": "tjipto.uud.artifact-contract",
   "contract_version": 7,
-  "contract_fingerprint": "b4fe9b00c712eb0a83e4d32b4ecb77be8f9f4e260b549084798b2ed4db0b9fba",
+  "contract_fingerprint": "a4ab6d2da1b5a8b1632b9c4b4fcb25e669fc83c6509470638324a2799859b1fc",
   "extractor_fingerprint": {
     "python": "3.12.10",
     "pymupdf": "1.27.2.3",
@@ -35,6 +35,7 @@
     "not_promoted_amends_edges": 8,
     "pages": 63,
     "promotion_decisions": 77,
+    "propositions": 2063,
     "retrieval_units": 650,
     "source_conflicts": 4,
     "source_documents": 6,
@@ -256,8 +257,8 @@
         "support_exception_ids",
         "support_kind"
       ],
-      "bytes": 6155089,
-      "sha256": "8f6d904d055a81d7c60cac895db06fcb5cc66fe6cd36d9dec92f63c3b17da434"
+      "bytes": 6170222,
+      "sha256": "cf3f373b1d0934ae122bc64c32b23f1716e5857ef51eea46ef3e1f497d20df62"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -428,6 +429,34 @@
       "bytes": 145491,
       "sha256": "4dd85d1c8648c66168513cb54bde72550b741f2e1d4dd3cbd314052965cf7183"
     },
+    "propositions.jsonl": {
+      "origin": "generated",
+      "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
+      "producer": "proposition_builder",
+      "build_stage": "claim_grounding",
+      "logical_key": "propositions",
+      "artifact_kind": "propositions",
+      "format": "jsonl",
+      "artifact_schema": 7,
+      "primary_id": "proposition_id",
+      "required_fields": [
+        "proposition_id",
+        "claim_type",
+        "legal_unit_id",
+        "predicate",
+        "object",
+        "polarity",
+        "modality",
+        "evidence_id",
+        "text_segment_id",
+        "text_span_ids",
+        "bbox_refs",
+        "source_document_id",
+        "source_sha256"
+      ],
+      "bytes": 3997201,
+      "sha256": "210e8b0f3efe617f31a330b49edc51d9e6f8a28d8eaf5307eb629dfdd11cc319"
+    },
     "retrieval_units.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
@@ -459,8 +488,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 30095090,
-      "sha256": "dd25673b215b48e2bef9eb02d07000080e1046aad1faeb52bf1720211c0bc86f"
+      "bytes": 31111299,
+      "sha256": "55ee389559301e3af6f5050a18f31fac93a85b2418459a148f3c9d5a92adf56b"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -581,8 +610,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 23331,
-      "sha256": "c2ff606f5b59a3c3bfb53cb13d2723c61a8fe3281ac562d8a8809941830641c3"
+      "bytes": 23439,
+      "sha256": "7fb5179cbc7ade796299643abd568e6850d1d04ee7f266a068e4fe11ac0b49a0"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -725,6 +754,7 @@
   "pages": "pages.jsonl",
   "pdf_health_report": "pdf_health_report.json",
   "promotion_decisions": "promotion_decisions.jsonl",
+  "propositions": "propositions.jsonl",
   "retrieval_units": "retrieval_units.jsonl",
   "runtime_projection": "runtime_projection.json",
   "schema_version": 7,

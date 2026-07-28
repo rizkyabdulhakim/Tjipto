@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from threading import RLock
 
+from tjipto.contracts.relations import is_relevance_relation
 from tjipto.contracts.evidence import source_lineage_reason
 
 
@@ -53,6 +54,7 @@ class EvidenceStore:
         self._page_text_spans: list[dict] | None = None
         self._page_text_span_by_id: dict[str, dict] | None = None
         self._raw_source_spans: list[dict] | None = None
+        self._propositions: list[dict] | None = None
         self._raw_source_span_by_support_id: dict[str, dict] | None = None
 
     @property
@@ -89,32 +91,14 @@ class EvidenceStore:
     def semantic_graph_edges(self) -> list[dict]:
         """Validated semantic projection; provenance rows are intentionally absent."""
         if self._semantic_graph_edges is None:
-            allowed = {"CONTAINS", "PART_OF", "MODIFIES", "RENAMES", "RENUMBERED_TO", "DELETES", "INSERTS"}
-            rows = [
+            self._semantic_graph_edges = sorted(
+                (
                 dict(row)
                 for row in self.graph_edges
-                if row.get("runtime_loadable") is True and row.get("edge_type") in allowed
-            ]
-            for relation in self.article_amendment_relations:
-                evidence = self.get(str(relation.get("evidence_id") or ""))
-                if (
-                    relation.get("runtime_loadable") is True
-                    and relation.get("validator_status") == "valid"
-                    and relation.get("relation_type") in allowed
-                    and evidence is not None
-                    and evidence.get("status") == "final"
-                    and bool(relation.get("bbox_refs"))
-                    and bool(self.bboxes_for(evidence["evidence_id"]))
-                ):
-                    rows.append({
-                        "edge_id": f"relation::{relation['relation_id']}",
-                        "source_id": f"legal_unit::{relation['source_legal_unit_id']}",
-                        "target_id": f"legal_unit::{relation['target_legal_unit_id']}",
-                        "edge_type": relation["relation_type"],
-                        "relation_id": relation["relation_id"],
-                        "runtime_loadable": True,
-                    })
-            self._semantic_graph_edges = sorted(rows, key=lambda row: (row["edge_id"], row["source_id"], row["target_id"]))
+                if row.get("runtime_loadable") is True and is_relevance_relation(row.get("edge_type"))
+                ),
+                key=lambda row: (row["edge_id"], row["source_id"], row["target_id"]),
+            )
         return self._semantic_graph_edges
 
     @property
@@ -164,6 +148,12 @@ class EvidenceStore:
         if self._raw_source_spans is None:
             self._raw_source_spans = _optional_jsonl(self.config, "raw_source_spans")
         return self._raw_source_spans
+
+    @property
+    def propositions(self) -> list[dict]:
+        if self._propositions is None:
+            self._propositions = _optional_jsonl(self.config, "propositions")
+        return self._propositions
 
     def get(self, evidence_id: str) -> dict | None:
         return next((row for row in self.evidence if row["evidence_id"] == evidence_id), None)

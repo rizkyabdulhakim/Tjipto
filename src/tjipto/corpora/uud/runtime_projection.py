@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tjipto.contracts.relations import is_relevance_relation
 
 RUNTIME_ARTIFACTS = (
     "evidence_registry",
@@ -18,7 +19,11 @@ RUNTIME_ARTIFACTS = (
     "source_conflicts",
 )
 
-_GRAPH_EDGE_FIELDS = ("source_id", "target_id", "edge_type")
+_GRAPH_EDGE_FIELDS = (
+    "edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id",
+    "runtime_loadable", "support_kind", "support_relation_ids", "support_evidence_ids",
+    "text_span_ids", "bbox_refs", "source_role", "temporal_context",
+)
 
 _SOURCE_SPAN_FIELDS = (
     "source_support_id",
@@ -50,9 +55,10 @@ def build_runtime_projection(**artifacts: list[dict]) -> dict:
     """The sole runtime payload; release artifacts remain the audit authority."""
     rows = {name: list(artifacts.get(name, ())) for name in RUNTIME_ARTIFACTS}
     rows["graph_edges"] = [
-        {key: row[key] for key in _GRAPH_EDGE_FIELDS}
+        {key: row[key] for key in _GRAPH_EDGE_FIELDS if key in row}
         for row in artifacts.get("graph_edges", ())
         if row.get("edge_type") in {"HAS_FINAL_EVIDENCE", "PAGE_GROUNDED_AT"}
+        or (row.get("runtime_loadable") is True and is_relevance_relation(row.get("edge_type")))
     ]
     refs = _bbox_refs(rows.values())
     words = []

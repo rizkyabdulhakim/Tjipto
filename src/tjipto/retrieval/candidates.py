@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tjipto.contracts.relations import descriptor_for, is_authority_relation, is_relevance_relation
+
 ROUTE_WEIGHT = {
     "exact": 1000.0,
     "metadata": 900.0,
@@ -72,7 +74,7 @@ def graph_expand(store, seeds: tuple[dict, ...], filters: dict, per_seed: int = 
                     target_unit = target.split("::", 1)[1]
                     row = next((item for item in evidence_by_unit.get(target_unit, ()) if _usable(store, item, filters)), None)
                     evidence_id = row.get("evidence_id") if row else None
-                    crosses_source = any(item["edge_type"] in _AUTHORITY_RELATION_EDGE_TYPES for item in next_path)
+                    crosses_source = any(is_authority_relation(item["edge_type"]) for item in next_path)
                     if not evidence_id or evidence_id in seen or not _usable(store, row, filters):
                         continue
                     if crosses_source and row is not None and row.get("source_role") != seed.get("source_role"):
@@ -95,17 +97,6 @@ def graph_expand(store, seeds: tuple[dict, ...], filters: dict, per_seed: int = 
     return tuple(out)
 
 
-_SEMANTIC_EDGE_TYPES = {
-    "CONTAINS", "PART_OF", "MODIFIES", "RENAMES", "RENUMBERED_TO", "DELETES", "INSERTS",
-}
-_INVERSES = {
-    "CONTAINS": "PART_OF", "PART_OF": "CONTAINS", "MODIFIES": "MODIFIED_BY",
-    "RENAMES": "RENAMED_FROM", "RENUMBERED_TO": "RENUMBERED_FROM",
-    "DELETES": "DELETED_BY", "INSERTS": "INSERTED_BY",
-}
-_AUTHORITY_RELATION_EDGE_TYPES = _SEMANTIC_EDGE_TYPES | set(_INVERSES.values())
-
-
 def _neighbors(store, *, semantic: bool) -> dict[str, tuple[dict, ...]]:
     graph: dict[str, list[dict]] = {}
     if semantic:
@@ -115,11 +106,15 @@ def _neighbors(store, *, semantic: bool) -> dict[str, tuple[dict, ...]]:
 
 
 def _connect(graph: dict[str, list[dict]], edge: dict) -> None:
+    if not is_relevance_relation(edge.get("edge_type")):
+        return
     source, target = edge["source_id"], edge["target_id"]
     graph.setdefault(source, []).append(edge | {"target_id": target})
-    inverse = _INVERSES.get(str(edge.get("edge_type")))
-    if inverse:
-        graph.setdefault(target, []).append(edge | {"source_id": target, "target_id": source, "edge_type": inverse})
+    descriptor = descriptor_for(edge.get("edge_type"))
+    if descriptor and descriptor.inverse:
+        graph.setdefault(target, []).append(
+            edge | {"source_id": target, "target_id": source, "edge_type": descriptor.inverse, "relation_type": descriptor.inverse}
+        )
 
 
 def _usable(store, row: dict | None, filters: dict) -> bool:

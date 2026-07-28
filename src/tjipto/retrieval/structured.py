@@ -13,7 +13,7 @@ from tjipto.corpora.parser_dispatch import (
     resolve_navigation,
 )
 from tjipto.evidence.store import EvidenceStore
-from tjipto.retrieval.metadata import resolve_source_scope
+from tjipto.corpora.source_arbitration import resolve_source_scope
 
 
 @dataclass(frozen=True)
