@@ -40,8 +40,6 @@ class EvidenceStore:
         self._source_documents: list[dict] | None = None
         self._document_metadata: list[dict] | None = None
         self._metadata_grounding: list[dict] | None = None
-        self._document_relations: list[dict] | None = None
-        self._article_amendment_relations: list[dict] | None = None
         self._metadata_bbox_by_grounding: dict[str, list[dict]] | None = None
         self._source_conflicts: list[dict] | None = None
         self._graph_edges: list[dict] | None = None
@@ -118,18 +116,6 @@ class EvidenceStore:
         if self._metadata_grounding is None:
             self._metadata_grounding = _optional_jsonl(self.config, "metadata_grounding")
         return self._metadata_grounding
-
-    @property
-    def document_relations(self) -> list[dict]:
-        if self._document_relations is None:
-            self._document_relations = _optional_jsonl(self.config, "document_relations")
-        return self._document_relations
-
-    @property
-    def article_amendment_relations(self) -> list[dict]:
-        if self._article_amendment_relations is None:
-            self._article_amendment_relations = _optional_jsonl(self.config, "article_amendment_relations")
-        return self._article_amendment_relations
 
     @property
     def source_conflicts(self) -> list[dict]:
@@ -279,14 +265,11 @@ class EvidenceStore:
                 self.evidence,
                 self.metadata_grounding,
                 self.page_text_spans,
-                self.article_amendment_relations,
+                self.graph_edges,
                 self.source_conflicts,
             )
             for artifact_row in artifact_rows
-            for field, values in artifact_row.items()
-            if "bbox" in field and isinstance(values, (list, tuple))
-            for value in values
-            if isinstance(value, str)
+            for value in _bbox_refs(artifact_row)
         }
         for row in self._word_bboxes_all():
             word_id = row["word_bbox_id"]
@@ -344,10 +327,24 @@ def _rows(config, logical_key: str) -> list[dict]:
         projection = config.json("runtime_projection")
         rows = projection.get("artifacts", {}).get(logical_key)
         if isinstance(rows, (list, tuple)):
-            return [dict(row) for row in rows]
+            return list(rows)
     except (KeyError, OSError, ValueError):
         pass
-    return [dict(row) for row in config.jsonl(logical_key)]
+    return list(config.jsonl(logical_key))
+
+
+def _bbox_refs(value: object) -> tuple[str, ...]:
+    refs: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if "bbox" in key and isinstance(item, (list, tuple)):
+                refs.extend(ref for ref in item if isinstance(ref, str))
+            elif isinstance(item, (dict, list, tuple)):
+                refs.extend(_bbox_refs(item))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            refs.extend(_bbox_refs(item))
+    return tuple(refs)
 
 
 def exact_bboxes_for_text_spans(text_spans: list[dict | None], bbox_rows: list[dict]) -> list[dict]:

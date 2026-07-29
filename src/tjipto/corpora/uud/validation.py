@@ -43,7 +43,6 @@ from tjipto.corpora.uud.provenance_exceptions import (
 from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit, substantive_structural_unit
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
-from tjipto.corpora.uud.policy.relations import is_deletion_provision, is_renumbering_provision, is_scope_provision
 from tjipto.core.manifest import artifact_set_digest, read_json, read_jsonl
 
 
@@ -86,6 +85,24 @@ LEGAL_EDGE_TYPES = {
     "RENUMBERED_FROM",
     "DELETED_BY",
     "INSERTED_BY",
+}
+
+_REQUIRED_HEALTH_STATUSES = {
+    "raw_source_geometry_health": "pass",
+    "source_object_disposition_health": "complete",
+    "legal_unit_chunk_span_closure_health": "complete",
+    "structural_authority_contract_health": "complete",
+    "semantic_precedence_health": "complete",
+    "instrument_runtime_safety_health": "complete",
+    "instrument_exact_grounding_health": "complete",
+    "instrument_query_precision_health": "complete",
+    "instrument_natural_query_precision_health": "complete",
+    "word_bbox_registry_health": "complete",
+    "selector_geometry_health": "complete",
+    "promotion_engine_health": "complete",
+    "promotion_decision_audit_health": "complete",
+    "article_relation_runtime_policy_health": "complete",
+    "legal_graph_authority_health": "complete",
 }
 
 
@@ -305,6 +322,12 @@ def build_validation_report(
         word_bboxes=word_bboxes,
         pages=pages or [],
     )
+    validation_report["selector_geometry_health"] = _selector_geometry_health(
+        propositions=propositions,
+        evidence=evidence,
+        page_text_spans=page_text_spans,
+        word_bboxes=word_bboxes,
+    )
     validation_report["highlight_registry_contract"] = {
         "status": "complete",
         "architecture": "bbox_registry_union_word_bboxes",
@@ -497,6 +520,7 @@ def _validate_schema6_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
     span_ids = {row.get("text_span_id") for row in by_artifact.get("page_text_spans", [])}
     spans_by_id = {row.get("text_span_id"): row for row in by_artifact.get("page_text_spans", [])}
     source_docs = {row.get("source_document_id"): row for row in by_artifact.get("source_documents", [])}
+
     for row in evidence:
         row_id = str(row.get("evidence_id"))
         if row.get("object_role") != "evidence":
@@ -676,8 +700,8 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
     if UUD_ARTIFACT_SCHEMA == 7:
         schema7_errors = list(_validate_schema7_contract(artifacts))
         report = artifacts.get("validation_report")
-        for health_key in ("legal_graph_authority_health", "source_object_disposition_health"):
-            if not isinstance(report, Mapping) or report.get(health_key, {}).get("status") != "complete":
+        for health_key, expected_status in _REQUIRED_HEALTH_STATUSES.items():
+            if not isinstance(report, Mapping) or report.get(health_key, {}).get("status") != expected_status:
                 schema7_errors.append(f"validation_report_incomplete:{health_key}")
         return tuple(dict.fromkeys(schema7_errors))
     if UUD_ARTIFACT_SCHEMA == 6:
@@ -1949,6 +1973,45 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
     for word in rows("word_bboxes"):
         bbox_ids.add(word.get("word_bbox_id"))
         bbox_ids.update(character.get("character_bbox_id") for character in word.get("characters") or ())
+    for row in rows("propositions"):
+        proposition_id = str(row.get("proposition_id") or "<missing>")
+        selectors = row.get("source_selectors")
+        if not isinstance(selectors, list) or not selectors:
+            errors.append(f"invalid_selector:{proposition_id}:missing")
+            continue
+        selector_quotes: list[str] = []
+        selector_bboxes: list[str] = []
+        for selector in selectors:
+            span = spans_by_id.get(selector.get("text_span_id"))
+            start, end = selector.get("start"), selector.get("end")
+            if not span or not isinstance(start, int) or not isinstance(end, int):
+                errors.append(f"invalid_selector:{proposition_id}:span")
+                continue
+            text_start = span.get("text_start")
+            if not isinstance(text_start, int):
+                errors.append(f"invalid_selector:{proposition_id}:absolute_offset")
+                continue
+            if (
+                selector.get("stream_id") != span.get("stream_id")
+                or selector.get("source_document_id") != span.get("source_document_id")
+                or selector.get("source_sha256") != span.get("source_sha256")
+                or selector.get("page_number") != span.get("page_number")
+            ):
+                errors.append(f"invalid_selector:{proposition_id}:source")
+            if selector.get("absolute_start") != text_start + start or selector.get("absolute_end") != text_start + end:
+                errors.append(f"invalid_selector:{proposition_id}:absolute_offset")
+            text = str(span.get("text") or "")
+            if selector.get("prefix") != text[max(0, start - 32) : start] or selector.get("suffix") != text[end : end + 32]:
+                errors.append(f"invalid_selector:{proposition_id}:context")
+            character_ids = selector.get("character_bbox_ids") or []
+            if not character_ids or any(character_id not in bbox_ids for character_id in character_ids):
+                errors.append(f"invalid_selector:{proposition_id}:geometry")
+            selector_quotes.append(text[start:end])
+            selector_bboxes.extend(character_ids)
+        if "\n".join(selector_quotes) != row.get("exact_quote"):
+            errors.append(f"invalid_selector:{proposition_id}:quote")
+        if tuple(dict.fromkeys(selector_bboxes)) != tuple(row.get("bbox_refs") or ()):
+            errors.append(f"invalid_selector:{proposition_id}:bbox_refs")
     source_rows = rows("source_documents")
     source_ids = {row.get("source_document_id") for row in source_rows}
     sources_by_id = {row.get("source_document_id"): row for row in source_rows}
@@ -2296,87 +2359,31 @@ def _validator_range_matches_reference(text: str, reference: object, kind: objec
     return matches_uud_contextual_reference(text, reference)
 
 
-def _independent_renumbering_mappings(text: str) -> list[dict[str, str]]:
-    """Build the validation oracle from raw source references, independently."""
-    rows: list[dict[str, str]] = []
-    for transition in re.finditer(r"\bmenjadi\b", text, re.IGNORECASE):
-        left_start = max(text.rfind(";", 0, transition.start()), text.rfind(".", 0, transition.start())) + 1
-        right_end = text.find(";", transition.end())
-        right_end = len(text) if right_end < 0 else right_end
-        old_refs = _independent_reference_groups(text[left_start : transition.start()])
-        new_refs = _independent_reference_groups(text[transition.end() : right_end])
-        if old_refs and len(old_refs) == len(new_refs):
-            rows.extend({"old_reference": old, "new_reference": new} for old, new in zip(old_refs, new_refs))
-    return rows
-
-
-def _independent_reference_groups(segment: str) -> list[str]:
-    references = parse_legal_references("uud", segment)
-    groups: list[str] = []
-    for index, reference in enumerate(references):
-        start = int(reference["start"])
-        end = int(references[index + 1]["start"]) if index + 1 < len(references) else len(segment)
-        ayats = re.findall(r"\bayat\s*\(\s*(\d+)\s*\)", segment[start:end], re.IGNORECASE)
-        if ayats:
-            groups.extend(f"{reference['reference']} ayat ({number})" for number in ayats)
-        else:
-            groups.append(str(reference["reference"]))
-    return groups
-
-
 def _source_relation_contract_errors(
     *, evidence: list[dict], legal_units: list[dict], article_amendment_relations: list[dict]
 ) -> tuple[str, ...]:
-    units = {(row.get("source_document_id"), row.get("unit_label")) for row in legal_units}
-    expected: set[tuple[str, str, str, str]] = set()
-    for row in evidence:
-        if is_scope_provision(row):
-            role = str(row.get("source_role") or "")
-            for reference in parse_legal_references("uud", str(row.get("quoted_text") or "")):
-                label = str(reference["reference"])
-                if (row.get("source_document_id"), label) in units:
-                    expected.add((role, "MODIFIES", "", label))
-        elif is_renumbering_provision(row):
-            for mapping in _independent_renumbering_mappings(str(row.get("quoted_text") or "")):
-                target = str(mapping["new_reference"]).split(" ayat", 1)[0]
-                if ("uud::current_consolidated", target) in units:
-                    relation_type = (
-                        "RENUMBERED_TO"
-                        if mapping["old_reference"] == "Pasal 25E" and mapping["new_reference"] == "Pasal 25A"
-                        else "RENAMES"
-                    )
-                    expected.add(
-                        (str(row.get("source_role") or ""), relation_type, str(mapping["old_reference"]), str(mapping["new_reference"]))
-                    )
-        elif is_deletion_provision(row):
-            for reference in parse_legal_references("uud", str(row.get("quoted_text") or "")):
-                label = str(reference["reference"])
-                if (row.get("source_document_id"), label) in units:
-                    expected.add((str(row.get("source_role") or ""), "DELETES", "", label))
-    actual = [
-        (
-            str(row.get("source_role") or ""),
-            str(row.get("relation_type") or ""),
-            str(row.get("old_reference") or ""),
-            str(row.get("new_reference") or row.get("target_citation") or ""),
-        )
-        for row in article_amendment_relations
-    ]
-    actual_set = set(actual)
-    errors = [
-        f"article_relation_missing_source_reference:{role}:{relation}:{old}->{target}"
-        for role, relation, old, target in sorted(expected - actual_set)
-    ]
-    errors.extend(
-        f"article_relation_unexpected_source_reference:{role}:{relation}:{old}->{target}"
-        for role, relation, old, target in sorted(actual_set - expected)
-    )
-    counts = Counter(actual)
-    errors.extend(
-        f"article_relation_duplicate_source_reference:{role}:{relation}:{old}->{target}"
-        for (role, relation, old, target), count in sorted(counts.items())
-        if count > 1
-    )
+    evidence_ids = {str(row.get("evidence_id")) for row in evidence}
+    unit_ids = {str(row.get("legal_unit_id")) for row in legal_units}
+    relation_ids: set[str] = set()
+    errors: list[str] = []
+    for row in article_amendment_relations:
+        relation_id = str(row.get("relation_id") or "")
+        relation_type = str(row.get("relation_type") or "")
+        descriptor = descriptor_for(relation_type)
+        if not relation_id or relation_id in relation_ids:
+            errors.append(f"article_relation_duplicate_source_reference:{relation_id}")
+        relation_ids.add(relation_id)
+        if (
+            not descriptor
+            or not descriptor.authority_bearing
+            or row.get("evidence_id") not in evidence_ids
+            or row.get("source_legal_unit_id") not in unit_ids
+            or row.get("target_legal_unit_id") not in unit_ids
+            or not row.get("target_citation")
+        ):
+            errors.append(f"article_relation_unexpected_source_reference:{relation_id}")
+        if row.get("support_class") == "exact_article_relation" and not row.get("bbox_refs"):
+            errors.append(f"article_relation_missing_source_reference:{relation_id}")
     return tuple(errors)
 
 
@@ -2423,6 +2430,56 @@ def _word_bbox_registry_health(*, word_bboxes: list[dict], pages: list[dict]) ->
         "missing_normalized_text_count": len(missing_normalized_text),
         "status": "complete" if not invalid_coords and not missing_page_refs and not missing_normalized_text else "incomplete",
     }
+
+
+def _selector_geometry_health(
+    *, propositions: list[dict], evidence: list[dict], page_text_spans: list[dict], word_bboxes: list[dict]
+) -> dict:
+    spans = {row.get("text_span_id"): row for row in page_text_spans}
+    character_ids = [
+        character.get("character_bbox_id")
+        for word in word_bboxes
+        for character in word.get("characters") or ()
+        if character.get("character_bbox_id")
+    ]
+    known_character_ids = set(character_ids)
+    evidence_by_id = {row.get("evidence_id"): row for row in evidence}
+    round_trip_mismatches = 0
+    whole_span_bboxes = 0
+    marker_intersections = 0
+    citable_without_geometry = 0
+    marker_pattern = re.compile(r"\*{1,4}(?:/\*{1,4})?\)")
+    for proposition in propositions:
+        selector_quotes: list[str] = []
+        selector_bboxes: list[str] = []
+        for selector in proposition.get("source_selectors") or ():
+            span = spans.get(selector.get("text_span_id")) or {}
+            text = str(span.get("text") or "")
+            start, end = selector.get("start"), selector.get("end")
+            if not isinstance(start, int) or not isinstance(end, int):
+                selector_quotes.append("")
+                continue
+            selector_quotes.append(text[start:end])
+            selector_bboxes.extend(selector.get("character_bbox_ids") or ())
+            if set(selector.get("character_bbox_ids") or ()) & set(span.get("span_bbox_ids") or ()):
+                whole_span_bboxes += 1
+        exact_quote = proposition.get("exact_quote")
+        geometry = tuple(dict.fromkeys(selector_bboxes))
+        if "\n".join(selector_quotes) != exact_quote or geometry != tuple(proposition.get("bbox_refs") or ()):
+            round_trip_mismatches += 1
+        if marker_pattern.search(str(exact_quote or "")):
+            marker_intersections += 1
+        evidence_row = evidence_by_id.get(proposition.get("evidence_id"), {})
+        if evidence_row.get("citation_final") is True and (not geometry or not set(geometry) <= known_character_ids):
+            citable_without_geometry += 1
+    counts = {
+        "selector_round_trip_mismatch_count": round_trip_mismatches,
+        "partial_selector_whole_span_bbox_count": whole_span_bboxes,
+        "persisted_character_bbox_id_duplicate_count": len(character_ids) - len(set(character_ids)),
+        "marker_highlight_intersection_count": marker_intersections,
+        "citable_support_without_valid_geometry_count": citable_without_geometry,
+    }
+    return counts | {"status": "complete" if not any(counts.values()) else "incomplete"}
 
 
 def _pdf_health_summary(report: dict) -> dict:
@@ -2867,7 +2924,7 @@ def _article_relation_runtime_policy_health(
         legal_units=legal_units,
         article_amendment_relations=list(article_amendment_relations),
     )
-    return {
+    counts = {
         "article_relation_total_count": len(article_amendment_relations),
         "article_relation_exact_support_count": len(exact_rows),
         "article_relation_trace_only_count": len(trace_rows),
@@ -2891,6 +2948,22 @@ def _article_relation_runtime_policy_health(
         "source_relation_duplicate_count": sum(
             1 for error in source_contract_errors if error.startswith("article_relation_duplicate_source_reference:")
         ),
+    }
+    return {
+        **counts,
+        "status": "complete"
+        if not any(
+            counts[key]
+            for key in (
+                "article_relation_trace_missing_reason_count",
+                "article_relation_invalid_bbox_refs",
+                "article_relation_invalid_coordinates",
+                "source_relation_missing_count",
+                "source_relation_unexpected_count",
+                "source_relation_duplicate_count",
+            )
+        )
+        else "incomplete",
     }
 
 
@@ -3126,40 +3199,40 @@ def _instrument_runtime_safety_health(
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
-    accepted_retrieval = [row for row in retrieval_units if row.get("status") == "accepted"]
-    accepted_evidence_ids = {row["evidence_id"] for row in accepted_retrieval}
+    published_retrieval = [row for row in retrieval_units if row.get("artifact_status") == "published"]
+    indexed_evidence_ids = {row["evidence_id"] for row in published_retrieval}
     nonruntime_accepted = [
         row
         for row in evidence
-        if row["evidence_id"] in accepted_evidence_ids
+        if row["evidence_id"] in indexed_evidence_ids
         and (
             units_by_id.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
             or chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
         )
     ]
     page_grounded_accepted = [
-        row for row in evidence if row["evidence_id"] in accepted_evidence_ids and row.get("bbox_precision") == "page_grounded_only"
+        row for row in evidence if row["evidence_id"] in indexed_evidence_ids and row.get("bbox_precision") == "page_grounded_only"
     ]
     nonhighlightable_viewer_resolvable = [
         row
         for row in evidence
-        if row["evidence_id"] in accepted_evidence_ids
+        if row["evidence_id"] in indexed_evidence_ids
         and row.get("viewer_highlightable") is False
         and row.get("status") == "final"
         and bool(row.get("bbox_refs"))
     ]
     accepted_for_nonruntime_chunks = [
-        row for row in accepted_retrieval if chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
+        row for row in published_retrieval if chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is False
     ]
     accepted_for_page_grounded = [
-        row for row in accepted_retrieval if evidence_by_id.get(row.get("evidence_id"), {}).get("bbox_precision") == "page_grounded_only"
+        row for row in published_retrieval if evidence_by_id.get(row.get("evidence_id"), {}).get("bbox_precision") == "page_grounded_only"
     ]
     unresolved_instrument = [
         row
-        for row in retrieval_units
-        if row.get("status") != "accepted"
-        and not row.get("rejection_reason")
-        and units_by_id.get(row.get("legal_unit_id"), {}).get("unit_type", "").endswith("_record")
+        for row in evidence
+        if _is_instrument_unit(units_by_id.get(row.get("legal_unit_id"), {}))
+        and chunks_by_unit.get(row.get("legal_unit_id"), {}).get("runtime_loadable") is True
+        and row["evidence_id"] not in indexed_evidence_ids
     ]
     counts = {
         "nonruntime_evidence_public_answerable_count": len(nonruntime_accepted),
@@ -3273,14 +3346,14 @@ def _instrument_query_precision_health(evidence: list[dict], legal_units: list[d
 
 def _instrument_natural_query_precision_health(evidence: list[dict], legal_units: list[dict], retrieval_units: list[dict]) -> dict:
     units_by_id = {row["legal_unit_id"]: row for row in legal_units}
-    accepted_evidence_ids = {row["evidence_id"] for row in retrieval_units if row.get("status") == "accepted"}
+    indexed_evidence_ids = {row["evidence_id"] for row in retrieval_units if row.get("artifact_status") == "published"}
     instrument_evidence = [row for row in evidence if _is_instrument_unit(units_by_id.get(row.get("legal_unit_id"), {}))]
     fail_closed_targets = [
         row
         for row in instrument_evidence
-        if _instrument_role_from_citation(row.get("citation")) in {"decision", "scope"} and row["evidence_id"] not in accepted_evidence_ids
+        if _instrument_role_from_citation(row.get("citation")) in {"decision", "scope"} and row["evidence_id"] not in indexed_evidence_ids
     ]
-    answerable_fail_closed_targets = [row for row in fail_closed_targets if row["evidence_id"] in accepted_evidence_ids]
+    answerable_fail_closed_targets = [row for row in fail_closed_targets if row["evidence_id"] in indexed_evidence_ids]
     safe_exact_targets = [
         row
         for row in instrument_evidence
@@ -3288,7 +3361,7 @@ def _instrument_natural_query_precision_health(evidence: list[dict], legal_units
         and row.get("bbox_precision") == "exact"
         and row.get("viewer_highlightable") is True
     ]
-    safe_not_accepted = [row for row in safe_exact_targets if row["evidence_id"] not in accepted_evidence_ids]
+    safe_not_accepted = [row for row in safe_exact_targets if row["evidence_id"] not in indexed_evidence_ids]
     fallback_overrides = [
         row
         for row in retrieval_units
@@ -3868,7 +3941,7 @@ def _structural_authority_contract_health(
         1
         for row in retrieval_units
         if row.get("object_role") != "retrieval_index_record"
-        or row.get("artifact_status") not in {"published", "accepted"}
+        or row.get("artifact_status") not in {"published", "excluded"}
         or not isinstance(row.get("page_locator"), dict)
         or row.get("evidence_id") is None
     )

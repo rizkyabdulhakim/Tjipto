@@ -82,7 +82,7 @@ _INTEGRITY_REASONS = frozenset(
 )
 _CI_GATES = frozenset(
     {
-        "compileall", "unittest", "pytest", "retrieval_evaluation", "artifact_validate", "artifact_rebuild", "ruff", "mypy",
+        "compileall", "unittest", "pytest", "pytest_run_1", "pytest_run_2", "retrieval_evaluation", "artifact_validate", "artifact_rebuild", "ruff", "mypy",
         "bandit", "pip_check", "pip_audit", "clean_tree", "release_validation", "web_test", "web_lint", "web_typecheck",
         "web_build", "web_smoke",
     }

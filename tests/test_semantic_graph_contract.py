@@ -48,6 +48,19 @@ class SemanticGraphContractTest(unittest.TestCase):
         self.assertTrue(all(edge["edge_type"] == "AMENDED_BY" for edge in edges))
         self.assertTrue(all(edge["relation_id"].startswith("uud_document_relation::") for edge in edges))
 
+    def test_runtime_relation_edges_embed_their_audited_projection(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        assert config is not None
+        projection = config.json("runtime_projection")["artifacts"]
+        self.assertNotIn("document_relations", projection)
+        self.assertNotIn("article_amendment_relations", projection)
+        relation_edges = [edge for edge in projection["graph_edges"] if edge.get("relation_id")]
+        self.assertTrue(relation_edges)
+        for edge in relation_edges:
+            relation = edge.get("relation_projection") or {}
+            self.assertEqual(relation.get("relation_id"), edge["relation_id"])
+            self.assertEqual(relation.get("relation_type"), edge["edge_type"])
+
 
 if __name__ == "__main__":
     unittest.main()

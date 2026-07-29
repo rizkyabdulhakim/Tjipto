@@ -273,7 +273,7 @@ ARTIFACT_OPTIONAL_FIELDS: dict[str, frozenset[str]] = {
     }),
     "bbox_registry": frozenset({"object_role"}),
     "retrieval_units": frozenset({"object_role", "retrieval_terms", "page_locator"}),
-    "graph_edges": frozenset({"object_role", "support_relation_ids", "support_evidence_ids", "support_exception_ids"}),
+    "graph_edges": frozenset({"object_role", "support_relation_ids", "support_evidence_ids", "support_exception_ids", "relation_projection"}),
     "document_relations": frozenset({"object_role", "support_relation_ids", "support_evidence_ids", "support_exception_ids", "support_kind"}),
     "metadata_grounding": frozenset({
         "object_role", "authority_kind", "citable", "citation_final", "exactness", "evidence_exists", "reason_code",
@@ -355,7 +355,7 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
     "graph_edges": frozenset({
         "artifact_status", "confidence_policy", "derivation_basis", "derivation_method", "derivation_reason", "edge_id", "edge_type",
         "object_role", "provenance_ref", "provenance_ref_kind", "provenance_support", "reason_code", "relation_id", "relation_type", "derived_from_edge_id",
-        "runtime_loadable", "source_document_id", "source_id", "source_node_type", "source_role", "support_evidence_ids",
+        "runtime_loadable", "source_document_id", "source_id", "source_node_type", "source_role", "support_evidence_ids", "relation_projection",
         "support_exception_ids", "support_kind", "support_relation_ids", "target_id", "target_node_type", "temporal_context", "validation_status",
     }),
     "graph_nodes": frozenset({

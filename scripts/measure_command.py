@@ -52,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run one CI gate and write bounded JSON evidence.")
     parser.add_argument("--gate")
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--result-report", type=Path)
     parser.add_argument("--environment-report", type=Path)
     parser.add_argument("--corpus", action="append", default=[])
     parser.add_argument("command", nargs=argparse.REMAINDER)
@@ -76,6 +77,9 @@ def main(argv: list[str] | None = None) -> int:
             args.report.parent.mkdir(parents=True, exist_ok=True)
             with args.report.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record, sort_keys=True) + "\n")
+    if args.result_report:
+        args.result_report.parent.mkdir(parents=True, exist_ok=True)
+        args.result_report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if args.environment_report:
         args.environment_report.parent.mkdir(parents=True, exist_ok=True)
         args.environment_report.write_text(json.dumps(_environment_report(args.corpus), indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -103,6 +107,8 @@ def _environment_report(corpus_ids: list[str] | None = None) -> dict:
     return {
         "commit_sha": _command_output(root, "git", "rev-parse", "HEAD"),
         "tree_sha": _command_output(root, "git", "rev-parse", "HEAD^{tree}"),
+        "parent_sha": _command_output(root, "git", "rev-parse", "HEAD^"),
+        "branch": os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME") or _command_output(root, "git", "branch", "--show-current"),
         "workflow_ref": os.environ.get("GITHUB_WORKFLOW_REF"),
         "run_id": os.environ.get("GITHUB_RUN_ID"),
         "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),

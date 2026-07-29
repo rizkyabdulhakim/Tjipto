@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 import re
+import unicodedata
 
 
 _BOUNDARY = re.compile(r"[.!?;,:]")
@@ -15,7 +16,9 @@ _OPERATORS = {
 }
 
 
-def build_propositions(*, legal_units: list[dict], evidence: list[dict], page_text_spans: list[dict]) -> list[dict]:
+def build_propositions(
+    *, legal_units: list[dict], evidence: list[dict], page_text_spans: list[dict], word_bboxes: list[dict]
+) -> list[dict]:
     """Publish only complete, BBox-backed source clauses."""
     spans = {str(row.get("text_span_id")): row for row in page_text_spans}
     evidence_by_span: dict[str, list[dict]] = {}
@@ -28,6 +31,7 @@ def build_propositions(*, legal_units: list[dict], evidence: list[dict], page_te
     # Emit propositions only from leaf units so the same source sentence
     # cannot be republished through a BAB/Pasal and one of its Ayat.
     parents = {str(row.get("parent_legal_unit_id")) for row in legal_units if row.get("parent_legal_unit_id")}
+    words_by_id = {str(row.get("word_bbox_id")): row for row in word_bboxes}
     rows = []
     for unit in legal_units:
         unit_id = str(unit.get("legal_unit_id") or "")
@@ -36,7 +40,7 @@ def build_propositions(*, legal_units: list[dict], evidence: list[dict], page_te
         record: dict | None = _evidence_for_unit(unit, evidence_by_span)
         if record is None:
             continue
-        for segment_index, segment in enumerate(_segments(unit, spans)):
+        for segment_index, segment in enumerate(_segments(unit, spans, words_by_id)):
             quoted = segment["exact_quote"]
             normalized = _normalize(quoted)
             if not normalized or not segment["bbox_refs"]:
@@ -83,7 +87,7 @@ def _evidence_for_unit(unit: dict, evidence_by_span: dict[str, list[dict]]) -> d
     )
 
 
-def _segments(unit: dict, spans: dict[str, dict]) -> tuple[dict, ...]:
+def _segments(unit: dict, spans: dict[str, dict], words_by_id: dict[str, dict]) -> tuple[dict, ...]:
     selected = [spans[span_id] for span_id in unit.get("text_span_ids") or () if span_id in spans]
     if not selected:
         return ()
@@ -101,18 +105,30 @@ def _segments(unit: dict, spans: dict[str, dict]) -> tuple[dict, ...]:
     start = 0
     for match in _BOUNDARY.finditer(text):
         end = match.end()
-        row = _segment(text, mapping, selected, start, end, match.group())
+        row = _segment(text, mapping, selected, words_by_id, start, end, match.group())
         if row:
             rows.append(row)
         start = end
-    row = _segment(text, mapping, selected, start, len(text), "source_end")
+    row = _segment(text, mapping, selected, words_by_id, start, len(text), "source_end")
     if row:
         rows.append(row)
     return tuple(rows)
 
 
-def _segment(text: str, mapping: list[tuple[str, int] | None], spans: list[dict], start: int, end: int, boundary: str) -> dict | None:
-    quote = text[start:end].strip()
+def _segment(
+    text: str,
+    mapping: list[tuple[str, int] | None],
+    spans: list[dict],
+    words_by_id: dict[str, dict],
+    start: int,
+    end: int,
+    boundary: str,
+) -> dict | None:
+    raw_quote = text[start:end]
+    left = len(raw_quote) - len(raw_quote.lstrip())
+    right = len(raw_quote.rstrip())
+    start, end = start + left, start + right
+    quote = text[start:end]
     if not _normalize(quote):
         return None
     ids = []
@@ -129,17 +145,62 @@ def _segment(text: str, mapping: list[tuple[str, int] | None], spans: list[dict]
     if not ids:
         return None
     span_by_id = {str(row["text_span_id"]): row for row in spans}
+    selector_rows = []
+    for span_id, offsets in selectors.items():
+        span = span_by_id[span_id]
+        character_ids = _selected_character_ids(span, offsets[0], offsets[1], words_by_id)
+        if not character_ids:
+            return None
+        selector_rows.append(
+            {
+                "text_span_id": span_id,
+                "start": offsets[0],
+                "end": offsets[1],
+                "stream_id": span["stream_id"],
+                "absolute_start": span["text_start"] + offsets[0],
+                "absolute_end": span["text_start"] + offsets[1],
+                "prefix": span["text"][max(0, offsets[0] - 32) : offsets[0]],
+                "suffix": span["text"][offsets[1] : offsets[1] + 32],
+                "source_document_id": span["source_document_id"],
+                "source_sha256": span["source_sha256"],
+                "page_number": span["page_number"],
+                "character_bbox_ids": character_ids,
+            }
+        )
     return {
         "exact_quote": quote,
         "text_span_ids": ids,
-        "source_selectors": [
-            {"text_span_id": span_id, "start": offsets[0], "end": offsets[1]}
-            for span_id, offsets in selectors.items()
-        ],
-        "bbox_refs": list(dict.fromkeys(ref for span_id in ids for ref in span_by_id[span_id].get("span_bbox_ids") or ())),
+        "source_selectors": selector_rows,
+        "bbox_refs": list(dict.fromkeys(char_id for selector in selector_rows for char_id in selector["character_bbox_ids"])),
         "page_numbers": sorted({int(span_by_id[span_id]["page_number"]) for span_id in ids}),
         "terminal_boundary": boundary,
     }
+
+
+def _selected_character_ids(span: dict, start: int, end: int, words_by_id: dict[str, dict]) -> list[str]:
+    """Return one unambiguous visible-character slice; partial quotes never inherit a span box."""
+    selected = str(span.get("text") or "")[start:end]
+    target = _visible(selected)
+    if not target:
+        return []
+    characters = [
+        character
+        for bbox_id in span.get("span_bbox_ids") or ()
+        for character in (words_by_id.get(str(bbox_id), {}).get("characters") or ())
+    ]
+    visible = "".join(str(character.get("text") or "") for character in characters)
+    match_start = visible.find(target)
+    if match_start < 0 or visible.find(target, match_start + 1) >= 0:
+        return []
+    return [
+        str(character["character_bbox_id"])
+        for character in characters[match_start : match_start + len(target)]
+        if character.get("character_bbox_id")
+    ]
+
+
+def _visible(value: str) -> str:
+    return "".join(character for character in unicodedata.normalize("NFKC", value) if not character.isspace())
 
 
 def _normalize(text: str) -> str:

@@ -91,6 +91,31 @@ class PdfTextSpanCoverageTest(unittest.TestCase):
         markers = [row for row in rows if row["classification"] == "source_annotation_marker"]
         self.assertTrue(all(not row.get("semantic_text") for row in markers))
 
+    def test_proposition_selectors_use_trimmed_character_geometry(self) -> None:
+        spans = {row["text_span_id"]: row for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
+        characters = {
+            character["character_bbox_id"]
+            for word in read_jsonl(FINAL / "word_bboxes.jsonl")
+            for character in word.get("characters") or ()
+        }
+        propositions = read_jsonl(FINAL / "propositions.jsonl")
+        self.assertTrue(propositions)
+        for proposition in propositions:
+            quotes = []
+            selected_ids = []
+            for selector in proposition["source_selectors"]:
+                span = spans[selector["text_span_id"]]
+                start, end = selector["start"], selector["end"]
+                self.assertEqual(span["text"][start:end], span["text"][start:end].strip())
+                self.assertEqual(selector["absolute_start"], span["text_start"] + start)
+                self.assertEqual(selector["absolute_end"], span["text_start"] + end)
+                self.assertFalse(set(selector["character_bbox_ids"]) & set(span["span_bbox_ids"]))
+                self.assertTrue(set(selector["character_bbox_ids"]) <= characters)
+                quotes.append(span["text"][start:end])
+                selected_ids.extend(selector["character_bbox_ids"])
+            self.assertEqual(proposition["exact_quote"], "\n".join(quotes))
+            self.assertEqual(proposition["bbox_refs"], list(dict.fromkeys(selected_ids)))
+
 
 if __name__ == "__main__":
     unittest.main()

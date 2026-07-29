@@ -12,7 +12,7 @@ from tjipto.corpora.uud.structure_builder import compact, matching_sequence
 
 def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict]:
     chunks_by_unit = {row["legal_unit_id"]: row for row in chunks}
-    return [
+    rows = [
         {
             "chunk_id": chunks_by_unit[row["legal_unit_id"]]["chunk_id"],
             "evidence_id": row["evidence_id"],
@@ -27,8 +27,10 @@ def build_retrieval_units(evidence: list[dict], chunks: list[dict]) -> list[dict
             "text": _retrieval_unit_text(row),
         }
         | _constitutional_retrieval_fields(row)
+        | _retrieval_answerability(row, chunks_by_unit[row["legal_unit_id"]])
         for row in sorted(evidence, key=lambda item: item["evidence_id"])
     ]
+    return [row for row in rows if row["artifact_status"] == "published"]
 
 
 def _constitutional_retrieval_fields(row: dict) -> dict:
@@ -47,18 +49,18 @@ def _constitutional_retrieval_fields(row: dict) -> dict:
 
 def _retrieval_answerability(evidence: dict, chunk: dict) -> dict:
     if evidence.get("bbox_precision") == "page_grounded_only":
-        return {"status": "excluded_public_answer", "rejection_reason": "page_grounded_only_not_answerable"}
+        return {"artifact_status": "excluded"}
     if evidence.get("bbox_precision") != "exact":
-        return {"status": "excluded_public_answer", "rejection_reason": "missing_exact_grounding"}
+        return {"artifact_status": "excluded"}
     if evidence.get("viewer_highlightable") is False:
-        return {"status": "excluded_public_answer", "rejection_reason": "viewer_not_highlightable"}
+        return {"artifact_status": "excluded"}
     if not evidence.get("text_span_ids"):
-        return {"status": "excluded_public_answer", "rejection_reason": "missing_exact_text_span_support"}
+        return {"artifact_status": "excluded"}
     if not (evidence.get("bbox_ids") or evidence.get("bbox_refs")):
-        return {"status": "excluded_public_answer", "rejection_reason": "missing_bbox"}
+        return {"artifact_status": "excluded"}
     if chunk.get("runtime_loadable") is False:
-        return {"status": "excluded_public_answer", "rejection_reason": "linked_chunk_not_runtime_loadable"}
-    return {"status": "accepted"}
+        return {"artifact_status": "excluded"}
+    return {"artifact_status": "published"}
 
 
 def apply_chunk_grounding(

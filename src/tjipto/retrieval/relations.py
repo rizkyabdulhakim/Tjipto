@@ -86,12 +86,11 @@ def amendment_relation_lookup(store, query: str) -> tuple[dict, tuple[dict, ...]
         )
     relation_types = set(target.get("relation_types") or ())
     role = target.get("role")
-    relation_by_id = {row.get("relation_id"): row for row in store.article_amendment_relations}
     rows = []
     for edge in store.graph_edges:
         if edge.get("edge_type") not in relation_types or not edge.get("relation_id"):
             continue
-        relation = relation_by_id.get(edge["relation_id"])
+        relation = edge.get("relation_projection") or {}
         if relation is None or relation.get("runtime_loadable") is not True:
             continue
         if role and relation.get("source_role") != role:

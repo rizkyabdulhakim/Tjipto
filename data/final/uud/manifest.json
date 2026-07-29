@@ -6,7 +6,7 @@
   "corpus_id": "uud",
   "contract_id": "tjipto.uud.artifact-contract",
   "contract_version": 7,
-  "contract_fingerprint": "34505306c5af793d93bd6268a85f7b3ce48522f3265a4cdb8d2b11f83a326fab",
+  "contract_fingerprint": "0e97f9ffeda25b66e8b7b9da92f93a89cf51637c30ccf9f8cb81b154a785cc0b",
   "extractor_fingerprint": {
     "python": "3.12.10",
     "pymupdf": "1.27.2.3",
@@ -35,8 +35,8 @@
     "not_promoted_amends_edges": 8,
     "pages": 63,
     "promotion_decisions": 75,
-    "propositions": 1019,
-    "retrieval_units": 650,
+    "propositions": 877,
+    "retrieval_units": 647,
     "source_conflicts": 4,
     "source_documents": 6,
     "source_objects": 705,
@@ -258,8 +258,8 @@
         "support_exception_ids",
         "support_kind"
       ],
-      "bytes": 6258921,
-      "sha256": "25748d74f68b458ca4cddb72022aa590bf1615a0f3911f567fa05d5059fe4e12"
+      "bytes": 7014429,
+      "sha256": "3b191a54c503d1b148eef1e4bd5006d63b7bb4e492a1f4c60e153e0e3aea95dc"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -455,8 +455,8 @@
         "source_document_id",
         "source_sha256"
       ],
-      "bytes": 2093418,
-      "sha256": "e59906ecad20da5ab945acfd6c7440f39a86d811b99c1b0abf1070e30f368d42"
+      "bytes": 8969020,
+      "sha256": "3e3b857a0e02f5d9f4e8c066d234b7d959e05000915c98c74ccb58ed8d8e4d54"
     },
     "retrieval_units.jsonl": {
       "origin": "generated",
@@ -477,8 +477,8 @@
         "artifact_status",
         "page_locator"
       ],
-      "bytes": 770320,
-      "sha256": "3c6de967a0dc17310d065abbc7c9f085e38e76c3a2f7d4ee85909ad33162bb7f"
+      "bytes": 766898,
+      "sha256": "90271718c7e3464ea00a215326456ca6c2863b0e643a30be646a50e0d3a9980a"
     },
     "runtime_projection.json": {
       "origin": "generated",
@@ -489,8 +489,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 31445196,
-      "sha256": "9fdba66e58d6ae9e3fc0761801725d54790aa5e07748941133757883774a8fe0"
+      "bytes": 17148195,
+      "sha256": "883797c899b355f08948dbc831e41c5b609ed619a4887e252c9882cd74f4a6a3"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -637,8 +637,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 24513,
-      "sha256": "ca5f4cacf306d11330883fb8fd2e72732ae018c7e4970d638c0bfd5431cc81eb"
+      "bytes": 24840,
+      "sha256": "8d23e52ddf28e53714db27d259cc836e5bb0d76860b76a57a344d3507e242a88"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

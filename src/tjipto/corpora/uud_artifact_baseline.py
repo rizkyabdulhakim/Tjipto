@@ -28,6 +28,7 @@ from tjipto.corpora.uud.relation_builder import (
     build_article_amendment_relations,
     build_document_relations,
     materialize_document_relation_edges,
+    materialize_relation_projections,
 )
 from tjipto.corpora.uud.retrieval_builder import apply_chunk_grounding, build_retrieval_units
 from tjipto.corpora.uud.runtime_projection import build_runtime_projection
@@ -170,7 +171,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     retrieval_units = build_retrieval_units(evidence, chunks)
     for retrieval in retrieval_units:
         retrieval.setdefault("object_role", "retrieval_index_record")
-        retrieval.setdefault("artifact_status", "published")
+        retrieval.setdefault("artifact_status", "excluded")
         retrieval.setdefault(
             "page_locator",
             {"source_document_id": retrieval.get("source_document_id"), "page_numbers": retrieval.get("page_numbers", [])},
@@ -194,6 +195,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         legal_units=legal_units,
         evidence=evidence,
         page_text_spans=page_text_spans,
+        word_bboxes=word_bboxes,
     )
     pdf_health_report = build_pdf_health_report(
         repo_root=repo_root,
@@ -239,6 +241,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         nodes=graph_nodes,
         edges=graph_edges,
     )
+    materialize_relation_projections(graph_edges, document_relations, article_amendment_relations)
     apply_retrieval_semantics(retrieval_units, evidence)
     promotion_decisions = build_promotion_decisions(
         evidence=evidence,

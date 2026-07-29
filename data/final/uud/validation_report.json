@@ -43,9 +43,9 @@
     "excluded_records": 0,
     "evidence_records": 650,
     "bbox_records": 1827,
-    "retrieval_units": 650,
+    "retrieval_units": 647,
     "promotion_decisions": 75,
-    "propositions": 1019,
+    "propositions": 877,
     "graph_nodes": 3209,
     "graph_edges": 8004,
     "page_text_spans": 2070,
@@ -269,8 +269,8 @@
     "nonhighlightable_viewer_resolvable_count": 0,
     "retrieval_units_accepted_for_nonruntime_chunks_count": 0,
     "retrieval_units_accepted_for_page_grounded_only_evidence_count": 0,
-    "instrument_records_unresolved_count": 650,
-    "status": "incomplete"
+    "instrument_records_unresolved_count": 0,
+    "status": "complete"
   },
   "instrument_exact_grounding_health": {
     "final_evidence_linked_to_nonruntime_count": 0,
@@ -299,19 +299,19 @@
   "instrument_natural_query_precision_health": {
     "natural_fail_closed_query_neighbor_answer_count": 0,
     "natural_fail_closed_query_neighbor_search_count": 0,
-    "safe_exact_label_not_rank_first_count": 8,
+    "safe_exact_label_not_rank_first_count": 0,
     "lexical_fallback_overrode_instrument_intent_count": 0,
     "natural_variant_neighbor_answer_count": 0,
     "natural_variant_neighbor_search_count": 0,
     "punctuation_boundary_miss_count": 0,
     "amandemen_alias_miss_count": 0,
     "ordinal_alias_miss_count": 0,
-    "safe_exact_label_punctuation_rank_miss_count": 8,
+    "safe_exact_label_punctuation_rank_miss_count": 0,
     "role_family_neighbor_answer_count": 0,
     "role_family_neighbor_search_count": 0,
     "scope_family_alias_miss_count": 0,
     "target_fail_closed_fallback_count": 0,
-    "status": "incomplete"
+    "status": "complete"
   },
   "instrument_intent_matrix_health": {
     "instrument_like_bm25_fallback_count": 0,
@@ -451,6 +451,14 @@
     "missing_normalized_text_count": 0,
     "status": "complete"
   },
+  "selector_geometry_health": {
+    "selector_round_trip_mismatch_count": 0,
+    "partial_selector_whole_span_bbox_count": 0,
+    "persisted_character_bbox_id_duplicate_count": 0,
+    "marker_highlight_intersection_count": 0,
+    "citable_support_without_valid_geometry_count": 0,
+    "status": "complete"
+  },
   "highlight_registry_contract": {
     "status": "complete",
     "architecture": "bbox_registry_union_word_bboxes",
@@ -556,10 +564,11 @@
     "document_relation_exact_support_partial_trace_omitted_count": 2,
     "relation_runtime_policy_slow_gate_status": "not_executed_in_offline_validation__run_public_runtime_policy_gate",
     "document_relation_count": 13,
-    "source_relation_contract_status": "incomplete",
-    "source_relation_missing_count": 2,
-    "source_relation_unexpected_count": 33,
-    "source_relation_duplicate_count": 0
+    "source_relation_contract_status": "complete",
+    "source_relation_missing_count": 0,
+    "source_relation_unexpected_count": 0,
+    "source_relation_duplicate_count": 0,
+    "status": "complete"
   },
   "legal_graph_baseline": {
     "status": "authority_aware_evidence_gated",
@@ -685,5 +694,5 @@
       "source_anomaly_trace": 4
     }
   },
-  "validated_artifact_set_digest": "1e6587349ae39fe12e8716f9a046ac2bc55e2b89568c0fc28729d2f23520ffcb"
+  "validated_artifact_set_digest": "16c6d80e7b4b6fb1436725a0018540244b74ba9f8a9abe2a7191511939b0445e"
 }

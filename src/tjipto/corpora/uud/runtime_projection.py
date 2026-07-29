@@ -14,15 +14,13 @@ RUNTIME_ARTIFACTS = (
     "document_metadata",
     "metadata_grounding",
     "metadata_grounding_registry",
-    "document_relations",
-    "article_amendment_relations",
     "source_conflicts",
 )
 
 _GRAPH_EDGE_FIELDS = (
     "edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id",
     "runtime_loadable", "support_kind", "support_relation_ids", "support_evidence_ids", "derived_from_edge_id",
-    "text_span_ids", "bbox_refs", "source_role", "temporal_context",
+    "text_span_ids", "bbox_refs", "source_role", "temporal_context", "relation_projection",
 )
 
 _SOURCE_SPAN_FIELDS = (
@@ -50,10 +48,20 @@ _SOURCE_SPAN_FIELDS = (
     "disposition_reason",
 )
 
+_RUNTIME_PAGE_SPAN_FIELDS = (
+    "text_span_id", "source_document_id", "source_pdf_path", "source_sha256", "source_role", "temporal_context",
+    "page_number", "text", "exact_quote", "stream_id", "text_start", "text_end", "text_prefix", "text_suffix",
+    "bbox_precision", "viewer_highlightable", "object_role",
+)
+
 
 def build_runtime_projection(**artifacts: list[dict]) -> dict:
     """The sole runtime payload; release artifacts remain the audit authority."""
     rows = {name: list(artifacts.get(name, ())) for name in RUNTIME_ARTIFACTS}
+    rows["page_text_spans"] = [
+        {key: row[key] for key in _RUNTIME_PAGE_SPAN_FIELDS if key in row}
+        for row in artifacts.get("page_text_spans", ())
+    ]
     rows["graph_edges"] = [
         {key: row[key] for key in _GRAPH_EDGE_FIELDS if key in row}
         for row in artifacts.get("graph_edges", ())
@@ -89,7 +97,17 @@ def _bbox_refs(artifact_sets) -> set[str]:
     refs: set[str] = set()
     for rows in artifact_sets:
         for row in rows:
-            for key, value in row.items():
-                if "bbox" in key and isinstance(value, (list, tuple)):
-                    refs.update(item for item in value if isinstance(item, str))
+            _add_bbox_refs(row, refs)
     return refs
+
+
+def _add_bbox_refs(value, refs: set[str]) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if "bbox" in key and isinstance(item, (list, tuple)):
+                refs.update(ref for ref in item if isinstance(ref, str))
+            elif isinstance(item, (dict, list, tuple)):
+                _add_bbox_refs(item, refs)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _add_bbox_refs(item, refs)

@@ -91,7 +91,8 @@ class LegalRuntimeService:
         self.telemetry = telemetry or Telemetry.from_environment(self.registry)
         self.telemetry.bind_registry(self.registry)
         self._integrity_error: str | None = None
-        self._store_cache: dict[str, EvidenceStore] = {}
+        self._store_cache: OrderedDict[str, EvidenceStore] = OrderedDict()
+        self._store_cache_limit = max(1, len(self.registry.corpus_ids()))
         self._public_targets: OrderedDict[str, tuple[str, dict]] = OrderedDict()
         self._public_target_limit = 1024
         self._public_target_lock = threading.RLock()
@@ -99,6 +100,7 @@ class LegalRuntimeService:
     def _store(self, corpus_id: str):
         cached = self._store_cache.get(corpus_id)
         if cached is not None:
+            self._store_cache.move_to_end(corpus_id)
             self._integrity_error = None
             return cached
         try:
@@ -111,6 +113,8 @@ class LegalRuntimeService:
         self.telemetry.emit("corpus_load", corpus_id=config.corpus_id, status="loaded")
         store = EvidenceStore.shared(config)
         self._store_cache[corpus_id] = store
+        while len(self._store_cache) > self._store_cache_limit:
+            self._store_cache.popitem(last=False)
         return store
 
     def _route_retrieval(self, corpus_id: str, query: str, store: EvidenceStore, **kwargs: Any) -> dict:
@@ -674,7 +678,7 @@ class LegalRuntimeService:
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
         if routed.get("route") == "document_relation":
-            return _document_relation_response(store, routed)
+            return _relation_response(store, routed)
         clarification = _metadata_scope_clarification(store, routed)
         if clarification:
             return routed | clarification
@@ -1558,15 +1562,15 @@ def _metadata_grounding_evidence(store, metadata_grounding_id: str | None) -> di
     return None
 
 
-def _document_relation_response(store, routed: dict) -> dict:
+def _relation_response(store, routed: dict) -> dict:
     templates = _answer_templates(store)
     target = routed.get("relation_target") or {"mode": None}
     graph_edges = tuple(routed.get("matches") or ())
     if target["mode"] == "article":
-        return _article_relation_response(store, routed, target, templates, _article_relation_support(store, graph_edges))
+        return _project_article_relation(store, routed, target, templates, _relation_support(graph_edges, "article_amendment_relation_graph"))
     if target["mode"] == "unsupported":
         return _relation_not_promoted(routed, templates)
-    support = _document_relation_support(store, graph_edges)
+    support = _relation_support(graph_edges, "document_relation_graph")
     if not support:
         reason = "document_relation_not_found"
         return project_response(
@@ -1597,7 +1601,7 @@ def _document_relation_response(store, routed: dict) -> dict:
     )
 
 
-def _article_relation_response(store, routed: dict, target: dict, templates: dict[str, str], support: tuple[dict, ...]) -> dict:
+def _project_article_relation(store, routed: dict, target: dict, templates: dict[str, str], support: tuple[dict, ...]) -> dict:
     if not support:
         if target.get("target_citation"):
             return _relation_not_promoted(routed, templates, reason="relation_target_not_found")
@@ -1678,21 +1682,11 @@ def _relation_not_promoted(routed: dict, templates: dict[str, str], *, reason: s
     )
 
 
-def _document_relation_support(store, graph_edges: tuple[dict, ...]) -> tuple[dict, ...]:
-    by_id = {row.get("relation_id"): row for row in store.document_relations}
+def _relation_support(graph_edges: tuple[dict, ...], route_source: str) -> tuple[dict, ...]:
     return tuple(
-        by_id[edge["relation_id"]] | {"route_sources": edge.get("route_sources") or ("document_relation_graph",)}
+        edge["relation_projection"] | {"route_sources": edge.get("route_sources") or (route_source,)}
         for edge in graph_edges
-        if edge.get("relation_id") in by_id
-    )
-
-
-def _article_relation_support(store, graph_edges: tuple[dict, ...]) -> tuple[dict, ...]:
-    by_id = {row.get("relation_id"): row for row in store.article_amendment_relations}
-    return tuple(
-        by_id[edge["relation_id"]] | {"route_sources": edge.get("route_sources") or ("article_amendment_relation_graph",)}
-        for edge in graph_edges
-        if edge.get("relation_id") in by_id
+        if edge.get("relation_projection")
     )
 
 
@@ -1757,9 +1751,12 @@ def _relation_for_evidence(store, evidence_id: str | None, relation_id: str | No
         return None
     return next(
         (
-            row
-            for row in getattr(store, "article_amendment_relations", ())
-            if row.get("evidence_id") == evidence_id and (relation_id is None or row.get("relation_id") == relation_id)
+            projection
+            for edge in store.graph_edges
+            for projection in (edge.get("relation_projection") or {},)
+            if projection.get("target_legal_unit_id")
+            and projection.get("evidence_id") == evidence_id
+            and (relation_id is None or projection.get("relation_id") == relation_id)
         ),
         None,
     )

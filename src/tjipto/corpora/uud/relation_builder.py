@@ -165,6 +165,31 @@ def materialize_document_relation_edges(document_relations: list[dict]) -> list[
     return rows
 
 
+def materialize_relation_projections(
+    edges: list[dict], document_relations: list[dict], article_relations: list[dict]
+) -> None:
+    """Embed the audited relation record on its persisted runtime edge."""
+    relations = {
+        str(row["relation_id"]): row
+        for row in (*document_relations, *article_relations)
+    }
+    for edge in edges:
+        relation = relations.get(str(edge.get("relation_id") or ""))
+        if relation is None:
+            continue
+        projection = dict(relation)
+        projection["relation_type"] = edge["edge_type"]
+        projection["source_id"] = edge["source_id"]
+        projection["target_id"] = edge["target_id"]
+        if edge.get("derived_from_edge_id") and "target_legal_unit_id" not in projection:
+            for source_key, target_key in (
+                ("source_document_id", "target_document_id"),
+                ("source_role", "target_source_role"),
+            ):
+                projection[source_key], projection[target_key] = projection.get(target_key), projection.get(source_key)
+        edge["relation_projection"] = projection
+
+
 def build_article_amendment_relations(
     *,
     graph_edges: list[dict],

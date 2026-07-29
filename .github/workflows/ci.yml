@@ -34,8 +34,32 @@ jobs:
         run: python scripts/measure_command.py --gate compileall --report reports/ci-gates.jsonl -- python -m compileall -q src tests scripts
       - name: Unit tests
         run: python scripts/measure_command.py --gate unittest --report reports/ci-gates.jsonl -- python -m unittest discover -s tests -v
-      - name: Pytest
-        run: python scripts/measure_command.py --gate pytest --report reports/ci-gates.jsonl -- python -m pytest -q -p no:cacheprovider
+      - name: Pytest run 1
+        run: python scripts/measure_command.py --gate pytest_run_1 --report reports/ci-gates.jsonl --result-report reports/pytest-run-1.json -- python -m pytest -q -p no:cacheprovider
+      - name: Pytest run 2
+        run: python scripts/measure_command.py --gate pytest_run_2 --report reports/ci-gates.jsonl --result-report reports/pytest-run-2.json -- python -m pytest -q -p no:cacheprovider
+      - name: Compare pytest resource evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          first = json.loads(Path("reports/pytest-run-1.json").read_text(encoding="utf-8"))
+          second = json.loads(Path("reports/pytest-run-2.json").read_text(encoding="utf-8"))
+          comparison = {
+              "run_1_peak_rss_bytes": first["peak_rss_bytes"],
+              "run_2_peak_rss_bytes": second["peak_rss_bytes"],
+              "run_1_wall_seconds": first["wall_seconds"],
+              "run_2_wall_seconds": second["wall_seconds"],
+              "rss_limit_bytes": 721 * 1024 * 1024,
+          }
+          comparison["rss_limit_pass"] = max(comparison["run_1_peak_rss_bytes"], comparison["run_2_peak_rss_bytes"]) <= comparison["rss_limit_bytes"]
+          comparison["rss_stability_pass"] = comparison["run_2_peak_rss_bytes"] <= comparison["run_1_peak_rss_bytes"] * 1.05
+          comparison["wall_stability_pass"] = comparison["run_2_wall_seconds"] <= comparison["run_1_wall_seconds"] * 1.10
+          Path("reports/pytest-resource-comparison.json").write_text(json.dumps(comparison, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          if not all(comparison[key] for key in ("rss_limit_pass", "rss_stability_pass", "wall_stability_pass")):
+              raise SystemExit("pytest resource limits exceeded")
+          PY
       - name: Retrieval evaluation
         run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps
       - name: Artifact validation
@@ -55,7 +79,9 @@ jobs:
       - name: Dependency inspection
         run: python -m pip inspect > reports/pip-inspect.json
       - name: Clean tree after rebuild
-        run: python scripts/measure_command.py --gate clean_tree --report reports/ci-gates.jsonl -- git diff --exit-code
+        run: |
+          git status --porcelain=v1 --untracked-files=all > reports/clean-tree.txt
+          test ! -s reports/clean-tree.txt
       - name: Verify exact archive (first build)
         run: |
           set -euo pipefail
