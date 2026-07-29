@@ -105,6 +105,18 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertGreaterEqual(len(lines), 2)
         self.assertTrue(all(line["canonical_end"] > line["canonical_start"] for line in lines))
 
+    def test_clause_claim_viewer_uses_opaque_exact_overlay_target(self) -> None:
+        result = self._post(
+            "/legal/uud/ask",
+            {"query": "Pasal 7C menyebut Presiden tidak dapat membekukan dan/atau membubarkan Dewan Perwakilan Rakyat?"},
+        )
+        support = result["supports"][0]
+        viewer = self._post("/legal/uud/viewer", {"target": support["viewer_target"]["public_target_id"]})
+        self.assertEqual(viewer["status"], "viewer_payload_ready")
+        self.assertEqual(viewer["quoted_text"], support["text"])
+        self.assertTrue(viewer["bbox_rectangles"])
+        self._assert_public(viewer)
+
     def test_groups_preserve_members_and_keep_nonlegal_sections_out_of_quotes(self) -> None:
         result = self._post("/legal/uud/ask", {"query": "siapa wakil ketua yang tercantum dalam Perubahan Pertama?"})
         self.assertTrue(result["support_groups"])

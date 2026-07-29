@@ -453,9 +453,13 @@
   },
   "selector_geometry_health": {
     "selector_round_trip_mismatch_count": 0,
+    "absolute_selector_mismatch_count": 0,
+    "unknown_selected_character_id_count": 0,
     "partial_selector_whole_span_bbox_count": 0,
     "persisted_character_bbox_id_duplicate_count": 0,
-    "marker_highlight_intersection_count": 0,
+    "marker_text_in_exact_quote_count": 0,
+    "marker_viewer_geometry_intersection_count": 0,
+    "viewer_geometry_without_exact_selector_lineage_count": 0,
     "citable_support_without_valid_geometry_count": 0,
     "status": "complete"
   },
@@ -684,6 +688,9 @@
     "graph_final_citation_edge_count": 0,
     "invalid_finality_policy_count": 0,
     "missing_authority_field_count": 0,
+    "forward_relation_projection_endpoint_mismatch_count": 0,
+    "inverse_relation_projection_endpoint_mismatch_count": 0,
+    "relation_direction_mismatch_count": 0,
     "authority_kind_counts": {
       "relation_reference": 8004
     },
@@ -694,5 +701,11 @@
       "source_anomaly_trace": 4
     }
   },
-  "validated_artifact_set_digest": "3ab7ba35218096be4e91f3a20995d0e065221c49a791004ef722527470ee756f"
+  "validated_artifact_set_digest": "195c1564ce986247d14659d78c567175c2f5be4011036b14ddef3c8490d89376",
+  "required_health": {
+    "status": "complete",
+    "required_section_count": 15,
+    "unsatisfied_section_count": 0,
+    "unsatisfied_sections": {}
+  }
 }

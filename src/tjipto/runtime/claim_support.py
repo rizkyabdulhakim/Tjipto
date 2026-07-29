@@ -107,6 +107,9 @@ def _grounded_propositions(store, evidence: tuple[dict, ...]) -> tuple[dict, ...
 def _public_segment(proposition: dict) -> dict[str, Any]:
     spans = tuple(str(item) for item in proposition.get("text_span_ids") or ())
     return {
+        "proposition_id": proposition.get("proposition_id"),
+        "evidence_id": proposition.get("evidence_id"),
+        "legal_unit_id": proposition.get("legal_unit_id"),
         "segment_id": proposition.get("text_segment_id"),
         "exact_quote": proposition.get("exact_quote"),
         "start_selector": spans[0] if spans else None,
@@ -116,6 +119,7 @@ def _public_segment(proposition: dict) -> dict[str, Any]:
         "page_numbers": tuple(proposition.get("page_numbers") or ()),
         "source_document_id": proposition.get("source_document_id"),
         "terminal_boundary": proposition.get("terminal_boundary"),
+        "viewer_overlay": proposition.get("viewer_overlay"),
     }
 
 

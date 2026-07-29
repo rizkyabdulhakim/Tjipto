@@ -6,10 +6,17 @@ from hashlib import sha256
 import re
 import unicodedata
 
+from tjipto.evidence.bbox import (
+    GEOMETRY_IDENTITY_FIELDS,
+    VIEWER_RECTANGLE_FIELDS,
+    positive_area_intersection,
+    subtract_rectangle,
+)
 
 _BOUNDARY = re.compile(r"[.!?;,:]")
 _TOKEN = re.compile(r"[a-z0-9]+")
 _NORMATIVE = re.compile(r"^(?P<subject>.+?)\s+(?P<operator>wajib|dilarang)\s+(?P<object>.+)$", re.IGNORECASE)
+_SOURCE_MARKER = re.compile(r"\*{1,4}(?:/\*{1,4})?\)")
 _OPERATORS = {
     "wajib": ("requires", "positive", "obligation"),
     "dilarang": ("prohibits", "positive", "prohibition"),
@@ -32,7 +39,15 @@ def build_propositions(
     # cannot be republished through a BAB/Pasal and one of its Ayat.
     parents = {str(row.get("parent_legal_unit_id")) for row in legal_units if row.get("parent_legal_unit_id")}
     words_by_id = {str(row.get("word_bbox_id")): row for row in word_bboxes}
-    rows = []
+    characters_by_id = {
+        str(character["character_bbox_id"]): word | character
+        for word in word_bboxes
+        for character in word.get("characters") or ()
+    }
+    marker_boxes: dict[tuple[object, ...], list[dict]] = {}
+    for marker in source_marker_character_boxes(word_bboxes):
+        marker_boxes.setdefault(_geometry_space_key(marker), []).append(marker)
+    rows: list[dict] = []
     for unit in legal_units:
         unit_id = str(unit.get("legal_unit_id") or "")
         if not unit_id or (unit.get("unit_type") != "ayat_record" and unit_id in parents):
@@ -46,7 +61,7 @@ def build_propositions(
             if not normalized or not segment["bbox_refs"]:
                 continue
             common = _common_record(unit_id, record, segment_index, segment)
-            rows.append(common | {
+            rows.append(_with_viewer_overlay(common | {
                 "proposition_id": _proposition_id("textual_occurrence", common),
                 "claim_type": "textual_occurrence",
                 "subject": unit.get("canonical_label") or unit.get("unit_label"),
@@ -56,14 +71,14 @@ def build_propositions(
                 "modality": "textual",
                 "conditions": [],
                 "exceptions": [],
-            })
+            }, characters_by_id, marker_boxes))
             normative = _normative_proposition(quoted)
             if normative:
-                rows.append(common | {
+                rows.append(_with_viewer_overlay(common | {
                     "proposition_id": _proposition_id("normative_proposition", common),
                     "claim_type": "normative_proposition",
                     **normative,
-                })
+                }, characters_by_id, marker_boxes))
     return sorted(rows, key=lambda row: row["proposition_id"])
 
 
@@ -201,6 +216,93 @@ def _selected_character_ids(span: dict, start: int, end: int, words_by_id: dict[
 
 def _visible(value: str) -> str:
     return "".join(character for character in unicodedata.normalize("NFKC", value) if not character.isspace())
+
+
+def source_marker_character_boxes(word_bboxes: list[dict]) -> tuple[dict, ...]:
+    """Return immutable source-marker glyph geometry without changing extraction rows."""
+    rows: list[dict] = []
+    for word in word_bboxes:
+        for match in _SOURCE_MARKER.finditer(str(word.get("text") or "")):
+            rows.extend(
+                word | character
+                for character in word.get("characters") or ()
+                if character.get("char_start", -1) < match.end() and character.get("char_end", -1) > match.start()
+            )
+    return tuple(rows)
+
+
+def _with_viewer_overlay(
+    proposition: dict,
+    characters_by_id: dict[str, dict],
+    marker_boxes: dict[tuple[object, ...], list[dict]],
+) -> dict:
+    selected_ids = tuple(str(value) for value in proposition.get("bbox_refs") or ())
+    selected = [characters_by_id[value] for value in selected_ids if value in characters_by_id]
+    grouped: dict[str, list[dict]] = {}
+    for character in selected:
+        grouped.setdefault(str(character.get("word_bbox_id") or character["character_bbox_id"]), []).append(character)
+    rectangles = []
+    clipped_rectangles = []
+    covered_ids: set[str] = set()
+    clipped_ids: set[str] = set()
+    for characters in grouped.values():
+        first = characters[0]
+        character_ids = tuple(str(character["character_bbox_id"]) for character in characters)
+        base = {
+            **{field: first.get(field) for field in VIEWER_RECTANGLE_FIELDS},
+            "x0": min(float(character["x0"]) for character in characters),
+            "y0": min(float(character["y0"]) for character in characters),
+            "x1": max(float(character["x1"]) for character in characters),
+            "y1": max(float(character["y1"]) for character in characters),
+            "bbox_id": character_ids[0],
+            "character_bbox_ids": character_ids,
+            "bbox_precision": "exact",
+            "viewer_highlightable": True,
+        }
+        pieces = [base]
+        clipped = False
+        for marker in marker_boxes.get(_geometry_space_key(first), ()):
+            clipped = clipped or any(positive_area_intersection(piece, marker) for piece in pieces)
+            pieces = [piece for candidate in pieces for piece in subtract_rectangle(candidate, marker)]
+        if pieces:
+            covered_ids.update(character_ids)
+        if clipped:
+            clipped_ids.update(character_ids)
+        for index, piece in enumerate(pieces):
+            piece["viewer_overlay_id"] = _viewer_overlay_id(proposition["proposition_id"], character_ids[0], index, piece)
+            rectangles.append(piece)
+            if clipped:
+                clipped_rectangles.append(piece)
+    complete = len(selected) == len(selected_ids) and covered_ids == set(selected_ids)
+    proposition["viewer_overlay"] = {
+        "status": "complete" if complete else "unavailable",
+        "reason_code": None if complete else "exact_viewer_geometry_unavailable",
+        "proposition_id": proposition["proposition_id"],
+        "source_document_id": proposition.get("source_document_id"),
+        "source_sha256": proposition.get("source_sha256"),
+        "selector_field": "source_selectors",
+        "selected_character_field": "bbox_refs",
+        "clipped_character_count": len(clipped_ids),
+        "rectangles": rectangles if complete else [],
+        "clipped_rectangles": clipped_rectangles if complete else [],
+    }
+    return proposition
+
+
+def _geometry_space_key(row: dict) -> tuple[object, ...]:
+    return tuple(row.get(field) for field in GEOMETRY_IDENTITY_FIELDS)
+
+
+def _viewer_overlay_id(proposition_id: str, character_id: str, index: int, rectangle: dict) -> str:
+    identity = "\x1f".join(
+        (
+            proposition_id,
+            character_id,
+            str(index),
+            *(str(rectangle[field]) for field in ("page_number", "x0", "y0", "x1", "y1")),
+        )
+    )
+    return f"viewer_overlay::{sha256(identity.encode('utf-8')).hexdigest()}"
 
 
 def _normalize(text: str) -> str:

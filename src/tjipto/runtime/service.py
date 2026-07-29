@@ -15,6 +15,7 @@ from tjipto.corpora.parser_dispatch import parse_legal_reference
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.strategy import StrategyRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
+from tjipto.evidence.bbox import viewer_overlay_rectangles
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.metadata import (
@@ -278,6 +279,7 @@ class LegalRuntimeService:
         page_number: int | None = None,
         bbox_id: str | None = None,
         bbox_refs: tuple[str, ...] = (),
+        proposition_id: str | None = None,
         quoted_text: str | None = None,
         support_projection: dict | None = None,
         source_pdf_path: str | None = None,
@@ -308,6 +310,27 @@ class LegalRuntimeService:
             synthetic_bboxes = store.source_span_bboxes(evidence_id) if evidence is not None else None
         if evidence is None:
             return {"status": "not_found", "reason": "invalid_evidence", "corpus_id": corpus_id}
+        if proposition_id is not None:
+            proposition = next(
+                (
+                    row
+                    for row in store.propositions
+                    if row.get("proposition_id") == proposition_id
+                    and row.get("legal_unit_id") == evidence.get("legal_unit_id")
+                    and row.get("source_document_id") == evidence.get("source_document_id")
+                    and tuple(row.get("bbox_refs") or ()) == bbox_refs
+                ),
+                None,
+            )
+            overlay = viewer_overlay_rectangles(proposition or {})
+            if proposition is None or not overlay:
+                return {"status": "not_found", "reason": "invalid_viewer_target", "corpus_id": corpus_id}
+            evidence = evidence | {
+                "bbox_refs": bbox_refs,
+                "quoted_text": proposition.get("exact_quote"),
+                "page_numbers": tuple(proposition.get("page_numbers") or ()),
+            }
+            synthetic_bboxes = list(overlay)
         relation = _relation_for_evidence(store, evidence_id, relation_id)
         if relation is not None:
             evidence = evidence | {
@@ -332,9 +355,10 @@ class LegalRuntimeService:
             if evidence.get("metadata_grounding")
             else store.bboxes_for_refs(tuple(relation.get("bbox_refs") or ())) if relation is not None else store.bboxes_for(evidence_id)
         )
-        if bbox_refs:
+        if bbox_refs and proposition_id is None:
             bboxes = store.bboxes_for_refs(bbox_refs)
-        bboxes = _select_viewer_bboxes(bboxes, bbox_refs)
+        if proposition_id is None:
+            bboxes = _select_viewer_bboxes(bboxes, bbox_refs)
         if bbox_refs and not bboxes:
             return {"status": "not_found", "reason": "invalid_viewer_target", "corpus_id": corpus_id}
         return _viewer_with_authority(
@@ -753,8 +777,11 @@ class LegalRuntimeService:
             citations = ()
             viewer_refs = ()
         else:
-            citations = tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"])
-            viewer_refs = context_pack["viewer_refs"]
+            citations = _claim_citations(
+                tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"]),
+                claim_support,
+            )
+            viewer_refs = tuple(row["viewer_ref"] for row in citations)
         if metadata_support:
             values = tuple(dict.fromkeys(
                 str(row.get("display_text") or row.get("answer") or "") for row in metadata_support
@@ -1194,6 +1221,57 @@ def _row_is_historical_anomaly(store, row: dict) -> bool:
 
 def _citation_with_authority(store, row: dict, *, conflict: dict | None = None) -> dict:
     return row | _authority_policy(store, row, conflict=conflict)
+
+
+def _claim_citations(citations: tuple[dict, ...], claim_support) -> tuple[dict, ...]:
+    segments = tuple(
+        segment
+        for claim in claim_support
+        for segment in claim.support_segments
+        if segment.get("evidence_id")
+    )
+    return tuple(
+        _claim_citation(
+            row,
+            next(
+                (
+                    segment
+                    for segment in segments
+                    if segment.get("source_document_id") == row.get("source_document_id")
+                    and (
+                        segment.get("evidence_id") == row.get("evidence_id")
+                        or segment.get("legal_unit_id") == row.get("legal_unit_id")
+                    )
+                ),
+                None,
+            ),
+        )
+        for row in citations
+    )
+
+
+def _claim_citation(citation: dict, segment: dict | None) -> dict:
+    if segment is None:
+        return citation
+    bbox_refs = tuple(segment.get("bbox_refs") or ())
+    exact_quote = segment.get("exact_quote")
+    return citation | {
+        "proposition_id": segment.get("proposition_id"),
+        "quoted_text": exact_quote,
+        "display_text": exact_quote,
+        "copy_text": exact_quote,
+        "layout_lines": (),
+        "text_span_ids": tuple(segment.get("text_span_ids") or ()),
+        "bbox_refs": bbox_refs,
+        "page_numbers": tuple(segment.get("page_numbers") or ()),
+        "bbox_count": len(bbox_refs),
+        "viewer_overlay": segment.get("viewer_overlay"),
+        "viewer_ref": {
+            **dict(citation.get("viewer_ref") or {}),
+            "bbox_count": len(bbox_refs),
+            "can_resolve": bool(bbox_refs),
+        },
+    }
 
 
 def _source_span_evidence(store, support_id: str) -> dict | None:
@@ -1788,23 +1866,28 @@ def _public_document_relation(row: dict) -> dict:
 
 
 def public_article_relation(row: dict) -> dict:
+    inverse = row.get("projection_direction") == "inverse"
     return {
         "relation_id": row.get("relation_id"),
         "relation_type": row.get("relation_type"),
-        "source_document_id": row.get("source_document_id"),
-        "source_role": row.get("source_role"),
+        "source_document_id": row.get("support_document_id") or row.get("source_document_id"),
+        "source_role": row.get("support_source_role") or row.get("source_role"),
         "source_legal_unit_id": row.get("source_legal_unit_id"),
         "source_legal_unit_role": row.get("source_legal_unit_role"),
         "source_label": row.get("source_label"),
-        "source_reference": row.get("old_reference") or row.get("source_reference"),
-        "source_reference_range": row.get("old_reference_range") or row.get("source_reference_range"),
-        "source_reference_range_kind": row.get("old_reference_range_kind") or row.get("source_reference_range_kind"),
+        "source_reference": row.get("new_reference" if inverse else "old_reference") or row.get("source_reference"),
+        "source_reference_range": row.get("new_reference_range" if inverse else "old_reference_range")
+        or row.get("source_reference_range"),
+        "source_reference_range_kind": row.get("new_reference_range_kind" if inverse else "old_reference_range_kind")
+        or row.get("source_reference_range_kind"),
         "target_legal_unit_id": row.get("target_legal_unit_id"),
         "target_label": row.get("target_label") or row.get("target_citation"),
         "target_citation": row.get("target_citation"),
-        "target_reference": row.get("new_reference") or row.get("target_reference"),
-        "target_reference_range": row.get("new_reference_range") or row.get("target_reference_range"),
-        "target_reference_range_kind": row.get("new_reference_range_kind") or row.get("target_reference_range_kind"),
+        "target_reference": row.get("old_reference" if inverse else "new_reference") or row.get("target_reference"),
+        "target_reference_range": row.get("old_reference_range" if inverse else "new_reference_range")
+        or row.get("target_reference_range"),
+        "target_reference_range_kind": row.get("old_reference_range_kind" if inverse else "new_reference_range_kind")
+        or row.get("target_reference_range_kind"),
         "target_source_role": row.get("target_source_role"),
         "evidence_id": row.get("evidence_id"),
         "bbox_refs": tuple(row.get("bbox_refs") or ()),

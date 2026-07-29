@@ -208,6 +208,7 @@ def _public_support(row: dict, panel_section: str, service: LegalRuntimeService,
     linkable = row.get("viewer_highlightable") is True and target_source.get("can_resolve") is True
     target = service.register_public_target(corpus_id, {
         "evidence_id": row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
+        "proposition_id": row.get("proposition_id"),
         "relation_id": row.get("relation_id"),
         "source_document_id": row.get("source_document_id"),
         "bbox_refs": tuple(row.get("bbox_refs") or ()),

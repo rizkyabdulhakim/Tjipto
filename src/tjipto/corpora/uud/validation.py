@@ -44,6 +44,8 @@ from tjipto.corpora.uud.provenance_exceptions import (
 from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit, substantive_structural_unit
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
+from tjipto.corpora.uud.proposition_builder import source_marker_character_boxes
+from tjipto.evidence.bbox import positive_area_intersection, viewer_overlay_rectangles
 from tjipto.core.manifest import artifact_set_digest, read_json, read_jsonl, validate_manifest
 
 
@@ -426,7 +428,29 @@ def build_validation_report(
     validation_report["validated_artifact_set_digest"] = artifact_set_digest(
         {"files": manifest_files}, exclude=("validation_report.json",)
     )
+    _derive_validation_status(validation_report)
     return validation_report
+
+
+def _derive_validation_status(report: dict) -> None:
+    unsatisfied = {
+        health_key: {
+            "expected": expected_status,
+            "actual": (report.get(health_key) or {}).get("status")
+            if isinstance(report.get(health_key), Mapping)
+            else None,
+        }
+        for health_key, expected_status in _REQUIRED_HEALTH_STATUSES.items()
+        if not isinstance(report.get(health_key), Mapping)
+        or report[health_key].get("status") != expected_status
+    }
+    report["required_health"] = {
+        "status": "complete" if not unsatisfied else "incomplete",
+        "required_section_count": len(_REQUIRED_HEALTH_STATUSES),
+        "unsatisfied_section_count": len(unsatisfied),
+        "unsatisfied_sections": unsatisfied,
+    }
+    report["status"] = "valid" if not unsatisfied else "invalid"
 
 
 def _evidence_admission_audit(legal_units: list[dict], evidence: list[dict]) -> dict:
@@ -1543,7 +1567,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         if row["relation_id"] in seen_ids["article_amendment_relation_id"]:
             errors.append(f"duplicate_article_amendment_relation_id:{row['relation_id']}")
         seen_ids["article_amendment_relation_id"].add(row["relation_id"])
-        if row.get("relation_type") not in {"MODIFIES", "DELETES", "INSERTS", "ADDS", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
+        if row.get("relation_type") not in {"MODIFIES", "DELETES", "ADDS", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
             errors.append(f"invalid_article_amendment_relation_type:{row['relation_id']}:{row.get('relation_type')}")
         evidence_row = evidence_by_id.get(row.get("evidence_id"))
         if not evidence_row:
@@ -2123,7 +2147,7 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
     for row in relation_rows:
         relation_id = str(row.get("relation_id") or "<missing>")
         relation_type = row.get("relation_type")
-        if relation_type not in {"MODIFIES", "DELETES", "INSERTS", "ADDS", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
+        if relation_type not in {"MODIFIES", "DELETES", "ADDS", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
             errors.append(f"invalid_enum:article_amendment_relations:{relation_id}:relation_type")
         evidence_row = evidence_by_id.get(row.get("evidence_id"))
         source_unit = units_by_id.get(row.get("source_legal_unit_id"))
@@ -2463,17 +2487,26 @@ def _selector_geometry_health(
     *, propositions: list[dict], evidence: list[dict], page_text_spans: list[dict], word_bboxes: list[dict]
 ) -> dict:
     spans = {row.get("text_span_id"): row for row in page_text_spans}
-    character_ids = [
-        character.get("character_bbox_id")
+    characters = [
+        word | character
         for word in word_bboxes
         for character in word.get("characters") or ()
         if character.get("character_bbox_id")
     ]
+    character_ids = [character["character_bbox_id"] for character in characters]
     known_character_ids = set(character_ids)
+    characters_by_id = {character["character_bbox_id"]: character for character in characters}
+    marker_boxes: dict[tuple[object, ...], list[dict]] = defaultdict(list)
+    for marker in source_marker_character_boxes(word_bboxes):
+        marker_boxes[_geometry_space_key(marker)].append(marker)
     evidence_by_id = {row.get("evidence_id"): row for row in evidence}
     round_trip_mismatches = 0
+    absolute_selector_mismatches = 0
+    unknown_selected_character_ids = 0
     whole_span_bboxes = 0
-    marker_intersections = 0
+    marker_text_in_quotes = 0
+    marker_geometry_intersections = 0
+    overlay_lineage_failures = 0
     citable_without_geometry = 0
     marker_pattern = re.compile(r"\*{1,4}(?:/\*{1,4})?\)")
     for proposition in propositions:
@@ -2488,6 +2521,13 @@ def _selector_geometry_health(
                 continue
             selector_quotes.append(text[start:end])
             selector_bboxes.extend(selector.get("character_bbox_ids") or ())
+            if (
+                selector.get("stream_id") != span.get("stream_id")
+                or selector.get("absolute_start") != span.get("text_start", 0) + start
+                or selector.get("absolute_end") != span.get("text_start", 0) + end
+            ):
+                absolute_selector_mismatches += 1
+            unknown_selected_character_ids += len(set(selector.get("character_bbox_ids") or ()) - known_character_ids)
             if set(selector.get("character_bbox_ids") or ()) & set(span.get("span_bbox_ids") or ()):
                 whole_span_bboxes += 1
         exact_quote = proposition.get("exact_quote")
@@ -2495,18 +2535,62 @@ def _selector_geometry_health(
         if "\n".join(selector_quotes) != exact_quote or geometry != tuple(proposition.get("bbox_refs") or ()):
             round_trip_mismatches += 1
         if marker_pattern.search(str(exact_quote or "")):
-            marker_intersections += 1
+            marker_text_in_quotes += 1
+        overlay = proposition.get("viewer_overlay") or {}
+        rectangles = viewer_overlay_rectangles(proposition, characters_by_id)
+        covered_character_ids = {
+            character_id
+            for rectangle in rectangles
+            for character_id in rectangle.get("character_bbox_ids") or ()
+        }
+        clipped_character_ids = {
+            character_id
+            for rectangle in overlay.get("clipped_rectangles") or ()
+            for character_id in rectangle.get("character_bbox_ids") or ()
+        }
+        if (
+            overlay.get("status") != "complete"
+            or overlay.get("proposition_id") != proposition.get("proposition_id")
+            or overlay.get("source_document_id") != proposition.get("source_document_id")
+            or overlay.get("source_sha256") != proposition.get("source_sha256")
+            or overlay.get("selector_field") != "source_selectors"
+            or overlay.get("selected_character_field") != "bbox_refs"
+            or clipped_character_ids - set(geometry)
+            or overlay.get("clipped_character_count") != len(clipped_character_ids)
+            or covered_character_ids != set(geometry)
+        ):
+            overlay_lineage_failures += 1
+        marker_geometry_intersections += sum(
+            1
+            for rectangle in rectangles
+            for marker in marker_boxes.get(_geometry_space_key(rectangle), ())
+            if positive_area_intersection(rectangle, marker)
+        )
         evidence_row = evidence_by_id.get(proposition.get("evidence_id"), {})
         if evidence_row.get("citation_final") is True and (not geometry or not set(geometry) <= known_character_ids):
             citable_without_geometry += 1
     counts = {
         "selector_round_trip_mismatch_count": round_trip_mismatches,
+        "absolute_selector_mismatch_count": absolute_selector_mismatches,
+        "unknown_selected_character_id_count": unknown_selected_character_ids,
         "partial_selector_whole_span_bbox_count": whole_span_bboxes,
         "persisted_character_bbox_id_duplicate_count": len(character_ids) - len(set(character_ids)),
-        "marker_highlight_intersection_count": marker_intersections,
+        "marker_text_in_exact_quote_count": marker_text_in_quotes,
+        "marker_viewer_geometry_intersection_count": marker_geometry_intersections,
+        "viewer_geometry_without_exact_selector_lineage_count": overlay_lineage_failures,
         "citable_support_without_valid_geometry_count": citable_without_geometry,
     }
     return counts | {"status": "complete" if not any(counts.values()) else "incomplete"}
+
+
+def _geometry_space_key(row: dict) -> tuple[object, ...]:
+    return tuple(
+        row.get(field)
+        for field in (
+            "source_document_id", "source_sha256", "page_number", "coordinate_space",
+            "coordinate_origin", "page_rotation", "page_box_basis", "transform_version",
+        )
+    )
 
 
 def _pdf_health_summary(report: dict) -> dict:
@@ -3029,6 +3113,18 @@ def _legal_graph_authority_health(
         for row in relation_edges
         if not {"relation_id", "support_relation_ids", "support_evidence_ids", "support_kind"} <= set(row)
     ]
+    projection_endpoint_mismatches = [
+        row
+        for row in relation_edges
+        if _relation_projection_endpoint_mismatch(row)
+    ]
+    relation_direction_mismatches = [
+        row
+        for row in relation_edges
+        if (row.get("relation_projection") or {}).get("relation_type") != row.get("edge_type")
+        or (row.get("derived_from_edge_id") and (row.get("relation_projection") or {}).get("projection_direction") != "inverse")
+        or (not row.get("derived_from_edge_id") and (row.get("relation_projection") or {}).get("projection_direction") != "forward")
+    ]
     return {
         "status": "complete"
         if not (
@@ -3036,6 +3132,8 @@ def _legal_graph_authority_health(
             or authority_without_bbox
             or trace_promoted
             or missing_fields
+            or projection_endpoint_mismatches
+            or relation_direction_mismatches
             or any(row.get("citation_final") is True for row in graph_edges)
         )
         else "incomplete",
@@ -3051,9 +3149,30 @@ def _legal_graph_authority_health(
         "graph_final_citation_edge_count": sum(1 for row in graph_edges if row.get("citation_final") is True),
         "invalid_finality_policy_count": sum(1 for row in graph_edges if row.get("citation_final") is True),
         "missing_authority_field_count": len(missing_fields),
+        "forward_relation_projection_endpoint_mismatch_count": sum(
+            1 for row in projection_endpoint_mismatches if not row.get("derived_from_edge_id")
+        ),
+        "inverse_relation_projection_endpoint_mismatch_count": sum(
+            1 for row in projection_endpoint_mismatches if row.get("derived_from_edge_id")
+        ),
+        "relation_direction_mismatch_count": len(relation_direction_mismatches),
         "authority_kind_counts": dict(sorted(Counter(row.get("authority_kind") or "relation_reference" for row in graph_edges).items())),
         "support_kind_counts": dict(sorted(Counter(row.get("support_kind") or "relation_reference" for row in graph_edges).items())),
     }
+
+
+def _relation_projection_endpoint_mismatch(edge: dict) -> bool:
+    projection = edge.get("relation_projection") or {}
+    source_unit = projection.get("source_legal_unit_id")
+    target_unit = projection.get("target_legal_unit_id")
+    return bool(
+        source_unit
+        and target_unit
+        and (
+            edge.get("source_id") != f"legal_unit::{source_unit}"
+            or edge.get("target_id") != f"legal_unit::{target_unit}"
+        )
+    )
 
 
 def _all_text_disposition_health(

@@ -205628,8 +205628,10 @@
           "target_legal_unit_id": "uud_legal_unit_00575",
           "target_citation": "Pasal 16",
           "source_legal_unit_id": "uud_legal_unit_00643",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Clause (d)",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "Pasal 16",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -205695,8 +205697,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00643",
-          "target_id": "legal_unit::uud_legal_unit_00575"
+          "target_id": "legal_unit::uud_legal_unit_00575",
+          "projection_direction": "forward"
         }
       },
       {
@@ -214175,8 +214180,10 @@
           "target_legal_unit_id": "uud_legal_unit_00380",
           "target_citation": "Pasal 5 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00621",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
           "source_label": "Perubahan Pertama Scope",
+          "target_document_id": "uud::amendment_1_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
@@ -214263,8 +214270,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00621",
-          "target_id": "legal_unit::uud_legal_unit_00380"
+          "target_id": "legal_unit::uud_legal_unit_00380",
+          "projection_direction": "forward"
         }
       },
       {
@@ -214293,8 +214303,10 @@
           "target_legal_unit_id": "uud_legal_unit_00381",
           "target_citation": "Pasal 7",
           "source_legal_unit_id": "uud_legal_unit_00621",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
           "source_label": "Perubahan Pertama Scope",
+          "target_document_id": "uud::amendment_1_historical",
           "target_label": "Pasal 7",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
@@ -214351,8 +214363,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00621",
-          "target_id": "legal_unit::uud_legal_unit_00381"
+          "target_id": "legal_unit::uud_legal_unit_00381",
+          "projection_direction": "forward"
         }
       },
       {
@@ -214381,8 +214396,10 @@
           "target_legal_unit_id": "uud_legal_unit_00382",
           "target_citation": "Pasal 9",
           "source_legal_unit_id": "uud_legal_unit_00621",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
           "source_label": "Perubahan Pertama Scope",
+          "target_document_id": "uud::amendment_1_historical",
           "target_label": "Pasal 9",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
@@ -214439,8 +214456,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00621",
-          "target_id": "legal_unit::uud_legal_unit_00382"
+          "target_id": "legal_unit::uud_legal_unit_00382",
+          "projection_direction": "forward"
         }
       },
       {
@@ -214469,8 +214489,10 @@
           "target_legal_unit_id": "uud_legal_unit_00388",
           "target_citation": "Pasal 14",
           "source_legal_unit_id": "uud_legal_unit_00621",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
           "source_label": "Perubahan Pertama Scope",
+          "target_document_id": "uud::amendment_1_historical",
           "target_label": "Pasal 14",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
@@ -214527,8 +214549,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00621",
-          "target_id": "legal_unit::uud_legal_unit_00388"
+          "target_id": "legal_unit::uud_legal_unit_00388",
+          "projection_direction": "forward"
         }
       },
       {
@@ -214557,8 +214582,10 @@
           "target_legal_unit_id": "uud_legal_unit_00391",
           "target_citation": "Pasal 15",
           "source_legal_unit_id": "uud_legal_unit_00621",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
           "source_label": "Perubahan Pertama Scope",
+          "target_document_id": "uud::amendment_1_historical",
           "target_label": "Pasal 15",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
@@ -214615,8 +214642,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00621",
-          "target_id": "legal_unit::uud_legal_unit_00391"
+          "target_id": "legal_unit::uud_legal_unit_00391",
+          "projection_direction": "forward"
         }
       },
       {
@@ -214645,8 +214675,10 @@
           "target_legal_unit_id": "uud_legal_unit_00393",
           "target_citation": "Pasal 17 ayat (2)",
           "source_legal_unit_id": "uud_legal_unit_00621",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
           "source_label": "Perubahan Pertama Scope",
+          "target_document_id": "uud::amendment_1_historical",
           "target_label": "(2)",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
@@ -214709,8 +214741,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00621",
-          "target_id": "legal_unit::uud_legal_unit_00393"
+          "target_id": "legal_unit::uud_legal_unit_00393",
+          "projection_direction": "forward"
         }
       },
       {
@@ -214739,8 +214774,10 @@
           "target_legal_unit_id": "uud_legal_unit_00395",
           "target_citation": "Pasal 20",
           "source_legal_unit_id": "uud_legal_unit_00621",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
           "source_label": "Perubahan Pertama Scope",
+          "target_document_id": "uud::amendment_1_historical",
           "target_label": "Pasal 20",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
@@ -214797,8 +214834,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00621",
-          "target_id": "legal_unit::uud_legal_unit_00395"
+          "target_id": "legal_unit::uud_legal_unit_00395",
+          "projection_direction": "forward"
         }
       },
       {
@@ -214827,8 +214867,10 @@
           "target_legal_unit_id": "uud_legal_unit_00400",
           "target_citation": "Pasal 21",
           "source_legal_unit_id": "uud_legal_unit_00621",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
           "source_label": "Perubahan Pertama Scope",
+          "target_document_id": "uud::amendment_1_historical",
           "target_label": "Pasal 21",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
@@ -214900,8 +214942,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00621",
-          "target_id": "legal_unit::uud_legal_unit_00400"
+          "target_id": "legal_unit::uud_legal_unit_00400",
+          "projection_direction": "forward"
         }
       },
       {
@@ -214930,8 +214975,10 @@
           "target_legal_unit_id": "uud_legal_unit_00401",
           "target_citation": "Pasal 18",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 18",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215009,8 +215056,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00401"
+          "target_id": "legal_unit::uud_legal_unit_00401",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215039,8 +215089,10 @@
           "target_legal_unit_id": "uud_legal_unit_00409",
           "target_citation": "Pasal 18A",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 18A",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215103,8 +215155,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00409"
+          "target_id": "legal_unit::uud_legal_unit_00409",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215133,8 +215188,10 @@
           "target_legal_unit_id": "uud_legal_unit_00412",
           "target_citation": "Pasal 18B",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 18B",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215197,8 +215254,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00412"
+          "target_id": "legal_unit::uud_legal_unit_00412",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215227,8 +215287,10 @@
           "target_legal_unit_id": "uud_legal_unit_00415",
           "target_citation": "Pasal 19",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 19",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215288,8 +215350,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00415"
+          "target_id": "legal_unit::uud_legal_unit_00415",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215318,8 +215383,10 @@
           "target_legal_unit_id": "uud_legal_unit_00420",
           "target_citation": "Pasal 20 ayat (5)",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "(5)",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215388,8 +215455,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00420"
+          "target_id": "legal_unit::uud_legal_unit_00420",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215418,8 +215488,10 @@
           "target_legal_unit_id": "uud_legal_unit_00421",
           "target_citation": "Pasal 20A",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 20A",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215474,8 +215546,11 @@
           "trace_only_reason": "shared_source_line_target_not_isolatable",
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00421"
+          "target_id": "legal_unit::uud_legal_unit_00421",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215504,8 +215579,10 @@
           "target_legal_unit_id": "uud_legal_unit_00426",
           "target_citation": "Pasal 22A",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 22A",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215568,8 +215645,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00426"
+          "target_id": "legal_unit::uud_legal_unit_00426",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215598,8 +215678,10 @@
           "target_legal_unit_id": "uud_legal_unit_00427",
           "target_citation": "Pasal 22B",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 22B",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215662,8 +215744,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00427"
+          "target_id": "legal_unit::uud_legal_unit_00427",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215692,8 +215777,10 @@
           "target_legal_unit_id": "uud_legal_unit_00428",
           "target_citation": "Pasal 25E",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 25E",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215756,8 +215843,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00428"
+          "target_id": "legal_unit::uud_legal_unit_00428",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215786,8 +215876,10 @@
           "target_legal_unit_id": "uud_legal_unit_00431",
           "target_citation": "Pasal 26 ayat (2)",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "(2)",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215856,8 +215948,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00431"
+          "target_id": "legal_unit::uud_legal_unit_00431",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215886,8 +215981,10 @@
           "target_legal_unit_id": "uud_legal_unit_00435",
           "target_citation": "Pasal 28A",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28A",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -215950,8 +216047,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00435"
+          "target_id": "legal_unit::uud_legal_unit_00435",
+          "projection_direction": "forward"
         }
       },
       {
@@ -215980,8 +216080,10 @@
           "target_legal_unit_id": "uud_legal_unit_00436",
           "target_citation": "Pasal 28B",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28B",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216044,8 +216146,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00436"
+          "target_id": "legal_unit::uud_legal_unit_00436",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216074,8 +216179,10 @@
           "target_legal_unit_id": "uud_legal_unit_00439",
           "target_citation": "Pasal 28C",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28C",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216138,8 +216245,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00439"
+          "target_id": "legal_unit::uud_legal_unit_00439",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216168,8 +216278,10 @@
           "target_legal_unit_id": "uud_legal_unit_00442",
           "target_citation": "Pasal 28D",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28D",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216232,8 +216344,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00442"
+          "target_id": "legal_unit::uud_legal_unit_00442",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216262,8 +216377,10 @@
           "target_legal_unit_id": "uud_legal_unit_00447",
           "target_citation": "Pasal 28E",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28E",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216326,8 +216443,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00447"
+          "target_id": "legal_unit::uud_legal_unit_00447",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216356,8 +216476,10 @@
           "target_legal_unit_id": "uud_legal_unit_00451",
           "target_citation": "Pasal 28F",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28F",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216420,8 +216542,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00451"
+          "target_id": "legal_unit::uud_legal_unit_00451",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216450,8 +216575,10 @@
           "target_legal_unit_id": "uud_legal_unit_00452",
           "target_citation": "Pasal 28G",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28G",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216514,8 +216641,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00452"
+          "target_id": "legal_unit::uud_legal_unit_00452",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216544,8 +216674,10 @@
           "target_legal_unit_id": "uud_legal_unit_00455",
           "target_citation": "Pasal 28H",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28H",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216608,8 +216740,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00455"
+          "target_id": "legal_unit::uud_legal_unit_00455",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216638,8 +216773,10 @@
           "target_legal_unit_id": "uud_legal_unit_00460",
           "target_citation": "Pasal 28I",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28I",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216702,8 +216839,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00460"
+          "target_id": "legal_unit::uud_legal_unit_00460",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216732,8 +216872,10 @@
           "target_legal_unit_id": "uud_legal_unit_00466",
           "target_citation": "Pasal 28J",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 28J",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216796,8 +216938,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00466"
+          "target_id": "legal_unit::uud_legal_unit_00466",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216826,8 +216971,10 @@
           "target_legal_unit_id": "uud_legal_unit_00470",
           "target_citation": "Pasal 30",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 30",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216890,8 +217037,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00470"
+          "target_id": "legal_unit::uud_legal_unit_00470",
+          "projection_direction": "forward"
         }
       },
       {
@@ -216920,8 +217070,10 @@
           "target_legal_unit_id": "uud_legal_unit_00477",
           "target_citation": "Pasal 36A",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 36A",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -216984,8 +217136,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00477"
+          "target_id": "legal_unit::uud_legal_unit_00477",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217014,8 +217169,10 @@
           "target_legal_unit_id": "uud_legal_unit_00478",
           "target_citation": "Pasal 36B",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 36B",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -217078,8 +217235,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00478"
+          "target_id": "legal_unit::uud_legal_unit_00478",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217108,8 +217268,10 @@
           "target_legal_unit_id": "uud_legal_unit_00479",
           "target_citation": "Pasal 36C",
           "source_legal_unit_id": "uud_legal_unit_00628",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Perubahan Kedua Scope",
+          "target_document_id": "uud::amendment_2_historical",
           "target_label": "Pasal 36C",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
@@ -217190,8 +217352,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00628",
-          "target_id": "legal_unit::uud_legal_unit_00479"
+          "target_id": "legal_unit::uud_legal_unit_00479",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217220,8 +217385,10 @@
           "target_legal_unit_id": "uud_legal_unit_00481",
           "target_citation": "Pasal 1 ayat (2)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(2)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -217322,8 +217489,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00481"
+          "target_id": "legal_unit::uud_legal_unit_00481",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217352,8 +217522,10 @@
           "target_legal_unit_id": "uud_legal_unit_00484",
           "target_citation": "Pasal 3 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -217430,8 +217602,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00484"
+          "target_id": "legal_unit::uud_legal_unit_00484",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217460,8 +217635,10 @@
           "target_legal_unit_id": "uud_legal_unit_00488",
           "target_citation": "Pasal 6 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -217538,8 +217715,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00488"
+          "target_id": "legal_unit::uud_legal_unit_00488",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217568,8 +217748,10 @@
           "target_legal_unit_id": "uud_legal_unit_00491",
           "target_citation": "Pasal 6A ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -217646,8 +217828,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00491"
+          "target_id": "legal_unit::uud_legal_unit_00491",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217676,8 +217861,10 @@
           "target_legal_unit_id": "uud_legal_unit_00495",
           "target_citation": "Pasal 7A",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "Pasal 7A",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -217748,8 +217935,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00495"
+          "target_id": "legal_unit::uud_legal_unit_00495",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217778,8 +217968,10 @@
           "target_legal_unit_id": "uud_legal_unit_00497",
           "target_citation": "Pasal 7B ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -217856,8 +218048,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00497"
+          "target_id": "legal_unit::uud_legal_unit_00497",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217886,8 +218081,10 @@
           "target_legal_unit_id": "uud_legal_unit_00504",
           "target_citation": "Pasal 7C",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "Pasal 7C",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -217958,8 +218155,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00504"
+          "target_id": "legal_unit::uud_legal_unit_00504",
+          "projection_direction": "forward"
         }
       },
       {
@@ -217988,8 +218188,10 @@
           "target_legal_unit_id": "uud_legal_unit_00506",
           "target_citation": "Pasal 8 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -218066,8 +218268,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00506"
+          "target_id": "legal_unit::uud_legal_unit_00506",
+          "projection_direction": "forward"
         }
       },
       {
@@ -218096,8 +218301,10 @@
           "target_legal_unit_id": "uud_legal_unit_00509",
           "target_citation": "Pasal 11 ayat (2)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(2)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -218174,8 +218381,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00509"
+          "target_id": "legal_unit::uud_legal_unit_00509",
+          "projection_direction": "forward"
         }
       },
       {
@@ -218204,8 +218414,10 @@
           "target_legal_unit_id": "uud_legal_unit_00512",
           "target_citation": "Pasal 17 ayat (4)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(4)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -218282,8 +218494,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00512"
+          "target_id": "legal_unit::uud_legal_unit_00512",
+          "projection_direction": "forward"
         }
       },
       {
@@ -218312,8 +218527,10 @@
           "target_legal_unit_id": "uud_legal_unit_00514",
           "target_citation": "Pasal 22C ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -218390,8 +218607,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00514"
+          "target_id": "legal_unit::uud_legal_unit_00514",
+          "projection_direction": "forward"
         }
       },
       {
@@ -218420,8 +218640,10 @@
           "target_legal_unit_id": "uud_legal_unit_00519",
           "target_citation": "Pasal 22D ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -218498,8 +218720,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00519"
+          "target_id": "legal_unit::uud_legal_unit_00519",
+          "projection_direction": "forward"
         }
       },
       {
@@ -218528,8 +218753,10 @@
           "target_legal_unit_id": "uud_legal_unit_00524",
           "target_citation": "Pasal 22E ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -218606,8 +218833,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00524"
+          "target_id": "legal_unit::uud_legal_unit_00524",
+          "projection_direction": "forward"
         }
       },
       {
@@ -218636,8 +218866,10 @@
           "target_legal_unit_id": "uud_legal_unit_00531",
           "target_citation": "Pasal 23 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -218700,8 +218932,11 @@
           "trace_only_reason": "shared_source_line_target_not_isolatable",
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00531"
+          "target_id": "legal_unit::uud_legal_unit_00531",
+          "projection_direction": "forward"
         }
       },
       {
@@ -218730,8 +218965,10 @@
           "target_legal_unit_id": "uud_legal_unit_00534",
           "target_citation": "Pasal 23A",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "Pasal 23A",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -218802,8 +219039,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00534"
+          "target_id": "legal_unit::uud_legal_unit_00534",
+          "projection_direction": "forward"
         }
       },
       {
@@ -218832,8 +219072,10 @@
           "target_legal_unit_id": "uud_legal_unit_00535",
           "target_citation": "Pasal 23C",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "Pasal 23C",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -218904,8 +219146,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00535"
+          "target_id": "legal_unit::uud_legal_unit_00535",
+          "projection_direction": "forward"
         }
       },
       {
@@ -218934,8 +219179,10 @@
           "target_legal_unit_id": "uud_legal_unit_00537",
           "target_citation": "Pasal 23E ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -219012,8 +219259,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00537"
+          "target_id": "legal_unit::uud_legal_unit_00537",
+          "projection_direction": "forward"
         }
       },
       {
@@ -219042,8 +219292,10 @@
           "target_legal_unit_id": "uud_legal_unit_00541",
           "target_citation": "Pasal 23F ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -219120,8 +219372,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00541"
+          "target_id": "legal_unit::uud_legal_unit_00541",
+          "projection_direction": "forward"
         }
       },
       {
@@ -219150,8 +219405,10 @@
           "target_legal_unit_id": "uud_legal_unit_00544",
           "target_citation": "Pasal 23G ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -219228,8 +219485,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00544"
+          "target_id": "legal_unit::uud_legal_unit_00544",
+          "projection_direction": "forward"
         }
       },
       {
@@ -219258,8 +219518,10 @@
           "target_legal_unit_id": "uud_legal_unit_00547",
           "target_citation": "Pasal 24 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -219336,8 +219598,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00547"
+          "target_id": "legal_unit::uud_legal_unit_00547",
+          "projection_direction": "forward"
         }
       },
       {
@@ -219366,8 +219631,10 @@
           "target_legal_unit_id": "uud_legal_unit_00550",
           "target_citation": "Pasal 24A ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -219444,8 +219711,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00550"
+          "target_id": "legal_unit::uud_legal_unit_00550",
+          "projection_direction": "forward"
         }
       },
       {
@@ -219474,8 +219744,10 @@
           "target_legal_unit_id": "uud_legal_unit_00556",
           "target_citation": "Pasal 24B ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -219552,8 +219824,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00556"
+          "target_id": "legal_unit::uud_legal_unit_00556",
+          "projection_direction": "forward"
         }
       },
       {
@@ -219582,8 +219857,10 @@
           "target_legal_unit_id": "uud_legal_unit_00561",
           "target_citation": "Pasal 24C ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00632",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "Perubahan Ketiga Scope",
+          "target_document_id": "uud::amendment_3_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
@@ -219690,8 +219967,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00632",
-          "target_id": "legal_unit::uud_legal_unit_00561"
+          "target_id": "legal_unit::uud_legal_unit_00561",
+          "projection_direction": "forward"
         }
       },
       {
@@ -219720,8 +220000,10 @@
           "target_legal_unit_id": "uud_legal_unit_00568",
           "target_citation": "Pasal 2 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -219844,8 +220126,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00568"
+          "target_id": "legal_unit::uud_legal_unit_00568",
+          "projection_direction": "forward"
         }
       },
       {
@@ -219874,8 +220159,10 @@
           "target_legal_unit_id": "uud_legal_unit_00570",
           "target_citation": "Pasal 6A ayat (4)",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "(4)",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -219974,8 +220261,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00570"
+          "target_id": "legal_unit::uud_legal_unit_00570",
+          "projection_direction": "forward"
         }
       },
       {
@@ -220004,8 +220294,10 @@
           "target_legal_unit_id": "uud_legal_unit_00572",
           "target_citation": "Pasal 8 ayat (3)",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "(3)",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -220104,8 +220396,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00572"
+          "target_id": "legal_unit::uud_legal_unit_00572",
+          "projection_direction": "forward"
         }
       },
       {
@@ -220134,8 +220429,10 @@
           "target_legal_unit_id": "uud_legal_unit_00574",
           "target_citation": "Pasal 11 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -220234,8 +220531,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00574"
+          "target_id": "legal_unit::uud_legal_unit_00574",
+          "projection_direction": "forward"
         }
       },
       {
@@ -220264,8 +220564,10 @@
           "target_legal_unit_id": "uud_legal_unit_00575",
           "target_citation": "Pasal 16",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "Pasal 16",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -220375,8 +220677,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00575"
+          "target_id": "legal_unit::uud_legal_unit_00575",
+          "projection_direction": "forward"
         }
       },
       {
@@ -220405,8 +220710,10 @@
           "target_legal_unit_id": "uud_legal_unit_00577",
           "target_citation": "Pasal 23B",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "Pasal 23B",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -220499,8 +220806,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00577"
+          "target_id": "legal_unit::uud_legal_unit_00577",
+          "projection_direction": "forward"
         }
       },
       {
@@ -220529,8 +220839,10 @@
           "target_legal_unit_id": "uud_legal_unit_00578",
           "target_citation": "Pasal 23D",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "Pasal 23D",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -220626,8 +220938,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00578"
+          "target_id": "legal_unit::uud_legal_unit_00578",
+          "projection_direction": "forward"
         }
       },
       {
@@ -220656,8 +220971,10 @@
           "target_legal_unit_id": "uud_legal_unit_00580",
           "target_citation": "Pasal 24 ayat (3)",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "(3)",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -220756,8 +221073,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00580"
+          "target_id": "legal_unit::uud_legal_unit_00580",
+          "projection_direction": "forward"
         }
       },
       {
@@ -220786,8 +221106,10 @@
           "target_legal_unit_id": "uud_legal_unit_00583",
           "target_citation": "Pasal 31 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -220886,8 +221208,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00583"
+          "target_id": "legal_unit::uud_legal_unit_00583",
+          "projection_direction": "forward"
         }
       },
       {
@@ -220916,8 +221241,10 @@
           "target_legal_unit_id": "uud_legal_unit_00596",
           "target_citation": "Pasal 34 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -221016,8 +221343,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00596"
+          "target_id": "legal_unit::uud_legal_unit_00596",
+          "projection_direction": "forward"
         }
       },
       {
@@ -221046,8 +221376,10 @@
           "target_legal_unit_id": "uud_legal_unit_00601",
           "target_citation": "Pasal 37 ayat (1)",
           "source_legal_unit_id": "uud_legal_unit_00639",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
           "source_label": "Perubahan Keempat Scope",
+          "target_document_id": "uud::amendment_4_historical",
           "target_label": "(1)",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
@@ -221146,8 +221478,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00639",
-          "target_id": "legal_unit::uud_legal_unit_00601"
+          "target_id": "legal_unit::uud_legal_unit_00601",
+          "projection_direction": "forward"
         }
       },
       {
@@ -236708,14 +237043,16 @@
         "relation_projection": {
           "relation_id": "uud_article_amendment_relation::renames::uud_instrument_final_citation_evidence::amendment_4_historical::00021::perubahan_keempat_clause_c::uud_legal_unit_00014::Pasal 3 ayat (3)->Pasal 3 ayat (2)",
           "corpus_id": "uud",
-          "source_document_id": "uud::amendment_4_historical",
-          "source_role": "amendment_4_historical",
+          "source_document_id": "uud::amendment_3_historical",
+          "source_role": "amendment_3_historical",
           "relation_type": "RENAMES",
           "target_legal_unit_id": "uud_legal_unit_00014",
           "target_citation": "Pasal 3 ayat (2)",
           "source_legal_unit_id": "uud_legal_unit_00485",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "(3)",
+          "target_document_id": "uud::current_consolidated",
           "target_label": "(2)",
           "target_source_role": "current_consolidated",
           "old_reference": "Pasal 3 ayat (3)",
@@ -236800,8 +237137,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00485",
-          "target_id": "legal_unit::uud_legal_unit_00014"
+          "target_id": "legal_unit::uud_legal_unit_00014",
+          "projection_direction": "forward"
         }
       },
       {
@@ -236824,14 +237164,16 @@
         "relation_projection": {
           "relation_id": "uud_article_amendment_relation::renames::uud_instrument_final_citation_evidence::amendment_4_historical::00021::perubahan_keempat_clause_c::uud_legal_unit_00015::Pasal 3 ayat (4)->Pasal 3 ayat (3)",
           "corpus_id": "uud",
-          "source_document_id": "uud::amendment_4_historical",
-          "source_role": "amendment_4_historical",
+          "source_document_id": "uud::amendment_3_historical",
+          "source_role": "amendment_3_historical",
           "relation_type": "RENAMES",
           "target_legal_unit_id": "uud_legal_unit_00015",
           "target_citation": "Pasal 3 ayat (3)",
           "source_legal_unit_id": "uud_legal_unit_00486",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
           "source_label": "(4)",
+          "target_document_id": "uud::current_consolidated",
           "target_label": "(3)",
           "target_source_role": "current_consolidated",
           "old_reference": "Pasal 3 ayat (4)",
@@ -236892,8 +237234,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00486",
-          "target_id": "legal_unit::uud_legal_unit_00015"
+          "target_id": "legal_unit::uud_legal_unit_00015",
+          "projection_direction": "forward"
         }
       },
       {
@@ -236916,8 +237261,8 @@
         "relation_projection": {
           "relation_id": "uud_article_amendment_relation::renumbered_to::uud_instrument_final_citation_evidence::amendment_4_historical::00021::perubahan_keempat_clause_c::uud_legal_unit_00170::Pasal 25E->Pasal 25A",
           "corpus_id": "uud",
-          "source_document_id": "uud::amendment_4_historical",
-          "source_role": "amendment_4_historical",
+          "source_document_id": "uud::amendment_2_historical",
+          "source_role": "amendment_2_historical",
           "relation_type": "RENUMBERED_TO",
           "substantive_change": false,
           "source_conflict": false,
@@ -236925,8 +237270,10 @@
           "target_legal_unit_id": "uud_legal_unit_00170",
           "target_citation": "Pasal 25A",
           "source_legal_unit_id": "uud_legal_unit_00428",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
           "source_label": "Pasal 25E",
+          "target_document_id": "uud::current_consolidated",
           "target_label": "Pasal 25A",
           "target_source_role": "current_consolidated",
           "old_reference": "Pasal 25E",
@@ -236999,8 +237346,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00428",
-          "target_id": "legal_unit::uud_legal_unit_00170"
+          "target_id": "legal_unit::uud_legal_unit_00170",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237039,7 +237389,8 @@
           "article_level": false,
           "reason": "source_role_document_level_relation_without_pasal_ayat_evidence_bbox",
           "source_id": "source_role::amendment_1_historical",
-          "target_id": "source_role::original_historical"
+          "target_id": "source_role::original_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237078,7 +237429,8 @@
           "article_level": false,
           "reason": "source_role_document_level_relation_without_pasal_ayat_evidence_bbox",
           "source_id": "source_role::amendment_2_historical",
-          "target_id": "source_role::original_historical"
+          "target_id": "source_role::original_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237117,7 +237469,8 @@
           "article_level": false,
           "reason": "source_role_document_level_relation_without_pasal_ayat_evidence_bbox",
           "source_id": "source_role::amendment_3_historical",
-          "target_id": "source_role::original_historical"
+          "target_id": "source_role::original_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237156,7 +237509,8 @@
           "article_level": false,
           "reason": "source_role_document_level_relation_without_pasal_ayat_evidence_bbox",
           "source_id": "source_role::amendment_4_historical",
-          "target_id": "source_role::original_historical"
+          "target_id": "source_role::original_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237193,7 +237547,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::current_consolidated",
-          "target_id": "source_role::amendment_1_historical"
+          "target_id": "source_role::amendment_1_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237230,7 +237585,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::current_consolidated",
-          "target_id": "source_role::amendment_2_historical"
+          "target_id": "source_role::amendment_2_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237267,7 +237623,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::current_consolidated",
-          "target_id": "source_role::amendment_3_historical"
+          "target_id": "source_role::amendment_3_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237304,7 +237661,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::current_consolidated",
-          "target_id": "source_role::amendment_4_historical"
+          "target_id": "source_role::amendment_4_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237341,7 +237699,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::current_consolidated",
-          "target_id": "source_role::original_historical"
+          "target_id": "source_role::original_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237380,7 +237739,8 @@
           "article_level": false,
           "reason": "source_role_document_level_relation_without_pasal_ayat_evidence_bbox",
           "source_id": "source_role::original_historical",
-          "target_id": "source_role::amendment_1_historical"
+          "target_id": "source_role::amendment_1_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237419,7 +237779,8 @@
           "article_level": false,
           "reason": "source_role_document_level_relation_without_pasal_ayat_evidence_bbox",
           "source_id": "source_role::original_historical",
-          "target_id": "source_role::amendment_2_historical"
+          "target_id": "source_role::amendment_2_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237458,7 +237819,8 @@
           "article_level": false,
           "reason": "source_role_document_level_relation_without_pasal_ayat_evidence_bbox",
           "source_id": "source_role::original_historical",
-          "target_id": "source_role::amendment_3_historical"
+          "target_id": "source_role::amendment_3_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237497,7 +237859,8 @@
           "article_level": false,
           "reason": "source_role_document_level_relation_without_pasal_ayat_evidence_bbox",
           "source_id": "source_role::original_historical",
-          "target_id": "source_role::amendment_4_historical"
+          "target_id": "source_role::amendment_4_historical",
+          "projection_direction": "forward"
         }
       },
       {
@@ -237524,12 +237887,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "DELETED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00575",
-          "target_citation": "Pasal 16",
-          "source_legal_unit_id": "uud_legal_unit_00643",
+          "target_legal_unit_id": "uud_legal_unit_00643",
+          "target_citation": "Perubahan Keempat Clause (d)",
+          "source_legal_unit_id": "uud_legal_unit_00575",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Clause (d)",
-          "target_label": "Pasal 16",
+          "source_label": "Pasal 16",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Clause (d)",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 16",
@@ -237594,8 +237959,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00575",
-          "target_id": "legal_unit::uud_legal_unit_00643"
+          "target_id": "legal_unit::uud_legal_unit_00643",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -237622,12 +237990,14 @@
           "source_document_id": "uud::amendment_1_historical",
           "source_role": "amendment_1_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00380",
-          "target_citation": "Pasal 5 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00621",
+          "target_legal_unit_id": "uud_legal_unit_00621",
+          "target_citation": "Perubahan Pertama Scope",
+          "source_legal_unit_id": "uud_legal_unit_00380",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
-          "source_label": "Perubahan Pertama Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_1_historical",
+          "target_label": "Perubahan Pertama Scope",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
           "new_reference": "Pasal 5 ayat (1)",
@@ -237713,8 +238083,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00380",
-          "target_id": "legal_unit::uud_legal_unit_00621"
+          "target_id": "legal_unit::uud_legal_unit_00621",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -237741,12 +238114,14 @@
           "source_document_id": "uud::amendment_1_historical",
           "source_role": "amendment_1_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00381",
-          "target_citation": "Pasal 7",
-          "source_legal_unit_id": "uud_legal_unit_00621",
+          "target_legal_unit_id": "uud_legal_unit_00621",
+          "target_citation": "Perubahan Pertama Scope",
+          "source_legal_unit_id": "uud_legal_unit_00381",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
-          "source_label": "Perubahan Pertama Scope",
-          "target_label": "Pasal 7",
+          "source_label": "Pasal 7",
+          "target_document_id": "uud::amendment_1_historical",
+          "target_label": "Perubahan Pertama Scope",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
           "new_reference": "Pasal 7",
@@ -237802,8 +238177,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00381",
-          "target_id": "legal_unit::uud_legal_unit_00621"
+          "target_id": "legal_unit::uud_legal_unit_00621",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -237830,12 +238208,14 @@
           "source_document_id": "uud::amendment_1_historical",
           "source_role": "amendment_1_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00382",
-          "target_citation": "Pasal 9",
-          "source_legal_unit_id": "uud_legal_unit_00621",
+          "target_legal_unit_id": "uud_legal_unit_00621",
+          "target_citation": "Perubahan Pertama Scope",
+          "source_legal_unit_id": "uud_legal_unit_00382",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
-          "source_label": "Perubahan Pertama Scope",
-          "target_label": "Pasal 9",
+          "source_label": "Pasal 9",
+          "target_document_id": "uud::amendment_1_historical",
+          "target_label": "Perubahan Pertama Scope",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
           "new_reference": "Pasal 9",
@@ -237891,8 +238271,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00382",
-          "target_id": "legal_unit::uud_legal_unit_00621"
+          "target_id": "legal_unit::uud_legal_unit_00621",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -237919,12 +238302,14 @@
           "source_document_id": "uud::amendment_1_historical",
           "source_role": "amendment_1_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00388",
-          "target_citation": "Pasal 14",
-          "source_legal_unit_id": "uud_legal_unit_00621",
+          "target_legal_unit_id": "uud_legal_unit_00621",
+          "target_citation": "Perubahan Pertama Scope",
+          "source_legal_unit_id": "uud_legal_unit_00388",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
-          "source_label": "Perubahan Pertama Scope",
-          "target_label": "Pasal 14",
+          "source_label": "Pasal 14",
+          "target_document_id": "uud::amendment_1_historical",
+          "target_label": "Perubahan Pertama Scope",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
           "new_reference": "Pasal 14",
@@ -237980,8 +238365,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00388",
-          "target_id": "legal_unit::uud_legal_unit_00621"
+          "target_id": "legal_unit::uud_legal_unit_00621",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238008,12 +238396,14 @@
           "source_document_id": "uud::amendment_1_historical",
           "source_role": "amendment_1_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00391",
-          "target_citation": "Pasal 15",
-          "source_legal_unit_id": "uud_legal_unit_00621",
+          "target_legal_unit_id": "uud_legal_unit_00621",
+          "target_citation": "Perubahan Pertama Scope",
+          "source_legal_unit_id": "uud_legal_unit_00391",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
-          "source_label": "Perubahan Pertama Scope",
-          "target_label": "Pasal 15",
+          "source_label": "Pasal 15",
+          "target_document_id": "uud::amendment_1_historical",
+          "target_label": "Perubahan Pertama Scope",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
           "new_reference": "Pasal 15",
@@ -238069,8 +238459,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00391",
-          "target_id": "legal_unit::uud_legal_unit_00621"
+          "target_id": "legal_unit::uud_legal_unit_00621",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238097,12 +238490,14 @@
           "source_document_id": "uud::amendment_1_historical",
           "source_role": "amendment_1_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00393",
-          "target_citation": "Pasal 17 ayat (2)",
-          "source_legal_unit_id": "uud_legal_unit_00621",
+          "target_legal_unit_id": "uud_legal_unit_00621",
+          "target_citation": "Perubahan Pertama Scope",
+          "source_legal_unit_id": "uud_legal_unit_00393",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
-          "source_label": "Perubahan Pertama Scope",
-          "target_label": "(2)",
+          "source_label": "(2)",
+          "target_document_id": "uud::amendment_1_historical",
+          "target_label": "Perubahan Pertama Scope",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
           "new_reference": "Pasal 17 ayat (2)",
@@ -238164,8 +238559,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00393",
-          "target_id": "legal_unit::uud_legal_unit_00621"
+          "target_id": "legal_unit::uud_legal_unit_00621",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238192,12 +238590,14 @@
           "source_document_id": "uud::amendment_1_historical",
           "source_role": "amendment_1_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00395",
-          "target_citation": "Pasal 20",
-          "source_legal_unit_id": "uud_legal_unit_00621",
+          "target_legal_unit_id": "uud_legal_unit_00621",
+          "target_citation": "Perubahan Pertama Scope",
+          "source_legal_unit_id": "uud_legal_unit_00395",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
-          "source_label": "Perubahan Pertama Scope",
-          "target_label": "Pasal 20",
+          "source_label": "Pasal 20",
+          "target_document_id": "uud::amendment_1_historical",
+          "target_label": "Perubahan Pertama Scope",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
           "new_reference": "Pasal 20",
@@ -238253,8 +238653,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00395",
-          "target_id": "legal_unit::uud_legal_unit_00621"
+          "target_id": "legal_unit::uud_legal_unit_00621",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238281,12 +238684,14 @@
           "source_document_id": "uud::amendment_1_historical",
           "source_role": "amendment_1_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00400",
-          "target_citation": "Pasal 21",
-          "source_legal_unit_id": "uud_legal_unit_00621",
+          "target_legal_unit_id": "uud_legal_unit_00621",
+          "target_citation": "Perubahan Pertama Scope",
+          "source_legal_unit_id": "uud_legal_unit_00400",
+          "source_legal_unit_document_id": "uud::amendment_1_historical",
           "source_legal_unit_role": "amendment_1_historical",
-          "source_label": "Perubahan Pertama Scope",
-          "target_label": "Pasal 21",
+          "source_label": "Pasal 21",
+          "target_document_id": "uud::amendment_1_historical",
+          "target_label": "Perubahan Pertama Scope",
           "target_source_role": "amendment_1_historical",
           "old_reference": "",
           "new_reference": "Pasal 21",
@@ -238357,8 +238762,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_1_historical",
+          "support_source_role": "amendment_1_historical",
           "source_id": "legal_unit::uud_legal_unit_00400",
-          "target_id": "legal_unit::uud_legal_unit_00621"
+          "target_id": "legal_unit::uud_legal_unit_00621",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238385,12 +238793,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00401",
-          "target_citation": "Pasal 18",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00401",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 18",
+          "source_label": "Pasal 18",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 18",
@@ -238467,8 +238877,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00401",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238495,12 +238908,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00409",
-          "target_citation": "Pasal 18A",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00409",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 18A",
+          "source_label": "Pasal 18A",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 18A",
@@ -238562,8 +238977,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00409",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238590,12 +239008,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00412",
-          "target_citation": "Pasal 18B",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00412",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 18B",
+          "source_label": "Pasal 18B",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 18B",
@@ -238657,8 +239077,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00412",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238685,12 +239108,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00415",
-          "target_citation": "Pasal 19",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00415",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 19",
+          "source_label": "Pasal 19",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 19",
@@ -238749,8 +239174,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00415",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238777,12 +239205,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00420",
-          "target_citation": "Pasal 20 ayat (5)",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00420",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "(5)",
+          "source_label": "(5)",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 20 ayat (5)",
@@ -238850,8 +239280,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00420",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238878,12 +239311,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00421",
-          "target_citation": "Pasal 20A",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00421",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 20A",
+          "source_label": "Pasal 20A",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 20A",
@@ -238937,8 +239372,11 @@
           "trace_only_reason": "shared_source_line_target_not_isolatable",
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00421",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -238965,12 +239403,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00426",
-          "target_citation": "Pasal 22A",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00426",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 22A",
+          "source_label": "Pasal 22A",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 22A",
@@ -239032,8 +239472,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00426",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239060,12 +239503,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00427",
-          "target_citation": "Pasal 22B",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00427",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 22B",
+          "source_label": "Pasal 22B",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 22B",
@@ -239127,8 +239572,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00427",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239155,12 +239603,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00428",
-          "target_citation": "Pasal 25E",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00428",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 25E",
+          "source_label": "Pasal 25E",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 25E",
@@ -239222,8 +239672,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00428",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239250,12 +239703,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00431",
-          "target_citation": "Pasal 26 ayat (2)",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00431",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "(2)",
+          "source_label": "(2)",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 26 ayat (2)",
@@ -239323,8 +239778,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00431",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239351,12 +239809,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00435",
-          "target_citation": "Pasal 28A",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00435",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28A",
+          "source_label": "Pasal 28A",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28A",
@@ -239418,8 +239878,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00435",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239446,12 +239909,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00436",
-          "target_citation": "Pasal 28B",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00436",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28B",
+          "source_label": "Pasal 28B",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28B",
@@ -239513,8 +239978,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00436",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239541,12 +240009,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00439",
-          "target_citation": "Pasal 28C",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00439",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28C",
+          "source_label": "Pasal 28C",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28C",
@@ -239608,8 +240078,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00439",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239636,12 +240109,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00442",
-          "target_citation": "Pasal 28D",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00442",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28D",
+          "source_label": "Pasal 28D",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28D",
@@ -239703,8 +240178,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00442",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239731,12 +240209,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00447",
-          "target_citation": "Pasal 28E",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00447",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28E",
+          "source_label": "Pasal 28E",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28E",
@@ -239798,8 +240278,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00447",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239826,12 +240309,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00451",
-          "target_citation": "Pasal 28F",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00451",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28F",
+          "source_label": "Pasal 28F",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28F",
@@ -239893,8 +240378,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00451",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -239921,12 +240409,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00452",
-          "target_citation": "Pasal 28G",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00452",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28G",
+          "source_label": "Pasal 28G",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28G",
@@ -239988,8 +240478,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00452",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240016,12 +240509,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00455",
-          "target_citation": "Pasal 28H",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00455",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28H",
+          "source_label": "Pasal 28H",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28H",
@@ -240083,8 +240578,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00455",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240111,12 +240609,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00460",
-          "target_citation": "Pasal 28I",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00460",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28I",
+          "source_label": "Pasal 28I",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28I",
@@ -240178,8 +240678,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00460",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240206,12 +240709,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00466",
-          "target_citation": "Pasal 28J",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00466",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 28J",
+          "source_label": "Pasal 28J",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 28J",
@@ -240273,8 +240778,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00466",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240301,12 +240809,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00470",
-          "target_citation": "Pasal 30",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00470",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 30",
+          "source_label": "Pasal 30",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 30",
@@ -240368,8 +240878,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00470",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240396,12 +240909,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00477",
-          "target_citation": "Pasal 36A",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00477",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 36A",
+          "source_label": "Pasal 36A",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 36A",
@@ -240463,8 +240978,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00477",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240491,12 +241009,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00478",
-          "target_citation": "Pasal 36B",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00478",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 36B",
+          "source_label": "Pasal 36B",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 36B",
@@ -240558,8 +241078,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00478",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240586,12 +241109,14 @@
           "source_document_id": "uud::amendment_2_historical",
           "source_role": "amendment_2_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00479",
-          "target_citation": "Pasal 36C",
-          "source_legal_unit_id": "uud_legal_unit_00628",
+          "target_legal_unit_id": "uud_legal_unit_00628",
+          "target_citation": "Perubahan Kedua Scope",
+          "source_legal_unit_id": "uud_legal_unit_00479",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
           "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Perubahan Kedua Scope",
-          "target_label": "Pasal 36C",
+          "source_label": "Pasal 36C",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Perubahan Kedua Scope",
           "target_source_role": "amendment_2_historical",
           "old_reference": "",
           "new_reference": "Pasal 36C",
@@ -240671,8 +241196,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_2_historical",
+          "support_source_role": "amendment_2_historical",
           "source_id": "legal_unit::uud_legal_unit_00479",
-          "target_id": "legal_unit::uud_legal_unit_00628"
+          "target_id": "legal_unit::uud_legal_unit_00628",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240699,12 +241227,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00481",
-          "target_citation": "Pasal 1 ayat (2)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00481",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(2)",
+          "source_label": "(2)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 1 ayat (2)",
@@ -240804,8 +241334,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00481",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240832,12 +241365,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00484",
-          "target_citation": "Pasal 3 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00484",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 3 ayat (1)",
@@ -240913,8 +241448,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00484",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -240941,12 +241479,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00488",
-          "target_citation": "Pasal 6 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00488",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 6 ayat (1)",
@@ -241022,8 +241562,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00488",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -241050,12 +241593,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00491",
-          "target_citation": "Pasal 6A ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00491",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 6A ayat (1)",
@@ -241131,8 +241676,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00491",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -241159,12 +241707,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00495",
-          "target_citation": "Pasal 7A",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00495",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "Pasal 7A",
+          "source_label": "Pasal 7A",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 7A",
@@ -241234,8 +241784,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00495",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -241262,12 +241815,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00497",
-          "target_citation": "Pasal 7B ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00497",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 7B ayat (1)",
@@ -241343,8 +241898,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00497",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -241371,12 +241929,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00504",
-          "target_citation": "Pasal 7C",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00504",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "Pasal 7C",
+          "source_label": "Pasal 7C",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 7C",
@@ -241446,8 +242006,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00504",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -241474,12 +242037,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00506",
-          "target_citation": "Pasal 8 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00506",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 8 ayat (1)",
@@ -241555,8 +242120,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00506",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -241583,12 +242151,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00509",
-          "target_citation": "Pasal 11 ayat (2)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00509",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(2)",
+          "source_label": "(2)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 11 ayat (2)",
@@ -241664,8 +242234,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00509",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -241692,12 +242265,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00512",
-          "target_citation": "Pasal 17 ayat (4)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00512",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(4)",
+          "source_label": "(4)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 17 ayat (4)",
@@ -241773,8 +242348,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00512",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -241801,12 +242379,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00514",
-          "target_citation": "Pasal 22C ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00514",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 22C ayat (1)",
@@ -241882,8 +242462,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00514",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -241910,12 +242493,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00519",
-          "target_citation": "Pasal 22D ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00519",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 22D ayat (1)",
@@ -241991,8 +242576,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00519",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242019,12 +242607,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00524",
-          "target_citation": "Pasal 22E ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00524",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 22E ayat (1)",
@@ -242100,8 +242690,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00524",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242128,12 +242721,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00531",
-          "target_citation": "Pasal 23 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00531",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 23 ayat (1)",
@@ -242195,8 +242790,11 @@
           "trace_only_reason": "shared_source_line_target_not_isolatable",
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00531",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242223,12 +242821,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00534",
-          "target_citation": "Pasal 23A",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00534",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "Pasal 23A",
+          "source_label": "Pasal 23A",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 23A",
@@ -242298,8 +242898,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00534",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242326,12 +242929,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00535",
-          "target_citation": "Pasal 23C",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00535",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "Pasal 23C",
+          "source_label": "Pasal 23C",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 23C",
@@ -242401,8 +243006,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00535",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242429,12 +243037,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00537",
-          "target_citation": "Pasal 23E ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00537",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 23E ayat (1)",
@@ -242510,8 +243120,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00537",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242538,12 +243151,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00541",
-          "target_citation": "Pasal 23F ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00541",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 23F ayat (1)",
@@ -242619,8 +243234,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00541",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242647,12 +243265,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00544",
-          "target_citation": "Pasal 23G ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00544",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 23G ayat (1)",
@@ -242728,8 +243348,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00544",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242756,12 +243379,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00547",
-          "target_citation": "Pasal 24 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00547",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 24 ayat (1)",
@@ -242837,8 +243462,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00547",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242865,12 +243493,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00550",
-          "target_citation": "Pasal 24A ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00550",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 24A ayat (1)",
@@ -242946,8 +243576,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00550",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -242974,12 +243607,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00556",
-          "target_citation": "Pasal 24B ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00556",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 24B ayat (1)",
@@ -243055,8 +243690,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00556",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -243083,12 +243721,14 @@
           "source_document_id": "uud::amendment_3_historical",
           "source_role": "amendment_3_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00561",
-          "target_citation": "Pasal 24C ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00632",
+          "target_legal_unit_id": "uud_legal_unit_00632",
+          "target_citation": "Perubahan Ketiga Scope",
+          "source_legal_unit_id": "uud_legal_unit_00561",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
           "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "Perubahan Ketiga Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "Perubahan Ketiga Scope",
           "target_source_role": "amendment_3_historical",
           "old_reference": "",
           "new_reference": "Pasal 24C ayat (1)",
@@ -243194,8 +243834,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_3_historical",
+          "support_source_role": "amendment_3_historical",
           "source_id": "legal_unit::uud_legal_unit_00561",
-          "target_id": "legal_unit::uud_legal_unit_00632"
+          "target_id": "legal_unit::uud_legal_unit_00632",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -243222,12 +243865,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00568",
-          "target_citation": "Pasal 2 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00568",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 2 ayat (1)",
@@ -243349,8 +243994,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00568",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -243377,12 +244025,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00570",
-          "target_citation": "Pasal 6A ayat (4)",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00570",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "(4)",
+          "source_label": "(4)",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 6A ayat (4)",
@@ -243480,8 +244130,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00570",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -243508,12 +244161,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00572",
-          "target_citation": "Pasal 8 ayat (3)",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00572",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "(3)",
+          "source_label": "(3)",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 8 ayat (3)",
@@ -243611,8 +244266,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00572",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -243639,12 +244297,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00574",
-          "target_citation": "Pasal 11 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00574",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 11 ayat (1)",
@@ -243742,8 +244402,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00574",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -243770,12 +244433,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00575",
-          "target_citation": "Pasal 16",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00575",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "Pasal 16",
+          "source_label": "Pasal 16",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 16",
@@ -243884,8 +244549,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00575",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -243912,12 +244580,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00577",
-          "target_citation": "Pasal 23B",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00577",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "Pasal 23B",
+          "source_label": "Pasal 23B",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 23B",
@@ -244009,8 +244679,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00577",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -244037,12 +244710,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00578",
-          "target_citation": "Pasal 23D",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00578",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "Pasal 23D",
+          "source_label": "Pasal 23D",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 23D",
@@ -244137,8 +244812,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00578",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -244165,12 +244843,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00580",
-          "target_citation": "Pasal 24 ayat (3)",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00580",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "(3)",
+          "source_label": "(3)",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 24 ayat (3)",
@@ -244268,8 +244948,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00580",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -244296,12 +244979,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00583",
-          "target_citation": "Pasal 31 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00583",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 31 ayat (1)",
@@ -244399,8 +245084,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00583",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -244427,12 +245115,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00596",
-          "target_citation": "Pasal 34 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00596",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 34 ayat (1)",
@@ -244530,8 +245220,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00596",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -244558,12 +245251,14 @@
           "source_document_id": "uud::amendment_4_historical",
           "source_role": "amendment_4_historical",
           "relation_type": "MODIFIED_BY",
-          "target_legal_unit_id": "uud_legal_unit_00601",
-          "target_citation": "Pasal 37 ayat (1)",
-          "source_legal_unit_id": "uud_legal_unit_00639",
+          "target_legal_unit_id": "uud_legal_unit_00639",
+          "target_citation": "Perubahan Keempat Scope",
+          "source_legal_unit_id": "uud_legal_unit_00601",
+          "source_legal_unit_document_id": "uud::amendment_4_historical",
           "source_legal_unit_role": "amendment_4_historical",
-          "source_label": "Perubahan Keempat Scope",
-          "target_label": "(1)",
+          "source_label": "(1)",
+          "target_document_id": "uud::amendment_4_historical",
+          "target_label": "Perubahan Keempat Scope",
           "target_source_role": "amendment_4_historical",
           "old_reference": "",
           "new_reference": "Pasal 37 ayat (1)",
@@ -244661,8 +245356,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00601",
-          "target_id": "legal_unit::uud_legal_unit_00639"
+          "target_id": "legal_unit::uud_legal_unit_00639",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -244686,16 +245384,18 @@
         "relation_projection": {
           "relation_id": "uud_article_amendment_relation::renames::uud_instrument_final_citation_evidence::amendment_4_historical::00021::perubahan_keempat_clause_c::uud_legal_unit_00014::Pasal 3 ayat (3)->Pasal 3 ayat (2)",
           "corpus_id": "uud",
-          "source_document_id": "uud::amendment_4_historical",
-          "source_role": "amendment_4_historical",
+          "source_document_id": "uud::current_consolidated",
+          "source_role": "current_consolidated",
           "relation_type": "RENAMED_FROM",
-          "target_legal_unit_id": "uud_legal_unit_00014",
-          "target_citation": "Pasal 3 ayat (2)",
-          "source_legal_unit_id": "uud_legal_unit_00485",
-          "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "(3)",
-          "target_label": "(2)",
-          "target_source_role": "current_consolidated",
+          "target_legal_unit_id": "uud_legal_unit_00485",
+          "target_citation": "(3)",
+          "source_legal_unit_id": "uud_legal_unit_00014",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
+          "source_legal_unit_role": "current_consolidated",
+          "source_label": "(2)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "(3)",
+          "target_source_role": "amendment_3_historical",
           "old_reference": "Pasal 3 ayat (3)",
           "new_reference": "Pasal 3 ayat (2)",
           "old_reference_range": [
@@ -244778,8 +245478,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00014",
-          "target_id": "legal_unit::uud_legal_unit_00485"
+          "target_id": "legal_unit::uud_legal_unit_00485",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -244803,16 +245506,18 @@
         "relation_projection": {
           "relation_id": "uud_article_amendment_relation::renames::uud_instrument_final_citation_evidence::amendment_4_historical::00021::perubahan_keempat_clause_c::uud_legal_unit_00015::Pasal 3 ayat (4)->Pasal 3 ayat (3)",
           "corpus_id": "uud",
-          "source_document_id": "uud::amendment_4_historical",
-          "source_role": "amendment_4_historical",
+          "source_document_id": "uud::current_consolidated",
+          "source_role": "current_consolidated",
           "relation_type": "RENAMED_FROM",
-          "target_legal_unit_id": "uud_legal_unit_00015",
-          "target_citation": "Pasal 3 ayat (3)",
-          "source_legal_unit_id": "uud_legal_unit_00486",
-          "source_legal_unit_role": "amendment_3_historical",
-          "source_label": "(4)",
-          "target_label": "(3)",
-          "target_source_role": "current_consolidated",
+          "target_legal_unit_id": "uud_legal_unit_00486",
+          "target_citation": "(4)",
+          "source_legal_unit_id": "uud_legal_unit_00015",
+          "source_legal_unit_document_id": "uud::amendment_3_historical",
+          "source_legal_unit_role": "current_consolidated",
+          "source_label": "(3)",
+          "target_document_id": "uud::amendment_3_historical",
+          "target_label": "(4)",
+          "target_source_role": "amendment_3_historical",
           "old_reference": "Pasal 3 ayat (4)",
           "new_reference": "Pasal 3 ayat (3)",
           "old_reference_range": [
@@ -244871,8 +245576,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00015",
-          "target_id": "legal_unit::uud_legal_unit_00486"
+          "target_id": "legal_unit::uud_legal_unit_00486",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -244896,19 +245604,21 @@
         "relation_projection": {
           "relation_id": "uud_article_amendment_relation::renumbered_to::uud_instrument_final_citation_evidence::amendment_4_historical::00021::perubahan_keempat_clause_c::uud_legal_unit_00170::Pasal 25E->Pasal 25A",
           "corpus_id": "uud",
-          "source_document_id": "uud::amendment_4_historical",
-          "source_role": "amendment_4_historical",
+          "source_document_id": "uud::current_consolidated",
+          "source_role": "current_consolidated",
           "relation_type": "RENUMBERED_FROM",
           "substantive_change": false,
           "source_conflict": false,
           "anomaly": false,
-          "target_legal_unit_id": "uud_legal_unit_00170",
-          "target_citation": "Pasal 25A",
-          "source_legal_unit_id": "uud_legal_unit_00428",
-          "source_legal_unit_role": "amendment_2_historical",
-          "source_label": "Pasal 25E",
-          "target_label": "Pasal 25A",
-          "target_source_role": "current_consolidated",
+          "target_legal_unit_id": "uud_legal_unit_00428",
+          "target_citation": "Pasal 25E",
+          "source_legal_unit_id": "uud_legal_unit_00170",
+          "source_legal_unit_document_id": "uud::amendment_2_historical",
+          "source_legal_unit_role": "current_consolidated",
+          "source_label": "Pasal 25A",
+          "target_document_id": "uud::amendment_2_historical",
+          "target_label": "Pasal 25E",
+          "target_source_role": "amendment_2_historical",
           "old_reference": "Pasal 25E",
           "new_reference": "Pasal 25A",
           "old_reference_range": [
@@ -244979,8 +245689,11 @@
           "trace_only_reason": null,
           "runtime_loadable": true,
           "validator_status": "valid",
+          "support_document_id": "uud::amendment_4_historical",
+          "support_source_role": "amendment_4_historical",
           "source_id": "legal_unit::uud_legal_unit_00170",
-          "target_id": "legal_unit::uud_legal_unit_00428"
+          "target_id": "legal_unit::uud_legal_unit_00428",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -245018,7 +245731,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::amendment_1_historical",
-          "target_id": "source_role::current_consolidated"
+          "target_id": "source_role::current_consolidated",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -245056,7 +245770,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::amendment_2_historical",
-          "target_id": "source_role::current_consolidated"
+          "target_id": "source_role::current_consolidated",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -245094,7 +245809,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::amendment_3_historical",
-          "target_id": "source_role::current_consolidated"
+          "target_id": "source_role::current_consolidated",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -245132,7 +245848,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::amendment_4_historical",
-          "target_id": "source_role::current_consolidated"
+          "target_id": "source_role::current_consolidated",
+          "projection_direction": "inverse"
         }
       },
       {
@@ -245170,7 +245887,8 @@
           "article_level": false,
           "reason": "consolidated_provenance_without_legal_force_claim",
           "source_id": "source_role::original_historical",
-          "target_id": "source_role::current_consolidated"
+          "target_id": "source_role::current_consolidated",
+          "projection_direction": "inverse"
         }
       }
     ],

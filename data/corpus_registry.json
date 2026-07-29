@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "67db1d548adcdfba6e1df658d796a58504f6e82b96b09f97490e8db0594c28b5",
+    "manifest_sha256": "75d97796712f315e4ec384386414596eafbe2f2e4ea67fc891276ba0ecf5bf6d",
     "runtime_required_artifacts": [
       "runtime_projection",
       "validation_report",
@@ -905,7 +905,6 @@
         ],
         "schema_only_relation_types": [
           "ADDS",
-          "INSERTS",
           "SUPPLEMENTS"
         ],
         "source_role_label_prefix": "Perubahan ",

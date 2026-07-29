@@ -4,7 +4,9 @@ from pathlib import Path
 from hashlib import sha256
 import unittest
 
-from tjipto.core.manifest import read_jsonl
+from tjipto.core.manifest import read_json, read_jsonl
+from tjipto.corpora.uud.proposition_builder import source_marker_character_boxes
+from tjipto.evidence.bbox import positive_area_intersection, viewer_overlay_rectangles
 from tjipto.ingestion.pdf.text_spans import build_pdf_text_spans
 
 
@@ -94,7 +96,7 @@ class PdfTextSpanCoverageTest(unittest.TestCase):
     def test_proposition_selectors_use_trimmed_character_geometry(self) -> None:
         spans = {row["text_span_id"]: row for row in read_jsonl(FINAL / "page_text_spans.jsonl")}
         characters = {
-            character["character_bbox_id"]
+            character["character_bbox_id"]: word | character
             for word in read_jsonl(FINAL / "word_bboxes.jsonl")
             for character in word.get("characters") or ()
         }
@@ -110,11 +112,74 @@ class PdfTextSpanCoverageTest(unittest.TestCase):
                 self.assertEqual(selector["absolute_start"], span["text_start"] + start)
                 self.assertEqual(selector["absolute_end"], span["text_start"] + end)
                 self.assertFalse(set(selector["character_bbox_ids"]) & set(span["span_bbox_ids"]))
-                self.assertTrue(set(selector["character_bbox_ids"]) <= characters)
+                self.assertTrue(set(selector["character_bbox_ids"]) <= characters.keys())
                 quotes.append(span["text"][start:end])
                 selected_ids.extend(selector["character_bbox_ids"])
             self.assertEqual(proposition["exact_quote"], "\n".join(quotes))
             self.assertEqual(proposition["bbox_refs"], list(dict.fromkeys(selected_ids)))
+            overlay = proposition["viewer_overlay"]
+            self.assertEqual(overlay["status"], "complete")
+            self.assertEqual(overlay["proposition_id"], proposition["proposition_id"])
+            self.assertEqual(overlay["source_document_id"], proposition["source_document_id"])
+            self.assertEqual(overlay["source_sha256"], proposition["source_sha256"])
+            self.assertEqual(overlay["selector_field"], "source_selectors")
+            self.assertEqual(overlay["selected_character_field"], "bbox_refs")
+            self.assertEqual(
+                {
+                    character_id
+                    for row in viewer_overlay_rectangles(proposition, characters)
+                    for character_id in row["character_bbox_ids"]
+                },
+                set(proposition["bbox_refs"]),
+            )
+
+    def test_pasal_7c_viewer_overlay_clips_marker_overlap_without_changing_raw_geometry(self) -> None:
+        word_bboxes = read_jsonl(FINAL / "word_bboxes.jsonl")
+        characters = {
+            character["character_bbox_id"]: word | character
+            for word in word_bboxes
+            for character in word.get("characters") or ()
+        }
+        proposition = next(
+            row
+            for row in read_jsonl(FINAL / "propositions.jsonl")
+            if row["source_document_id"] == "uud::current_consolidated"
+            and row["page_numbers"] == [7]
+            and row["exact_quote"].startswith("Pasal 7C\n")
+        )
+        selected_period = next(
+            characters[character_id]
+            for character_id in proposition["bbox_refs"]
+            if characters[character_id].get("text") == "."
+        )
+        marker = next(
+            row
+            for row in source_marker_character_boxes(word_bboxes)
+            if row["source_document_id"] == proposition["source_document_id"]
+            and row["page_number"] == 7
+            and positive_area_intersection(selected_period, row)
+        )
+        self.assertEqual(marker["text"], "*")
+        period_overlay = [
+            row
+            for row in viewer_overlay_rectangles(proposition, characters)
+            if selected_period["character_bbox_id"] in row["character_bbox_ids"]
+        ]
+        self.assertTrue(period_overlay)
+        self.assertFalse(any(positive_area_intersection(row, marker) for row in period_overlay))
+
+    def test_selector_health_reports_text_and_viewer_geometry_separately(self) -> None:
+        health = read_json(FINAL / "validation_report.json")["selector_geometry_health"]
+        self.assertNotIn("marker_highlight_intersection_count", health)
+        for counter in (
+            "selector_round_trip_mismatch_count",
+            "absolute_selector_mismatch_count",
+            "unknown_selected_character_id_count",
+            "marker_text_in_exact_quote_count",
+            "marker_viewer_geometry_intersection_count",
+            "viewer_geometry_without_exact_selector_lineage_count",
+        ):
+            self.assertEqual(health[counter], 0, counter)
 
 
 if __name__ == "__main__":

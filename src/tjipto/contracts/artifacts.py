@@ -293,9 +293,10 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "grounding_level", "new_reference", "new_reference_range", "new_reference_range_kind", "old_reference",
         "old_reference_range", "old_reference_range_kind", "page_number", "quoted_text", "recovery_capability",
         "recovery_status", "relation_id", "relation_type", "runtime_loadable", "source_document_id", "source_label",
-        "source_legal_unit_id", "source_legal_unit_role", "source_pdf_sha256", "source_role", "source_support_exact", "substantive_change", "source_conflict", "anomaly",
+        "source_legal_unit_document_id", "source_legal_unit_id", "source_legal_unit_role", "source_pdf_sha256",
+        "source_role", "source_support_exact", "substantive_change", "source_conflict", "anomaly",
         "support_class", "target_bbox_refs", "target_citation", "target_geometry_method", "target_geometry_source_ids",
-        "target_label", "target_legal_unit_id", "target_precision", "target_source_role", "target_text_span_ids",
+        "target_document_id", "target_label", "target_legal_unit_id", "target_precision", "target_source_role", "target_text_span_ids",
         "text_span_ids", "trace_only_reason", "validator_status", "viewer_highlightable",
     }),
     "bbox_registry": frozenset({
@@ -392,7 +393,8 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
     "propositions": frozenset({
         "proposition_id", "claim_type", "legal_unit_id", "subject", "predicate", "object", "polarity", "modality",
         "conditions", "exceptions", "source_role", "temporal_context", "evidence_id", "text_segment_id", "exact_quote",
-        "text_span_ids", "source_selectors", "bbox_refs", "page_numbers", "source_document_id", "source_sha256", "terminal_boundary",
+        "text_span_ids", "source_selectors", "bbox_refs", "page_numbers", "source_document_id", "source_sha256",
+        "terminal_boundary", "viewer_overlay",
     }),
     "retrieval_units": frozenset({"artifact_status", "chunk_id", "evidence_id", "legal_unit_id", "object_role", "page_locator", "retrieval_terms", "retrieval_unit_id", "source_role", "temporal_context", "text"}),
     "source_conflicts": frozenset({

@@ -3,6 +3,7 @@ from __future__ import annotations
 from hashlib import sha256
 import re
 
+from tjipto.contracts.relations import descriptor_for
 from tjipto.corpora.parser_dispatch import parse_legal_references
 from tjipto.corpora.uud.parser import matches_uud_contextual_reference
 
@@ -177,17 +178,42 @@ def materialize_relation_projections(
         relation = relations.get(str(edge.get("relation_id") or ""))
         if relation is None:
             continue
-        projection = dict(relation)
-        projection["relation_type"] = edge["edge_type"]
-        projection["source_id"] = edge["source_id"]
-        projection["target_id"] = edge["target_id"]
-        if edge.get("derived_from_edge_id") and "target_legal_unit_id" not in projection:
-            for source_key, target_key in (
-                ("source_document_id", "target_document_id"),
-                ("source_role", "target_source_role"),
-            ):
+        edge["relation_projection"] = _relation_projection(edge, relation)
+
+
+def _relation_projection(edge: dict, relation: dict) -> dict:
+    projection = dict(relation)
+    article_relation = "source_legal_unit_id" in projection
+    if article_relation:
+        projection["support_document_id"] = projection.get("source_document_id")
+        projection["support_source_role"] = projection.get("source_role")
+        projection["source_document_id"] = projection.get("source_legal_unit_document_id")
+        projection["source_role"] = projection.get("source_legal_unit_role")
+    inverse = edge.get("derived_from_edge_id") is not None
+    if inverse:
+        descriptor = descriptor_for(relation.get("relation_type"))
+        if descriptor is None or descriptor.inverse != edge.get("edge_type"):
+            raise ValueError(f"invalid_inverse_relation_projection:{edge.get('edge_id')}")
+        for source_key, target_key in (
+            ("source_document_id", "target_document_id"),
+            ("source_role", "target_source_role"),
+            ("source_label", "target_label"),
+            ("source_legal_unit_id", "target_legal_unit_id"),
+        ):
+            if source_key in projection or target_key in projection:
                 projection[source_key], projection[target_key] = projection.get(target_key), projection.get(source_key)
-        edge["relation_projection"] = projection
+        if article_relation:
+            projection["source_legal_unit_role"] = projection.get("source_role")
+            projection["target_citation"] = projection.get("target_label")
+    projection.update(
+        {
+            "relation_type": edge["edge_type"],
+            "source_id": edge["source_id"],
+            "target_id": edge["target_id"],
+            "projection_direction": "inverse" if inverse else "forward",
+        }
+    )
+    return projection
 
 
 def build_article_amendment_relations(
@@ -297,8 +323,10 @@ def build_article_amendment_relations(
                 "target_legal_unit_id": target_unit_id,
                 "target_citation": target_citation,
                 "source_legal_unit_id": source_unit_id,
+                "source_legal_unit_document_id": source_unit.get("source_document_id") if source_unit else None,
                 "source_legal_unit_role": source_unit.get("source_role") if source_unit else None,
                 "source_label": source_unit.get("unit_label") if source_unit else None,
+                "target_document_id": target.get("source_document_id") if target else None,
                 "target_label": target.get("unit_label"),
                 "target_source_role": target.get("source_role") if target else None,
                 "old_reference": old_reference,

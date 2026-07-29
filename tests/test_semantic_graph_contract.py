@@ -37,6 +37,32 @@ class SemanticGraphContractTest(unittest.TestCase):
                 assert descriptor is not None
                 self.assertEqual(edge["edge_type"], descriptor.inverse)
                 self.assertEqual((edge["source_id"], edge["target_id"]), (origin["target_id"], origin["source_id"]))
+                projection = edge.get("relation_projection")
+                if not projection or not projection.get("source_legal_unit_id"):
+                    continue
+                self.assertEqual(
+                    (edge["source_id"], edge["target_id"]),
+                    (
+                        f"legal_unit::{projection['source_legal_unit_id']}",
+                        f"legal_unit::{projection['target_legal_unit_id']}",
+                    ),
+                )
+                self.assertEqual(projection["projection_direction"], "inverse")
+                self.assertEqual(projection["relation_type"], edge["edge_type"])
+                self.assertEqual(
+                    (
+                        projection["source_document_id"],
+                        projection["target_document_id"],
+                        projection["source_label"],
+                        projection["target_label"],
+                    ),
+                    (
+                        origin["relation_projection"]["target_document_id"],
+                        origin["relation_projection"]["source_document_id"],
+                        origin["relation_projection"]["target_label"],
+                        origin["relation_projection"]["source_label"],
+                    ),
+                )
 
     def test_document_amendment_query_selects_persisted_graph_edges(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -60,6 +86,22 @@ class SemanticGraphContractTest(unittest.TestCase):
             relation = edge.get("relation_projection") or {}
             self.assertEqual(relation.get("relation_id"), edge["relation_id"])
             self.assertEqual(relation.get("relation_type"), edge["edge_type"])
+            if relation.get("source_legal_unit_id"):
+                self.assertEqual(edge["source_id"], f"legal_unit::{relation['source_legal_unit_id']}")
+                self.assertEqual(edge["target_id"], f"legal_unit::{relation['target_legal_unit_id']}")
+
+    def test_relation_schema_declares_canonical_addition_inverse(self) -> None:
+        self.assertEqual(descriptor_for("ADDS").inverse, "INSERTED_BY")  # type: ignore[union-attr]
+        self.assertEqual(descriptor_for("INSERTED_BY").inverse, "ADDS")  # type: ignore[union-attr]
+        self.assertIsNone(descriptor_for("INSERTS"))
+
+    def test_relation_projection_health_has_no_direction_or_endpoint_mismatch(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        assert config is not None
+        health = config.json("validation_report")["legal_graph_authority_health"]
+        self.assertEqual(health["forward_relation_projection_endpoint_mismatch_count"], 0)
+        self.assertEqual(health["inverse_relation_projection_endpoint_mismatch_count"], 0)
+        self.assertEqual(health["relation_direction_mismatch_count"], 0)
 
 
 if __name__ == "__main__":

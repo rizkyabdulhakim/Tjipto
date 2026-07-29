@@ -93,7 +93,7 @@ def amendment_relation_lookup(store, query: str) -> tuple[dict, tuple[dict, ...]
         relation = edge.get("relation_projection") or {}
         if relation is None or relation.get("runtime_loadable") is not True:
             continue
-        if role and relation.get("source_role") != role:
+        if role and relation.get("support_source_role", relation.get("source_role")) != role:
             continue
         if not _article_relation_matches_target(store, relation, target.get("target_citation")):
             continue

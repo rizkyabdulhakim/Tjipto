@@ -28,7 +28,7 @@ from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.retrieval_builder import build_retrieval_units
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
-from tjipto.corpora.uud.validation import build_validation_report
+from tjipto.corpora.uud.validation import _REQUIRED_HEALTH_STATUSES, _derive_validation_status, build_validation_report
 from tjipto.corpora.uud_artifact_baseline import rebuild_uud_artifact_baseline
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
 
@@ -392,6 +392,27 @@ class UudBuilderContractTest(unittest.TestCase):
             ),
             read_json(FINAL / "validation_report.json"),
         )
+
+    def test_validation_report_status_is_derived_from_required_health(self) -> None:
+        report = {
+            key: {"status": expected}
+            for key, expected in _REQUIRED_HEALTH_STATUSES.items()
+        }
+        _derive_validation_status(report)
+        self.assertEqual((report["status"], report["required_health"]["unsatisfied_section_count"]), ("valid", 0))
+        for observed in ("incomplete", "unknown", None):
+            with self.subTest(observed=observed):
+                mutated = dict(report)
+                if observed is None:
+                    mutated.pop("selector_geometry_health")
+                else:
+                    mutated["selector_geometry_health"] = {"status": observed}
+                _derive_validation_status(mutated)
+                self.assertEqual(
+                    (mutated["status"], mutated["required_health"]["unsatisfied_section_count"]),
+                    ("invalid", 1),
+                )
+                self.assertIn("selector_geometry_health", mutated["required_health"]["unsatisfied_sections"])
 
     def test_source_conflicts_rebuild_from_specs_and_grounding(self) -> None:
         source_conflicts = build_source_conflicts()

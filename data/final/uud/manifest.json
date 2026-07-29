@@ -6,7 +6,7 @@
   "corpus_id": "uud",
   "contract_id": "tjipto.uud.artifact-contract",
   "contract_version": 7,
-  "contract_fingerprint": "0e97f9ffeda25b66e8b7b9da92f93a89cf51637c30ccf9f8cb81b154a785cc0b",
+  "contract_fingerprint": "8fdc8a3c5af053eaa38d909133723dd35479fa00e8cd858e277a38378ab744ee",
   "extractor_fingerprint": {
     "python": "3.12.10",
     "pymupdf": "1.27.2.3",
@@ -83,8 +83,8 @@
         "source_support_exact",
         "viewer_highlightable"
       ],
-      "bytes": 361245,
-      "sha256": "3f5cb73484b3371d902d6f521100982334b7ea2752c82f2de2d156c4b5ecd94c"
+      "bytes": 369429,
+      "sha256": "c4d7a203c8864643919b6d4e27aea9a6fecd9eb3a42e017e3226695dc91f0304"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -258,8 +258,8 @@
         "support_exception_ids",
         "support_kind"
       ],
-      "bytes": 7014429,
-      "sha256": "3b191a54c503d1b148eef1e4bd5006d63b7bb4e492a1f4c60e153e0e3aea95dc"
+      "bytes": 7051352,
+      "sha256": "0cabe66259dd117dd797ad346638274e4d5c92f28f2a88c87f4b4a2283af775a"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -455,8 +455,8 @@
         "source_document_id",
         "source_sha256"
       ],
-      "bytes": 8969020,
-      "sha256": "3e3b857a0e02f5d9f4e8c066d234b7d959e05000915c98c74ccb58ed8d8e4d54"
+      "bytes": 18667740,
+      "sha256": "887ac55b7c1f19fe9f04241644149c5b0be8a82768b48f1b100aef2ab6672ca1"
     },
     "retrieval_units.jsonl": {
       "origin": "generated",
@@ -489,8 +489,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 17361952,
-      "sha256": "c55ead0ce104c5cea34cfd9337d7ffb204ba4d11b64e31bd441fe663f8469e4d"
+      "bytes": 17406055,
+      "sha256": "c45257cc85ddebbe099f15a753ebd2765e8badf3098f0f5b10be62ba22b353d3"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -637,8 +637,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 24840,
-      "sha256": "eae6a2114e25003f21f79a4e7eb77fd3ba2bd8575e0501066eb8104179929e8f"
+      "bytes": 25364,
+      "sha256": "0f74d663f44a840e41ee8a7981813e8595c8ec3214dc37941c9c0820b71130b8"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
