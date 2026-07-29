@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from hashlib import sha256
+import json
 from pathlib import Path
 import re
 from collections.abc import Mapping
@@ -43,7 +44,7 @@ from tjipto.corpora.uud.provenance_exceptions import (
 from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit, substantive_structural_unit
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
-from tjipto.core.manifest import artifact_set_digest, read_json, read_jsonl
+from tjipto.core.manifest import artifact_set_digest, read_json, read_jsonl, validate_manifest
 
 
 DECISION_LABELS = {
@@ -475,13 +476,38 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
         or manifest.get("contract_fingerprint") != CONTRACT_FINGERPRINT
     ):
         return ("contract_fingerprint_mismatch",)
+    integrity_errors = validate_manifest(final_dir)
+    required_artifacts = set(MINIMUM_ARTIFACT_FIELDS) | {"validation_report"}
     artifacts: dict[str, object] = {}
     for rel, record in manifest.get("files", {}).items():
         logical_key = record.get("logical_key", rel)
+        if logical_key not in required_artifacts:
+            continue
         path = final_dir / rel
         if path.exists():
-            artifacts[logical_key] = read_json(path) if record.get("format") == "json" else read_jsonl(path)
-    return validate_uud_artifacts(final_dir, artifacts)
+            if record.get("format") == "json":
+                artifacts[logical_key] = read_json(path)
+            elif logical_key == "word_bboxes":
+                artifacts[logical_key] = _word_bbox_validation_rows(path)
+            else:
+                artifacts[logical_key] = read_jsonl(path)
+    return tuple(dict.fromkeys((*integrity_errors, *validate_uud_artifacts(final_dir, artifacts))))
+
+
+def _word_bbox_validation_rows(path: Path) -> list[dict]:
+    rows: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        source = json.loads(line)
+        row = dict.fromkeys(source)
+        row["word_bbox_id"] = source.get("word_bbox_id")
+        row["characters"] = [
+            {"character_bbox_id": character.get("character_bbox_id")}
+            for character in source.get("characters") or ()
+        ]
+        rows.append(row)
+    return rows
 
 
 def _validate_schema6_contract(artifacts: Mapping[str, object]) -> tuple[str, ...]:
@@ -1820,7 +1846,7 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
 
     def rows(name: str) -> list[dict]:
         value = artifacts.get(name) or []
-        return list(value) if isinstance(value, list) else []
+        return value if isinstance(value, list) else []
 
     for artifact, required in MINIMUM_ARTIFACT_FIELDS.items():
         allowed = set(ARTIFACT_ALLOWED_FIELDS.get(artifact, ())) or set(required) | set(ARTIFACT_OPTIONAL_FIELDS.get(artifact, ())) | set(COMMON_ARTIFACT_FIELDS)

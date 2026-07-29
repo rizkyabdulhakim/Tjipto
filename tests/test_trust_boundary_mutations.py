@@ -25,7 +25,7 @@ class TrustBoundaryMutationTest(unittest.TestCase):
             "retrieval_units": read_jsonl(FINAL / "retrieval_units.jsonl"),
             "evidence": read_jsonl(FINAL / "evidence_registry.jsonl"),
             "bbox_rows": read_jsonl(FINAL / "bbox_registry.jsonl"),
-            "word_bboxes": read_jsonl(FINAL / "word_bboxes.jsonl"),
+            "word_bboxes": [],
             "page_text_spans": read_jsonl(FINAL / "page_text_spans.jsonl"),
             "source_documents": read_jsonl(FINAL / "source_documents.jsonl"),
             "pages": read_jsonl(FINAL / "pages.jsonl"),

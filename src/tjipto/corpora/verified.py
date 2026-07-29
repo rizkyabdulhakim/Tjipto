@@ -412,9 +412,13 @@ def _rows_for(manifest: dict, artifacts: dict[str, object], logical_key: str) ->
 
 def _freeze(value):
     if isinstance(value, dict):
-        return FrozenDict({key: _freeze(item) for key, item in value.items()})
+        for key in value:
+            dict.__setitem__(value, key, _freeze(value[key]))
+        return FrozenDict(value)
     if isinstance(value, list):
-        return tuple(_freeze(item) for item in value)
+        for index, item in enumerate(value):
+            value[index] = _freeze(item)
+        return tuple(value)
     return value
 
 

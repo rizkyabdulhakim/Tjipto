@@ -68,14 +68,15 @@ class UudBuilderContractTest(unittest.TestCase):
             self.assertEqual(first, _artifact_hashes(root / "data/final/uud"))
 
     def _word_bboxes(self) -> list[dict]:
-        if self._cached_word_bboxes is not None:
-            return self._cached_word_bboxes
+        cls = type(self)
+        if cls._cached_word_bboxes is not None:
+            return cls._cached_word_bboxes
         import fitz
 
         source_documents = self._source_documents_for_test()
         docs = {source_id: fitz.open(ROOT / meta["path"]) for source_id, meta in source_documents.items()}
         try:
-            self._cached_word_bboxes = [
+            cls._cached_word_bboxes = [
                 row
                 for source_id, doc in docs.items()
                 for row in build_word_bbox_rows(
@@ -86,7 +87,7 @@ class UudBuilderContractTest(unittest.TestCase):
                     bbox_id_prefix="uud_word_bbox",
                 )
             ]
-            return self._cached_word_bboxes
+            return cls._cached_word_bboxes
         finally:
             for doc in docs.values():
                 doc.close()
