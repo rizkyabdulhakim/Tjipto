@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
+from tjipto.corpora.verified import VerifiedCorpusRepository
+from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -13,6 +15,12 @@ class DomainCapabilityContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.service = LegalRuntimeService(ROOT)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.service = None
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
 
     def test_content_and_location_tokens_do_not_invent_a_domain_or_corpus(self) -> None:
         for query in (

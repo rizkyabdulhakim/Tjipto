@@ -21,8 +21,13 @@ def _canonicalize(value):
 
 
 def write_json(path: Path, data: dict) -> None:
-    path.write_bytes((json.dumps(_canonicalize(data), ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode("utf-8"))
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(_canonicalize(data), handle, ensure_ascii=False, indent=2, allow_nan=False)
+        handle.write("\n")
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.write_bytes("".join(json.dumps(_canonicalize(row), ensure_ascii=False, allow_nan=False) + "\n" for row in rows).encode("utf-8"))
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        for row in rows:
+            json.dump(_canonicalize(row), handle, ensure_ascii=False, allow_nan=False)
+            handle.write("\n")

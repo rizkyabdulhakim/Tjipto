@@ -99,6 +99,11 @@ class VerifiedCorpusRepository:
     _published_lock = RLock()
     _published_snapshot_limit = 1
 
+    @classmethod
+    def clear_shared_cache(cls) -> None:
+        with cls._published_lock:
+            cls._published_snapshots.clear()
+
     def __init__(self, registry):
         self.registry = registry
         self.publication = CorpusPublicationService()

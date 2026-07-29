@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
+from tjipto.corpora.verified import VerifiedCorpusRepository
+from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.claim_support import _contradicts, _supports
 from tjipto.runtime.query_semantics import PropositionClaim
@@ -15,6 +17,12 @@ class ClaimVerificationContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.service = LegalRuntimeService(ROOT)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.service = None
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
 
     def test_normative_tokens_are_not_substantive_support(self) -> None:
         for query in (

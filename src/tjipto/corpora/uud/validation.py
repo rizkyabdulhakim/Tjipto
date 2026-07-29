@@ -496,17 +496,18 @@ def validate_uud_artifact_dir(final_dir: Path) -> tuple[str, ...]:
 
 def _word_bbox_validation_rows(path: Path) -> list[dict]:
     rows: list[dict] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        source = json.loads(line)
-        row = dict.fromkeys(source)
-        row["word_bbox_id"] = source.get("word_bbox_id")
-        row["characters"] = [
-            {"character_bbox_id": character.get("character_bbox_id")}
-            for character in source.get("characters") or ()
-        ]
-        rows.append(row)
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            source = json.loads(line)
+            row = dict.fromkeys(source)
+            row["word_bbox_id"] = source.get("word_bbox_id")
+            row["characters"] = [
+                {"character_bbox_id": character.get("character_bbox_id")}
+                for character in source.get("characters") or ()
+            ]
+            rows.append(row)
     return rows
 
 

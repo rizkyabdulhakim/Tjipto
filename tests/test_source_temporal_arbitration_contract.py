@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
+from tjipto.corpora.verified import VerifiedCorpusRepository
+from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.service import LegalRuntimeService
 
@@ -16,6 +18,13 @@ class SourceTemporalArbitrationContractTest(unittest.TestCase):
         cls.service = LegalRuntimeService(ROOT)
         cls.store = cls.service._store("uud")
         assert cls.store is not None
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.store = None
+        cls.service = None
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
 
     def test_named_source_precedes_generic_post_amendment_wording(self) -> None:
         result = self.service.ask("uud", "Apa isi Pasal 7 setelah Perubahan Pertama?")

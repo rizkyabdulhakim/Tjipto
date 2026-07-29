@@ -29,7 +29,8 @@ def read_json(path: Path) -> dict:
 
 
 def read_jsonl(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    with path.open(encoding="utf-8") as handle:
+        return [json.loads(line) for line in handle if line.strip()]
 
 
 def file_sha256(path: Path) -> str:

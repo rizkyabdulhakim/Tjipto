@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 
 from tjipto.corpora.capabilities import resolve_capability
+from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.intent import classify_relation_intent
 from tjipto.runtime.service import LegalRuntimeService
@@ -21,6 +22,13 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
         cls.service = LegalRuntimeService(ROOT)
         cls.store = cls.service._store("uud")
         assert cls.store is not None
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.store = None
+        cls.service = None
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
 
     def test_criminal_punishment_function_blocks_article_citation(self) -> None:
         for query in (

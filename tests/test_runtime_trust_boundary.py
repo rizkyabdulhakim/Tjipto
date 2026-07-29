@@ -12,6 +12,8 @@ import threading
 import unittest
 from unittest.mock import patch
 
+from tjipto.corpora.verified import VerifiedCorpusRepository
+from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.http import make_server
 from tjipto.runtime.service import LegalRuntimeService
 
@@ -34,6 +36,10 @@ class RuntimeTrustBoundaryTest(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join(timeout=2)
+        cls.server = None
+        cls.thread = None
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
 
     def test_raw_request_framing_fails_closed(self) -> None:
         cases = (

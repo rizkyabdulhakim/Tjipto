@@ -9,6 +9,8 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from tjipto.corpora.verified import VerifiedCorpusRepository
+from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.http import make_server
 from tjipto.telemetry import Telemetry
 
@@ -35,6 +37,10 @@ class RuntimeHttpContractTest(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join(timeout=2)
+        cls.server = None
+        cls.thread = None
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
 
     def test_public_capabilities_and_search_are_closed(self) -> None:
         capabilities = self._get("/legal/uud/capabilities")

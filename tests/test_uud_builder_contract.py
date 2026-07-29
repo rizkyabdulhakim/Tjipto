@@ -49,6 +49,10 @@ class UudBuilderContractTest(unittest.TestCase):
         }
         cls._cached_word_bboxes: list[dict] | None = None
 
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._cached_word_bboxes = None
+
     def _source_documents_for_test(self) -> dict[str, dict]:
         return dict(self._source_documents)
 
