@@ -191,6 +191,10 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         page_text_spans=page_text_spans,
         source_documents=source_documents,
     )
+    # Extraction rows are fully represented by the persisted source objects,
+    # page spans, and BBox rows below.  Do not retain the duplicate PDF
+    # extraction graph while assembling and validating the remaining artifacts.
+    del extracted_pdfs, pdf_lines_by_source
     propositions = build_propositions(
         legal_units=legal_units,
         evidence=evidence,
