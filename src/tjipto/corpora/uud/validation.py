@@ -2543,9 +2543,11 @@ def _selector_geometry_health(
             for rectangle in rectangles
             for character_id in rectangle.get("character_bbox_ids") or ()
         }
+        clipped_indexes = set(overlay.get("clipped_rectangle_indexes") or ())
         clipped_character_ids = {
             character_id
-            for rectangle in overlay.get("clipped_rectangles") or ()
+            for index, rectangle in enumerate(rectangles)
+            if index in clipped_indexes
             for character_id in rectangle.get("character_bbox_ids") or ()
         }
         if (
@@ -2556,6 +2558,7 @@ def _selector_geometry_health(
             or overlay.get("selector_field") != "source_selectors"
             or overlay.get("selected_character_field") != "bbox_refs"
             or clipped_character_ids - set(geometry)
+            or any(not isinstance(index, int) or index < 0 or index >= len(rectangles) for index in clipped_indexes)
             or overlay.get("clipped_character_count") != len(clipped_character_ids)
             or covered_character_ids != set(geometry)
         ):

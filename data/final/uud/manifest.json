@@ -455,8 +455,8 @@
         "source_document_id",
         "source_sha256"
       ],
-      "bytes": 18667740,
-      "sha256": "887ac55b7c1f19fe9f04241644149c5b0be8a82768b48f1b100aef2ab6672ca1"
+      "bytes": 11054844,
+      "sha256": "0d68ac0bd5b12edab56a9692fb3000ef633952fc867a8837fc8b69290fb76f6e"
     },
     "retrieval_units.jsonl": {
       "origin": "generated",
@@ -638,7 +638,7 @@
       "format": "json",
       "artifact_schema": 7,
       "bytes": 25364,
-      "sha256": "0f74d663f44a840e41ee8a7981813e8595c8ec3214dc37941c9c0820b71130b8"
+      "sha256": "a1b6ae86ce177f33d29ee6d9c508b3e7f962248a1ea9c21321d556265a627245"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

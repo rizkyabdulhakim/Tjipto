@@ -62,8 +62,35 @@ def viewer_overlay_rectangles(proposition: dict, characters_by_id: dict[str, dic
     overlay = proposition.get("viewer_overlay") or {}
     if overlay.get("status") != "complete":
         return ()
-    rectangles = tuple(overlay.get("rectangles") or ())
-    selected = set(proposition.get("bbox_refs") or ())
+    geometry_spaces = tuple(overlay.get("geometry_spaces") or ())
+    compact_rectangles = tuple(overlay.get("rectangles") or ())
+    selected_ids = tuple(proposition.get("bbox_refs") or ())
+    if any(
+        not isinstance(rectangle.get("geometry_space_index"), int)
+        or rectangle["geometry_space_index"] < 0
+        or rectangle["geometry_space_index"] >= len(geometry_spaces)
+        or not isinstance(rectangle.get("selected_character_start"), int)
+        or not isinstance(rectangle.get("selected_character_end"), int)
+        or rectangle["selected_character_start"] < 0
+        or rectangle["selected_character_end"] <= rectangle["selected_character_start"]
+        or rectangle["selected_character_end"] > len(selected_ids)
+        for rectangle in compact_rectangles
+    ):
+        return ()
+    rectangles = tuple(
+        {
+            **geometry_spaces[rectangle["geometry_space_index"]],
+            **rectangle,
+            "bbox_id": selected_ids[rectangle["selected_character_start"]],
+            "character_bbox_ids": selected_ids[
+                rectangle["selected_character_start"] : rectangle["selected_character_end"]
+            ],
+            "bbox_precision": "exact",
+            "viewer_highlightable": True,
+        }
+        for rectangle in compact_rectangles
+    )
+    selected = set(selected_ids)
     covered = {
         character_id
         for rectangle in rectangles

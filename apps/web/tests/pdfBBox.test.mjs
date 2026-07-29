@@ -63,9 +63,20 @@ test("Pasal 7C viewer overlay highlights legal text without covering the visible
       Math.min(character.y1, selectedPeriod.y1) > Math.max(character.y0, selectedPeriod.y0),
   );
   assert.ok(marker, "the source marker must remain present in the extracted PDF geometry");
-  const overlays = proposition.viewer_overlay.clipped_rectangles.filter(
-    (rectangle) => rectangle.character_bbox_ids.includes(selectedPeriod.character_bbox_id),
-  );
+  const overlays = proposition.viewer_overlay.clipped_rectangle_indexes
+    .map((index) => ({
+      ...proposition.viewer_overlay.geometry_spaces[
+        proposition.viewer_overlay.rectangles[index].geometry_space_index
+      ],
+      ...proposition.viewer_overlay.rectangles[index],
+      character_bbox_ids: proposition.bbox_refs.slice(
+        proposition.viewer_overlay.rectangles[index].selected_character_start,
+        proposition.viewer_overlay.rectangles[index].selected_character_end,
+      ),
+      bbox_precision: "exact",
+      viewer_highlightable: true,
+    }))
+    .filter((rectangle) => rectangle.character_bbox_ids.includes(selectedPeriod.character_bbox_id));
   assert.ok(overlays.length);
   for (const scale of [0.75, 1, 2]) {
     const markerRect = bboxToViewportPercent(
