@@ -996,11 +996,12 @@ def _layout_lines(store, row: dict) -> tuple[dict, ...]:
         if not span:
             continue
         boxes = store.exact_bboxes_for_text_spans((span_id,)) if store is not None else ()
-        width = next((float(box["page_width"]) for box in boxes if isinstance(box.get("page_width"), (int, float))), 0.0)
-        x0 = min((float(box["x0"]) for box in boxes if isinstance(box.get("x0"), (int, float))), default=0.0)
-        x1 = max((float(box["x1"]) for box in boxes if isinstance(box.get("x1"), (int, float))), default=0.0)
-        y0 = min((float(box["y0"]) for box in boxes if isinstance(box.get("y0"), (int, float))), default=0.0)
-        y1 = max((float(box["y1"]) for box in boxes if isinstance(box.get("y1"), (int, float))), default=0.0)
+        geometry = boxes or (span,)
+        width = next((float(box["page_width"]) for box in geometry if isinstance(box.get("page_width"), (int, float))), 0.0)
+        x0 = min((float(box["x0"]) for box in geometry if isinstance(box.get("x0"), (int, float))), default=0.0)
+        x1 = max((float(box["x1"]) for box in geometry if isinstance(box.get("x1"), (int, float))), default=0.0)
+        y0 = min((float(box["y0"]) for box in geometry if isinstance(box.get("y0"), (int, float))), default=0.0)
+        y1 = max((float(box["y1"]) for box in geometry if isinstance(box.get("y1"), (int, float))), default=0.0)
         fragments.append({
             "text": span.get("exact_quote") or span.get("text") or "",
             "order": order,

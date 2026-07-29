@@ -489,8 +489,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 17148195,
-      "sha256": "883797c899b355f08948dbc831e41c5b609ed619a4887e252c9882cd74f4a6a3"
+      "bytes": 17361952,
+      "sha256": "c55ead0ce104c5cea34cfd9337d7ffb204ba4d11b64e31bd441fe663f8469e4d"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -638,7 +638,7 @@
       "format": "json",
       "artifact_schema": 7,
       "bytes": 24840,
-      "sha256": "8d23e52ddf28e53714db27d259cc836e5bb0d76860b76a57a344d3507e242a88"
+      "sha256": "eae6a2114e25003f21f79a4e7eb77fd3ba2bd8575e0501066eb8104179929e8f"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

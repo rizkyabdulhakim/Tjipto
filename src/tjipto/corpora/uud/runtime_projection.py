@@ -51,7 +51,9 @@ _SOURCE_SPAN_FIELDS = (
 _RUNTIME_PAGE_SPAN_FIELDS = (
     "text_span_id", "source_document_id", "source_pdf_path", "source_sha256", "source_role", "temporal_context",
     "page_number", "text", "exact_quote", "stream_id", "text_start", "text_end", "text_prefix", "text_suffix",
-    "bbox_precision", "viewer_highlightable", "object_role",
+    # Span coordinates retain source line layout without retaining every
+    # word-level geometry row in the runtime snapshot.
+    "x0", "y0", "x1", "y1", "bbox_precision", "viewer_highlightable", "object_role",
 )
 
 

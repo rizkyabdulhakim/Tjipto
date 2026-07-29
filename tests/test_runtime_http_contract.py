@@ -92,6 +92,13 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(result["supports"][0]["panel_section"], "Kutipan Relevan")
         self._assert_public(result)
 
+    def test_exact_support_preserves_source_line_layout(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "Pasal 28A"})
+        self.assertEqual(result["status"], "answer_ready")
+        lines = result["supports"][0]["layout_lines"]
+        self.assertGreaterEqual(len(lines), 2)
+        self.assertTrue(all(line["canonical_end"] > line["canonical_start"] for line in lines))
+
     def test_groups_preserve_members_and_keep_nonlegal_sections_out_of_quotes(self) -> None:
         result = self._post("/legal/uud/ask", {"query": "siapa wakil ketua yang tercantum dalam Perubahan Pertama?"})
         self.assertTrue(result["support_groups"])
