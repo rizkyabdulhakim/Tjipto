@@ -36,8 +36,58 @@ jobs:
         run: python scripts/measure_command.py --gate compileall --report reports/ci-gates.jsonl -- python -m compileall -q src tests scripts
       - name: Unit tests
         run: python scripts/measure_command.py --gate unittest --report reports/ci-gates.jsonl -- python -m unittest discover -s tests -v
+      - name: Profile suspected memory owners
+        run: |
+          for file in \
+            tests/test_verified_corpus_contract.py \
+            tests/test_uud_builder_contract.py \
+            tests/test_raw_source_geometry_contract.py \
+            tests/test_pdf_text_span_coverage.py \
+            tests/test_runtime_contract.py \
+            tests/test_runtime_http_contract.py \
+            tests/test_graph_contract.py
+          do
+            name="$(basename "$file" .py)"
+            python scripts/measure_command.py \
+              --result-report "reports/memory-${name}.json" \
+              -- python -m pytest -q "$file" -p no:cacheprovider
+          done
+      - name: Profile per-test RSS
+        env:
+          TJIPTO_MEMORY_REPORT: reports/memory-per-test.json
+        run: python -m pytest -q -p no:cacheprovider -p scripts.pytest_memory_profile
+      - name: Profile Python allocations
+        env:
+          TJIPTO_MEMORY_REPORT: reports/memory-python-allocations.json
+          TJIPTO_MEMORY_TRACEMALLOC: "1"
+        run: |
+          python -m pytest -q -p no:cacheprovider -p scripts.pytest_memory_profile \
+            tests/test_uud_builder_contract.py::UudBuilderContractTest::test_evidence_rebuild_identity_from_rebuilt_chunks_without_seed \
+            tests/test_uud_builder_contract.py::UudBuilderContractTest::test_word_bbox_registry_exists_and_is_deterministic
       - name: Pytest run 1
         run: python scripts/measure_command.py --gate pytest_run_1 --report reports/ci-gates.jsonl --result-report reports/pytest-run-1.json -- python -m pytest -q -p no:cacheprovider
+      - name: Retrieval evaluation
+        run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps
+      - name: Artifact validation
+        run: python scripts/measure_command.py --gate artifact_validate --report reports/ci-gates.jsonl -- python -m tjipto.corpora.uud_artifact_baseline validate
+      - name: Artifact rebuild
+        run: python scripts/measure_command.py --gate artifact_rebuild --report reports/ci-gates.jsonl -- python -m tjipto.corpora.uud_artifact_baseline rebuild
+      - name: Ruff
+        run: python scripts/measure_command.py --gate ruff --report reports/ci-gates.jsonl -- ruff check src tests scripts
+      - name: MyPy
+        run: python scripts/measure_command.py --gate mypy --report reports/ci-gates.jsonl -- mypy src
+      - name: Bandit
+        run: python scripts/measure_command.py --gate bandit --report reports/ci-gates.jsonl -- bandit -q -r src
+      - name: pip check
+        run: python scripts/measure_command.py --gate pip_check --report reports/ci-gates.jsonl -- python -m pip check
+      - name: pip audit
+        run: python scripts/measure_command.py --gate pip_audit --report reports/ci-gates.jsonl -- python -m pip_audit --strict -r requirements.lock -f json -o reports/pip-audit.json
+      - name: Dependency inspection
+        run: python -m pip inspect > reports/pip-inspect.json
+      - name: Clean tree after rebuild
+        run: |
+          git status --porcelain=v1 --untracked-files=all > reports/clean-tree.txt
+          test ! -s reports/clean-tree.txt
       - name: Pytest run 2
         run: python scripts/measure_command.py --gate pytest_run_2 --report reports/ci-gates.jsonl --result-report reports/pytest-run-2.json -- python -m pytest -q -p no:cacheprovider
       - name: Compare pytest resource evidence
@@ -62,28 +112,6 @@ jobs:
           if not all(comparison[key] for key in ("rss_limit_pass", "rss_stability_pass", "wall_stability_pass")):
               raise SystemExit("pytest resource limits exceeded")
           PY
-      - name: Retrieval evaluation
-        run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps
-      - name: Artifact validation
-        run: python scripts/measure_command.py --gate artifact_validate --report reports/ci-gates.jsonl -- python -m tjipto.corpora.uud_artifact_baseline validate
-      - name: Artifact rebuild
-        run: python scripts/measure_command.py --gate artifact_rebuild --report reports/ci-gates.jsonl -- python -m tjipto.corpora.uud_artifact_baseline rebuild
-      - name: Ruff
-        run: python scripts/measure_command.py --gate ruff --report reports/ci-gates.jsonl -- ruff check src tests scripts
-      - name: MyPy
-        run: python scripts/measure_command.py --gate mypy --report reports/ci-gates.jsonl -- mypy src
-      - name: Bandit
-        run: python scripts/measure_command.py --gate bandit --report reports/ci-gates.jsonl -- bandit -q -r src
-      - name: pip check
-        run: python scripts/measure_command.py --gate pip_check --report reports/ci-gates.jsonl -- python -m pip check
-      - name: pip audit
-        run: python scripts/measure_command.py --gate pip_audit --report reports/ci-gates.jsonl -- python -m pip_audit --strict -r requirements.lock -f json -o reports/pip-audit.json
-      - name: Dependency inspection
-        run: python -m pip inspect > reports/pip-inspect.json
-      - name: Clean tree after rebuild
-        run: |
-          git status --porcelain=v1 --untracked-files=all > reports/clean-tree.txt
-          test ! -s reports/clean-tree.txt
       - name: Verify exact archive (first build)
         run: |
           set -euo pipefail
