@@ -66,11 +66,15 @@ def query_source_annotations(store, query: str) -> SourceTextQueryResult | None:
 
 def annotation_health(store) -> dict[str, int]:
     legends = _verified_legends(store)
-    rows = tuple(_artifact_rows(store))
-    markers = [row for row in rows if row.get("classification") == "source_annotation_marker"]
+    markers = []
+    nonempty_count = 0
+    for row in _artifact_rows(store):
+        nonempty_count += bool(str(row.get("raw_text") or "").strip())
+        if row.get("classification") == "source_annotation_marker":
+            markers.append(row)
     mapped = [row for row in markers if _marker_parts(str(row.get("raw_text") or ""), legends)]
     return {
-        "raw_nonempty_source_span_count": sum(1 for row in rows if str(row.get("raw_text") or "").strip()),
+        "raw_nonempty_source_span_count": nonempty_count,
         "source_annotation_occurrence_count": len(markers),
         "unmapped_source_annotation_count": len(markers) - len(mapped),
         "ordinary_punctuation_annotation_count": sum(
@@ -173,7 +177,14 @@ def _unit_markers(store) -> dict[str, str]:
     rows_by_page: dict[int, list[dict]] = defaultdict(list)
     for row in _artifact_rows(store):
         if row.get("source_role") == "current_consolidated" and row.get("page_number") in pages:
-            rows_by_page[int(row["page_number"])].append(row)
+            rows_by_page[int(row["page_number"])].append(
+                {
+                    "extraction_order": row.get("extraction_order"),
+                    "raw_text": row.get("raw_text"),
+                    "semantic_text": row.get("semantic_text"),
+                    "classification": row.get("classification"),
+                }
+            )
     result: dict[str, str] = {}
     for unit in units:
         rows = rows_by_page[int(unit["page_start"])]

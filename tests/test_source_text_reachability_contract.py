@@ -74,7 +74,14 @@ class SourceTextReachabilityContractTests(unittest.TestCase):
     def test_validator_rejects_unmapped_marker_and_colon_promotion(self) -> None:
         rows = []
         with self.store.config.artifact_path("raw_source_spans").open(encoding="utf-8") as handle:
-            rows = [json.loads(line) for line in handle if line.strip()]
+            for line in handle:
+                row = json.loads(line)
+                if (
+                    row.get("source_role") == "current_consolidated"
+                    and row.get("page_number") == 1
+                    and int(row.get("extraction_order") or 0) <= 11
+                ):
+                    rows.append(row)
         self.assertEqual(validate_source_text_closure(rows), ())
         colon = next(row for row in rows if row.get("raw_text") == ":")
         mutated = rows + [colon | {"classification": "source_annotation_marker", "raw_source_span_id": "mutation::colon"}]

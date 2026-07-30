@@ -91,23 +91,28 @@ def source_text_record(row: dict) -> SourceTextRecord:
 
 
 def source_text_health(store) -> dict[str, int]:
+    record_count = 0
+    without_route = 0
+    without_selector = 0
+    without_geometry_or_reason = 0
     with store.config.artifact_path("raw_source_spans").open(encoding="utf-8") as handle:
-        records = tuple(
-            source_text_record(row)
-            for line in handle
-            if line.strip()
-            and str((row := json.loads(line)).get("raw_text") or "").strip()
-        )
+        for line in handle:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not str(row.get("raw_text") or "").strip():
+                continue
+            record = source_text_record(row)
+            record_count += 1
+            without_route += not record.capabilities and not record.abstention_reason
+            without_selector += not record.selector.stream_id
+            without_geometry_or_reason += not record.geometry_available and not record.abstention_reason
     annotation_health = getattr(getattr(store.config, "strategy", None), "source_text_health", None)
     annotation = annotation_health(store) if annotation_health is not None else {}
     return {
-        "nonempty_source_span_count": len(records),
-        "meaningful_source_span_without_route_count": sum(
-            1 for record in records if not record.capabilities and not record.abstention_reason
-        ),
-        "source_text_without_selector_count": sum(1 for record in records if not record.selector.stream_id),
-        "source_text_without_geometry_or_reason_count": sum(
-            1 for record in records if not record.geometry_available and not record.abstention_reason
-        ),
+        "nonempty_source_span_count": record_count,
+        "meaningful_source_span_without_route_count": without_route,
+        "source_text_without_selector_count": without_selector,
+        "source_text_without_geometry_or_reason_count": without_geometry_or_reason,
         **annotation,
     }
