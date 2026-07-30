@@ -66,14 +66,14 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
     if result.get("readiness") is False:
         return _public_integrity(result)
     support_rows = (
-        *((row, "legal") for row in result.get("final_citations", result.get("citations", ()))),
-        *(() if result.get("answer_type") == "article_amendment_relation" else ((row, "legal") for row in result.get("historical_citations", ()))),
-        *((row, "metadata") for row in result.get("metadata_support", ())),
-        *((row, "structure") for row in result.get("structural_support", ())),
-        *((row, "trace") for row in result.get("relation_support", ())),
-        *((row, "trace") for row in result.get("trace_support", ())),
+        *result.get("final_citations", result.get("citations", ())),
+        *(() if result.get("answer_type") == "article_amendment_relation" else result.get("historical_citations", ())),
+        *result.get("metadata_support", ()),
+        *result.get("structural_support", ()),
+        *result.get("relation_support", ()),
+        *result.get("trace_support", ()),
     )
-    projected = tuple((_public_support(row, section, service, corpus_id), row) for row, section in support_rows)
+    projected = tuple((_public_support(row, service, corpus_id), row) for row in support_rows)
     supports = tuple(support for support, _ in projected)
     if result.get("clarification_options"):
         return {
@@ -109,7 +109,7 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
 def _public_citation_response(result: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
     if result.get("readiness") is False:
         return _public_integrity(result)
-    projected = tuple((_public_support(row, "legal", service, corpus_id), row) for row in result.get("citation_payloads", ()))
+    projected = tuple((_public_support(row, service, corpus_id), row) for row in result.get("citation_payloads", ()))
     supports = tuple(support for support, _ in projected)
     return {
         "kind": "answer",
@@ -199,10 +199,22 @@ def _public_search_result(row: dict, service: LegalRuntimeService, corpus_id: st
     }
 
 
-def _public_support(row: dict, panel_section: str, service: LegalRuntimeService, corpus_id: str) -> dict:
-    labels = {"legal": "Kutipan Relevan", "metadata": "Sumber Dokumen", "structure": "Struktur Dokumen", "trace": "Catatan Sumber"}
-    legal = panel_section == "legal"
-    fact_kind = row.get("fact_kind") or ("legal_text" if legal else "document_structure" if panel_section == "structure" else "source_fact" if panel_section == "metadata" else "source_discrepancy")
+def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
+    authority = row.get("authority_kind")
+    authority_kind = authority if isinstance(authority, str) and authority in {
+        "legal_citation", "metadata_source", "metadata_trace", "source_conflict_provenance",
+        "source_anomaly", "structural_context", "instrument_provenance", "source_text",
+    } else "source_text"
+    fact_kind = row.get("fact_kind") or {
+        "legal_citation": "legal_text",
+        "metadata_source": "source_fact",
+        "metadata_trace": "source_fact",
+        "structural_context": "document_structure",
+        "instrument_provenance": "source_provenance",
+        "source_conflict_provenance": "source_discrepancy",
+        "source_anomaly": "source_discrepancy",
+        "source_text": "source_trace",
+    }.get(authority_kind, "source_trace")
     role_label = row.get("printed_role") if fact_kind == "person_role" else None
     target_source = dict(row.get("viewer_target") or row.get("viewer_ref") or {})
     linkable = row.get("viewer_highlightable") is True and target_source.get("can_resolve") is True
@@ -216,42 +228,24 @@ def _public_support(row: dict, panel_section: str, service: LegalRuntimeService,
         "support_projection": {
             key: row[key]
             for key in (
-                "display_text", "copy_text", "layout_lines", "presentation_as_legal_quote",
-                "citation_final", "relevant_quote_eligible",
+                "display_text", "presentation_as_legal_quote", "citation_final",
             )
             if key in row
         },
     }) if linkable else None
-    layout = tuple(_public_layout_line(item, index) for index, item in enumerate(row.get("layout_lines") or ()))
     return {
-        "public_support_id": service.public_identifier(corpus_id, "support", target or (row.get("display_label"), row.get("source_role"), panel_section)),
-        "support_kind": row.get("support_kind") or ("metadata_source" if panel_section == "metadata" else "structural_provenance" if panel_section == "structure" else "trace_support"),
-        "panel_section": labels[panel_section],
+        "public_support_id": service.public_identifier(corpus_id, "support", target or (row.get("display_label"), row.get("source_role"), authority_kind)),
+        "authority_kind": authority_kind,
+        "citation_final": row.get("citation_final") is True and authority_kind == "legal_citation",
+        "support_kind": row.get("support_kind") or "trace_support",
         "fact_kind": fact_kind,
-        "label": row.get("printed_name") or role_label or row.get("display_label") or row.get("label") or row.get("citation") or labels[panel_section],
+        "label": row.get("printed_name") or role_label or row.get("display_label") or row.get("label") or row.get("citation") or row.get("authority_label") or "Bukti sumber",
         "role_label": role_label,
         "text": row.get("display_text") or row.get("quoted_text") or row.get("answer") or "",
-        "layout_lines": layout,
-        "copy_text": row.get("copy_text") or row.get("quoted_text") or "",
         "source_label": row.get("document_title") or row.get("source_label"),
         "source_role": row.get("source_role"),
         "page_numbers": tuple(row.get("page_numbers") or ()),
-        "legal_citation_available": legal and row.get("citation_final") is True,
-        "relevant_quote_eligible": legal and row.get("relevant_quote_eligible") is True,
         "viewer_target": _public_target(target, "viewer", row.get("page_numbers") or (), linkable),
-    }
-
-
-def _public_layout_line(row: dict, index: int) -> dict:
-    alignment = row.get("alignment") if row.get("alignment") in {"left", "center", "right", "justify"} else "unknown"
-    return {
-        "text": str(row.get("text") or ""),
-        "line_order": int(row.get("line_order") or index),
-        "paragraph_id": str(row.get("paragraph_id") or index),
-        "alignment": alignment,
-        "indent": float(row.get("indent") or 0.0),
-        "canonical_start": int(row.get("canonical_start") or 0),
-        "canonical_end": int(row.get("canonical_end") or len(str(row.get("text") or ""))),
     }
 
 
@@ -270,7 +264,7 @@ def _support_groups(projected: tuple[tuple[dict, dict], ...], service: LegalRunt
     role_counts: dict[tuple[str, str, str], int] = {}
     entity_counts: dict[str, int] = {}
     for support, row in projected:
-        if support.get("panel_section") != "Sumber Dokumen" or support.get("fact_kind") != "person_role":
+        if support.get("authority_kind") != "metadata_source" or support.get("fact_kind") != "person_role":
             continue
         role_key = (str(support.get("source_label") or ""), str(support.get("source_role") or ""), str(support.get("role_label") or ""))
         role_counts[role_key] = role_counts.get(role_key, 0) + 1
@@ -285,7 +279,6 @@ def _support_groups(projected: tuple[tuple[dict, dict], ...], service: LegalRunt
         {
             "public_group_id": service.public_identifier(corpus_id, "support-group", key),
             "group_kind": key[0],
-            "panel_section": members[0]["panel_section"],
             "label": _support_group_label(key[0], members),
             "summary": members[0]["source_label"] or members[0]["label"],
             "member_count": len(members),
@@ -302,11 +295,11 @@ def _support_group_key(
     entity_counts: dict[str, int],
 ) -> tuple[tuple[str, ...], str]:
     """Group only source facts with an explicit, deterministic common owner."""
-    section = str(support.get("panel_section") or "")
+    authority_kind = str(support.get("authority_kind") or "")
     source = str(support.get("source_label") or "")
     source_role = str(support.get("source_role") or "")
     fact_kind = str(support.get("fact_kind") or "")
-    if section == "Sumber Dokumen" and fact_kind == "person_role":
+    if authority_kind == "metadata_source" and fact_kind == "person_role":
         role_key = (source, source_role, str(support.get("role_label") or ""))
         if role_counts.get(role_key, 0) > 1:
             return role_key, "role_members"
@@ -314,7 +307,7 @@ def _support_group_key(
         if name and entity_counts.get(name, 0) > 1:
             return (name, str(support.get("role_label") or "")), "entity_occurrences"
         return (), ""
-    if section == "Sumber Dokumen":
+    if authority_kind == "metadata_source":
         return (source, source_role), "document_metadata"
     return (), ""
 

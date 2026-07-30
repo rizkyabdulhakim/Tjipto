@@ -752,7 +752,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertNotIn("article_amendment_relations", public)
         support = public["supports"][0]
         self.assertEqual(support["support_kind"], "article_relation")
-        self.assertEqual(support["panel_section"], "Catatan Sumber")
+        self.assertEqual(support["authority_kind"], "instrument_provenance")
+        self.assertFalse(support["citation_final"])
         self.assertNotEqual(support["source_label"], "uud::amendment_4_historical")
         self.assertTrue(support["viewer_target"]["can_resolve"])
         self.assertNotIn("evidence_id", support["viewer_target"])
@@ -1167,7 +1168,8 @@ class RuntimeContractTest(unittest.TestCase):
     def test_bab_heading_support_uses_only_heading_text_and_geometry(self) -> None:
         public = handle_request("uud", "ask", {"query": "BAB XA"}, service=self.service)
         support = public["supports"][0]
-        self.assertEqual(support["panel_section"], "Kutipan Relevan")
+        self.assertEqual(support["authority_kind"], "legal_citation")
+        self.assertTrue(support["citation_final"])
         self.assertEqual(support["text"].splitlines(), ["BAB XA", "HAK ASASI MANUSIA"])
         viewer = handle_request("uud", "viewer", {"target": support["viewer_target"]["public_target_id"]}, service=self.service)
         self.assertEqual(viewer["quoted_text"], support["text"])

@@ -333,7 +333,7 @@ function CitationFooter({
   activeId?: number;
 }) {
   const relevantCitations = citations.filter(
-    (citation) => citation.supportKind === "legal_unit" && citation.relevantQuoteEligible === true,
+    (citation) => citation.authorityKind === "legal_citation",
   );
   if (!relevantCitations.length) return null;
   const hasProvenance = relevantCitations.some((c) => c.citationFinal === false);

@@ -55,7 +55,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
     def test_rc2_scenario_manifest_is_complete_and_versioned(self) -> None:
         manifest = json.loads((ROOT / "tests/scenarios/public_evidence_rc2.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["version"], 2)
+        self.assertEqual(manifest["version"], 3)
         for scenario in manifest["scenarios"]:
             self.assertEqual(set(scenario), {"id", "owner", "test", "assertions", "command"})
             self.assertTrue(scenario["id"] and scenario["assertions"] and scenario["command"])
@@ -67,11 +67,11 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self._assert_public(asked)
         support = asked["supports"][0]
         self.assertEqual(set(support), {
-            "public_support_id", "support_kind", "panel_section", "fact_kind", "label", "role_label", "text", "layout_lines", "copy_text",
-            "source_label", "source_role", "page_numbers", "legal_citation_available", "relevant_quote_eligible", "viewer_target",
+            "public_support_id", "authority_kind", "citation_final", "support_kind", "fact_kind", "label", "role_label",
+            "text", "source_label", "source_role", "page_numbers", "viewer_target",
         })
-        self.assertEqual(support["panel_section"], "Kutipan Relevan")
-        self.assertNotIn("\nPresiden\nmembentuk", support["copy_text"])
+        self.assertEqual(support["authority_kind"], "legal_citation")
+        self.assertTrue(support["citation_final"])
         self.assertNotIn("source_bbox_refs", json.dumps(support))
         target = support["viewer_target"]["public_target_id"]
         viewer = self._post("/legal/uud/viewer", {"target": target})
@@ -95,15 +95,31 @@ class RuntimeHttpContractTest(unittest.TestCase):
         result = self._post("/legal/uud/citation", {"query": "Pasal 1 ayat (3)"})
         self.assertEqual(result["status"], "found")
         self.assertTrue(result["supports"])
-        self.assertEqual(result["supports"][0]["panel_section"], "Kutipan Relevan")
+        self.assertEqual(result["supports"][0]["authority_kind"], "legal_citation")
+        self.assertTrue(result["supports"][0]["citation_final"])
         self._assert_public(result)
 
-    def test_exact_support_preserves_source_line_layout(self) -> None:
+    def test_public_support_omits_quote_presentation_fields(self) -> None:
         result = self._post("/legal/uud/ask", {"query": "Pasal 28A"})
         self.assertEqual(result["status"], "answer_ready")
-        lines = result["supports"][0]["layout_lines"]
-        self.assertGreaterEqual(len(lines), 2)
-        self.assertTrue(all(line["canonical_end"] > line["canonical_start"] for line in lines))
+        support = result["supports"][0]
+        self.assertFalse({
+            "copy_text", "layout_lines", "legal_citation_available", "relevant_quote_eligible", "panel_section",
+        } & set(support))
+
+    def test_public_support_exposes_typed_authority_and_finality(self) -> None:
+        cases = (
+            ("Pasal 16 UUD konsolidasi", "legal_citation", True),
+            ("kapan perubahan pertama ditetapkan", "metadata_source", False),
+            ("Apa isi BAB XI agama?", "structural_context", False),
+            ("pasal yang dihapus", "instrument_provenance", False),
+            ("Kenapa Amandemen 4 Aturan Tambahan ada Pasal III, tapi Satu Naskah Pasal II?", "source_anomaly", False),
+        )
+        for query, authority_kind, citation_final in cases:
+            with self.subTest(query=query):
+                supports = self._post("/legal/uud/ask", {"query": query})["supports"]
+                support = next(row for row in supports if row["authority_kind"] == authority_kind)
+                self.assertIs(support["citation_final"], citation_final)
 
     def test_clause_claim_viewer_uses_opaque_exact_overlay_target(self) -> None:
         result = self._post(
@@ -126,9 +142,8 @@ class RuntimeHttpContractTest(unittest.TestCase):
             self.assertTrue(group["public_group_id"])
             for member in group["members"]:
                 self.assertIn(member, result["supports"])
-                if member["panel_section"] != "Kutipan Relevan":
-                    self.assertFalse(member["legal_citation_available"])
-                    self.assertFalse(member["relevant_quote_eligible"])
+                self.assertEqual(member["authority_kind"], "metadata_source")
+                self.assertFalse(member["citation_final"])
         group = result["support_groups"][0]
         self.assertEqual(group["group_kind"], "role_members")
         self.assertEqual(group["member_count"], 7)

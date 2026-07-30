@@ -1,19 +1,21 @@
 export type CorpusId = string;
 export type RegulationType = CorpusId;
+export type AuthorityKind =
+  | "legal_citation"
+  | "metadata_source"
+  | "metadata_trace"
+  | "source_conflict_provenance"
+  | "source_anomaly"
+  | "structural_context"
+  | "instrument_provenance"
+  | "source_text";
 
 export interface Citation {
   id: number;
   publicTargetId: string;
   documentTitle: string;
   regulationType: RegulationType;
-  authorityKind?:
-    | "legal_citation"
-    | "metadata_source"
-    | "metadata_trace"
-    | "source_conflict_provenance"
-    | "source_anomaly"
-    | "structural_context"
-    | "instrument_provenance";
+  authorityKind?: AuthorityKind;
   authorityLabel?: string;
   citationFinal?: boolean;
   viewerMode?: "evidence" | "document";
@@ -22,26 +24,12 @@ export interface Citation {
   pageNumber: number;
   excerpt: string;
   supportKind?: string;
-  relevantQuoteEligible?: boolean;
-  displayText?: string;
-  copyText?: string;
-  layoutLines?: LayoutLine[];
+  factKind?: string;
   viewerTarget?: Record<string, unknown>;
   sourceDomain?: string;
   sourceRole?: string;
   temporalContext?: string;
   sourceStatusLabel?: string;
-  panelSection?: "Kutipan Relevan" | "Sumber Dokumen" | "Struktur Dokumen" | "Catatan Sumber";
-}
-
-export interface LayoutLine {
-  text: string;
-  line_order: number;
-  paragraph_id: string;
-  alignment: "left" | "center" | "right" | "justify" | "unknown";
-  indent: number;
-  canonical_start?: number;
-  canonical_end?: number;
 }
 
 export interface ChatMessage {

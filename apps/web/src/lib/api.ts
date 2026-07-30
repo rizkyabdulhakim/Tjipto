@@ -1,4 +1,4 @@
-import type { Citation, LayoutLine, SupportGroup } from "./types";
+import type { AuthorityKind, Citation, SupportGroup } from "./types";
 import type { PdfBBox } from "./pdfBBox";
 
 declare global {
@@ -28,37 +28,23 @@ export interface ViewerTargetPayload {
   can_resolve?: boolean;
 }
 
-export interface LayoutPayloadLine {
-  text: string;
-  line_order: number;
-  paragraph_id: string;
-  alignment: LayoutLine["alignment"];
-  indent: number;
-  canonical_start: number;
-  canonical_end: number;
-}
-
 export interface SupportPayload {
   public_support_id: string;
+  authority_kind: AuthorityKind;
+  citation_final: boolean;
   support_kind: string;
-  panel_section: "Kutipan Relevan" | "Sumber Dokumen" | "Struktur Dokumen" | "Catatan Sumber";
   fact_kind: string;
   label: string;
   role_label?: string | null;
   text: string;
-  layout_lines: LayoutPayloadLine[];
-  copy_text: string;
   source_label?: string;
   source_role?: string;
   page_numbers: number[];
-  legal_citation_available: boolean;
-  relevant_quote_eligible: boolean;
   viewer_target: ViewerTargetPayload;
 }
 
 export interface SupportGroupPayload {
   public_group_id: string;
-  panel_section: SupportPayload["panel_section"];
   label: string;
   summary: string;
   member_count: number;
@@ -180,8 +166,7 @@ export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Cit
 
 export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): SupportGroup[] {
   const grouped = (response.support_groups ?? []).flatMap((group) => {
-    const kind: SupportGroup["kind"] | null = group.panel_section === "Sumber Dokumen" ? "metadata" : group.panel_section === "Struktur Dokumen" ? "structure" : group.panel_section === "Catatan Sumber" ? "trace" : null;
-    if (!kind) return [];
+    const kind: SupportGroup["kind"] = "metadata";
     return [{
       id: group.public_group_id,
       title: group.label,
@@ -200,11 +185,11 @@ export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): Supp
   });
   const groupedIds = new Set((response.support_groups ?? []).flatMap((group) => group.members.map((member) => member.public_support_id)));
   const atomic = (response.supports ?? []).flatMap((support) => {
-    if (groupedIds.has(support.public_support_id) || support.panel_section === "Kutipan Relevan") return [];
-    const kind: SupportGroup["kind"] = support.panel_section === "Sumber Dokumen" ? "metadata" : support.panel_section === "Struktur Dokumen" ? "structure" : "trace";
+    const kind = supportGroupKind(support.authority_kind);
+    if (groupedIds.has(support.public_support_id) || !kind) return [];
     return [{
       id: support.public_support_id,
-      title: support.panel_section,
+      title: supportGroupTitle(kind),
       summary: support.source_label ?? support.label,
       kind,
       members: [{ id: support.public_support_id, publicTargetId: support.viewer_target.public_target_id ?? undefined, label: support.label, detail: support.text, kind, clickable: support.viewer_target.can_resolve === true }],
@@ -237,19 +222,26 @@ function mapSupportToCitation(support: SupportPayload, index: number): Citation[
     publicTargetId: target,
     documentTitle: support.source_label ?? "Dokumen sumber",
     regulationType: "legal",
-    authorityKind: support.panel_section === "Kutipan Relevan" ? "legal_citation" : undefined,
+    authorityKind: support.authority_kind,
     authorityLabel: support.label,
-    citationFinal: support.legal_citation_available,
+    citationFinal: support.citation_final,
     article: support.label,
     pageNumber: Number(support.page_numbers[0] ?? 1),
     excerpt: support.text,
     supportKind: support.support_kind,
-    relevantQuoteEligible: support.relevant_quote_eligible,
-    displayText: support.text,
-    copyText: support.copy_text,
-    layoutLines: support.layout_lines,
+    factKind: support.fact_kind,
     viewerTarget: support.viewer_target as Record<string, unknown>,
     sourceRole: support.source_role,
-    panelSection: support.panel_section,
   }];
+}
+
+function supportGroupKind(authority: AuthorityKind): SupportGroup["kind"] | null {
+  if (authority === "legal_citation") return null;
+  if (authority === "metadata_source" || authority === "metadata_trace") return "metadata";
+  if (authority === "structural_context") return "structure";
+  return "trace";
+}
+
+function supportGroupTitle(kind: SupportGroup["kind"]) {
+  return kind === "metadata" ? "Sumber Dokumen" : kind === "structure" ? "Struktur Dokumen" : "Catatan Sumber";
 }
