@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from functools import lru_cache
 import json
 import re
 import unicodedata
@@ -91,7 +90,6 @@ def document_annotations(store) -> tuple[SourceAnnotation, ...]:
     return tuple(_verified_legends(store).values())
 
 
-@lru_cache(maxsize=1)
 def _verified_legends(store) -> dict[str, SourceAnnotation]:
     candidates: dict[str, list[tuple[dict, dict]]] = defaultdict(list)
     window: deque[dict] = deque(maxlen=3)
@@ -166,7 +164,6 @@ def _unit_marker(store, label: str) -> str | None:
     return _unit_markers(store).get(label)
 
 
-@lru_cache(maxsize=1)
 def _unit_markers(store) -> dict[str, str]:
     units = tuple(
         row
