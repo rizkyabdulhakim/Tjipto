@@ -9,6 +9,7 @@ import tempfile
 import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
+from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.corpora.uud.validation import validate_uud_artifact_dir
 from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
@@ -20,6 +21,14 @@ FINAL = ROOT / "data/final/uud"
 
 
 class VerifiedCorpusContractTest(unittest.TestCase):
+    def setUp(self) -> None:
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
+
+    def tearDown(self) -> None:
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
+
     def test_cached_snapshot_rejects_integrity_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
