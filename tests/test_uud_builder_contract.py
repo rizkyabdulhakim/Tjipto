@@ -69,6 +69,7 @@ class UudBuilderContractTest(unittest.TestCase):
         return list(self._pages)
 
     def test_rebuild_executes_and_is_byte_identical(self) -> None:
+        type(self)._cached_word_bboxes = None
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             shutil.copytree(ROOT / "data", root / "data")
