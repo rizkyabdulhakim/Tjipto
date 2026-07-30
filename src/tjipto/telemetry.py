@@ -37,6 +37,7 @@ _HTTP_ROUTES = frozenset(
         "legal.pdf",
         "legal.bookmarks",
         "legal.capabilities",
+        "legal.facets",
         "legacy.ask",
         "legacy.search",
         "legacy.citation",

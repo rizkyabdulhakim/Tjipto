@@ -16,7 +16,11 @@ from tjipto.telemetry import Telemetry
 
 
 ROOT = Path(__file__).resolve().parents[1]
-_FORBIDDEN = ("evidence_id", "legal_unit_id", "source_document_id", "bbox_id", "source_bbox_refs", "manifest_digest", "artifact_set_digest", "context_pack")
+_FORBIDDEN = (
+    "evidence_id", "legal_unit_id", "source_document_id", "bbox_id", "source_bbox_refs",
+    "manifest_digest", "artifact_set_digest", "context_pack", "source_role", '"route"',
+    '"intent"', '"reason"', "reason_code",
+)
 
 
 class RuntimeHttpContractTest(unittest.TestCase):
@@ -50,8 +54,33 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(result["status"], "found")
         self.assertTrue(result["results"])
         self._assert_public(result)
-        self.assertEqual(set(result["results"][0]), {"title", "label", "snippet", "source_role", "page_numbers", "viewer_target"})
+        self.assertEqual(set(result["results"][0]), {"title", "label", "snippet", "source_status_label", "page_numbers", "viewer_target"})
         self.assertTrue(result["results"][0]["viewer_target"]["public_target_id"])
+
+    def test_regulation_catalog_filters_and_viewer_use_closed_public_payloads(self) -> None:
+        facets = self._post("/legal/catalog/facets", {})
+        self.assertEqual({facet["name"] for facet in facets["facets"]}, {"document_role", "legal_status", "establishment_period"})
+        result = self._post("/legal/catalog/search", {"query": "gaji pppk", "filters": {"legal_status": "applicable"}})
+        self.assertEqual(result["kind"], "catalog")
+        self.assertEqual(result["total"], 2)
+        self._assert_public(result)
+        target = result["results"][0]["viewer_target"]["public_target_id"]
+        viewer = self._post("/legal/catalog/viewer", {"target": target})
+        self.assertEqual(viewer["kind"], "document")
+        self.assertEqual(viewer["legal_status"], "Berlaku")
+        self.assertRegex(viewer["publication"], r"Lembaran Negara Republik Indonesia Tahun \d{4} Nomor \d+")
+        self._assert_public(viewer)
+        body, headers = self._get_bytes(viewer["pdf"]["access_url"])
+        self.assertEqual(headers["Content-Type"], "application/pdf")
+        self.assertTrue(body.startswith(b"%PDF"))
+
+    def test_supported_overview_remains_an_answer_until_citation_click(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "Apa ringkasan BAB XA?"})
+        self.assertEqual(result["kind"], "answer")
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertTrue(result["supports"])
+        self.assertTrue(result["supports"][0]["citation"]["text"])
+        self.assertNotIn("document", result)
 
     def test_rc2_scenario_manifest_is_complete_and_versioned(self) -> None:
         manifest = json.loads((ROOT / "tests/scenarios/public_evidence_rc2.json").read_text(encoding="utf-8"))
@@ -68,7 +97,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
         support = asked["supports"][0]
         self.assertEqual(set(support), {
             "public_support_id", "authority_kind", "citation_final", "support_kind", "fact_kind", "label", "role_label",
-            "text", "source_label", "source_role", "page_numbers", "viewer_target",
+            "text", "source_label", "source_status_label", "page_numbers", "viewer_target", "citation",
         })
         self.assertEqual(support["authority_kind"], "legal_citation")
         self.assertTrue(support["citation_final"])
@@ -172,7 +201,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             with self.assertRaises(HTTPError) as error:
                 self._post(path, payload)
             self.assertEqual(error.exception.code, 400)
-            self.assertEqual(json.loads(error.exception.read().decode("utf-8")), {"status": "bad_request", "reason": "invalid_request"})
+            self.assertEqual(json.loads(error.exception.read().decode("utf-8")), {"status": "bad_request"})
 
     def test_invalid_target_and_pdf_query_do_not_leak(self) -> None:
         viewer = self._post("/legal/uud/viewer", {"target": "not-a-target"})
@@ -185,14 +214,14 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
     def test_transport_rejects_invalid_json_oversized_body_and_unknown_routes(self) -> None:
         for data, headers, expected in (
-            (b"{", {"Content-Type": "application/json"}, (400, "invalid_json")),
-            (b"x" * (64 * 1024 + 1), {"Content-Type": "application/json", "Content-Length": str(64 * 1024 + 1)}, (413, "request_body_too_large")),
+            (b"{", {"Content-Type": "application/json"}, (400, "bad_request")),
+            (b"x" * (64 * 1024 + 1), {"Content-Type": "application/json", "Content-Length": str(64 * 1024 + 1)}, (413, "payload_too_large")),
         ):
             request = Request(self.base_url + "/legal/uud/ask", data=data, headers=headers, method="POST")
             with self.assertRaises(HTTPError) as error:
                 urlopen(request, timeout=10)  # nosec B310
             self.assertEqual(error.exception.code, expected[0])
-            self.assertEqual(json.loads(error.exception.read().decode("utf-8"))["reason"], expected[1])
+            self.assertEqual(json.loads(error.exception.read().decode("utf-8")), {"status": expected[1]})
         with self.assertRaises(HTTPError) as error:
             self._get("/not-real")
         self.assertEqual(error.exception.code, 404)

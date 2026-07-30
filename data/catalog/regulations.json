@@ -1,0 +1,189 @@
+{
+  "documents": [
+    {
+      "key": "perpres-98-2020",
+      "document_type": "Peraturan Presiden",
+      "document_type_normalized": "peraturan presiden",
+      "number": "98",
+      "year": "2020",
+      "official_title": "Gaji dan Tunjangan Pegawai Pemerintah dengan Perjanjian Kerja",
+      "short_title": "Perpres 98 Tahun 2020",
+      "issuer": "Presiden Republik Indonesia",
+      "aliases": [
+        "Perpres 98 Tahun 2020",
+        "Perpres Gaji dan Tunjangan PPPK",
+        "Gaji PPPK"
+      ],
+      "status": "Berlaku",
+      "status_normalized": "applicable",
+      "document_role": "base",
+      "document_role_label": "Naskah Pokok",
+      "preferred": true,
+      "permissions": [
+        "catalog",
+        "view"
+      ],
+      "catalog_provenance": {
+        "kind": "official_catalog_page",
+        "reference": "https://peraturan.bpk.go.id/Details/147306/perpres-no",
+        "verified_at": "2026-07-30T08:10:58+00:00"
+      },
+      "pdf_provenance": {
+        "kind": "official_pdf",
+        "reference": "https://peraturan.bpk.go.id/Download/139194/Perpres%20Nomor%2098%20Tahun%202020.pdf",
+        "verified_at": "2026-07-30T08:10:58+00:00",
+        "immutable_source_identity": "91c09ba1d3589cfb557e885bfead7cb2cf890e6b2d56ce63c35fd96eaa4509f3"
+      },
+      "acquisition": {
+        "path": "data/sources/regulations/perpres-98-2020.pdf",
+        "retrieval_time": "2026-07-30T08:10:58+00:00",
+        "redirect_chain": [],
+        "mime_type": "application/octet-stream",
+        "file_size": 486197,
+        "sha256": "91c09ba1d3589cfb557e885bfead7cb2cf890e6b2d56ce63c35fd96eaa4509f3",
+        "page_count": 6,
+        "source_authority": "Database Peraturan BPK",
+        "reviewer_decision": "accepted_for_catalog_and_document_view"
+      },
+      "cross_check": {
+        "reference": "https://peraturan.go.id/id/perpres-no-98-tahun-2020",
+        "authority": "Direktorat Jenderal Peraturan Perundang-undangan",
+        "result": "identity_status_and_relation_match",
+        "discrepancies": []
+      },
+      "publication": {
+        "source_value": "LEMBARAN NEGARA REPUBLIK INDONESIA TAHUN 2O2O NOMOR 218",
+        "normalized": "lembaran negara republik indonesia tahun 2020 nomor 218",
+        "display": "Lembaran Negara Republik Indonesia Tahun 2020 Nomor 218",
+        "page_number": 5
+      },
+      "lifecycle": [
+        {
+          "kind": "establishment",
+          "value": "28 September 2020",
+          "normalized": "2020-09-28",
+          "display": "28 September 2020"
+        },
+        {
+          "kind": "promulgation",
+          "value": "29 September 2020",
+          "normalized": "2020-09-29",
+          "display": "29 September 2020"
+        },
+        {
+          "kind": "effectiveness",
+          "value": "29 September 2020",
+          "normalized": "2020-09-29",
+          "display": "29 September 2020"
+        }
+      ],
+      "relations": [
+        {
+          "relation": "amended_by",
+          "source": "perpres-98-2020",
+          "target": "perpres-11-2024"
+        }
+      ],
+      "provision_effects": []
+    },
+    {
+      "key": "perpres-11-2024",
+      "document_type": "Peraturan Presiden",
+      "document_type_normalized": "peraturan presiden",
+      "number": "11",
+      "year": "2024",
+      "official_title": "Perubahan atas Peraturan Presiden Nomor 98 Tahun 2020 tentang Peraturan Gaji dan Tunjangan Pegawai Pemerintah dengan Perjanjian Kerja",
+      "short_title": "Perpres 11 Tahun 2024",
+      "issuer": "Presiden Republik Indonesia",
+      "aliases": [
+        "Perpres 11 Tahun 2024",
+        "Perubahan Perpres Gaji PPPK",
+        "Perubahan Perpres 98 Tahun 2020"
+      ],
+      "status": "Berlaku",
+      "status_normalized": "applicable",
+      "document_role": "amendment",
+      "document_role_label": "Naskah Perubahan",
+      "preferred": false,
+      "permissions": [
+        "catalog",
+        "view"
+      ],
+      "catalog_provenance": {
+        "kind": "official_catalog_page",
+        "reference": "https://peraturan.bpk.go.id/Details/276756/perpres-no-11-tah",
+        "verified_at": "2026-07-30T08:10:58+00:00"
+      },
+      "pdf_provenance": {
+        "kind": "official_pdf",
+        "reference": "https://peraturan.bpk.go.id/Download/335287/Salinan%20Perpres%20Nomor%2011%20Tahun%202024.pdf",
+        "verified_at": "2026-07-30T08:10:58+00:00",
+        "immutable_source_identity": "f2a05d254953df8fd51505ee2ec18f8597e800939786f9cb21939070e35b8595"
+      },
+      "acquisition": {
+        "path": "data/sources/regulations/perpres-11-2024.pdf",
+        "retrieval_time": "2026-07-30T08:10:58+00:00",
+        "redirect_chain": [],
+        "mime_type": "application/octet-stream",
+        "file_size": 877138,
+        "sha256": "f2a05d254953df8fd51505ee2ec18f8597e800939786f9cb21939070e35b8595",
+        "page_count": 4,
+        "source_authority": "Database Peraturan BPK",
+        "reviewer_decision": "accepted_for_catalog_and_document_view"
+      },
+      "cross_check": {
+        "reference": "https://peraturan.go.id/id/perpres-no-11-tahun-2024",
+        "authority": "Direktorat Jenderal Peraturan Perundang-undangan",
+        "result": "identity_status_and_relation_match",
+        "discrepancies": [
+          "The BPK catalog title includes the additional word 'Peraturan' before 'Gaji'; the official PDF and Peraturan.go.id title omit it. The catalog identity preserves the BPK source value.",
+          "The BPK catalog metadata reports 4 pages while its note describes 5 pages including the appendix; the downloaded official PDF contains 4 pages.",
+          "PDF text extraction maps printed 'Kerja' to 'Keda' and printed digits in 2020 to letter O; exact provision selector preserves the extracted source stream."
+        ]
+      },
+      "publication": {
+        "source_value": "LEMBARAN NEGARA REPUBLIK INDONESIA TAHUN 2024 NOMOR 24",
+        "normalized": "lembaran negara republik indonesia tahun 2024 nomor 24",
+        "display": "Lembaran Negara Republik Indonesia Tahun 2024 Nomor 24",
+        "page_number": 3
+      },
+      "lifecycle": [
+        {
+          "kind": "establishment",
+          "value": "26 Januari 2024",
+          "normalized": "2024-01-26",
+          "display": "26 Januari 2024"
+        },
+        {
+          "kind": "promulgation",
+          "value": "26 Januari 2024",
+          "normalized": "2024-01-26",
+          "display": "26 Januari 2024"
+        },
+        {
+          "kind": "effectiveness",
+          "value": "26 Januari 2024",
+          "normalized": "2024-01-26",
+          "display": "26 Januari 2024"
+        }
+      ],
+      "relations": [
+        {
+          "relation": "amends",
+          "source": "perpres-11-2024",
+          "target": "perpres-98-2020"
+        }
+      ],
+      "provision_effects": [
+        {
+          "relation": "amends",
+          "source": "perpres-11-2024",
+          "target": "perpres-98-2020",
+          "exact_target": "Lampiran Peraturan Presiden Nomor 98 Tahun 2020",
+          "exact_source_text": "Mengubah Lampiran Peraturan Presiden Nomor 98 Tahun 2O2O tentang Gaji dan Tunjangan Pegawai Pemerintah dengan Perjanjian Keda (Lembaran Negara Republik Indonesia Tahun 2O2O Nomor 218)', sehingga menjadi sebagaimana tercantum dalam Lampiran yang merupakan bagian tidak terpisahkan dari Peraturan Presiden ini.",
+          "page_number": 2
+        }
+      ]
+    }
+  ]
+}

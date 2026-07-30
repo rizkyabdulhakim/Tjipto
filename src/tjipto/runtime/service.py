@@ -32,7 +32,8 @@ from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.response import AnswerDecision, project_response
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.telemetry import Telemetry
-from tjipto.runtime.viewer import document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
+from tjipto.runtime.viewer import _source_status_label, document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
+from tjipto.catalog import CatalogService
 
 
 _BOOKMARKS: dict[str, dict] = {}
@@ -97,6 +98,7 @@ class LegalRuntimeService:
         self._public_targets: OrderedDict[str, tuple[str, dict]] = OrderedDict()
         self._public_target_limit = 1024
         self._public_target_lock = threading.RLock()
+        self._catalog_service = None
 
     def _store(self, corpus_id: str):
         cached = self._store_cache.get(corpus_id)
@@ -163,6 +165,15 @@ class LegalRuntimeService:
             self._public_targets.move_to_end(target)
             return dict(record[1])
 
+    def public_source_context(self, corpus_id: str, target: str | None) -> str | None:
+        request = self._public_target_request(corpus_id, target)
+        role = request.get("source_role") if request and request.get("kind") == "source_context" else None
+        return str(role) if role else None
+
+    def public_source_status_label(self, corpus_id: str, source_role: object) -> str | None:
+        store = self._store(corpus_id)
+        return _source_status_label({"source_role": source_role}, store) if store is not None else None
+
     def viewer_public(self, corpus_id: str, target: str | None) -> dict:
         if self._store(corpus_id) is None:
             return _integrity_failure(corpus_id, "", self._integrity_error)
@@ -217,6 +228,27 @@ class LegalRuntimeService:
             None if rows else "document_not_found",
             applied_filters=public_filters(normalized_filters),
         )
+
+    def catalog_search(self, query: str, limit: int = 10, filters: dict | None = None) -> dict:
+        return self._catalog().search(query, limit, filters)
+
+    def catalog_viewer(self, target: str) -> dict:
+        return self._catalog().viewer(target)
+
+    def catalog_pdf(self, target: str) -> dict:
+        return self._catalog().pdf(target)
+
+    def citation_unit(self, corpus_id: str, row: dict):
+        store = self._store(corpus_id)
+        factory = getattr(getattr(store.config, "strategy", None), "citation_unit_factory", None) if store is not None else None
+        return factory(store, row) if factory is not None else None
+
+    def _catalog(self):
+        if self._catalog_service is None:
+            from tjipto.corpora.catalog import builtin_catalog
+
+            self._catalog_service = CatalogService(builtin_catalog(self.registry.repo_root, self._store))
+        return self._catalog_service
 
     def citation(
         self,

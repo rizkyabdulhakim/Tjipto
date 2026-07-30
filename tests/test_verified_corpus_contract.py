@@ -284,7 +284,7 @@ class VerifiedCorpusContractTest(unittest.TestCase):
                 ("bookmarks", {}),
             ):
                 result = handle_request("uud", action, payload, root)
-                self.assertEqual(result, {"kind": "unavailable", "status": "unavailable", "reason": "service_unavailable"})
+                self.assertEqual(result, {"kind": "unavailable", "status": "unavailable"})
 
     def test_tampered_or_invalid_artifacts_cannot_answer(self) -> None:
         cases = (

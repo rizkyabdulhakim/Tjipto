@@ -1,18 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   SquarePen,
   Search,
   BookOpen,
-  X,
   Settings,
   ChevronDown,
-  MoreHorizontal,
   LogOut,
   Sun,
   Moon,
   PanelLeftClose,
 } from "lucide-react";
-import { quickQueries } from "./data";
 import { AnimatePresence, motion } from "motion/react";
 
 export type Route = "chat" | "search" | "library";
@@ -40,7 +37,6 @@ export function Sidebar({
   userMenuOpen,
   onToggleUserMenu,
 }: SidebarProps) {
-  const [query, setQuery] = useState("");
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -56,12 +52,6 @@ export function Sidebar({
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [userMenuOpen, onToggleUserMenu]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return quickQueries;
-    return quickQueries.filter((t) => t.title.toLowerCase().includes(q));
-  }, [query]);
 
   if (collapsed) {
     return (
@@ -119,102 +109,25 @@ export function Sidebar({
           shortcut="⌘N"
           tint="blue"
           onClick={onNewChat}
-          active={active === "chat" && query === ""}
+          active={active === "chat"}
         />
         <NavButton
           icon={<Search size={20} />}
-          label="Cari Regulasi"
+          label="Cari Peraturan"
           tint="indigo"
           active={active === "search"}
           onClick={() => onNavigate("search")}
         />
         <NavButton
           icon={<BookOpen size={20} />}
-          label="Pustaka Hukum"
+          label="Penanda"
           tint="teal"
           active={active === "library"}
           onClick={() => onNavigate("library")}
         />
       </nav>
 
-      {/* Quick query search */}
-      <div className="flex-1 flex flex-col min-h-0 px-3 pb-4">
-        <div className="relative mb-3 px-1">
-          <Search
-            size={14}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--tj-text-muted)] pointer-events-none z-10"
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari contoh pertanyaan..."
-            className="w-full h-8.5 pl-8 pr-8 rounded-xl bg-[var(--tj-surface-glass)] border border-[var(--tj-border-glass)] hover:bg-[var(--tj-surface-hover)] focus:border-[var(--tj-accent-primary)] focus:bg-[var(--tj-surface)] outline-none transition-all text-[var(--tj-text-primary)] placeholder:text-[var(--tj-text-muted)] placeholder:opacity-60 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)]"
-            style={{ 
-              fontSize: 13.5,
-              backgroundColor: 'color-mix(in srgb, var(--tj-surface-glass), var(--tj-text-primary) 3%)'
-            }}
-            aria-label="Search sample prompts"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center text-[var(--tj-text-muted)] hover:text-[var(--tj-text-primary)] hover:bg-[var(--tj-surface-hover)] z-10"
-              aria-label="Clear search"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-
-        <div
-          className="px-3 mb-2 uppercase tracking-[0.08em] flex items-center justify-between"
-          style={{
-            fontSize: 10,
-            color: "var(--tj-text-muted)",
-            fontWeight: 700,
-          }}
-        >
-          <span>Sample Prompts</span>
-        </div>
-
-        <div className="flex-1 overflow-y-auto tj-scroll flex flex-col gap-[2px]">
-          {filtered.length === 0 ? (
-            <div
-              className="px-3 py-8 text-center"
-              style={{ fontSize: 13, color: "var(--tj-text-muted)", opacity: 0.6 }}
-            >
-              No results found.
-            </div>
-          ) : (
-            filtered.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => onNavigate("chat")}
-                className={`group relative h-9 flex items-center px-3 rounded-xl text-left hover:bg-[var(--tj-surface-hover)] transition-all ${
-                  t.active && active === "chat"
-                    ? "bg-[var(--tj-surface-hover)]"
-                    : ""
-                }`}
-                style={{
-                  fontSize: 14,
-                  color:
-                    t.active && active === "chat"
-                      ? "var(--tj-text-primary)"
-                      : "var(--tj-text-secondary)",
-                }}
-              >
-                <HighlightedText text={t.title} query={query} />
-                <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity shrink-0 pl-2">
-                  <MoreHorizontal
-                    size={15}
-                    className="text-[var(--tj-text-muted)]"
-                  />
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-      </div>
+      <div className="flex-1" />
 
       {/* User menu — cleaner iOS style */}
       <div ref={userMenuRef} className="relative border-t border-[var(--tj-glass-border)] p-3 shrink-0">
@@ -469,14 +382,14 @@ function CollapsedSidebar({
         />
         <CollapsedNavButton
           icon={<Search size={20} />}
-          label="Cari Regulasi"
+          label="Cari Peraturan"
           tint="indigo"
           active={active === "search"}
           onClick={() => onNavigate("search")}
         />
         <CollapsedNavButton
           icon={<BookOpen size={20} />}
-          label="Pustaka Hukum"
+          label="Penanda"
           tint="teal"
           active={active === "library"}
           onClick={() => onNavigate("library")}
@@ -642,31 +555,5 @@ export function TjiptoLogo({ size = 36 }: { size?: number }) {
         <rect x="29.5" y="24" width="5" height="24" rx="1.5" />
       </g>
     </svg>
-  );
-}
-
-function HighlightedText({ text, query }: { text: string; query: string }) {
-  const q = query.trim();
-  if (!q) return <span className="truncate">{text}</span>;
-  const idx = text.toLowerCase().indexOf(q.toLowerCase());
-  if (idx === -1) return <span className="truncate">{text}</span>;
-  const before = text.slice(0, idx);
-  const match = text.slice(idx, idx + q.length);
-  const after = text.slice(idx + q.length);
-  return (
-    <span className="truncate">
-      {before}
-      <mark
-        style={{
-          background: "var(--tj-accent-soft)",
-          color: "var(--tj-accent)",
-          padding: "0 1px",
-          borderRadius: 2,
-        }}
-      >
-        {match}
-      </mark>
-      {after}
-    </span>
   );
 }

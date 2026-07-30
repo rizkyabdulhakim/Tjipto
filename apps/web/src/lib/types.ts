@@ -18,7 +18,9 @@ export interface Citation {
   authorityKind?: AuthorityKind;
   authorityLabel?: string;
   citationFinal?: boolean;
-  viewerMode?: "evidence" | "document";
+  citationNumber?: number;
+  citationText?: string;
+  viewerMode?: "evidence" | "document" | "catalog";
   article?: string;
   paragraph?: string;
   pageNumber: number;
@@ -27,9 +29,16 @@ export interface Citation {
   factKind?: string;
   viewerTarget?: Record<string, unknown>;
   sourceDomain?: string;
-  sourceRole?: string;
   temporalContext?: string;
   sourceStatusLabel?: string;
+  legalStatus?: string;
+  documentRole?: string;
+  establishmentDate?: string;
+  promulgationDate?: string;
+  effectiveDate?: string;
+  officialUrl?: string;
+  documentType?: string;
+  issuer?: string;
 }
 
 export interface ChatMessage {
@@ -38,10 +47,9 @@ export interface ChatMessage {
   content: string;
   citations?: Citation[];
   supportGroups?: SupportGroup[];
-  clarificationOptions?: { sourceRole?: string; label: string }[];
+  clarificationOptions?: { contextTarget: string; label: string }[];
   clarificationQuery?: string;
   status?: "streaming" | "complete";
-  runtimeStatus?: string;
 }
 
 export interface SupportItem {

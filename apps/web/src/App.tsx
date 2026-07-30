@@ -71,7 +71,7 @@ export default function App() {
     setMobileNavOpen(false);
   };
 
-  const submit = async (value: string, filters?: { source_role: string }, displayValue = value) => {
+  const submit = async (value: string, sourceContext?: string, displayValue = value) => {
     if (!hasChat) setHasChat(true);
     setRoute("chat");
     setActiveCitation(null);
@@ -87,14 +87,14 @@ export default function App() {
       {
         id: asstId,
         role: "assistant",
-        content: "Menghubungi runtime UUD terverifikasi...",
+        content: "Menelusuri sumber hukum terverifikasi…",
         status: "streaming",
       },
     ]);
     setIsStreaming(true);
 
     try {
-      const response = await askLegal(value, filters);
+      const response = await askLegal(value, sourceContext);
       const citations = mapAskResponseToCitations(response);
       const documentSource = mapAskResponseToDocumentSource(response);
       const supportGroups = mapAskResponseToSupportGroups(response);
@@ -109,12 +109,11 @@ export default function App() {
                 ...m,
                 content,
                 status: "complete",
-                runtimeStatus: response.status,
                 citations: citations.length ? citations : undefined,
                 supportGroups: supportGroups.length ? supportGroups : undefined,
                 clarificationOptions: (response.clarification_options ?? [])
-                  .filter((option) => option.label)
-                  .map((option) => ({ sourceRole: option.source_role, label: option.label as string })),
+                  .filter((option) => option.label && option.context_target)
+                  .map((option) => ({ contextTarget: option.context_target as string, label: option.label as string })),
                 clarificationQuery: response.status === "clarification_required" ? value : undefined,
               }
             : m,
@@ -126,9 +125,8 @@ export default function App() {
           m.id === asstId
             ? {
                 ...m,
-                content: "Backend UUD belum tersedia. Bukti tidak cukup / database belum tersedia dalam korpus UUD terverifikasi saat ini.",
+                content: "Sumber hukum belum dapat diakses. Coba kembali beberapa saat lagi.",
                 status: "complete",
-                runtimeStatus: "backend_unavailable",
               }
             : m,
         ),
@@ -138,8 +136,8 @@ export default function App() {
     }
   };
 
-  const clarify = (query: string, sourceRole: string, label: string) =>
-    submit(query, { source_role: sourceRole }, `${query}\nKonteks sumber: ${label}`);
+  const clarify = (query: string, contextTarget: string, label: string) =>
+    submit(query, contextTarget, `${query}\nKonteks sumber: ${label}`);
 
   const stop = () => setIsStreaming(false);
   const allCitations = messages.flatMap((message) => message.citations ?? []);
@@ -241,7 +239,7 @@ export default function App() {
             <button
               onClick={() => setMobileNavOpen(true)}
               className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-[var(--tj-surface-hover)] active:scale-90 transition-all"
-              aria-label="Open menu"
+              aria-label="Buka menu"
             >
               <Menu size={20} className="text-[var(--tj-text-primary)]" />
             </button>
@@ -249,7 +247,7 @@ export default function App() {
             <button
               onClick={newChat}
               className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-[var(--tj-surface-hover)] active:scale-90 transition-all"
-              aria-label="New chat"
+              aria-label="Percakapan baru"
             >
               <SquarePen size={19} className="text-[var(--tj-text-primary)]" />
             </button>
@@ -270,8 +268,8 @@ export default function App() {
               ) : (
                 <EmptyState onSubmit={submit} />
               ))}
-            {route === "search" && <SearchRoute onOpenCitation={setActiveCitation} />}
-            {route === "library" && <LibraryRoute />}
+            {route === "search" && <SearchRoute onOpenDocument={setActiveCitation} />}
+            {route === "library" && <LibraryRoute onOpenDocument={setActiveCitation} />}
           </div>
         </main>
 

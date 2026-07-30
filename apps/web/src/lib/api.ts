@@ -38,9 +38,10 @@ export interface SupportPayload {
   role_label?: string | null;
   text: string;
   source_label?: string;
-  source_role?: string;
+  source_status_label?: string;
   page_numbers: number[];
   viewer_target: ViewerTargetPayload;
+  citation?: { number: number; text: string; official_url: string; citation_final: boolean } | null;
 }
 
 export interface SupportGroupPayload {
@@ -56,36 +57,64 @@ export interface TjiptoAskResponse {
   kind: "answer" | "document" | "clarification" | "unavailable";
   status: string;
   answer?: string;
-  answer_scope?: string;
-  reason?: string | null;
-  document?: { label?: string; source_role?: string; viewer_target?: ViewerTargetPayload };
-  clarification_options?: { source_role?: string; label?: string }[];
+  document?: { label?: string; source_status_label?: string; viewer_target?: ViewerTargetPayload };
+  clarification_options?: { context_target?: string; label?: string }[];
   supports?: SupportPayload[];
   support_groups?: SupportGroupPayload[];
 }
 
 export interface SearchResult {
-  title?: string;
-  label?: string;
-  snippet?: string;
-  source_role?: string;
-  page_numbers?: number[];
+  official_title: string;
+  short_title: string;
+  document_type: string;
+  number: string;
+  year: string;
+  issuer: string;
+  legal_status: string;
+  document_role: string;
+  establishment_date?: string;
+  official_url: string;
   viewer_target?: ViewerTargetPayload;
+}
+
+export interface CatalogFacet {
+  name: string;
+  label: string;
+  options: { value: string; label: string; count: number }[];
+}
+
+export interface CatalogResponse {
+  kind: "catalog";
+  status: string;
+  total: number;
+  applied_filters: Record<string, string>;
+  facets: CatalogFacet[];
+  results: SearchResult[];
 }
 
 export interface ViewerPayload {
   status: string;
   citation?: string;
   quoted_text?: string;
-  source_role?: string;
   source_status_label?: string;
   page_numbers?: number[];
   bbox_rectangles?: (PdfBBox & { public_rectangle_id?: string; bbox_precision?: "exact" | "coarse" | "page_grounded_only"; viewer_highlightable?: boolean })[];
   viewer_highlightable?: boolean;
   pdf_access_available?: boolean;
   rendering_available?: boolean;
-  reason?: string | null;
   pdf?: { mime_type?: string; access_url?: string };
+  title?: string;
+  document_type?: string;
+  number?: string;
+  year?: string;
+  issuer?: string;
+  legal_status?: string;
+  document_role?: string;
+  establishment_date?: string;
+  promulgation_date?: string;
+  effective_date?: string;
+  official_url?: string;
+  publication?: string;
 }
 
 export interface BookmarkPointer {
@@ -96,13 +125,17 @@ export interface BookmarkPointer {
   status: string;
 }
 
-export async function askLegal(query: string, filters?: { source_role: string }): Promise<TjiptoAskResponse> {
-  return request("ask", { query, ...(filters ? { filters } : {}) });
+export async function askLegal(query: string, sourceContext?: string): Promise<TjiptoAskResponse> {
+  return request("ask", { query, ...(sourceContext ? { source_context: sourceContext } : {}) });
 }
 
-export async function searchLegal(query: string): Promise<SearchResult[]> {
-  const body = await request<{ results?: SearchResult[] }>("search", { query, limit: 5 });
-  return Array.isArray(body.results) ? body.results : [];
+export async function searchLegal(query: string, filters: Record<string, string> = {}): Promise<CatalogResponse> {
+  return catalogRequest<CatalogResponse>("search", { query, limit: 10, filters });
+}
+
+export async function getCatalogFacets(): Promise<CatalogFacet[]> {
+  const body = await catalogRequest<{ facets?: CatalogFacet[] }>("facets", {});
+  return Array.isArray(body.facets) ? body.facets : [];
 }
 
 export async function listLegalBookmarks(): Promise<{ bookmarks: BookmarkPointer[] }> {
@@ -117,8 +150,8 @@ export async function saveLegalBookmark(publicTargetId: string): Promise<Bookmar
   return body.bookmark ?? null;
 }
 
-export async function getLegalViewerPayload(publicTargetId: string): Promise<ViewerPayload> {
-  return request("viewer", { target: publicTargetId });
+export async function getLegalViewerPayload(publicTargetId: string, catalog = false): Promise<ViewerPayload> {
+  return catalog ? catalogRequest("viewer", { target: publicTargetId }) : request("viewer", { target: publicTargetId });
 }
 
 async function request<T = TjiptoAskResponse>(action: string, body: object): Promise<T> {
@@ -128,6 +161,17 @@ async function request<T = TjiptoAskResponse>(action: string, body: object): Pro
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(`runtime returned ${response.status}`);
+  return response.json();
+}
+
+async function catalogRequest<T>(action: string, body: object): Promise<T> {
+  if (!API_BASE) throw new Error("missing_runtime_configuration");
+  const response = await fetch(`${API_BASE}/legal/catalog/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`service returned ${response.status}`);
   return response.json();
 }
 
@@ -160,7 +204,6 @@ export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Cit
     viewerMode: "document",
     pageNumber: Number(source.viewer_target?.page_numbers?.[0] ?? 1),
     excerpt: "",
-    sourceRole: source.source_role,
   };
 }
 
@@ -200,17 +243,21 @@ export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): Supp
 
 export function mapSearchResultToCitation(item: SearchResult, index: number): Citation | null {
   const target = item.viewer_target?.public_target_id;
-  if (!target || !item.snippet) return null;
+  if (!target) return null;
   return {
     id: index + 1,
     publicTargetId: target,
-    documentTitle: item.title ?? "Dokumen sumber",
-    regulationType: "legal",
-    viewerMode: "evidence",
-    article: item.label,
-    pageNumber: Number(item.page_numbers?.[0] ?? item.viewer_target?.page_numbers?.[0] ?? 1),
-    excerpt: item.snippet,
-    sourceRole: item.source_role,
+    documentTitle: item.official_title,
+    regulationType: item.document_type,
+    viewerMode: "catalog",
+    pageNumber: 1,
+    excerpt: `${item.document_type} Nomor ${item.number} Tahun ${item.year}`,
+    legalStatus: item.legal_status,
+    documentRole: item.document_role,
+    establishmentDate: item.establishment_date,
+    officialUrl: item.official_url,
+    documentType: item.document_type,
+    issuer: item.issuer,
   };
 }
 
@@ -225,13 +272,15 @@ function mapSupportToCitation(support: SupportPayload, index: number): Citation[
     authorityKind: support.authority_kind,
     authorityLabel: support.label,
     citationFinal: support.citation_final,
+    citationNumber: support.citation?.number,
+    citationText: support.citation?.text,
     article: support.label,
     pageNumber: Number(support.page_numbers[0] ?? 1),
     excerpt: support.text,
     supportKind: support.support_kind,
     factKind: support.fact_kind,
     viewerTarget: support.viewer_target as Record<string, unknown>,
-    sourceRole: support.source_role,
+    sourceStatusLabel: support.source_status_label,
   }];
 }
 
@@ -244,4 +293,9 @@ function supportGroupKind(authority: AuthorityKind): SupportGroup["kind"] | null
 
 function supportGroupTitle(kind: SupportGroup["kind"]) {
   return kind === "metadata" ? "Sumber Dokumen" : kind === "structure" ? "Struktur Dokumen" : "Catatan Sumber";
+}
+
+export function legalReferenceLabel(article?: string, paragraph?: string) {
+  const label = article || "Ketentuan";
+  return paragraph ? `${label} ayat (${paragraph})` : label;
 }

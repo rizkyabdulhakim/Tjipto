@@ -1237,7 +1237,7 @@ class RuntimeContractTest(unittest.TestCase):
     def test_document_source_api_exposes_verified_document_target_only(self) -> None:
         result = handle_request("uud", "ask", {"query": "Apa isi Perubahan Pertama UUD?"}, service=self.service)
         self.assertEqual(result["kind"], "document")
-        self.assertEqual(result["document"]["source_role"], "amendment_1_historical")
+        self.assertEqual(result["document"]["source_status_label"], "Historis (sumber perubahan)")
         self.assertEqual(result["document"]["viewer_target"]["action"], "open_document")
         self.assertNotIn("supports", result)
 
@@ -1272,7 +1272,7 @@ class RuntimeContractTest(unittest.TestCase):
             ROOT,
         )
         self.assertEqual(api_result["status"], "answer_ready")
-        self.assertEqual(api_result["supports"][0]["source_role"], "amendment_1_historical")
+        self.assertEqual(api_result["supports"][0]["source_status_label"], "Historis (sumber perubahan)")
 
     def test_dense_readiness_does_not_fake_matches(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")

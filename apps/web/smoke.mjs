@@ -58,11 +58,12 @@ async function ensureServers() {
 
 async function ask(page, query) {
   await page.goto(frontendUrl, { waitUntil: "networkidle" });
-  const statuses = page.locator("[data-runtime-status]");
-  const before = await statuses.count();
+  const messages = page.locator('[data-message-role="assistant"]');
+  const before = await messages.count();
   await page.locator("textarea").fill(query);
-  await page.getByLabel("Send").click();
-  await page.waitForFunction((count) => document.querySelectorAll("[data-runtime-status]").length > count, before);
+  await page.getByLabel("Kirim").click();
+  await page.waitForFunction((count) => document.querySelectorAll('[data-message-role="assistant"]').length > count, before);
+  await page.locator('[data-message-role="assistant"]').last().getByLabel("Salin").waitFor();
 }
 
 async function openSupport(page, selector) {
@@ -83,14 +84,36 @@ async function run() {
   }, { apiBase: backendUrl, corpusId: "uud" });
   const page = await context.newPage();
   const payloads = [];
+  let catalogSearchCount = 0;
   page.on("response", async (response) => {
+    if (response.url().includes("/legal/catalog/search")) catalogSearchCount += 1;
     if (response.url().includes("/legal/")) {
       const type = response.headers()["content-type"] ?? "";
       if (type.includes("application/json")) payloads.push(await response.text());
     }
   });
   try {
-    await ask(page, "Pasal 28A");
+    await page.goto(frontendUrl, { waitUntil: "networkidle" });
+    await page.getByText("Cari Peraturan", { exact: true }).first().click();
+    const searchInput = page.getByPlaceholder("Cari berdasarkan jenis, nomor, tahun, atau judul");
+    await searchInput.fill("undang undang dasar negara republik indonesia tahun 1945");
+    assert(catalogSearchCount === 0, "Search ran before explicit submission.");
+    await page.getByLabel("Status Keberlakuan").selectOption("applicable");
+    assert(catalogSearchCount === 0, "Filter change submitted Search implicitly.");
+    await page.getByRole("button", { name: "Cari", exact: true }).click();
+    await page.waitForFunction(() => document.body.textContent?.includes("Undang-Undang Dasar Negara Republik Indonesia Tahun 1945"));
+    assert(catalogSearchCount === 1, "Explicit Search submission did not produce exactly one request.");
+    assert(await page.getByLabel("Status Keberlakuan").inputValue() === "applicable", "Submitted filter did not remain visible.");
+    await page.getByRole("button", { name: "Atur ulang filter" }).click();
+    assert(await page.getByLabel("Status Keberlakuan").inputValue() === "", "Filter reset did not clear selection.");
+    assert(catalogSearchCount === 1, "Filter reset submitted Search implicitly.");
+    const firstResult = page.getByRole("button", { name: /Buka naskah/ }).first();
+    await firstResult.click();
+    await page.locator('[data-evidence-panel="normal"]').waitFor();
+    await page.getByLabel("Tutup panel").click();
+
+    await ask(page, "Apa ringkasan BAB XA?");
+    assert(await page.locator("[data-evidence-panel]").count() === 0, "Answer receipt opened the panel automatically.");
     const legalCitation = page.locator('[data-citation-footer="true"] button').first();
     assert(await legalCitation.getAttribute("data-citation-kind") === "legal_citation", "Legal citation is not typed.");
     await legalCitation.click();
@@ -102,11 +125,28 @@ async function run() {
       try { return JSON.parse(body); } catch { return null; }
     }).find((body) => body?.supports?.[0]?.authority_kind === "legal_citation");
     assert(supportPayload?.supports[0].citation_final === true, "Public support finality is not typed.");
+    assert(typeof supportPayload?.supports[0].citation?.text === "string", "Deterministic citation text is missing.");
     for (const field of ["copy_text", "layout_lines", "legal_citation_available", "relevant_quote_eligible", "panel_section"]) {
       assert(!(field in supportPayload.supports[0]), `Public quote-only field remains: ${field}.`);
     }
 
     const document = page.locator("[data-pdf-document]").first();
+    const cardMetrics = await page.evaluate(() => {
+      const pdf = document.querySelector("[data-pdf-card]");
+      const status = document.querySelector("[data-legal-status-card]");
+      if (!pdf || !status) return null;
+      const pdfRect = pdf.getBoundingClientRect();
+      const statusRect = status.getBoundingClientRect();
+      return {
+        widthDelta: Math.abs(pdfRect.width - statusRect.width),
+        pdfRadius: getComputedStyle(pdf).borderRadius,
+        statusRadius: getComputedStyle(status).borderRadius,
+        toolbarHeight: document.querySelector("[data-panel-toolbar]")?.getBoundingClientRect().height,
+      };
+    });
+    assert(cardMetrics?.widthDelta <= 1, "PDF and legal-status cards do not share one content width.");
+    assert(cardMetrics?.pdfRadius === cardMetrics?.statusRadius, "PDF and legal-status card radii differ.");
+    assert(cardMetrics?.toolbarHeight === 48, "Panel toolbar height is inconsistent.");
     const targetPage = Number(await page.locator('[data-bbox-highlight="active"]').first().locator("xpath=ancestor::*[@data-pdf-page][1]").getAttribute("data-pdf-page"));
     assert(Number(await document.getAttribute("data-first-rendered-page")) === targetPage, "Target page did not render first.");
     const canvas = page.locator(`[data-pdf-page="${targetPage}"] canvas`);
@@ -119,7 +159,7 @@ async function run() {
     assert(Math.abs(at100.backingWidth - Math.ceil(at100.logicalWidth * at100.dpr)) <= 1, "Canvas backing store does not match DPR.");
     assert(at100.logicalWidth <= at100.scrollWidth && at100.logicalWidth >= at100.scrollWidth - 80, "100% PDF does not fit viewer width.");
 
-    await page.getByLabel("Zoom out").click();
+    await page.getByLabel("Perkecil tampilan").click();
     await page.waitForFunction((width) => {
       const node = document.querySelector("[data-bbox-highlight='active']")?.closest("[data-pdf-page]")?.querySelector("canvas");
       return node?.dataset.rendered === "true" && node.clientWidth < width * 0.8;
@@ -128,7 +168,7 @@ async function run() {
     assert(Math.abs(at75 / at100.logicalWidth - 0.75) < 0.03, "75% zoom did not re-render the PDF.");
 
     for (let index = 0; index < 5; index += 1) {
-      await page.getByLabel("Zoom in").evaluate((button) => button.click());
+      await page.getByLabel("Perbesar tampilan").evaluate((button) => button.click());
     }
     await page.getByText("200%", { exact: true }).waitFor();
     await canvas.waitFor();
@@ -138,10 +178,10 @@ async function run() {
     );
     const at200 = await canvas.evaluate((node) => node.clientWidth);
     assert(Math.abs(at200 / at100.logicalWidth - 2) < 0.03, "200% zoom did not re-render the PDF.");
-    await page.getByLabel("Zoom out").evaluate((button) => button.click());
-    await page.getByLabel("Zoom in").evaluate((button) => button.click());
+    await page.getByLabel("Perkecil tampilan").evaluate((button) => button.click());
+    await page.getByLabel("Perbesar tampilan").evaluate((button) => button.click());
     await canvas.waitFor({ state: "visible" });
-    assert(await page.getByText("Rendering PDF/BBox belum tersedia").count() === 0, "Cancelled render was reported as a failure.");
+    assert(await page.getByText("Naskah belum dapat ditampilkan").count() === 0, "Cancelled render was reported as a failure.");
 
     const renderWindowValid = await page.evaluate(() => {
       const root = document.querySelector("[data-evidence-pdf-area]");
@@ -158,7 +198,7 @@ async function run() {
     });
     assert(renderWindowValid, "A canvas exists outside the visible-plus-adjacent page window.");
 
-    const separator = page.getByRole("separator", { name: "Resize evidence panel" });
+    const separator = page.getByRole("separator", { name: "Ubah lebar panel sumber" });
     assert(await separator.getAttribute("aria-orientation") === "vertical", "Splitter orientation is missing.");
     assert(await separator.getAttribute("aria-controls") === "tjipto-evidence-panel", "Splitter controlled pane identity is missing.");
     await separator.focus();
@@ -229,7 +269,7 @@ async function run() {
     await highDprContext.close();
 
     const publicText = `${(await page.locator("body").innerText())}\n${payloads.join("\n")}`;
-    for (const forbidden of ["evidence_id", "legal_unit_id", "source_document_id", "source_bbox_refs", "bbox_id", "manifest_digest", "artifact_set_digest"]) {
+    for (const forbidden of ["evidence_id", "legal_unit_id", "source_document_id", "source_bbox_refs", "bbox_id", "manifest_digest", "artifact_set_digest", "\"source_role\"", "\"route\"", "\"intent\"", "\"reason\"", "reason_code"]) {
       assert(!publicText.includes(forbidden), `Public surface leaked ${forbidden}.`);
     }
     console.log("smoke:ok");

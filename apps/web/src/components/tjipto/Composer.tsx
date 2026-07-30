@@ -8,7 +8,7 @@ interface ComposerProps {
   compact?: boolean;
 }
 
-const PLACEHOLDERS = ["Tanya UUD 1945...", "Pasal 1 ayat (3)", "Pembukaan", "Negara hukum", "Hak asasi manusia"];
+const PLACEHOLDERS = ["Ajukan pertanyaan hukum...", "Jelaskan ketentuan ini", "Bandingkan dua ketentuan", "Cari dasar hukum"];
 
 export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerProps) {
   const [value, setValue] = useState("");
@@ -107,7 +107,7 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
             {/* Left attachment */}
             <button
               className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface-hover)] transition-colors"
-              aria-label="Attach"
+              aria-label="Lampirkan"
             >
               <Plus size={18} strokeWidth={2} />
             </button>
@@ -121,7 +121,7 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             rows={1}
-            placeholder={focused || value ? "Tanya UUD 1945..." : displayText}
+            placeholder={focused || value ? "Ajukan pertanyaan hukum..." : displayText}
             className="w-full resize-none bg-transparent outline-none px-14 py-[14px] placeholder:text-[var(--tj-text-muted)] text-[var(--tj-text-primary)] leading-[24px] tj-scroll self-center"
             style={{ fontSize: 16, minHeight: 52, maxHeight: 180, display: 'flex', alignItems: 'center' }}
           />
@@ -131,7 +131,7 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
             {!isStreaming && !canSend && (
               <button
                 className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface-hover)] transition-colors"
-                aria-label="Dictate"
+                aria-label="Dikte"
               >
                 <Mic size={16} />
               </button>
@@ -140,7 +140,7 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
               <button
                 onClick={onStop}
                 className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--tj-text-primary)] transition-colors hover:scale-110"
-                aria-label="Stop generating"
+                aria-label="Hentikan jawaban"
               >
                 <Square size={12} fill="currentColor" />
               </button>
@@ -153,7 +153,7 @@ export function Composer({ onSubmit, isStreaming, onStop, compact }: ComposerPro
                     ? "text-[#0a84ff] scale-110"
                     : "text-[var(--tj-text-muted)] opacity-30 scale-95"
                 }`}
-                aria-label="Send"
+                aria-label="Kirim"
               >
                 <ArrowUp size={18} strokeWidth={2.4} />
               </button>

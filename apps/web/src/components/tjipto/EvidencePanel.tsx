@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, CSSProperties, KeyboardEvent, PointerEvent, ReactNode, RefObject } from "react";
+import type { CSSProperties, KeyboardEvent, PointerEvent, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import * as pdfjs from "pdfjs-dist";
@@ -6,18 +6,14 @@ import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist/types/src/displa
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
   X,
-  Minus,
-  Plus,
-  Maximize2,
-  Minimize2,
-  Check,
   FileText,
-  Bookmark,
 } from "lucide-react";
 import type { Citation } from "../../lib/types";
-import { getLegalViewerPayload, pdfAccessUrl, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
+import { getLegalViewerPayload, legalReferenceLabel, pdfAccessUrl, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
 import { bboxToViewportPercent } from "../../lib/pdfBBox";
 import { canvasBackingStore, fitWidthScale, isRenderCancellation, RenderTaskOwner, visiblePageWindow } from "../../lib/pdfViewer";
+import { LegalStatusCard } from "./LegalStatusCard";
+import { PanelToolbar } from "./PanelToolbar";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -150,14 +146,14 @@ export function EvidencePanel({
             {!pdfOnly && split && (
               <button
                 type="button"
-                aria-label="Resize evidence panel"
+                aria-label="Ubah lebar panel sumber"
                 aria-controls="tjipto-evidence-panel"
                 aria-orientation="vertical"
                 aria-valuemin={SIDEBAR_MIN_WIDTH}
                 aria-valuemax={sidebarMaxWidth}
                 aria-valuenow={Math.round(sidebarWidth)}
                 role="separator"
-                title="Resize evidence panel"
+                title="Ubah lebar panel sumber"
                 onPointerDown={startResize}
                 onPointerMove={resize}
                 onPointerUp={stopResize}
@@ -191,7 +187,7 @@ function EvidenceContent({
   pdfOnly: boolean;
   onTogglePdfOnly: () => void;
 }) {
-  const documentMode = citation.viewerMode === "document";
+  const documentMode = citation.viewerMode === "document" || citation.viewerMode === "catalog";
   const [zoom, setZoom] = useState(100);
   const [saved, setSaved] = useState(false);
   const [viewer, setViewer] = useState<ViewerPayload | null>(null);
@@ -199,9 +195,9 @@ function EvidenceContent({
   const [renderFailed, setRenderFailed] = useState(false);
   const pdfScrollRef = useRef<HTMLDivElement | null>(null);
   const zoomAnchorRef = useRef<{ page: number; ratio: number } | null>(null);
-  const location = legalUnitLabel(citation.article, citation.paragraph);
+  const location = legalReferenceLabel(citation.article, citation.paragraph);
   const pageNumber = viewer?.page_numbers?.[0] ?? citation.pageNumber;
-  const sourceStatus = viewer?.source_status_label ?? citation.sourceStatusLabel ?? sourceStatusLabel(citation.sourceRole, citation.temporalContext);
+  const sourceStatus = viewer?.legal_status ?? viewer?.source_status_label ?? citation.legalStatus ?? citation.sourceStatusLabel ?? "Belum diverifikasi";
   const markRenderFailed = useCallback(() => {
     setRenderFailed(true);
     setViewer((current) => current ? { ...current, rendering_available: false } : current);
@@ -214,7 +210,7 @@ function EvidenceContent({
     setViewer(null);
     setViewerError(false);
     setRenderFailed(false);
-    const request = getLegalViewerPayload(citation.publicTargetId);
+    const request = getLegalViewerPayload(citation.publicTargetId, citation.viewerMode === "catalog");
     request
       .then((payload) => {
         if (!stale) setViewer(payload);
@@ -294,6 +290,8 @@ function EvidenceContent({
           </div>
           <button
             onClick={onClose}
+            aria-label="Tutup panel"
+            title="Tutup panel"
             className="w-9 h-9 -mt-1 -mr-1 rounded-xl flex items-center justify-center text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface-hover)] hover:text-[var(--tj-text-primary)] transition-all active:scale-90 shrink-0"
           >
             <X size={18} />
@@ -302,68 +300,26 @@ function EvidenceContent({
 
       </header>}
 
-      {/* TOOLBAR */}
-      <div className="px-4 sm:px-6 h-12 flex items-center gap-3 border-b border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)]/40 shrink-0">
-        <div className="flex items-center bg-[var(--tj-surface)]/80 rounded-xl border border-[var(--tj-border-subtle)] p-0.5 shadow-sm">
-          <ToolbarBtn
-            onClick={() => changeZoom(-25)}
-            disabled={zoom <= 50}
-            aria-label="Zoom out"
-            title="Zoom out"
-          >
-            <Minus size={14} />
-          </ToolbarBtn>
-          <span
-            className="px-2 select-none flex items-center justify-center"
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: "var(--tj-text-secondary)",
-              minWidth: 44,
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {zoom}%
-          </span>
-          <ToolbarBtn
-            onClick={() => changeZoom(25)}
-            disabled={zoom >= 200}
-            aria-label="Zoom in"
-            title="Zoom in"
-          >
-            <Plus size={14} />
-          </ToolbarBtn>
-        </div>
-
-        <div className="flex-1" />
-
-        <ToolbarBtn
-          onClick={onTogglePdfOnly}
-          className="w-9 h-9 rounded-xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] shadow-sm"
-          aria-label={pdfOnly ? "Exit PDF-only mode" : "Expand PDF-only mode"}
-          title={pdfOnly ? "Exit PDF-only mode" : "Expand PDF-only mode"}
-        >
-          {pdfOnly ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-        </ToolbarBtn>
-        {!pdfOnly && !documentMode && <ToolbarBtn
-          onClick={savePointer}
-          className="w-9 h-9 rounded-xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] shadow-sm"
-          aria-label="Simpan bookmark sementara"
-          title="Simpan bookmark sementara"
-        >
-          {saved ? <Check size={15} /> : <Bookmark size={15} />}
-        </ToolbarBtn>}
-      </div>
+      <PanelToolbar
+        zoom={zoom}
+        expanded={pdfOnly}
+        saved={saved}
+        canBookmark={!documentMode}
+        onZoom={changeZoom}
+        onToggleExpanded={onTogglePdfOnly}
+        onBookmark={savePointer}
+      />
 
       <div className="flex-1 min-h-0 flex flex-col bg-[var(--tj-app-bg)]/40">
         {/* PDF VIEW */}
         <div
           ref={pdfScrollRef}
-          className={`min-h-0 overflow-auto tj-scroll ${PDF_AREA_PADDING_CLASS} ${pdfOnly || documentMode ? "flex-1" : "basis-[54%] border-b border-[var(--tj-border-subtle)]"}`}
+          className={`min-h-0 overflow-auto tj-scroll ${PDF_AREA_PADDING_CLASS} ${pdfOnly ? "flex-1" : "basis-[54%] border-b border-[var(--tj-border-subtle)]"}`}
           data-evidence-pdf-area={pdfOnly ? "expanded" : documentMode ? "document" : "normal"}
         >
           <div
-            className="relative mx-auto w-full min-w-0 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] shadow-sm"
+            className="relative mx-auto w-full min-w-0 rounded-2xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] shadow-sm"
+            data-pdf-card
             style={{
               minHeight: pdfOnly ? PDF_ONLY_MIN_HEIGHT : PDF_NORMAL_MIN_HEIGHT,
             }}
@@ -388,95 +344,27 @@ function EvidenceContent({
           </div>
         </div>
 
-        {!pdfOnly && !documentMode && <div className="flex-1 min-h-0 overflow-y-auto tj-scroll px-6 py-6" data-evidence-detail-area="normal">
-          {/* DETAILS */}
-          <section className="mb-6">
-            <h3
-              className="uppercase mb-3 px-1"
-              style={{
-                fontSize: 11,
-                letterSpacing: "0.1em",
-                fontWeight: 700,
-                color: "var(--tj-text-muted)",
-              }}
-            >
-              Informasi Dokumen
-            </h3>
-            <div className="rounded-2xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm divide-y divide-[var(--tj-border-subtle)]">
-              <MetaRow label="Halaman">{pageNumber}</MetaRow>
-              <MetaRow label="Status Sumber">{sourceStatus}</MetaRow>
-              <MetaRow label="Yurisdiksi">Republik Indonesia</MetaRow>
-              <MetaRow label="Domain">{citation.sourceDomain ?? "Tidak tersedia"}</MetaRow>
-            </div>
-          </section>
-
-          {/* FOOTER */}
-          <footer className="pt-2">
-            <div
-              className="flex items-center justify-center gap-2.5 min-h-11 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3 text-center text-[var(--tj-text-secondary)]"
-              style={{ fontSize: 14, fontWeight: 700 }}
-            >
-              {viewer?.pdf_access_available && !renderFailed
-                ? "PDF asli dirender di frontend melalui akses backend tervalidasi"
-                : "PDF/BBox viewer belum tersedia untuk evidence ini"}
-            </div>
-          </footer>
+        {!pdfOnly && <div className={`flex-1 min-h-0 overflow-y-auto tj-scroll ${PDF_AREA_PADDING_CLASS}`} data-evidence-detail-area="normal">
+          <LegalStatusCard
+            status={sourceStatus}
+            role={viewer?.document_role ?? citation.documentRole}
+            documentType={viewer?.document_type ?? citation.documentType}
+            number={viewer?.number}
+            year={viewer?.year}
+            issuer={viewer?.issuer ?? citation.issuer}
+            establishmentDate={viewer?.establishment_date ?? citation.establishmentDate}
+            promulgationDate={viewer?.promulgation_date ?? citation.promulgationDate}
+            effectiveDate={viewer?.effective_date ?? citation.effectiveDate}
+            officialUrl={viewer?.official_url ?? citation.officialUrl}
+            publication={viewer?.publication}
+            page={pageNumber}
+          />
         </div>}
       </div>
     </>
   );
 }
 
-function ToolbarBtn({
-  children,
-  onClick,
-  disabled,
-  className = "",
-  ...rest
-}: {
-  children: ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
-} & ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-9 h-9 flex items-center justify-center text-[var(--tj-text-secondary)] hover:text-[var(--tj-text-primary)] hover:bg-[var(--tj-surface-hover)] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[var(--tj-text-secondary)] transition-all rounded-lg ${className}`}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
-}
-
-function MetaRow({
-  label,
-  children,
-  mono,
-}: {
-  label: string;
-  children: ReactNode;
-  mono?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3.5">
-      <span style={{ fontSize: 13, color: "var(--tj-text-muted)", fontWeight: 500 }}>{label}</span>
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: "var(--tj-text-primary)",
-          fontFamily: mono ? "'JetBrains Mono', ui-monospace, monospace" : undefined,
-        }}
-        className="truncate flex-1 text-right"
-      >
-        {children}
-      </span>
-    </div>
-  );
-}
 
 function RenderedViewer({
   viewer,
@@ -750,37 +638,22 @@ function UnavailableViewer({
   viewerError: boolean;
 }) {
   const loading = !viewer && !viewerError;
-  const backendReady = viewer?.status === "viewer_payload_ready";
+  const viewerReady = viewer?.status === "viewer_payload_ready";
   return (
     <div
       className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 py-10 text-center"
     >
       <FileText size={28} className="text-[var(--tj-text-muted)]" />
       <div style={{ fontSize: 14, fontWeight: 700, color: "var(--tj-text-primary)" }}>
-        {loading ? "Memuat metadata viewer" : "Rendering PDF/BBox belum tersedia"}
+        {loading ? "Memuat naskah resmi" : "Naskah belum dapat ditampilkan"}
       </div>
       <div style={{ fontSize: 13, color: "var(--tj-text-secondary)", lineHeight: "20px" }}>
-        {backendReady
-          ? `Evidence backend tersedia untuk ${location} pada halaman ${pageNumber}, tetapi runtime menyatakan rendering_available=false sehingga panel ini tidak menampilkan halaman PDF atau overlay BBox.`
-          : "Viewer runtime belum mengembalikan payload siap render untuk evidence ini."}
+        {viewerReady
+          ? `${location} ditemukan pada halaman ${pageNumber}, tetapi tampilan halaman belum tersedia.`
+          : "Sumber resmi belum dapat ditampilkan pada panel ini."}
       </div>
     </div>
   );
-}
-
-function legalUnitLabel(article?: string, paragraph?: string) {
-  const base = article || "UUD";
-  const knownLabel = /^(pasal|bab|aturan|pembukaan)\b/i.test(base) || base.includes(" / ");
-  const label = knownLabel ? base : `Pasal ${base}`;
-  return paragraph ? `${label} ayat (${paragraph})` : label;
-}
-
-function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
-  const role = sourceRole ?? temporalContext;
-  if (role === "current_consolidated") return "Berlaku (konsolidasi saat ini)";
-  if (role?.startsWith("amendment_")) return "Historis (sumber perubahan)";
-  if (role === "original_historical") return "Historis (naskah asli)";
-  return "Status sumber tidak tersedia";
 }
 
 function clamp(value: number, min: number, max: number) {

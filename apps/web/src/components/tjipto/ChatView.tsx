@@ -10,12 +10,13 @@ import {
   FileText,
 } from "lucide-react";
 import type { ChatMessage, Citation, SupportGroup } from "../../lib/types";
+import { legalReferenceLabel } from "../../lib/api";
 import { Composer } from "./Composer";
 
 interface ChatViewProps {
   messages: ChatMessage[];
   onSubmit: (value: string) => void;
-  onClarify: (query: string, sourceRole: string, label: string) => void;
+  onClarify: (query: string, contextTarget: string, label: string) => void;
   isStreaming: boolean;
   onStop: () => void;
   onCitationClick: (citation: Citation) => void;
@@ -97,7 +98,7 @@ function CitationChip({
   onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
-  const location = legalUnitLabel(citation.article, citation.paragraph);
+  const location = legalReferenceLabel(citation.article, citation.paragraph);
   return (
     <span className="relative inline-block align-baseline">
       <button
@@ -196,7 +197,7 @@ function AssistantMessage({
   activeCitationId,
 }: {
   message: ChatMessage;
-  onClarify: (query: string, sourceRole: string, label: string) => void;
+  onClarify: (query: string, contextTarget: string, label: string) => void;
   onCitationClick: (c: Citation) => void;
   activeCitationId?: number;
 }) {
@@ -216,18 +217,13 @@ function AssistantMessage({
     }
   };
   return (
-    <div className="mb-10 last:mb-20">
+    <div className="mb-10 last:mb-20" data-message-role="assistant">
       <div className="flex flex-col gap-2">
         <div
           className="flex items-center gap-2 mb-1 opacity-40 select-none"
           style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", color: "var(--tj-text-primary)" }}
         >
-          ANALISIS TJIPTO
-          {message.runtimeStatus && (
-            <span data-runtime-status={message.runtimeStatus} className="rounded-md border border-[var(--tj-border-subtle)] px-1.5 py-0.5">
-              {message.runtimeStatus}
-            </span>
-          )}
+          JAWABAN TJIPTO
         </div>
         <div className="flex-1 min-w-0">
           <div className="tj-assistant-content">
@@ -264,11 +260,11 @@ function AssistantMessage({
                 <div className="mt-2 flex flex-wrap gap-2">
                   {message.clarificationOptions.map((option) => (
                     <button
-                      key={option.sourceRole ?? option.label}
+                      key={option.contextTarget ?? option.label}
                       type="button"
-                      data-clarification-option={option.sourceRole ?? option.label}
-                      disabled={!option.sourceRole || !message.clarificationQuery}
-                      onClick={() => option.sourceRole && message.clarificationQuery && onClarify(message.clarificationQuery, option.sourceRole, option.label)}
+                      data-clarification-option={option.contextTarget ?? option.label}
+                      disabled={!option.contextTarget || !message.clarificationQuery}
+                      onClick={() => option.contextTarget && message.clarificationQuery && onClarify(message.clarificationQuery, option.contextTarget, option.label)}
                       className="rounded-lg border border-[var(--tj-border-subtle)] px-2.5 py-1.5 text-xs hover:bg-[var(--tj-surface-hover)]"
                     >
                       {option.label}
@@ -288,7 +284,7 @@ function AssistantMessage({
 
           {message.status !== "streaming" && (
             <div className="mt-4 flex items-center gap-1 -ml-1.5">
-              <IconButton icon={Copy} label={copied ? "Copied" : "Copy"} onClick={copy} />
+              <IconButton icon={Copy} label={copied ? "Tersalin" : "Salin"} onClick={copy} />
               <IconButton icon={ThumbsUp} label="Bermanfaat" />
               <IconButton icon={ThumbsDown} label="Kurang tepat" />
               <IconButton icon={Volume2} label="Baca bersuara" />
@@ -377,7 +373,7 @@ function CitationFooter({
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
-                {c.id}
+                {c.citationNumber ?? c.id}
               </span>
               <span className="flex-1 min-w-0">
                 <span
@@ -398,8 +394,7 @@ function CitationFooter({
                   className="block truncate mt-0.5"
                   style={{ fontSize: 12, color: "var(--tj-text-muted)" }}
                 >
-                  {legalUnitLabel(c.article, c.paragraph)}
-                  {" "}· hal. {c.pageNumber} · {c.sourceDomain}
+                  {c.citationText ?? legalReferenceLabel(c.article, c.paragraph)}
                 </span>
               </span>
               <FileText size={13} className="text-[var(--tj-text-muted)] shrink-0 mt-1" />
@@ -411,13 +406,6 @@ function CitationFooter({
   );
 }
 
-
-function legalUnitLabel(article?: string, paragraph?: string) {
-  const base = article || "UUD";
-  const knownLabel = /^(pasal|bab|aturan|pembukaan)\b/i.test(base) || base.includes(" / ");
-  const label = knownLabel ? base : `Pasal ${base}`;
-  return paragraph ? `${label} ayat (${paragraph})` : label;
-}
 
 function SupportFooter({
   citations,

@@ -405,3 +405,15 @@
 
 /* Monochrome inverse: text color when placed on top of accent (which flips light/dark) */
 .tj-on-accent { color: var(--tj-bg); }
+/* Opaque baseline; blur is an enhancement, never a contrast dependency. */
+.tj-legal-status-card {
+  background: var(--tj-surface);
+  box-shadow: var(--tj-shadow-panel);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .tj-legal-status-card {
+    background: color-mix(in srgb, var(--tj-surface) 88%, transparent);
+    backdrop-filter: blur(18px) saturate(125%);
+  }
+}

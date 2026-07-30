@@ -3,6 +3,8 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+from tjipto.catalog import CATALOG_FILTERS
+from tjipto.evidence.legal_citation import FootnoteBook
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -13,7 +15,7 @@ class BadRequest(ValueError):
 
 
 _PUBLIC_REQUEST_FIELDS = {
-    "ask": {"query", "limit", "filters"},
+    "ask": {"query", "limit", "filters", "source_context"},
     "search": {"query", "limit", "filters"},
     "citation": {"query", "source_role", "filters"},
     "viewer": {"target"},
@@ -40,7 +42,14 @@ def handle_request(
     if action == "viewer":
         return _public_viewer(service.viewer_public(corpus_id, _required_str(payload, "target")), corpus_id)
     if action == "ask":
-        result = service.ask(corpus_id, _query(payload), _limit(payload, default=3), _filters(payload))
+        filters = dict(_filters(payload) or {})
+        source_context = _optional_str(payload, "source_context")
+        if source_context:
+            role = service.public_source_context(corpus_id, source_context)
+            if role is None:
+                raise BadRequest()
+            filters["source_role"] = role
+        result = service.ask(corpus_id, _query(payload), _limit(payload, default=3), filters or None)
         return _public_ask(result, service, corpus_id)
     if action == "capabilities":
         return _public_capabilities(service.capabilities(corpus_id))
@@ -57,7 +66,6 @@ def _public_search(result: dict, service: LegalRuntimeService, corpus_id: str) -
     return {
         "kind": "document",
         "status": result.get("status"),
-        "reason": _public_reason(result.get("reason")),
         "results": tuple(_public_search_result(row, service, corpus_id) for row in result.get("results", ())),
     }
 
@@ -73,15 +81,15 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
         *result.get("relation_support", ()),
         *result.get("trace_support", ()),
     )
-    projected = tuple((_public_support(row, service, corpus_id), row) for row in support_rows)
+    footnotes = FootnoteBook()
+    projected = tuple((_public_support(row, service, corpus_id, footnotes), row) for row in support_rows)
     supports = tuple(support for support, _ in projected)
     if result.get("clarification_options"):
         return {
             "kind": "clarification",
             "status": result.get("status"),
             "answer": result.get("answer"),
-            "reason": _public_reason(result.get("reason")),
-            "clarification_options": tuple(_public_clarification_option(row) for row in result["clarification_options"]),
+            "clarification_options": tuple(_public_clarification_option(row, service, corpus_id) for row in result["clarification_options"]),
         }
     if result.get("document_source") is not None:
         source = result["document_source"]
@@ -91,7 +99,7 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
             "status": result.get("status"),
             "document": {
                 "label": source.get("document_title"),
-                "source_role": source.get("source_role"),
+                "source_status_label": service.public_source_status_label(corpus_id, source.get("source_role")),
                 "viewer_target": _public_target(target, "open_document", (1,), True),
             },
         }
@@ -99,8 +107,6 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
         "kind": "answer",
         "status": result.get("status"),
         "answer": result.get("answer"),
-        "answer_scope": result.get("answer_scope"),
-        "reason": _public_reason(result.get("reason")),
         "supports": supports,
         "support_groups": _support_groups(projected, service, corpus_id),
     }
@@ -109,12 +115,12 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
 def _public_citation_response(result: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
     if result.get("readiness") is False:
         return _public_integrity(result)
-    projected = tuple((_public_support(row, service, corpus_id), row) for row in result.get("citation_payloads", ()))
+    footnotes = FootnoteBook()
+    projected = tuple((_public_support(row, service, corpus_id, footnotes), row) for row in result.get("citation_payloads", ()))
     supports = tuple(support for support, _ in projected)
     return {
         "kind": "answer",
         "status": result.get("status"),
-        "reason": _public_reason(result.get("reason")),
         "supports": supports,
         "support_groups": _support_groups(projected, service, corpus_id),
     }
@@ -128,14 +134,12 @@ def _public_viewer(result: dict, corpus_id: str) -> dict:
         "status": result.get("status"),
         "citation": result.get("citation"),
         "quoted_text": result.get("quoted_text"),
-        "source_role": result.get("source_role"),
         "source_status_label": result.get("source_status_label"),
         "page_numbers": tuple(result.get("page_numbers") or ()),
         "bbox_rectangles": tuple(_public_bbox(row, index) for index, row in enumerate(result.get("bbox_rectangles", ()), start=1)),
         "viewer_highlightable": result.get("viewer_highlightable") is True,
         "pdf_access_available": result.get("pdf_access_available") is True,
         "rendering_available": result.get("rendering_available") is True,
-        "reason": _public_reason(result.get("reason")),
     }
     if result.get("pdf_access_available") and result.get("public_pdf_target"):
         public["pdf"] = {
@@ -149,7 +153,6 @@ def _public_integrity(result: dict) -> dict:
     return {
         "kind": "unavailable",
         "status": "unavailable",
-        "reason": "service_unavailable",
     }
 
 
@@ -178,14 +181,6 @@ def _public_bbox_precision(value: object) -> str:
     return value if value in {"exact", "coarse", "page_grounded_only"} else "page_grounded_only"
 
 
-def _public_reason(reason: object) -> str | None:
-    return str(reason) if reason in {
-        "invalid_query", "unsupported_corpus", "citation_not_found", "insufficient_evidence",
-        "page_grounded_only_not_answerable", "viewer_not_highlightable", "missing_exact_grounding",
-        "document_not_found", "unresolved_source_scope", "invalid_viewer_target",
-    } else None
-
-
 def _public_search_result(row: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
     document = row.get("status") == "document"
     target = service.register_public_target(corpus_id, {"evidence_id": None if document else row.get("evidence_id"), "source_document_id": row.get("source_document_id")})
@@ -193,13 +188,13 @@ def _public_search_result(row: dict, service: LegalRuntimeService, corpus_id: st
         "title": row.get("title"),
         "label": row.get("label"),
         "snippet": row.get("snippet"),
-        "source_role": row.get("source_role"),
+        "source_status_label": row.get("source_status_label") or service.public_source_status_label(corpus_id, row.get("source_role")),
         "page_numbers": tuple(row.get("page_numbers") or ()),
         "viewer_target": _public_target(target, "viewer", row.get("page_numbers") or (), True),
     }
 
 
-def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
+def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str, footnotes: FootnoteBook | None = None) -> dict:
     authority = row.get("authority_kind")
     authority_kind = authority if isinstance(authority, str) and authority in {
         "legal_citation", "metadata_source", "metadata_trace", "source_conflict_provenance",
@@ -233,6 +228,16 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str) -> 
             if key in row
         },
     }) if linkable else None
+    unit = service.citation_unit(corpus_id, row)
+    citation = None
+    if unit is not None:
+        number, text = (footnotes or FootnoteBook()).cite(unit)
+        citation = {
+            "number": number,
+            "text": text,
+            "official_url": unit.official_url,
+            "citation_final": unit.citation_final,
+        }
     return {
         "public_support_id": service.public_identifier(corpus_id, "support", target or (row.get("display_label"), row.get("source_role"), authority_kind)),
         "authority_kind": authority_kind,
@@ -243,9 +248,10 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str) -> 
         "role_label": role_label,
         "text": row.get("display_text") or row.get("quoted_text") or row.get("answer") or "",
         "source_label": row.get("document_title") or row.get("source_label"),
-        "source_role": row.get("source_role"),
+        "source_status_label": row.get("source_status_label") or service.public_source_status_label(corpus_id, row.get("source_role")),
         "page_numbers": tuple(row.get("page_numbers") or ()),
         "viewer_target": _public_target(target, "viewer", row.get("page_numbers") or (), linkable),
+        "citation": citation,
     }
 
 
@@ -266,7 +272,7 @@ def _support_groups(projected: tuple[tuple[dict, dict], ...], service: LegalRunt
     for support, row in projected:
         if support.get("authority_kind") != "metadata_source" or support.get("fact_kind") != "person_role":
             continue
-        role_key = (str(support.get("source_label") or ""), str(support.get("source_role") or ""), str(support.get("role_label") or ""))
+        role_key = (str(support.get("source_label") or ""), str(row.get("source_role") or ""), str(support.get("role_label") or ""))
         role_counts[role_key] = role_counts.get(role_key, 0) + 1
         identity = row.get("entity_identity")
         if identity:
@@ -297,7 +303,7 @@ def _support_group_key(
     """Group only source facts with an explicit, deterministic common owner."""
     authority_kind = str(support.get("authority_kind") or "")
     source = str(support.get("source_label") or "")
-    source_role = str(support.get("source_role") or "")
+    source_role = str(row.get("source_role") or "")
     fact_kind = str(support.get("fact_kind") or "")
     if authority_kind == "metadata_source" and fact_kind == "person_role":
         role_key = (source, source_role, str(support.get("role_label") or ""))
@@ -320,8 +326,12 @@ def _support_group_label(group_kind: str, members: list[dict]) -> str:
     return str(members[0].get("source_label") or members[0].get("label") or "Sumber dokumen")
 
 
-def _public_clarification_option(row: dict) -> dict:
-    return {"source_role": row.get("source_role"), "label": row.get("label")}
+def _public_clarification_option(row: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
+    target = service.register_public_target(
+        corpus_id,
+        {"kind": "source_context", "source_role": row.get("source_role")},
+    )
+    return {"context_target": target, "label": row.get("label")}
 
 
 def _public_capabilities(result: dict) -> dict:
@@ -347,7 +357,7 @@ def _public_bookmarks(result: dict) -> dict:
 
 def _public_bookmark(result: dict) -> dict:
     if result.get("status") != "saved":
-        return {"status": "unavailable", "reason": "bookmark_target_unavailable"}
+        return {"status": "unavailable"}
     row = result["bookmark"]
     return {
         "status": "saved",
@@ -359,6 +369,85 @@ def _public_bookmark(result: dict) -> dict:
             "status": row.get("status"),
         },
     }
+
+
+def handle_catalog_request(
+    action: str,
+    payload: dict,
+    repo_root: Path | None = None,
+    service: LegalRuntimeService | None = None,
+) -> dict:
+    service = service or _service_for(repo_root)
+    if action == "search":
+        _validate_catalog_payload(payload, {"query", "limit", "filters"})
+        result = service.catalog_search(_query(payload), _limit(payload, default=10), _filters(payload))
+        return {
+            "kind": "catalog",
+            "status": result["status"],
+            "total": result["total"],
+            "applied_filters": result.get("applied_filters", {}),
+            "facets": result["facets"],
+            "results": tuple(
+                {
+                    "official_title": row["official_title"],
+                    "short_title": row["short_title"],
+                    "document_type": row["document_type"],
+                    "number": row["number"],
+                    "year": row["year"],
+                    "issuer": row["issuer"],
+                    "legal_status": row["legal_status"],
+                    "document_role": row["document_role"],
+                    "establishment_date": row["establishment_date"],
+                    "official_url": row["official_url"],
+                    "viewer_target": _public_target(row["public_target_id"], "open_document", (1,), True),
+                }
+                for row in result["results"]
+            ),
+        }
+    if action == "viewer":
+        _validate_catalog_payload(payload, {"target"})
+        result = service.catalog_viewer(_required_str(payload, "target"))
+        if result["status"] != "found":
+            return {"kind": "unavailable", "status": "not_found"}
+        return {
+            "kind": "document",
+            "status": "found",
+            "citation": result["citation"],
+            "title": result["title"],
+            "document_type": result["document_type"],
+            "number": result["number"],
+            "year": result["year"],
+            "issuer": result["issuer"],
+            "legal_status": result["legal_status"],
+            "document_role": result["document_role"],
+            "establishment_date": result["establishment_date"],
+            "promulgation_date": result["promulgation_date"],
+            "effective_date": result["effective_date"],
+            "official_url": result["official_url"],
+            "publication": result["publication"],
+            "page_numbers": result["page_numbers"],
+            "bbox_rectangles": (),
+            "viewer_highlightable": False,
+            "pdf_access_available": True,
+            "rendering_available": True,
+            "pdf": {
+                "mime_type": "application/pdf",
+                "access_url": f"/legal/catalog/pdf?target={_required_str(payload, 'target')}",
+            },
+        }
+    if action == "facets":
+        _validate_catalog_payload(payload, set())
+        return {"kind": "catalog_facets", "facets": service.catalog_search("", 1)["facets"]}
+    return {"kind": "unavailable", "status": "unsupported_action"}
+
+
+def handle_catalog_pdf_request(
+    payload: dict,
+    repo_root: Path | None = None,
+    service: LegalRuntimeService | None = None,
+) -> dict:
+    _validate_catalog_payload(payload, {"target"})
+    return (service or _service_for(repo_root)).catalog_pdf(_required_str(payload, "target"))
 
 
 def handle_pdf_request(corpus_id: str, payload: dict, repo_root: Path | None = None, service: LegalRuntimeService | None = None) -> dict:
@@ -375,8 +464,13 @@ def _validate_payload(action: str, payload: object) -> None:
     allowed = _PUBLIC_REQUEST_FIELDS.get(action, {"target"} if action == "pdf" else None)
     if not isinstance(payload, dict) or allowed is None or set(payload) - allowed:
         raise BadRequest()
+
+
+def _validate_catalog_payload(payload: object, allowed: set[str]) -> None:
+    if not isinstance(payload, dict) or set(payload) - allowed:
+        raise BadRequest()
     filters = payload.get("filters")
-    if filters is not None and (not isinstance(filters, dict) or set(filters) - {"source_role"}):
+    if filters is not None and (not isinstance(filters, dict) or set(filters) - set(CATALOG_FILTERS)):
         raise BadRequest()
 
 

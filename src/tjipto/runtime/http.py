@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
-from tjipto.runtime.api import BadRequest, handle_pdf_request, handle_request
+from tjipto.runtime.api import BadRequest, handle_catalog_pdf_request, handle_catalog_request, handle_pdf_request, handle_request
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.telemetry import DEFAULT_TELEMETRY, Telemetry
 
@@ -67,12 +67,16 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
             return
         if route and len(route) == 2 and route[1] == "pdf":
             try:
-                result = handle_pdf_request(route[0], self._query_payload(), self.root, self.runtime_service)
-            except BadRequest as error:
-                self._json(400, {"status": "bad_request", "reason": error.reason})
+                result = (
+                    handle_catalog_pdf_request(self._query_payload(), self.root, self.runtime_service)
+                    if route[0] == "catalog"
+                    else handle_pdf_request(route[0], self._query_payload(), self.root, self.runtime_service)
+                )
+            except BadRequest:
+                self._json(400, {"status": "bad_request"})
                 return
             if result.get("status") != "pdf_access_ready":
-                self._json(404, {"status": "not_found", "reason": result.get("reason") or result.get("status")})
+                self._json(404, {"status": "not_found"})
                 return
             self._pdf(result)
             return
@@ -80,24 +84,28 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         route = self._route()
-        actions = {"ask", "search", "citation", "viewer", "bookmarks"}
+        actions = {"ask", "search", "citation", "viewer", "bookmarks", "facets"}
         if not route or len(route) != 2 or route[1] not in actions:
             self._json(404, {"status": "not_found"})
             return
         try:
             payload = self._read_json()
             action = "bookmark" if route[1] == "bookmarks" else route[1]
-            response = handle_request(route[0], action, payload, self.root, self.runtime_service)
+            response = (
+                handle_catalog_request(action, payload, self.root, self.runtime_service)
+                if route[0] == "catalog"
+                else handle_request(route[0], action, payload, self.root, self.runtime_service)
+            )
             self._json(200, response)
         except PayloadTooLarge as error:
             self._discard_oversized_body(error.size)
-            self._json(413, {"status": "payload_too_large", "reason": "request_body_too_large"})
-        except BadRequest as error:
-            self._json(400, {"status": "bad_request", "reason": error.reason})
+            self._json(413, {"status": "payload_too_large"})
+        except BadRequest:
+            self._json(400, {"status": "bad_request"})
         except json.JSONDecodeError:
-            self._json(400, {"status": "bad_request", "reason": "invalid_json"})
+            self._json(400, {"status": "bad_request"})
         except ValueError:
-            self._json(400, {"status": "bad_request", "reason": "invalid_content_length"})
+            self._json(400, {"status": "bad_request"})
 
     def _read_json(self) -> dict:
         lengths = self.headers.get_all("Content-Length") or []
@@ -158,7 +166,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         try:
             body = payload["path"].read_bytes()
         except OSError:
-            self._json(404, {"status": "not_found", "reason": "render_failed"})
+            self._json(404, {"status": "not_found"})
             return
         self.send_response(200)
         self._record_http(200)
@@ -200,7 +208,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
 def _telemetry_route(path: str) -> str:
     if path == "/health":
         return "health"
-    for action in ("ask", "search", "citation", "viewer", "pdf", "bookmarks", "capabilities"):
+    for action in ("ask", "search", "citation", "viewer", "pdf", "bookmarks", "capabilities", "facets"):
         if re.fullmatch(rf"/legal/[^/]+/{action}/?", path):
             return f"legal.{action}"
         if path in {f"/uud/{action}", f"/uud/{action}/"}:

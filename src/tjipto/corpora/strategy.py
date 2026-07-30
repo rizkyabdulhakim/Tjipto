@@ -46,6 +46,7 @@ class CorpusStrategy:
     contract: CorpusContract | None = None
     provenance_adapter: object | None = None
     semantic_validator: Callable[[object, dict[str, object]], tuple[str, ...]] | None = None
+    citation_unit_factory: Callable[[object, dict[str, object]], object] | None = None
 
 
 @dataclass(frozen=True)

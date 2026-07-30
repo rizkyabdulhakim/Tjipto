@@ -18,8 +18,9 @@ const legalSupport = {
   label: "Pasal 16",
   text: "Pasal 16\nPresiden membentuk dewan.",
   source_label: "UUD 1945",
-  source_role: "current_consolidated",
+  source_status_label: "Naskah Berlaku",
   page_numbers: [9],
+  citation: { number: 1, text: "Undang-Undang Dasar 1945, Pasal 16, hlm. 9", official_url: "https://example.invalid", citation_final: true },
   viewer_target: { public_target_id: "target_1", can_resolve: true, page_numbers: [9] },
 };
 
@@ -29,6 +30,8 @@ test("maps the closed public support contract to an opaque viewer target", () =>
   assert.equal(citations[0].publicTargetId, "target_1");
   assert.equal(citations[0].authorityKind, "legal_citation");
   assert.equal(citations[0].citationFinal, true);
+  assert.equal(citations[0].citationNumber, 1);
+  assert.match(citations[0].citationText, /Pasal 16/);
   assert.equal(citations[0].factKind, "legal_text");
   assert.equal("sourceDocumentId" in citations[0], false);
 });
@@ -62,10 +65,23 @@ test("maps support categories only from typed authority", () => {
 });
 
 test("maps search and document source through public targets only", () => {
-  const search = mapSearchResultToCitation({ title: "UUD 1945", snippet: "Dokumen sumber", page_numbers: [1], viewer_target: { public_target_id: "search_1" } }, 0);
+  const search = mapSearchResultToCitation({
+    official_title: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
+    short_title: "UUD 1945",
+    document_type: "Undang-Undang Dasar",
+    number: "1945",
+    year: "2002",
+    issuer: "MPR RI",
+    legal_status: "Berlaku",
+    document_role: "Naskah Berlaku",
+    official_url: "https://example.invalid",
+    viewer_target: { public_target_id: "search_1" },
+  }, 0);
   assert.equal(search?.publicTargetId, "search_1");
+  assert.equal(search?.viewerMode, "catalog");
   const document = mapAskResponseToDocumentSource({ kind: "document", status: "answer_ready", document: { label: "Dokumen", viewer_target: { public_target_id: "document_1" } } });
   assert.equal(document?.publicTargetId, "document_1");
+  assert.equal(document?.viewerMode, "document");
 });
 
 test("uses a safe answer fallback only when the public answer is empty", () => {
