@@ -4,10 +4,14 @@ from datetime import datetime, timezone
 import unittest
 
 from tjipto.contracts.legal_information import (
+    ConflictKind,
+    ConflictResolution,
     DocumentRelation,
     FieldState,
+    OfficialValue,
     ProvisionEffect,
     RelationKind,
+    ResolutionState,
     SourceKind,
     SourceProvenance,
     VerifiedValue,
@@ -34,8 +38,62 @@ class LegalInformationContractTest(unittest.TestCase):
             VerifiedValue("Berlaku", "applicable", "Berlaku", FieldState.VERIFIED)
 
     def test_conflicts_cannot_be_silently_collapsed(self) -> None:
+        values = (
+            OfficialValue(
+                "Judul A",
+                "judul a",
+                "Judul A",
+                SourceProvenance(SourceKind.OFFICIAL_CATALOG_PAGE, CATALOG.reference, NOW, source_authority="BPK"),
+            ),
+            OfficialValue(
+                "Judul B",
+                "judul b",
+                "Judul B",
+                SourceProvenance(SourceKind.OFFICIAL_JDIH_PAGE, "https://example.invalid/jdih", NOW, source_authority="JDIH"),
+            ),
+        )
         with self.assertRaisesRegex(ValueError, "conflicting_value_collapsed"):
-            VerifiedValue(None, "applicable", None, FieldState.CONFLICTING_SOURCES)
+            VerifiedValue(
+                "Judul A",
+                "judul a",
+                "Judul A",
+                FieldState.CONFLICTING_SOURCES,
+                values[0].provenance,
+                values,
+                ConflictKind.SOURCE_VALUE_DIFFERENCE,
+                ConflictResolution(ResolutionState.UNRESOLVED),
+            )
+
+    def test_conflicting_values_retain_provenance_and_require_explicit_resolution(self) -> None:
+        bpk = SourceProvenance(SourceKind.OFFICIAL_CATALOG_PAGE, CATALOG.reference, NOW, source_authority="BPK")
+        jdih = SourceProvenance(SourceKind.OFFICIAL_JDIH_PAGE, "https://example.invalid/jdih", NOW, source_authority="JDIH")
+        values = (
+            OfficialValue("Judul A", "judul a", "Judul A", bpk),
+            OfficialValue("Judul B", "judul b", "Judul B", jdih),
+        )
+        unresolved = VerifiedValue(
+            None,
+            None,
+            None,
+            FieldState.CONFLICTING_SOURCES,
+            conflicting_values=values,
+            conflict_kind=ConflictKind.SOURCE_VALUE_DIFFERENCE,
+            resolution=ConflictResolution(ResolutionState.UNRESOLVED),
+        )
+        self.assertIsNone(unresolved.display_value)
+        with self.assertRaisesRegex(ValueError, "resolved_conflict_requires_decision"):
+            ConflictResolution(ResolutionState.RESOLVED, 1)
+        resolved = VerifiedValue(
+            "Judul B",
+            "judul b",
+            "Judul B",
+            FieldState.CONFLICTING_SOURCES,
+            jdih,
+            values,
+            ConflictKind.SOURCE_VALUE_DIFFERENCE,
+            ConflictResolution(ResolutionState.RESOLVED, 1, "Pilih naskah resmi", "Judul penetapan"),
+        )
+        self.assertEqual(resolved.provenance, jdih)
 
     def test_catalog_facts_cannot_claim_pdf_grounding(self) -> None:
         with self.assertRaisesRegex(ValueError, "non_pdf_source_has_pdf_grounding"):

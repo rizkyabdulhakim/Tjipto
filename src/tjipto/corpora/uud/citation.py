@@ -7,7 +7,10 @@ from tjipto.corpora.uud.catalog import citation_identity
 def citation_unit(store, row: dict[str, object]) -> CitationUnit | None:
     role = str(row.get("source_role") or "")
     source_document_id = str(row.get("source_document_id") or "")
-    document_type, year, title = citation_identity(role)
+    try:
+        document_type, year, title = citation_identity(role)
+    except ValueError:
+        return None
     source: dict[str, object] = next(
         (
             item

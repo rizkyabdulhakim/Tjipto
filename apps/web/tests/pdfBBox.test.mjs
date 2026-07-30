@@ -37,13 +37,12 @@ test("all exact corpus bboxes pass the frontend transform at zoom", () => {
   }
 });
 
-test("page-only, malformed, and unsupported rotation bboxes fail closed", () => {
+test("page-only and malformed public rectangles fail closed", () => {
   const exact = rows.find((row) => row.bbox_precision === "exact" && row.viewer_highlightable === true);
   assert.equal(bboxToViewportPercent({ ...exact, viewer_highlightable: false }, viewport(exact)).ok, false);
   assert.equal(bboxToViewportPercent({ ...exact, bbox_precision: "page_grounded_only" }, viewport(exact)).ok, false);
   assert.equal(bboxToViewportPercent({ ...exact, page_width: undefined }, viewport(exact)).ok, false);
   assert.equal(bboxToViewportPercent({ ...exact, x1: exact.x0 }, viewport(exact)).ok, false);
-  assert.equal(bboxToViewportPercent({ ...exact, page_rotation: 90 }, viewport(exact)).ok, false);
 });
 
 test("Pasal 7C viewer overlay highlights legal text without covering the visible source marker", () => {

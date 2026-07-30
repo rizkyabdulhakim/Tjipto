@@ -8,6 +8,7 @@ export type AuthorityKind =
   | "source_anomaly"
   | "structural_context"
   | "instrument_provenance"
+  | "source_annotation"
   | "source_text";
 
 export interface Citation {

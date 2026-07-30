@@ -107,6 +107,23 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         except ValueError:
             self._json(400, {"status": "bad_request"})
 
+    def do_DELETE(self) -> None:
+        route = self._route()
+        if not route or len(route) != 2 or route[1] != "bookmarks" or route[0] == "catalog":
+            self._json(404, {"status": "not_found"})
+            return
+        try:
+            response = handle_request(
+                route[0],
+                "delete_bookmark",
+                self._read_json(),
+                self.root,
+                self.runtime_service,
+            )
+            self._json(200, response)
+        except (BadRequest, json.JSONDecodeError, ValueError):
+            self._json(400, {"status": "bad_request"})
+
     def _read_json(self) -> dict:
         lengths = self.headers.get_all("Content-Length") or []
         if self.headers.get("Transfer-Encoding") or len(lengths) > 1:
@@ -184,7 +201,7 @@ class TjiptoHttpHandler(BaseHTTPRequestHandler):
         if origin in _allowed_origins():
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def log_message(self, format: str, *args: Any) -> None:

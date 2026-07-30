@@ -15,6 +15,15 @@ class FieldState(StrEnum):
     INVALID_SOURCE_VALUE = "invalid_source_value"
 
 
+class ConflictKind(StrEnum):
+    SOURCE_VALUE_DIFFERENCE = "source_value_difference"
+
+
+class ResolutionState(StrEnum):
+    UNRESOLVED = "unresolved"
+    RESOLVED = "resolved"
+
+
 class SourceKind(StrEnum):
     OFFICIAL_PDF = "official_pdf"
     OFFICIAL_CATALOG_PAGE = "official_catalog_page"
@@ -55,6 +64,7 @@ class SourceProvenance:
     immutable_source_identity: str | None = None
     page_number: int | None = None
     selector: str | None = None
+    source_authority: str | None = None
 
     def __post_init__(self) -> None:
         if not self.reference or self.verified_at.tzinfo is None:
@@ -66,21 +76,73 @@ class SourceProvenance:
 
 
 @dataclass(frozen=True)
+class OfficialValue:
+    source_value: str
+    normalized_value: str
+    display_value: str
+    provenance: SourceProvenance
+
+    def __post_init__(self) -> None:
+        if not all((self.source_value, self.normalized_value, self.display_value, self.provenance.source_authority)):
+            raise ValueError("official_value_requires_provenance")
+
+
+@dataclass(frozen=True)
+class ConflictResolution:
+    state: ResolutionState
+    selected_value: int | None = None
+    reviewer_decision: str | None = None
+    legal_basis: str | None = None
+
+    def __post_init__(self) -> None:
+        details = (self.selected_value, self.reviewer_decision, self.legal_basis)
+        if self.state is ResolutionState.RESOLVED and (
+            self.selected_value is None or not self.reviewer_decision or not self.legal_basis
+        ):
+            raise ValueError("resolved_conflict_requires_decision")
+        if self.state is ResolutionState.UNRESOLVED and any(item is not None for item in details):
+            raise ValueError("unresolved_conflict_selects_value")
+
+
+@dataclass(frozen=True)
 class VerifiedValue:
     source_value: str | None
     normalized_value: str | None
     display_value: str | None
     state: FieldState
     provenance: SourceProvenance | None = None
+    conflicting_values: tuple[OfficialValue, ...] = ()
+    conflict_kind: ConflictKind | None = None
+    resolution: ConflictResolution | None = None
 
     def __post_init__(self) -> None:
         if self.state is FieldState.VERIFIED:
             if not all((self.source_value, self.normalized_value, self.display_value, self.provenance)):
                 raise ValueError("verified_value_requires_source_and_provenance")
+            if self.conflicting_values or self.conflict_kind or self.resolution:
+                raise ValueError("verified_value_has_conflict")
+        elif self.state is FieldState.CONFLICTING_SOURCES:
+            if len(self.conflicting_values) < 2 or self.conflict_kind is None or self.resolution is None:
+                raise ValueError("conflicting_value_requires_sources")
+            if self.resolution.state is ResolutionState.UNRESOLVED:
+                if any((self.source_value, self.normalized_value, self.display_value, self.provenance)):
+                    raise ValueError("conflicting_value_collapsed")
+            else:
+                selected_index = self.resolution.selected_value
+                if selected_index is None or not 0 <= selected_index < len(self.conflicting_values):
+                    raise ValueError("conflict_resolution_out_of_range")
+                selected = self.conflicting_values[selected_index]
+                if (self.source_value, self.normalized_value, self.display_value, self.provenance) != (
+                    selected.source_value,
+                    selected.normalized_value,
+                    selected.display_value,
+                    selected.provenance,
+                ):
+                    raise ValueError("resolved_value_mismatch")
         elif self.provenance is not None:
             raise ValueError("unverified_value_has_provenance")
-        if self.state is FieldState.CONFLICTING_SOURCES and self.normalized_value is not None:
-            raise ValueError("conflicting_value_collapsed")
+        elif self.conflicting_values or self.conflict_kind or self.resolution:
+            raise ValueError("non_conflict_value_has_conflict")
 
 
 @dataclass(frozen=True)
@@ -94,16 +156,15 @@ class LegalDocumentIdentity:
 
     @property
     def stable_id(self) -> str:
-        values = (
-            self.document_type.normalized_value,
-            self.number.normalized_value,
-            self.year.normalized_value,
-            self.issuer.normalized_value,
-            self.source_designation.normalized_value if self.source_designation else "",
-        )
-        if any(value is None for value in values):
+        required = (self.document_type, self.year, self.issuer)
+        if any(value.normalized_value is None for value in required):
             raise ValueError("identity_not_verified")
-        return f"legal-document-{sha256('|'.join(str(value) for value in values).encode()).hexdigest()}"
+        fields = (self.document_type, self.number, self.year, self.issuer, self.source_designation)
+        values = tuple(
+            value.normalized_value if value and value.normalized_value is not None else f"[{value.state.value}]" if value else ""
+            for value in fields
+        )
+        return f"legal-document-{sha256('|'.join(values).encode()).hexdigest()}"
 
 
 @dataclass(frozen=True)

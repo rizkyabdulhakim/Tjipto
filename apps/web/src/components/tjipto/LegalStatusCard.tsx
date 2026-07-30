@@ -1,6 +1,9 @@
+import { legalIdentity, numberAndYear } from "../../lib/legalPresentation";
+
 export function LegalStatusCard({
   status,
   role,
+  title,
   documentType,
   number,
   year,
@@ -10,10 +13,10 @@ export function LegalStatusCard({
   effectiveDate,
   officialUrl,
   publication,
-  page,
 }: {
   status: string;
   role?: string;
+  title?: string;
   documentType?: string;
   number?: string;
   year?: string;
@@ -23,18 +26,18 @@ export function LegalStatusCard({
   effectiveDate?: string;
   officialUrl?: string;
   publication?: string;
-  page?: number;
 }) {
+  const identity = legalIdentity({ official_title: title, document_type: documentType, number, year });
   const rows = [
+    ["Identitas Resmi", identity],
     ["Kedudukan Naskah", role],
     ["Jenis", documentType],
-    ["Nomor dan Tahun", number && year ? `${number} Tahun ${year}` : undefined],
+    ["Nomor dan Tahun", numberAndYear({ document_type: documentType, number, year })],
     ["Penerbit", issuer],
     ["Tanggal Penetapan", establishmentDate],
     ["Tanggal Pengundangan", promulgationDate],
     ["Tanggal Berlaku", effectiveDate],
     ["Identitas Pengundangan", publication],
-    ["Halaman", page ? String(page) : undefined],
   ].filter((row): row is [string, string] => Boolean(row[1]));
 
   return (

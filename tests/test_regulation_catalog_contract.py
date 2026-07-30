@@ -6,6 +6,8 @@ import inspect
 import unittest
 
 from tjipto.catalog import CatalogService
+from tjipto.contracts.legal_information import FieldState, ResolutionState
+from tjipto.corpora.uud.catalog import citation_identity, documents as constitutional_documents
 from tjipto.corpora.regulations.catalog import documents as regulation_documents
 from tjipto.runtime.api import BadRequest, handle_catalog_request
 from tjipto.runtime.service import LegalRuntimeService
@@ -20,14 +22,39 @@ class RegulationCatalogContractTest(unittest.TestCase):
         cls.service = LegalRuntimeService(ROOT)
 
     def test_current_constitution_is_not_truncated_behind_historical_ties(self) -> None:
-        result = self.service.catalog_search("undang undang dasar negara republik indonesia tahun 1945", 5)
+        result = handle_catalog_request(
+            "search",
+            {"query": "undang undang dasar negara republik indonesia tahun 1945", "limit": 5},
+            service=self.service,
+        )
         self.assertEqual(result["total"], 6)
-        self.assertEqual(result["results"][0]["document_role"], "Naskah Berlaku")
-        self.assertEqual(len({row["public_target_id"] for row in result["results"]}), len(result["results"]))
+        self.assertEqual(result["results"][0]["document_role"], "Naskah Konsolidasi")
+        self.assertEqual(
+            len({row["viewer_target"]["public_target_id"] for row in result["results"]}),
+            len(result["results"]),
+        )
 
     def test_explicit_historical_query_prioritizes_requested_source(self) -> None:
-        result = self.service.catalog_search("perubahan pertama uud 1945", 5)
-        self.assertEqual(result["results"][0]["short_title"], "Perubahan Pertama UUD 1945")
+        result = handle_catalog_request(
+            "search",
+            {"query": "perubahan pertama uud 1945", "limit": 5},
+            service=self.service,
+        )
+        self.assertEqual(result["results"][0]["document_role"], "Amandemen")
+
+    def test_uud_identity_and_status_follow_source_type(self) -> None:
+        documents = constitutional_documents(self.service._store("uud"))
+        by_role = {document.identity.source_designation.normalized_value: document for document in documents}
+        self.assertEqual(by_role["current_consolidated"].identity.number.state, FieldState.NOT_APPLICABLE)
+        self.assertEqual(by_role["current_consolidated"].identity.year.display_value, "1945")
+        self.assertEqual(by_role["current_consolidated"].document_role_label, "Naskah Konsolidasi")
+        self.assertEqual(by_role["original_historical"].document_role_label, "Naskah Asli")
+        self.assertEqual(by_role["amendment_1_historical"].document_role_label, "Amandemen")
+        self.assertTrue(
+            all(document.legal_status.status.state is FieldState.NOT_YET_VERIFIED for document in documents)
+        )
+        with self.assertRaisesRegex(ValueError, "unknown_uud_source_role"):
+            citation_identity("unknown")
 
     def test_pilot_is_search_and_view_only_with_verified_inverse_and_pdf_effect(self) -> None:
         pilot = regulation_documents(ROOT)
@@ -47,6 +74,11 @@ class RegulationCatalogContractTest(unittest.TestCase):
         result = handle_catalog_request("search", {"query": "", "filters": {"legal_status": "applicable"}}, service=self.service)
         self.assertTrue(result["results"])
         self.assertEqual({facet["name"] for facet in result["facets"]}, {"document_role", "legal_status", "establishment_period"})
+        roles = next(facet for facet in result["facets"] if facet["name"] == "document_role")["options"]
+        self.assertEqual(len({option["value"] for option in roles}), len(roles))
+        uud = handle_catalog_request("search", {"query": "UUD 1945"}, service=self.service)
+        periods = next(facet for facet in uud["facets"] if facet["name"] == "establishment_period")
+        self.assertEqual(periods["options"], ())
         with self.assertRaises(BadRequest):
             handle_catalog_request("search", {"query": "", "filters": {"corpus": "uud"}}, service=self.service)
 
@@ -67,6 +99,17 @@ class RegulationCatalogContractTest(unittest.TestCase):
         }
         self.assertTrue(all(required <= set(record["acquisition"]) for record in records))
         self.assertTrue(all(record["cross_check"]["reference"] and "discrepancies" in record["cross_check"] for record in records))
+
+    def test_pilot_title_conflict_retains_each_official_source_and_resolution(self) -> None:
+        pilot = regulation_documents(ROOT)
+        amendment = next(document for document in pilot if document.identity.number.normalized_value == "11")
+        title = amendment.identity.official_title
+        self.assertEqual(title.state, FieldState.CONFLICTING_SOURCES)
+        self.assertEqual(title.resolution.state, ResolutionState.RESOLVED)
+        self.assertEqual(len(title.conflicting_values), 3)
+        self.assertTrue(all(value.provenance.source_authority for value in title.conflicting_values))
+        self.assertEqual(len({value.provenance.reference for value in title.conflicting_values}), 3)
+        self.assertNotIn("tentang Peraturan Gaji", title.display_value)
 
     def test_catalog_path_has_no_answer_retrieval_or_graph_dependency(self) -> None:
         source = inspect.getsource(CatalogService).casefold()

@@ -66,19 +66,18 @@ test("maps support categories only from typed authority", () => {
 
 test("maps search and document source through public targets only", () => {
   const search = mapSearchResultToCitation({
-    official_title: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
-    short_title: "UUD 1945",
-    document_type: "Undang-Undang Dasar",
-    number: "1945",
-    year: "2002",
+    title: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
+    legal_identity: "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
     issuer: "MPR RI",
     legal_status: "Berlaku",
-    document_role: "Naskah Berlaku",
+    document_role: "Naskah Konsolidasi",
     official_url: "https://example.invalid",
     viewer_target: { public_target_id: "search_1" },
   }, 0);
   assert.equal(search?.publicTargetId, "search_1");
   assert.equal(search?.viewerMode, "catalog");
+  assert.equal(search?.documentTitle, "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945");
+  assert.doesNotMatch(search?.documentTitle, /Nomor 1945 Tahun 2002/);
   const document = mapAskResponseToDocumentSource({ kind: "document", status: "answer_ready", document: { label: "Dokumen", viewer_target: { public_target_id: "document_1" } } });
   assert.equal(document?.publicTargetId, "document_1");
   assert.equal(document?.viewerMode, "document");

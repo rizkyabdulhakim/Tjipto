@@ -5,7 +5,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import re
-import threading
+from threading import RLock
 from collections import OrderedDict
 from typing import Any
 from uuid import uuid4
@@ -19,25 +19,24 @@ from tjipto.evidence.bbox import viewer_overlay_rectangles
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.metadata import (
-    has_metadata_target,
     metadata_lookup,
     normalize_filters,
     public_filters,
 )
 from tjipto.corpora.source_arbitration import resolve_source_scope
-from tjipto.retrieval.relations import amendment_relation_target, has_relation_target
+from tjipto.retrieval.relations import amendment_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.claim_support import all_supported, verify_claims
+from tjipto.runtime.answer_arbitration import document_summary_query, source_document_response
+from tjipto.runtime.bookmarks import BookmarkRepository
 from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.response import AnswerDecision, project_response
 from tjipto.runtime.scope_guard import scope_guard_context
+from tjipto.runtime.source_text import source_text_response
 from tjipto.telemetry import Telemetry
 from tjipto.runtime.viewer import _source_status_label, document_viewer_payload, resolve_document_pdf_access, resolve_pdf_access, viewer_payload
 from tjipto.catalog import CatalogService
 
-
-_BOOKMARKS: dict[str, dict] = {}
-_BOOKMARK_LOCK = threading.RLock()
 
 _ANSWER_TEMPLATES = {
     "insufficient": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
@@ -97,8 +96,9 @@ class LegalRuntimeService:
         self._store_cache_limit = max(1, len(self.registry.corpus_ids()))
         self._public_targets: OrderedDict[str, tuple[str, dict]] = OrderedDict()
         self._public_target_limit = 1024
-        self._public_target_lock = threading.RLock()
+        self._public_target_lock = RLock()
         self._catalog_service = None
+        self._bookmarks = BookmarkRepository()
 
     def _store(self, corpus_id: str):
         cached = self._store_cache.get(corpus_id)
@@ -229,14 +229,58 @@ class LegalRuntimeService:
             applied_filters=public_filters(normalized_filters),
         )
 
-    def catalog_search(self, query: str, limit: int = 10, filters: dict | None = None) -> dict:
-        return self._catalog().search(query, limit, filters)
+    def catalog_search(
+        self,
+        query: str,
+        limit: int = 10,
+        filters: dict | None = None,
+        *,
+        corpus_id: str | None = None,
+    ) -> dict:
+        if corpus_id is not None and self._store(corpus_id) is None:
+            return _integrity_failure(corpus_id, query, self._integrity_error)
+        return self._catalog().search(query, limit, filters, corpus_id=corpus_id)
 
-    def catalog_viewer(self, target: str) -> dict:
-        return self._catalog().viewer(target)
+    def catalog_viewer(self, target: str):
+        return self._catalog().document(target)
 
     def catalog_pdf(self, target: str) -> dict:
         return self._catalog().pdf(target)
+
+    def catalog_documents(self):
+        return self._catalog().repository.documents
+
+    def catalog_document_for_source(self, source_role: object):
+        role = str(source_role or "")
+        return next(
+            (
+                document
+                for document in self.catalog_documents()
+                if document.identity.source_designation is not None
+                and document.identity.source_designation.normalized_value == role
+            ),
+            None,
+        )
+
+    def catalog_document_for_target(self, corpus_id: str, target: str | None):
+        catalog_document = self.catalog_viewer(str(target or ""))
+        if catalog_document is not None:
+            return catalog_document
+        request = self._public_target_request(corpus_id, target)
+        if request is None:
+            return None
+        store = self._store(corpus_id)
+        if store is None:
+            return None
+        source_document_id = request.get("source_document_id")
+        evidence = store.get(str(request.get("evidence_id") or ""))
+        if not source_document_id and evidence:
+            source_document_id = evidence.get("source_document_id")
+        source = next(
+            (row for row in store.source_documents if row.get("source_document_id") == source_document_id),
+            None,
+        )
+        return self.catalog_document_for_source(source.get("source_role")) if source else None
 
     def citation_unit(self, corpus_id: str, row: dict):
         store = self._store(corpus_id)
@@ -495,8 +539,7 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return _integrity_failure(corpus_id, "", self._integrity_error) | {"bookmarks": ()}
-        with _BOOKMARK_LOCK:
-            snapshot = tuple(row.copy() for row in _BOOKMARKS.values() if row["corpus_id"] == corpus_id)
+        snapshot = self._bookmarks.list(corpus_id)
         bookmarks = tuple(sorted((self._bookmark_status(row, store) for row in snapshot), key=lambda row: row["bookmark_id"]))
         return {
             "status": "ok",
@@ -531,22 +574,47 @@ class LegalRuntimeService:
             "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             "status": "active",
         }
-        with _BOOKMARK_LOCK:
-            _BOOKMARKS[bookmark["bookmark_id"]] = bookmark
+        self._bookmarks.save(bookmark)
         return {"status": "saved", "bookmark": bookmark}
 
     def bookmark_public(self, corpus_id: str, target: str | None, note: str | None = None) -> dict:
         request = self._public_target_request(corpus_id, target)
-        if request is None or not request.get("evidence_id"):
-            return {"status": "unavailable", "reason": "bookmark_target_unavailable"}
-        result = self.bookmark(corpus_id, request["evidence_id"], note)
-        if result.get("status") != "saved":
+        if request is not None and request.get("evidence_id"):
+            result = self.bookmark(corpus_id, request["evidence_id"], note)
+            if result.get("status") != "saved":
+                return result
+            result["bookmark"]["public_target"] = target
             return result
-        bookmark = result["bookmark"]
-        bookmark["public_target"] = target
-        return result
+        if target is None or self.catalog_viewer(target) is None:
+            return {"status": "unavailable", "reason": "bookmark_target_unavailable"}
+        bookmark = {
+            "bookmark_id": f"bm_{uuid4().hex}",
+            "corpus_id": corpus_id,
+            "target_kind": "catalog_document",
+            "public_target": target,
+            "note": note,
+            "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            "status": "active",
+        }
+        self._bookmarks.save(bookmark)
+        return {"status": "saved", "bookmark": bookmark}
+
+    def delete_bookmark_public(self, corpus_id: str, public_bookmark_id: str | None) -> dict:
+        if not public_bookmark_id:
+            return {"status": "unavailable"}
+        deleted = self._bookmarks.delete_public(
+            corpus_id,
+            public_bookmark_id,
+            lambda bookmark_id: self.public_identifier(corpus_id, "bookmark", bookmark_id),
+        )
+        if not deleted:
+            return {"status": "unavailable"}
+        return {"status": "deleted", "public_bookmark_id": public_bookmark_id}
 
     def _bookmark_status(self, bookmark: dict, store=None) -> dict:
+        if bookmark.get("target_kind") == "catalog_document":
+            status = "active" if self.catalog_viewer(str(bookmark.get("public_target") or "")) is not None else "unavailable"
+            return bookmark | {"status": status}
         store = store or self._store(bookmark["corpus_id"])
         evidence = store.get(bookmark["evidence_id"]) if store else None
         status = "active" if evidence and evidence.get("status") == "final" else "unavailable"
@@ -556,11 +624,29 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return _integrity_failure(corpus_id, query, self._integrity_error)
+        source_text = source_text_response(store, corpus_id, query)
+        if source_text is not None:
+            return source_text
+        normalized_summary = document_summary_query(
+            query,
+            strategy=getattr(store.config, "query_strategy", "generic"),
+            config=store.config,
+        )
+        if normalized_summary and normalized_summary != query:
+            result = self.ask(corpus_id, normalized_summary, limit, filters)
+            return result | {"original_query": query, "normalized_query": normalized_summary}
         semantics = interpret_query(store, corpus_id, query, available_corpora=self.registry.corpus_ids())
         anomaly = _source_anomaly_response(store, corpus_id, query)
         if anomaly:
             return anomaly
-        source_document = _source_document_response(store, corpus_id, query)
+        source_document = source_document_response(
+            store,
+            corpus_id,
+            query,
+            has_resolved_target=_has_resolved_legal_target(corpus_id, query, config=store.config),
+            document_title=_document_title,
+            insufficient_answer=_answer_templates(store)["insufficient"],
+        )
         if source_document:
             return source_document
         # A resolved legal target has precedence over the instrument classifier.
@@ -1490,101 +1576,6 @@ def _answer_type(route: str, status: str) -> str:
         "metadata_fact": "metadata_fact",
         "legal_relation": "legal_relation",
     }.get(route, "quoted_evidence")
-
-
-def _source_document_response(store, corpus_id: str, query: str) -> dict | None:
-    """Open one explicitly scoped verified source without inventing a citation."""
-    config = getattr(store, "config", None)
-    strategy = getattr(config, "query_strategy", "generic")
-    intent = intent_config_for(strategy, config)
-    instrument_decision = resolve_instrument_intent(query, intent, corpus=corpus_id)
-    scope = resolve_source_scope(query, strategy=strategy, config=config)
-    if not scope.explicit or _has_resolved_legal_target(corpus_id, query):
-        return None
-    if has_relation_target(query, strategy=strategy, config=config):
-        return None
-    if instrument_decision.role_family is not None or instrument_decision.target_status == "instrument_resolved_fail_closed":
-        return None
-    relation_config = intent.get("document_relation", {})
-    if not contains_intent_phrase(query, relation_config.get("target_document_terms", ())):
-        return None
-    if contains_intent_phrase(query, intent.get("instrument_analysis_signals", ())) or contains_intent_phrase(
-        query, intent.get("instrument_effect_signals", ())
-    ):
-        return None
-    if has_metadata_target(query, strategy=strategy, config=config, store=store) and _has_metadata_field_target(query, intent):
-        return None
-    metadata_rows = metadata_lookup(store, query, 1)
-    if metadata_rows and metadata_rows[0].get("metadata_field") != "official_title":
-        return None
-    source = next((row for row in store.source_documents if row.get("source_role") == scope.role), None)
-    templates = _answer_templates(store)
-    if source is None:
-        reason = "source_document_not_found"
-        return {
-            "status": "insufficient_evidence",
-            "route": "source_document",
-            "intent": "source_document_lookup",
-            "corpus_id": corpus_id,
-            "original_query": query,
-            "normalized_query": query.strip(),
-            "reason": reason,
-            "answer_type": "none",
-            "answer": templates["insufficient"],
-            "document_source": None,
-            "citations": (),
-            "final_citations": (),
-            "historical_citations": (),
-            "metadata_support": (),
-            "structural_support": (),
-            "trace_support": (),
-            "viewer_refs": (),
-            "metadata_facts": (),
-            "evidence": (),
-            "warnings": (),
-            "insufficient_reasons": (reason,),
-        }
-    title = _document_title(store, source)
-    document_source = {
-        "source_document_id": source.get("source_document_id"),
-        "source_role": source.get("source_role"),
-        "temporal_context": source.get("temporal_context"),
-        "document_title": title,
-        "viewer_target": {
-            "action": "open_document",
-            "source_document_id": source.get("source_document_id"),
-        },
-    }
-    return {
-        "status": "answer_ready",
-        "route": "source_document",
-        "intent": "source_document_lookup",
-        "corpus_id": corpus_id,
-        "original_query": query,
-        "normalized_query": query.strip(),
-        "reason": None,
-        "answer_type": "source_document",
-        "answer": f"Naskah sumber terverifikasi: {title}.",
-        "document_source": document_source,
-        "citations": (),
-        "final_citations": (),
-        "historical_citations": (),
-        "metadata_support": (),
-        "structural_support": (),
-        "trace_support": (),
-        "viewer_refs": (),
-        "metadata_facts": (),
-        "evidence": (),
-        "warnings": ("document_source_has_no_legal_citation",),
-        "insufficient_reasons": (),
-    }
-
-
-def _has_metadata_field_target(query: str, intent: dict) -> bool:
-    return any(
-        field != "official_title" and contains_intent_phrase(query, aliases)
-        for field, aliases in intent.get("metadata_fields", {}).items()
-    )
 
 
 def _unique_printed_names(rows: tuple[dict, ...]) -> tuple[str, ...]:

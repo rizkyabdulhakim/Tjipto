@@ -17,9 +17,7 @@ from tjipto.contracts.legal_information import (
     StatusAssertion,
     VerifiedValue,
 )
-from tjipto.evidence.legal_citation import IndonesianLegalCitationProfile
-
-
+from tjipto.contracts.source_text import SourceAnnotation
 CATALOG_FILTERS = ("document_role", "legal_status", "establishment_period")
 
 
@@ -45,6 +43,8 @@ class CatalogDocument:
     page_count: int
     preferred: bool
     permissions: frozenset[str]
+    corpus_id: str | None = None
+    source_annotations: tuple[SourceAnnotation, ...] = ()
 
     @property
     def stable_id(self) -> str:
@@ -72,7 +72,18 @@ class CatalogDocument:
 
     @property
     def establishment_period(self) -> str:
-        year = int(self.identity.year.normalized_value or 0)
+        establishment = next(
+            (
+                event.value
+                for event in self.lifecycle
+                if event.kind.value == "establishment" and event.value.state is FieldState.VERIFIED
+            ),
+            None,
+        )
+        match = re.match(r"(\d{4})", establishment.normalized_value or "") if establishment else None
+        if match is None:
+            return ""
+        year = int(match.group(1))
         return f"{year // 10 * 10}-{year // 10 * 10 + 9}"
 
     def __post_init__(self) -> None:
@@ -97,6 +108,7 @@ class CatalogQuery:
     text: str
     limit: int = 10
     filters: tuple[tuple[str, str], ...] = ()
+    corpus_id: str | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.limit <= 50:
@@ -126,18 +138,28 @@ class CatalogRepository:
     def search(self, query: CatalogQuery) -> tuple[tuple[CatalogDocument, ...], tuple[dict, ...], int]:
         normalized = normalize_catalog_text(query.text)
         filters = dict(query.filters)
-        candidates = tuple(document for document in self.documents if self._matches_filters(document, filters))
+        candidates = tuple(
+            document
+            for document in self.documents
+            if (query.corpus_id is None or document.corpus_id == query.corpus_id)
+            and self._matches_filters(document, filters)
+        )
         ranked = sorted(
             ((self._score(document, normalized), document) for document in candidates),
             key=lambda item: (item[0], item[1].stable_id),
             reverse=True,
         )
         matched = tuple(document for score, document in ranked if score[0] > 0)
-        facets = self.facets(normalized)
+        facets = self.facets(normalized, corpus_id=query.corpus_id)
         return matched[: query.limit], facets, len(matched)
 
-    def facets(self, normalized_query: str = "") -> tuple[dict, ...]:
-        documents = tuple(document for document in self.documents if not normalized_query or self._score(document, normalized_query)[0] > 0)
+    def facets(self, normalized_query: str = "", *, corpus_id: str | None = None) -> tuple[dict, ...]:
+        documents = tuple(
+            document
+            for document in self.documents
+            if (corpus_id is None or document.corpus_id == corpus_id)
+            and (not normalized_query or self._score(document, normalized_query)[0] > 0)
+        )
         values = {
             "document_role": ((document.document_role, document.document_role_label) for document in documents),
             "legal_status": (
@@ -213,60 +235,30 @@ class CatalogService:
     def __init__(self, repository: CatalogRepository):
         self.repository = repository
 
-    def search(self, query: str, limit: int = 10, filters: dict | None = None) -> dict:
+    def search(
+        self,
+        query: str,
+        limit: int = 10,
+        filters: dict | None = None,
+        *,
+        corpus_id: str | None = None,
+    ) -> dict:
         try:
             typed_filters = tuple(sorted((str(name), str(value)) for name, value in (filters or {}).items()))
-            documents, facets, total = self.repository.search(CatalogQuery(query, limit, typed_filters))
+            documents, facets, total = self.repository.search(CatalogQuery(query, limit, typed_filters, corpus_id))
         except ValueError:
             return {"status": "invalid_filter", "results": (), "facets": self.repository.facets(), "total": 0}
         return {
             "status": "found" if documents else "no_results",
-            "results": tuple(_public_document(document) for document in documents),
+            "results": documents,
             "facets": facets,
             "total": total,
             "applied_filters": dict(typed_filters),
         }
 
-    def viewer(self, target: str) -> dict:
-        document = self.repository.resolve(target)
-        if document is None:
-            return {"status": "not_found"}
-        lifecycle = {event.kind.value: event.value.display_value for event in document.lifecycle}
-        return {
-            "status": "found",
-            "citation": IndonesianLegalCitationProfile().full(document.citation_unit),
-            "title": document.identity.official_title.display_value,
-            "document_type": document.identity.document_type.display_value,
-            "number": document.identity.number.display_value,
-            "year": document.identity.year.display_value,
-            "issuer": document.identity.issuer.display_value,
-            "legal_status": document.legal_status.status.display_value,
-            "document_role": document.document_role_label,
-            "establishment_date": lifecycle.get("establishment"),
-            "promulgation_date": lifecycle.get("promulgation"),
-            "effective_date": lifecycle.get("effectiveness"),
-            "official_url": document.official_url,
-            "publication": document.publication.display_value,
-            "page_numbers": (1,),
-        }
+    def document(self, target: str) -> CatalogDocument | None:
+        return self.repository.resolve(target)
 
     def pdf(self, target: str) -> dict:
         document = self.repository.resolve(target)
         return {"status": "pdf_access_ready", "path": document.source_path} if document else {"status": "not_found"}
-
-
-def _public_document(document: CatalogDocument) -> dict:
-    lifecycle = {event.kind.value: event.value.display_value for event in document.lifecycle}
-    return {
-        "public_target_id": document.public_target_id,
-        "official_title": document.identity.official_title.display_value,
-        "short_title": document.short_title,
-        "document_type": document.identity.document_type.display_value,
-        "number": document.identity.number.display_value,
-        "year": document.identity.year.display_value,
-        "issuer": document.identity.issuer.display_value,
-        "legal_status": document.legal_status.status.display_value,
-        "document_role": document.document_role_label,
-        "establishment_date": lifecycle.get("establishment"),
-        "official_url": document.official_url,
-    }

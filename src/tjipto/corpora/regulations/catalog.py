@@ -10,13 +10,17 @@ import pymupdf
 
 from tjipto.catalog import CatalogDocument
 from tjipto.contracts.legal_information import (
+    ConflictKind,
+    ConflictResolution,
     DocumentRelation,
     FieldState,
     LegalDocumentIdentity,
     LifecycleEvent,
     LifecycleKind,
+    OfficialValue,
     ProvisionEffect,
     RelationKind,
+    ResolutionState,
     SourceKind,
     SourceProvenance,
     StatusAssertion,
@@ -101,11 +105,14 @@ def documents(repo_root: Path) -> tuple[CatalogDocument, ...]:
 
 def _identity(record: dict) -> LegalDocumentIdentity:
     source = _provenance(record["catalog_provenance"])
+    title = _conflicting_value(record["official_title_conflict"]) if "official_title_conflict" in record else _value(
+        record["official_title"], record["official_title"].casefold(), record["official_title"], source
+    )
     return LegalDocumentIdentity(
         _value(record["document_type"], record["document_type_normalized"], record["document_type"], source),
         _value(record["number"], record["number"], record["number"], source),
         _value(record["year"], record["year"], record["year"], source),
-        _value(record["official_title"], record["official_title"].casefold(), record["official_title"], source),
+        title,
         _value(record["issuer"], record["issuer"].casefold(), record["issuer"], source),
     )
 
@@ -120,6 +127,32 @@ def _provenance(record: dict) -> SourceProvenance:
         record["reference"],
         datetime.fromisoformat(record["verified_at"]),
         record.get("immutable_source_identity"),
+        source_authority=record.get("source_authority"),
+    )
+
+
+def _conflicting_value(record: dict) -> VerifiedValue:
+    values = tuple(
+        OfficialValue(item["source_value"], item["normalized"], item["display"], _provenance(item["provenance"]))
+        for item in record["values"]
+    )
+    raw_resolution = record["resolution"]
+    resolution = ConflictResolution(
+        ResolutionState(raw_resolution["state"]),
+        raw_resolution.get("selected_value"),
+        raw_resolution.get("reviewer_decision"),
+        raw_resolution.get("legal_basis"),
+    )
+    selected = values[resolution.selected_value] if resolution.selected_value is not None else None
+    return VerifiedValue(
+        selected.source_value if selected else None,
+        selected.normalized_value if selected else None,
+        selected.display_value if selected else None,
+        FieldState.CONFLICTING_SOURCES,
+        selected.provenance if selected else None,
+        values,
+        ConflictKind(record["kind"]),
+        resolution,
     )
 
 

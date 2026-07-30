@@ -140,9 +140,6 @@ function CitationChip({
             >
               {citation.authorityLabel ?? citation.regulationType.replace("_", " ")}
             </span>
-            <span style={{ fontSize: 11, color: "var(--tj-text-muted)" }}>
-              Halaman {citation.pageNumber}
-            </span>
           </span>
           <span
             className="block mb-1"
@@ -165,7 +162,7 @@ function CitationChip({
             className="block mt-2 pt-2 border-t border-[var(--tj-border-subtle)]"
             style={{ fontSize: 11, color: "var(--tj-accent)", fontWeight: 500 }}
           >
-            Klik untuk melihat panel bukti
+            Lihat sumber
           </span>
         </span>
       )}

@@ -8,6 +8,7 @@ import {
   type SearchResult,
 } from "../../lib/api";
 import type { Citation } from "../../lib/types";
+import { documentRole, legalIdentity, legalStatus } from "../../lib/legalPresentation";
 
 export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citation: Citation) => void }) {
   const [input, setInput] = useState("");
@@ -17,7 +18,17 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
   const [appliedFilters, setAppliedFilters] = useState<Record<string, string>>({});
   const [results, setResults] = useState<SearchResult[]>([]);
   const [total, setTotal] = useState(0);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "empty" | "unavailable">("idle");
+  const visibleFacets = facets
+    .map((facet) => ({ ...facet, options: unambiguousOptions(facet) }))
+    .filter((facet) => facet.options.length >= 2);
+  const hasFilters = Object.keys(filters).length > 0;
+  const activeFilterLabels = Object.entries(appliedFilters).flatMap(([name, value]) => {
+    const facet = facets.find((candidate) => candidate.name === name);
+    const option = facet?.options.find((candidate) => candidate.value === value);
+    return option ? [`${facet?.label}: ${option.label}`] : [];
+  });
 
   useEffect(() => {
     getCatalogFacets().then(setFacets).catch(() => setFacets([]));
@@ -29,6 +40,7 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
     try {
       const response = await searchLegal(input.trim(), filters);
       setSubmittedQuery(input.trim());
+      setHasSubmitted(true);
       setAppliedFilters(response.applied_filters);
       setResults(response.results);
       setFacets(response.facets);
@@ -43,7 +55,6 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
     <div className="flex-1 overflow-y-auto tj-scroll">
       <div className="mx-auto max-w-[960px] px-4 pb-16 pt-8 sm:px-6 sm:pt-12">
         <div className="max-w-[680px]">
-          <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--tj-accent)]">Katalog Hukum</p>
           <h1 className="tracking-tight text-[28px] font-semibold text-[var(--tj-text-primary)]">Cari Peraturan</h1>
           <p className="mt-2 text-[14px] leading-6 text-[var(--tj-text-secondary)]">
             Temukan identitas dan naskah resmi berdasarkan jenis, nomor, tahun, atau judul.
@@ -67,13 +78,13 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
             </button>
           </div>
 
-          {facets.length > 0 && (
+          {visibleFacets.length > 0 && (
             <fieldset className="mt-5 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] p-4">
               <legend className="flex items-center gap-2 px-1 text-[12px] font-semibold text-[var(--tj-text-secondary)]">
                 <Filter size={13} /> Filter hukum
               </legend>
               <div className="grid gap-3 pt-2 sm:grid-cols-3">
-                {facets.map((facet) => (
+                {visibleFacets.map((facet) => (
                   <label key={facet.name} className="text-[12px] font-medium text-[var(--tj-text-secondary)]">
                     {facet.label}
                     <select
@@ -95,21 +106,28 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
                   </label>
                 ))}
               </div>
-              <button
-                type="button"
-                onClick={() => setFilters({})}
-                className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-[12px] font-medium text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface-hover)]"
-              >
-                <RotateCcw size={13} /> Atur ulang filter
-              </button>
+              {hasFilters && <button
+                  type="button"
+                  onClick={() => setFilters({})}
+                  className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-[12px] font-medium text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface-hover)]"
+                >
+                  <RotateCcw size={13} /> Atur ulang filter
+                </button>}
             </fieldset>
           )}
         </form>
 
         <div className="mt-7 flex items-center justify-between text-[12px] text-[var(--tj-text-muted)]" aria-live="polite">
-          <span>{submittedQuery ? `${total} naskah untuk "${submittedQuery}"` : "Masukkan identitas peraturan untuk memulai."}</span>
+          <span>{hasSubmitted ? `${total} naskah${submittedQuery ? ` untuk "${submittedQuery}"` : ""}` : ""}</span>
           {Object.keys(appliedFilters).length > 0 && <span>{Object.keys(appliedFilters).length} filter diterapkan</span>}
         </div>
+        {activeFilterLabels.length > 0 && (
+          <ul className="mt-2 flex flex-wrap gap-2" aria-label="Filter aktif">
+            {activeFilterLabels.map((label) => (
+              <li key={label} className="rounded-full bg-[var(--tj-accent-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--tj-accent)]">{label}</li>
+            ))}
+          </ul>
+        )}
 
         {status === "loading" && <EmptyState text="Mencari naskah resmi..." />}
         {status === "empty" && <EmptyState text="Tidak ada naskah yang sesuai dengan pencarian dan filter hukum tersebut." />}
@@ -119,24 +137,23 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
             {results.map((row, index) => {
               const citation = mapSearchResultToCitation(row, index);
               return (
-                <li key={row.viewer_target?.public_target_id ?? `${row.document_type}-${row.number}-${row.year}`} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
+                <li key={row.viewer_target?.public_target_id ?? row.legal_identity ?? row.title} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
                   <button
                     type="button"
                     className="flex w-full items-start gap-3 text-left"
                     onClick={() => citation && onOpenDocument?.(citation)}
-                    aria-label={`Buka naskah ${row.short_title}`}
+                    aria-label={`Buka naskah ${row.legal_identity ?? row.title ?? "resmi"}`}
                   >
-                    <span className="mt-0.5 inline-flex h-6 shrink-0 items-center rounded-md bg-[var(--tj-accent-soft)] px-2 text-[11px] font-semibold text-[var(--tj-accent)]">
-                      {row.document_type}
-                    </span>
+                    {documentRole(row.document_role) && <span className="mt-0.5 inline-flex h-6 shrink-0 items-center rounded-md bg-[var(--tj-accent-soft)] px-2 text-[11px] font-semibold text-[var(--tj-accent)]">
+                      {documentRole(row.document_role)}
+                    </span>}
                     <span className="min-w-0">
-                      <span className="block text-[15px] font-semibold text-[var(--tj-text-primary)]">{row.official_title}</span>
-                      <span className="mt-1.5 block text-[13px] leading-5 text-[var(--tj-text-secondary)]">
-                        {row.document_type} Nomor {row.number} Tahun {row.year}
-                      </span>
+                      <span className="block text-[15px] font-semibold text-[var(--tj-text-primary)]">{row.legal_identity ?? legalIdentity({ official_title: row.title })}</span>
+                      {row.title && row.title !== row.legal_identity && <span className="mt-1.5 block text-[13px] leading-5 text-[var(--tj-text-secondary)]">
+                        {row.title}
+                      </span>}
                       <span className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-[var(--tj-text-muted)]">
-                        <span>{row.legal_status}</span>
-                        <span>{row.document_role}</span>
+                        <span>{legalStatus(row.legal_status)}</span>
                         {row.establishment_date && <span>Ditetapkan {row.establishment_date}</span>}
                       </span>
                     </span>
@@ -153,4 +170,10 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
 
 function EmptyState({ text }: { text: string }) {
   return <p className="mt-3 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-5 text-[14px] text-[var(--tj-text-secondary)]">{text}</p>;
+}
+
+function unambiguousOptions(facet: CatalogFacet) {
+  const counts = new Map<string, number>();
+  facet.options.forEach((option) => counts.set(option.value, (counts.get(option.value) ?? 0) + 1));
+  return facet.options.filter((option) => option.count > 0 && counts.get(option.value) === 1);
 }

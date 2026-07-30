@@ -11,18 +11,19 @@ from tjipto.contracts.legal_information import (
     StatusAssertion,
     VerifiedValue,
 )
+from tjipto.corpora.uud.source_annotations import document_annotations
 
 
 _TITLES = {
-    "current_consolidated": ("Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "UUD 1945", True, "current", "Naskah Berlaku"),
-    "original_historical": ("Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "UUD 1945 Naskah Asli", False, "historical", "Naskah Historis"),
-    "amendment_1_historical": ("Perubahan Pertama Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "Perubahan Pertama UUD 1945", False, "historical", "Naskah Historis"),
-    "amendment_2_historical": ("Perubahan Kedua Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "Perubahan Kedua UUD 1945", False, "historical", "Naskah Historis"),
-    "amendment_3_historical": ("Perubahan Ketiga Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "Perubahan Ketiga UUD 1945", False, "historical", "Naskah Historis"),
-    "amendment_4_historical": ("Perubahan Keempat Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "Perubahan Keempat UUD 1945", False, "historical", "Naskah Historis"),
+    "current_consolidated": ("Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "UUD 1945", True, "consolidated", "Naskah Konsolidasi"),
+    "original_historical": ("Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "UUD 1945 Naskah Asli", False, "original", "Naskah Asli"),
+    "amendment_1_historical": ("Perubahan Pertama Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "Perubahan Pertama UUD 1945", False, "constitutional_amendment", "Amandemen"),
+    "amendment_2_historical": ("Perubahan Kedua Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "Perubahan Kedua UUD 1945", False, "constitutional_amendment", "Amandemen"),
+    "amendment_3_historical": ("Perubahan Ketiga Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "Perubahan Ketiga UUD 1945", False, "constitutional_amendment", "Amandemen"),
+    "amendment_4_historical": ("Perubahan Keempat Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", "Perubahan Keempat UUD 1945", False, "constitutional_amendment", "Amandemen"),
 }
 _YEARS = {
-    "current_consolidated": "2002",
+    "current_consolidated": "1945",
     "original_historical": "1945",
     "amendment_1_historical": "1999",
     "amendment_2_historical": "2000",
@@ -32,8 +33,9 @@ _YEARS = {
 
 
 def citation_identity(source_role: str) -> tuple[str, str, str]:
-    title = _TITLES.get(source_role, _TITLES["current_consolidated"])[0]
-    return "Undang-Undang Dasar", "1945", title
+    if source_role not in _TITLES:
+        raise ValueError("unknown_uud_source_role")
+    return "Undang-Undang Dasar", _YEARS[source_role], _TITLES[source_role][0]
 
 
 def documents(store) -> tuple[CatalogDocument, ...]:
@@ -59,7 +61,7 @@ def documents(store) -> tuple[CatalogDocument, ...]:
         )
         identity = LegalDocumentIdentity(
             value("Undang-Undang Dasar", "undang-undang dasar"),
-            value("1945", "1945"),
+            VerifiedValue(None, None, None, FieldState.NOT_APPLICABLE),
             value(_YEARS[role], _YEARS[role]),
             value(title, title.casefold()),
             value("Majelis Permusyawaratan Rakyat Republik Indonesia", "mpr ri"),
@@ -70,7 +72,10 @@ def documents(store) -> tuple[CatalogDocument, ...]:
                 identity,
                 short_title,
                 (short_title, title, "konstitusi indonesia"),
-                StatusAssertion(value("Berlaku", "applicable"), verified_at),
+                StatusAssertion(
+                    VerifiedValue(None, None, None, FieldState.NOT_YET_VERIFIED),
+                    verified_at,
+                ),
                 document_role,
                 role_label,
                 (),
@@ -83,6 +88,8 @@ def documents(store) -> tuple[CatalogDocument, ...]:
                 int(source["page_count"]),
                 preferred,
                 frozenset({"catalog", "view"}),
+                corpus_id="uud",
+                source_annotations=document_annotations(store) if role == "current_consolidated" else (),
             )
         )
     return tuple(result)

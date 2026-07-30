@@ -44,6 +44,7 @@ from tjipto.corpora.uud.provenance_exceptions import (
 from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit, substantive_structural_unit
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
+from tjipto.corpora.uud.policy.source_text import validate_source_text_closure
 from tjipto.corpora.uud.proposition_builder import source_marker_character_boxes
 from tjipto.evidence.bbox import (
     derive_viewer_overlay,
@@ -1896,6 +1897,7 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
                     errors.append(f"invalid_type:{artifact}:{row_id}:{field}")
 
     raw_rows = rows("raw_source_spans")
+    errors.extend(validate_source_text_closure(raw_rows))
     source_object_rows = rows("source_objects")
     source_object_ids: set[str] = set()
     known_span_ids = {str(row.get("text_span_id") or "") for row in rows("page_text_spans")}

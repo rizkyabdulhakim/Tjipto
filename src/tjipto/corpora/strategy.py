@@ -47,6 +47,8 @@ class CorpusStrategy:
     provenance_adapter: object | None = None
     semantic_validator: Callable[[object, dict[str, object]], tuple[str, ...]] | None = None
     citation_unit_factory: Callable[[object, dict[str, object]], object] | None = None
+    source_text_query: Callable[[object, str], object | None] | None = None
+    source_text_health: Callable[[object], dict[str, int]] | None = None
 
 
 @dataclass(frozen=True)

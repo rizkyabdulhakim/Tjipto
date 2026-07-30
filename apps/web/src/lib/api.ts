@@ -63,19 +63,25 @@ export interface TjiptoAskResponse {
   support_groups?: SupportGroupPayload[];
 }
 
-export interface SearchResult {
-  official_title: string;
-  short_title: string;
-  document_type: string;
-  number: string;
-  year: string;
-  issuer: string;
-  legal_status: string;
-  document_role: string;
-  establishment_date?: string;
-  official_url: string;
+export interface LegalDocumentPayload {
+  legal_identity?: string;
+  title?: string;
+  legal_status?: string;
+  document_role?: string;
+  issuer?: string;
+  establishment_date?: string | null;
+  promulgation_date?: string | null;
+  effective_date?: string | null;
+  publication?: string | null;
+  official_url?: string;
+  relations?: LegalRelationPayload[];
+  provision_effects?: ProvisionEffectPayload[];
+  source_annotations?: SourceAnnotationPayload[];
+  official_title_conflict?: OfficialValueConflictPayload;
   viewer_target?: ViewerTargetPayload;
 }
+
+export type SearchResult = LegalDocumentPayload;
 
 export interface CatalogFacet {
   name: string;
@@ -92,7 +98,7 @@ export interface CatalogResponse {
   results: SearchResult[];
 }
 
-export interface ViewerPayload {
+export interface ViewerPayload extends LegalDocumentPayload {
   status: string;
   citation?: string;
   quoted_text?: string;
@@ -103,18 +109,49 @@ export interface ViewerPayload {
   pdf_access_available?: boolean;
   rendering_available?: boolean;
   pdf?: { mime_type?: string; access_url?: string };
-  title?: string;
+  document?: LegalDocumentPayload;
   document_type?: string;
   number?: string;
   year?: string;
-  issuer?: string;
-  legal_status?: string;
-  document_role?: string;
-  establishment_date?: string;
-  promulgation_date?: string;
-  effective_date?: string;
-  official_url?: string;
-  publication?: string;
+}
+
+export interface LegalRelationPayload {
+  label: string;
+  relation_type: string;
+  source: string;
+  target: string;
+  direction: string;
+  verification_state: string;
+  source_reference?: string;
+}
+
+export interface ProvisionEffectPayload {
+  label: string;
+  target: string;
+  verification_state: string;
+  source_reference?: string;
+  page_number?: number;
+}
+
+export interface SourceAnnotationPayload {
+  label: string;
+  text: string;
+  source_reference?: string;
+  page_number?: number;
+  viewer_target?: ViewerTargetPayload;
+}
+
+export interface OfficialValueConflictPayload {
+  state: string;
+  kind: string;
+  values: {
+    value: string;
+    source_authority?: string;
+    source_reference: string;
+    verified_at: string;
+  }[];
+  reviewer_decision?: string;
+  legal_basis?: string;
 }
 
 export interface BookmarkPointer {
@@ -123,6 +160,7 @@ export interface BookmarkPointer {
   note?: string;
   created_at: string;
   status: string;
+  document?: LegalDocumentPayload;
 }
 
 export async function askLegal(query: string, sourceContext?: string): Promise<TjiptoAskResponse> {
@@ -150,8 +188,22 @@ export async function saveLegalBookmark(publicTargetId: string): Promise<Bookmar
   return body.bookmark ?? null;
 }
 
+export async function deleteLegalBookmark(publicBookmarkId: string): Promise<boolean> {
+  const response = await fetch(corpusEndpoint("bookmarks"), {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bookmark: publicBookmarkId }),
+  });
+  if (!response.ok) return false;
+  const body = await response.json();
+  return body.status === "deleted";
+}
+
 export async function getLegalViewerPayload(publicTargetId: string, catalog = false): Promise<ViewerPayload> {
-  return catalog ? catalogRequest("viewer", { target: publicTargetId }) : request("viewer", { target: publicTargetId });
+  const payload = await (catalog
+    ? catalogRequest<ViewerPayload>("viewer", { target: publicTargetId })
+    : request<ViewerPayload>("viewer", { target: publicTargetId }));
+  return payload.document ? { ...payload, ...payload.document } : payload;
 }
 
 async function request<T = TjiptoAskResponse>(action: string, body: object): Promise<T> {
@@ -247,16 +299,15 @@ export function mapSearchResultToCitation(item: SearchResult, index: number): Ci
   return {
     id: index + 1,
     publicTargetId: target,
-    documentTitle: item.official_title,
-    regulationType: item.document_type,
+    documentTitle: item.legal_identity ?? item.title ?? "Identitas belum diverifikasi",
+    regulationType: "Dokumen hukum",
     viewerMode: "catalog",
     pageNumber: 1,
-    excerpt: `${item.document_type} Nomor ${item.number} Tahun ${item.year}`,
+    excerpt: item.title ?? "",
     legalStatus: item.legal_status,
     documentRole: item.document_role,
-    establishmentDate: item.establishment_date,
+    establishmentDate: item.establishment_date ?? undefined,
     officialUrl: item.official_url,
-    documentType: item.document_type,
     issuer: item.issuer,
   };
 }

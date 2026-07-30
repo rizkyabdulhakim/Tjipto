@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 _FORBIDDEN = (
     "evidence_id", "legal_unit_id", "source_document_id", "bbox_id", "source_bbox_refs",
     "manifest_digest", "artifact_set_digest", "context_pack", "source_role", '"route"',
-    '"intent"', '"reason"', "reason_code",
+    '"intent"', '"reason"', "reason_code", "pymupdf", "transform_version",
 )
 
 
@@ -54,7 +54,9 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(result["status"], "found")
         self.assertTrue(result["results"])
         self._assert_public(result)
-        self.assertEqual(set(result["results"][0]), {"title", "label", "snippet", "source_status_label", "page_numbers", "viewer_target"})
+        self.assertEqual(result["results"][0]["document_role"], "Naskah Konsolidasi")
+        self.assertNotIn("snippet", result["results"][0])
+        self.assertIn("legal_identity", result["results"][0])
         self.assertTrue(result["results"][0]["viewer_target"]["public_target_id"])
 
     def test_regulation_catalog_filters_and_viewer_use_closed_public_payloads(self) -> None:
@@ -75,12 +77,12 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertTrue(body.startswith(b"%PDF"))
 
     def test_supported_overview_remains_an_answer_until_citation_click(self) -> None:
-        result = self._post("/legal/uud/ask", {"query": "Apa ringkasan BAB XA?"})
-        self.assertEqual(result["kind"], "answer")
-        self.assertEqual(result["status"], "answer_ready")
-        self.assertTrue(result["supports"])
-        self.assertTrue(result["supports"][0]["citation"]["text"])
-        self.assertNotIn("document", result)
+        for query in ("ringkasan UUD", "ringkasan UUD amandemen pertama", "Apa ringkasan BAB XA?"):
+            result = self._post("/legal/uud/ask", {"query": query})
+            self.assertEqual(result["kind"], "answer", query)
+            self.assertTrue(result["supports"], query)
+            self.assertTrue(result["supports"][0]["citation"]["text"], query)
+            self.assertNotIn("document", result, query)
 
     def test_rc2_scenario_manifest_is_complete_and_versioned(self) -> None:
         manifest = json.loads((ROOT / "tests/scenarios/public_evidence_rc2.json").read_text(encoding="utf-8"))
@@ -97,7 +99,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
         support = asked["supports"][0]
         self.assertEqual(set(support), {
             "public_support_id", "authority_kind", "citation_final", "support_kind", "fact_kind", "label", "role_label",
-            "text", "source_label", "source_status_label", "page_numbers", "viewer_target", "citation",
+            "text", "source_label", "source_status_label", "page_numbers", "viewer_target", "citation", "document",
         })
         self.assertEqual(support["authority_kind"], "legal_citation")
         self.assertTrue(support["citation_final"])
@@ -115,10 +117,76 @@ class RuntimeHttpContractTest(unittest.TestCase):
         saved = self._post("/legal/uud/bookmarks", {"target": target, "note": "cek lagi"})
         self.assertEqual(saved["status"], "saved")
         self._assert_public(saved)
-        self.assertEqual(set(saved["bookmark"]), {"public_bookmark_id", "public_target_id", "note", "created_at", "status"})
+        self.assertEqual(
+            set(saved["bookmark"]),
+            {"public_bookmark_id", "public_target_id", "note", "created_at", "status", "document"},
+        )
         bookmarks = self._get("/legal/uud/bookmarks")
         self._assert_public(bookmarks)
         self.assertTrue(bookmarks["bookmarks"])
+        public_bookmark_id = saved["bookmark"]["public_bookmark_id"]
+        self.assertEqual(
+            self._delete("/legal/uud/bookmarks", {"bookmark": public_bookmark_id}),
+            {"status": "deleted", "public_bookmark_id": public_bookmark_id},
+        )
+        self.assertNotIn(public_bookmark_id, {
+            row["public_bookmark_id"] for row in self._get("/legal/uud/bookmarks")["bookmarks"]
+        })
+        self.assertEqual(
+            self._delete("/legal/uud/bookmarks", {"bookmark": public_bookmark_id}),
+            {"status": "unavailable"},
+        )
+
+    def test_ask_search_bookmark_and_viewer_share_one_document_projection(self) -> None:
+        asked = self._post("/legal/uud/ask", {"query": "Pasal 16 UUD konsolidasi"})
+        support = asked["supports"][0]
+        target = support["viewer_target"]["public_target_id"]
+        viewer = self._post("/legal/uud/viewer", {"target": target})
+        search = self._post(
+            "/legal/catalog/search",
+            {"query": "undang undang dasar negara republik indonesia tahun 1945", "limit": 1},
+        )
+        bookmark = self._post("/legal/uud/bookmarks", {"target": target})["bookmark"]
+        projections = (support["document"], viewer["document"], search["results"][0], bookmark["document"])
+        keys = ("legal_identity", "legal_status", "document_role", "issuer", "official_url")
+        self.assertEqual(
+            {tuple(projection[key] for key in keys) for projection in projections},
+            {tuple(projections[0][key] for key in keys)},
+        )
+        self.assertEqual({len(projection["source_annotations"]) for projection in projections}, {4})
+        self.assertTrue(
+            all(
+                set(annotation) == {"label", "text", "source_reference", "page_number"}
+                for annotation in projections[0]["source_annotations"]
+            )
+        )
+
+    def test_document_relations_and_provision_effects_remain_separate(self) -> None:
+        result = self._post("/legal/catalog/search", {"query": "perpres 11 tahun 2024"})
+        document = result["results"][0]
+        self.assertTrue(document["relations"])
+        self.assertTrue(document["provision_effects"])
+        self.assertEqual(document["relations"][0]["label"], "Mengubah")
+        self.assertEqual(document["provision_effects"][0]["label"], "Ketentuan yang diubah")
+        self.assertNotEqual(document["relations"][0]["target"], document["provision_effects"][0]["target"])
+        conflict = document["official_title_conflict"]
+        self.assertEqual(conflict["state"], "Terselesaikan")
+        self.assertEqual(len(conflict["values"]), 3)
+        self.assertTrue(all(row["source_authority"] and row["source_reference"] for row in conflict["values"]))
+        self._assert_public(document)
+
+    def test_catalog_document_bookmark_uses_the_same_opaque_target_contract(self) -> None:
+        result = self._post("/legal/catalog/search", {"query": "perpres 11 tahun 2024"})
+        target = result["results"][0]["viewer_target"]["public_target_id"]
+        saved = self._post("/legal/uud/bookmarks", {"target": target})
+        self.assertEqual(saved["status"], "saved")
+        self.assertEqual(saved["bookmark"]["public_target_id"], target)
+        self.assertEqual(saved["bookmark"]["document"]["legal_identity"], result["results"][0]["legal_identity"])
+        bookmark_id = saved["bookmark"]["public_bookmark_id"]
+        self.assertEqual(
+            self._delete("/legal/uud/bookmarks", {"bookmark": bookmark_id})["status"],
+            "deleted",
+        )
 
     def test_citation_shares_the_support_contract(self) -> None:
         result = self._post("/legal/uud/citation", {"query": "Pasal 1 ayat (3)"})
@@ -187,7 +255,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(len({row["viewer_target"]["public_target_id"] for row in group["members"]}), 4)
 
     def test_document_result_is_distinct_from_evidence_supports(self) -> None:
-        result = self._post("/legal/uud/ask", {"query": "Apa isi Perubahan Pertama UUD?"})
+        result = self._post("/legal/uud/ask", {"query": "Buka naskah Perubahan Pertama UUD"})
         self.assertEqual(set(result), {"kind", "status", "document"})
         self.assertEqual(result["kind"], "document")
         self.assertTrue(result["document"]["viewer_target"]["can_resolve"])
@@ -282,6 +350,16 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
     def _post(self, path: str, payload: dict) -> dict:
         request = Request(self.base_url + path, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
+        with urlopen(request, timeout=10) as response:  # nosec B310
+            return json.loads(response.read().decode("utf-8"))
+
+    def _delete(self, path: str, payload: dict) -> dict:
+        request = Request(
+            self.base_url + path,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="DELETE",
+        )
         with urlopen(request, timeout=10) as response:  # nosec B310
             return json.loads(response.read().decode("utf-8"))
 

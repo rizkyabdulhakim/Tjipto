@@ -64,6 +64,28 @@
       "citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum.",
       "limited": "Dukungan bukti terbatas tersedia; sistem tidak menghasilkan kesimpulan hukum."
     },
+    "document_summary": {
+      "query_terms": [
+        "ringkasan"
+      ],
+      "document_terms": [
+        "uud",
+        "undang undang dasar"
+      ],
+      "default_query": "BAB UUD",
+      "source_role_queries": {
+        "amendment_1_historical": "Perubahan Pertama Scope",
+        "amendment_2_historical": "Perubahan Kedua Scope",
+        "amendment_3_historical": "Perubahan Ketiga Scope",
+        "amendment_4_historical": "Perubahan Keempat Scope"
+      }
+    },
+    "document_open_terms": [
+      "buka naskah",
+      "buka dokumen",
+      "tampilkan dokumen",
+      "lihat pdf"
+    ],
     "viewer_source_status_labels": {
       "current_consolidated": "Berlaku (konsolidasi saat ini)",
       "amendment_*": "Historis (sumber perubahan)",

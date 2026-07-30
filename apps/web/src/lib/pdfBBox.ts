@@ -5,13 +5,8 @@ export interface PdfBBox {
   y0?: number;
   x1?: number;
   y1?: number;
-  coordinate_space?: string;
-  coordinate_origin?: string;
   page_width?: number;
   page_height?: number;
-  page_rotation?: number;
-  page_box_basis?: string;
-  transform_version?: string;
   viewer_highlightable?: boolean;
   bbox_precision?: string;
 }
@@ -27,15 +22,6 @@ export type BBoxViewportResult =
 export function bboxToViewportPercent(box: PdfBBox, viewport: PdfViewportLike): BBoxViewportResult {
   if (box.viewer_highlightable !== true || box.bbox_precision !== "exact") {
     return { ok: false, reason: "not_highlightable" };
-  }
-  if (
-    box.coordinate_space !== "pdf_user_space" ||
-    box.coordinate_origin !== "top_left" ||
-    box.transform_version !== "pymupdf_top_left_v1" ||
-    box.page_box_basis !== "media_box" ||
-    box.page_rotation !== 0
-  ) {
-    return { ok: false, reason: "invalid_coordinate_metadata" };
   }
   const values = [box.x0, box.y0, box.x1, box.y1, box.page_width, box.page_height];
   if (

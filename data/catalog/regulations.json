@@ -136,10 +136,54 @@
         "authority": "Direktorat Jenderal Peraturan Perundang-undangan",
         "result": "identity_status_and_relation_match",
         "discrepancies": [
-          "The BPK catalog title includes the additional word 'Peraturan' before 'Gaji'; the official PDF and Peraturan.go.id title omit it. The catalog identity preserves the BPK source value.",
           "The BPK catalog metadata reports 4 pages while its note describes 5 pages including the appendix; the downloaded official PDF contains 4 pages.",
           "PDF text extraction maps printed 'Kerja' to 'Keda' and printed digits in 2020 to letter O; exact provision selector preserves the extracted source stream."
         ]
+      },
+      "official_title_conflict": {
+        "kind": "source_value_difference",
+        "values": [
+          {
+            "source_value": "Perubahan atas Peraturan Presiden Nomor 98 Tahun 2020 tentang Peraturan Gaji dan Tunjangan Pegawai Pemerintah dengan Perjanjian Kerja",
+            "normalized": "perubahan atas peraturan presiden nomor 98 tahun 2020 tentang peraturan gaji dan tunjangan pegawai pemerintah dengan perjanjian kerja",
+            "display": "Perubahan atas Peraturan Presiden Nomor 98 Tahun 2020 tentang Peraturan Gaji dan Tunjangan Pegawai Pemerintah dengan Perjanjian Kerja",
+            "provenance": {
+              "kind": "official_catalog_page",
+              "reference": "https://peraturan.bpk.go.id/Details/276756/perpres-no-11-tah",
+              "verified_at": "2026-07-30T08:10:58+00:00",
+              "source_authority": "Database Peraturan BPK"
+            }
+          },
+          {
+            "source_value": "Perubahan atas Peraturan Presiden Nomor 98 Tahun 2020 tentang Gaji dan Tunjangan Pegawai Pemerintah dengan Perjanjian Kerja",
+            "normalized": "perubahan atas peraturan presiden nomor 98 tahun 2020 tentang gaji dan tunjangan pegawai pemerintah dengan perjanjian kerja",
+            "display": "Perubahan atas Peraturan Presiden Nomor 98 Tahun 2020 tentang Gaji dan Tunjangan Pegawai Pemerintah dengan Perjanjian Kerja",
+            "provenance": {
+              "kind": "official_pdf",
+              "reference": "https://peraturan.bpk.go.id/Download/335287/Salinan%20Perpres%20Nomor%2011%20Tahun%202024.pdf",
+              "verified_at": "2026-07-30T08:10:58+00:00",
+              "immutable_source_identity": "f2a05d254953df8fd51505ee2ec18f8597e800939786f9cb21939070e35b8595",
+              "source_authority": "Presiden Republik Indonesia"
+            }
+          },
+          {
+            "source_value": "Perubahan atas Peraturan Presiden Nomor 98 Tahun 2020 tentang Gaji dan Tunjangan Pegawai Pemerintah dengan Perjanjian Kerja",
+            "normalized": "perubahan atas peraturan presiden nomor 98 tahun 2020 tentang gaji dan tunjangan pegawai pemerintah dengan perjanjian kerja",
+            "display": "Perubahan atas Peraturan Presiden Nomor 98 Tahun 2020 tentang Gaji dan Tunjangan Pegawai Pemerintah dengan Perjanjian Kerja",
+            "provenance": {
+              "kind": "official_jdih_page",
+              "reference": "https://peraturan.go.id/id/perpres-no-11-tahun-2024",
+              "verified_at": "2026-07-30T08:10:58+00:00",
+              "source_authority": "Direktorat Jenderal Peraturan Perundang-undangan"
+            }
+          }
+        ],
+        "resolution": {
+          "state": "resolved",
+          "selected_value": 1,
+          "reviewer_decision": "Gunakan judul pada naskah resmi PDF yang dikonfirmasi oleh Peraturan.go.id.",
+          "legal_basis": "Judul naskah yang ditetapkan menjadi identitas tampilan; perbedaan katalog dipertahankan sebagai konflik sumber."
+        }
       },
       "publication": {
         "source_value": "LEMBARAN NEGARA REPUBLIK INDONESIA TAHUN 2024 NOMOR 24",

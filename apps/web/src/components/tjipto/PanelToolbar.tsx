@@ -19,7 +19,7 @@ export function PanelToolbar({
 }) {
   return (
     <div className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)]/40 px-4 sm:px-6" data-panel-toolbar>
-      <div className="flex items-center rounded-lg border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)]/80 p-0.5 shadow-sm">
+      <div className="flex items-center">
         <Control label="Perkecil tampilan" onClick={() => onZoom(-25)} disabled={zoom <= 50}><Minus size={14} /></Control>
         <span className="flex min-w-11 select-none items-center justify-center px-2 text-[12px] font-semibold tabular-nums text-[var(--tj-text-secondary)]">{zoom}%</span>
         <Control label="Perbesar tampilan" onClick={() => onZoom(25)} disabled={zoom >= 200}><Plus size={14} /></Control>

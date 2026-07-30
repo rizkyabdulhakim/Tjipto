@@ -1208,11 +1208,11 @@ class RuntimeContractTest(unittest.TestCase):
             else:
                 self.assertFalse(result["citations"], query)
 
-    def test_scoped_document_query_opens_full_source_without_legal_citation(self) -> None:
+    def test_only_explicit_document_navigation_opens_full_source(self) -> None:
         for query, role in (
-            ("Apa isi Perubahan Pertama UUD?", "amendment_1_historical"),
-            ("Apa isi Perubahan Keempat UUD?", "amendment_4_historical"),
-            ("Apa isi naskah asli UUD?", "original_historical"),
+            ("Buka naskah Perubahan Pertama UUD", "amendment_1_historical"),
+            ("Tampilkan dokumen Perubahan Keempat UUD", "amendment_4_historical"),
+            ("Lihat PDF naskah asli UUD", "original_historical"),
         ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "answer_ready", query)
@@ -1222,6 +1222,8 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["document_source"]["viewer_target"]["action"], "open_document", query)
             self.assertFalse(result["citations"], query)
             self.assertFalse(result["viewer_refs"], query)
+        for query in ("Apa isi Perubahan Pertama UUD?", "ringkasan UUD amandemen pertama"):
+            self.assertNotEqual(self.service.ask("uud", query).get("answer_type"), "source_document", query)
 
     def test_unresolved_scoped_document_never_falls_back_to_consolidated(self) -> None:
         result = self.service.ask("uud", "Apa isi amandement pertama UUD?")
@@ -1235,9 +1237,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertNotEqual(result["route"], "document_relation")
 
     def test_document_source_api_exposes_verified_document_target_only(self) -> None:
-        result = handle_request("uud", "ask", {"query": "Apa isi Perubahan Pertama UUD?"}, service=self.service)
+        result = handle_request("uud", "ask", {"query": "Buka naskah Perubahan Pertama UUD"}, service=self.service)
         self.assertEqual(result["kind"], "document")
-        self.assertEqual(result["document"]["source_status_label"], "Historis (sumber perubahan)")
         self.assertEqual(result["document"]["viewer_target"]["action"], "open_document")
         self.assertNotIn("supports", result)
 
@@ -1272,7 +1273,7 @@ class RuntimeContractTest(unittest.TestCase):
             ROOT,
         )
         self.assertEqual(api_result["status"], "answer_ready")
-        self.assertEqual(api_result["supports"][0]["source_status_label"], "Historis (sumber perubahan)")
+        self.assertEqual(api_result["supports"][0]["source_status_label"], "Amandemen")
 
     def test_dense_readiness_does_not_fake_matches(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")

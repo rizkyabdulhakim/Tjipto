@@ -14,6 +14,8 @@ import { bboxToViewportPercent } from "../../lib/pdfBBox";
 import { canvasBackingStore, fitWidthScale, isRenderCancellation, RenderTaskOwner, visiblePageWindow } from "../../lib/pdfViewer";
 import { LegalStatusCard } from "./LegalStatusCard";
 import { PanelToolbar } from "./PanelToolbar";
+import { documentRole, legalStatus } from "../../lib/legalPresentation";
+import { DocumentLegalDetails } from "./DocumentLegalDetails";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -197,7 +199,7 @@ function EvidenceContent({
   const zoomAnchorRef = useRef<{ page: number; ratio: number } | null>(null);
   const location = legalReferenceLabel(citation.article, citation.paragraph);
   const pageNumber = viewer?.page_numbers?.[0] ?? citation.pageNumber;
-  const sourceStatus = viewer?.legal_status ?? viewer?.source_status_label ?? citation.legalStatus ?? citation.sourceStatusLabel ?? "Belum diverifikasi";
+  const sourceStatus = legalStatus(viewer?.legal_status ?? citation.legalStatus);
   const markRenderFailed = useCallback(() => {
     setRenderFailed(true);
     setViewer((current) => current ? { ...current, rendering_available: false } : current);
@@ -304,7 +306,7 @@ function EvidenceContent({
         zoom={zoom}
         expanded={pdfOnly}
         saved={saved}
-        canBookmark={!documentMode}
+        canBookmark
         onZoom={changeZoom}
         onToggleExpanded={onTogglePdfOnly}
         onBookmark={savePointer}
@@ -318,7 +320,7 @@ function EvidenceContent({
           data-evidence-pdf-area={pdfOnly ? "expanded" : documentMode ? "document" : "normal"}
         >
           <div
-            className="relative mx-auto w-full min-w-0 rounded-2xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] shadow-sm"
+            className="relative mx-auto w-full min-w-0 overflow-hidden rounded-2xl border border-[var(--tj-border-subtle)] bg-[#121212] shadow-sm"
             data-pdf-card
             style={{
               minHeight: pdfOnly ? PDF_ONLY_MIN_HEIGHT : PDF_NORMAL_MIN_HEIGHT,
@@ -347,7 +349,8 @@ function EvidenceContent({
         {!pdfOnly && <div className={`flex-1 min-h-0 overflow-y-auto tj-scroll ${PDF_AREA_PADDING_CLASS}`} data-evidence-detail-area="normal">
           <LegalStatusCard
             status={sourceStatus}
-            role={viewer?.document_role ?? citation.documentRole}
+            role={documentRole(viewer?.document_role ?? citation.documentRole)}
+            title={viewer?.title ?? citation.documentTitle}
             documentType={viewer?.document_type ?? citation.documentType}
             number={viewer?.number}
             year={viewer?.year}
@@ -356,8 +359,13 @@ function EvidenceContent({
             promulgationDate={viewer?.promulgation_date ?? citation.promulgationDate}
             effectiveDate={viewer?.effective_date ?? citation.effectiveDate}
             officialUrl={viewer?.official_url ?? citation.officialUrl}
-            publication={viewer?.publication}
-            page={pageNumber}
+            publication={viewer?.publication ?? undefined}
+          />
+          <DocumentLegalDetails
+            relations={viewer?.relations}
+            provisionEffects={viewer?.provision_effects}
+            annotations={viewer?.source_annotations}
+            officialTitleConflict={viewer?.official_title_conflict}
           />
         </div>}
       </div>
@@ -420,7 +428,7 @@ function RenderedViewer({
   useLayoutEffect(() => {
     const node = documentRef.current?.parentElement;
     if (!node) return;
-    const update = () => setAvailableWidth(Math.max(1, node.clientWidth - 24));
+    const update = () => setAvailableWidth(Math.max(1, Math.min(960, node.clientWidth - 24)));
     const observer = new ResizeObserver(update);
     observer.observe(node);
     update();
@@ -470,7 +478,7 @@ function RenderedViewer({
   return (
     <div
       ref={documentRef}
-      className="w-max min-w-full bg-white px-3 py-4 space-y-4"
+      className="w-max min-w-full bg-[#121212] px-3 py-4 space-y-4"
       data-pdf-document="windowed"
       data-page-count={pdf.numPages}
       data-active-canvas-count={renderPages.size}

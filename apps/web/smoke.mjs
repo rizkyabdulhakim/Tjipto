@@ -98,14 +98,14 @@ async function run() {
     const searchInput = page.getByPlaceholder("Cari berdasarkan jenis, nomor, tahun, atau judul");
     await searchInput.fill("undang undang dasar negara republik indonesia tahun 1945");
     assert(catalogSearchCount === 0, "Search ran before explicit submission.");
-    await page.getByLabel("Status Keberlakuan").selectOption("applicable");
+    await page.getByLabel("Kedudukan Naskah").selectOption("consolidated");
     assert(catalogSearchCount === 0, "Filter change submitted Search implicitly.");
     await page.getByRole("button", { name: "Cari", exact: true }).click();
     await page.waitForFunction(() => document.body.textContent?.includes("Undang-Undang Dasar Negara Republik Indonesia Tahun 1945"));
     assert(catalogSearchCount === 1, "Explicit Search submission did not produce exactly one request.");
-    assert(await page.getByLabel("Status Keberlakuan").inputValue() === "applicable", "Submitted filter did not remain visible.");
+    assert(await page.getByLabel("Kedudukan Naskah").inputValue() === "consolidated", "Submitted filter did not remain visible.");
     await page.getByRole("button", { name: "Atur ulang filter" }).click();
-    assert(await page.getByLabel("Status Keberlakuan").inputValue() === "", "Filter reset did not clear selection.");
+    assert(await page.getByLabel("Kedudukan Naskah").inputValue() === "", "Filter reset did not clear selection.");
     assert(catalogSearchCount === 1, "Filter reset submitted Search implicitly.");
     const firstResult = page.getByRole("button", { name: /Buka naskah/ }).first();
     await firstResult.click();
@@ -119,6 +119,11 @@ async function run() {
     await legalCitation.click();
     await page.locator('[data-evidence-panel="normal"]').waitFor();
     await page.locator('[data-bbox-highlight="active"]').first().waitFor();
+    const bookmarkSaved = page.waitForResponse((response) =>
+      response.url().endsWith("/bookmarks") && response.request().method() === "POST",
+    );
+    await page.getByLabel("Simpan Penanda").click();
+    assert((await (await bookmarkSaved).json()).status === "saved", "Bookmark save did not succeed.");
     assert(await page.locator("blockquote").count() === 0, "Visible quote card remains.");
     assert(await page.getByLabel("Salin kutipan relevan").count() === 0, "Quote copy control remains.");
     const supportPayload = payloads.map((body) => {
@@ -158,6 +163,20 @@ async function run() {
     }));
     assert(Math.abs(at100.backingWidth - Math.ceil(at100.logicalWidth * at100.dpr)) <= 1, "Canvas backing store does not match DPR.");
     assert(at100.logicalWidth <= at100.scrollWidth && at100.logicalWidth >= at100.scrollWidth - 80, "100% PDF does not fit viewer width.");
+    await page.getByLabel("Tampilkan naskah penuh").click();
+    await page.locator('[data-evidence-panel="expanded"]').waitFor();
+    await page.waitForFunction(() => {
+      const node = document.querySelector("[data-evidence-panel='expanded'] canvas");
+      return node?.dataset.rendered === "true" && node.clientWidth >= 800 && node.clientWidth <= 960;
+    });
+    const expandedAt100 = await page.locator("[data-evidence-panel='expanded'] canvas").first().evaluate((node) => ({
+      pageWidth: node.clientWidth,
+      workspaceWidth: node.closest("[data-evidence-pdf-area]")?.clientWidth ?? 0,
+    }));
+    assert(expandedAt100.pageWidth <= 960, "Expanded 100% PDF exceeds the shared desktop width cap.");
+    assert(expandedAt100.workspaceWidth - expandedAt100.pageWidth >= 48, "Expanded PDF lost its dark workspace gutters.");
+    await page.getByLabel("Kembali ke panel").click();
+    await page.locator('[data-evidence-panel="normal"]').waitFor();
 
     await page.getByLabel("Perkecil tampilan").click();
     await page.waitForFunction((width) => {
@@ -239,7 +258,7 @@ async function run() {
     await disclosure.getByRole("button").first().click();
     await page.locator('[data-evidence-panel="normal"]').waitFor();
 
-    for (const [width, height, mode] of [[390, 844, "drawer"], [768, 1024, "split"], [820, 1180, "split"], [1024, 768, "split"], [1280, 900, "split"]]) {
+    for (const [width, height, mode] of [[390, 844, "drawer"], [768, 1024, "split"], [820, 1180, "split"], [1024, 768, "split"], [1280, 900, "split"], [1920, 1080, "split"]]) {
       await page.setViewportSize({ width, height });
       await page.locator(`[data-evidence-mode="${mode}"]`).waitFor();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
@@ -267,6 +286,14 @@ async function run() {
     assert(Math.abs(highDprMetrics.backingWidth - Math.ceil(highDprMetrics.logicalWidth * 2)) <= 1, "DPR 2 canvas width is incorrect.");
     assert(Math.abs(highDprMetrics.backingHeight - Math.ceil(highDprMetrics.logicalHeight * 2)) <= 1, "DPR 2 canvas height is incorrect.");
     await highDprContext.close();
+
+    await page.getByLabel("Tutup panel").click();
+    await page.getByText("Penanda", { exact: true }).first().click();
+    const deleteBookmark = page.getByLabel("Hapus penanda");
+    await deleteBookmark.first().waitFor();
+    const bookmarkCount = await deleteBookmark.count();
+    await deleteBookmark.first().click();
+    await page.waitForFunction((count) => document.querySelectorAll('[aria-label="Hapus penanda"]').length === count - 1, bookmarkCount);
 
     const publicText = `${(await page.locator("body").innerText())}\n${payloads.join("\n")}`;
     for (const forbidden of ["evidence_id", "legal_unit_id", "source_document_id", "source_bbox_refs", "bbox_id", "manifest_digest", "artifact_set_digest", "\"source_role\"", "\"route\"", "\"intent\"", "\"reason\"", "reason_code"]) {
