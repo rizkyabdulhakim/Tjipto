@@ -6,7 +6,7 @@ import unittest
 from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.service import LegalRuntimeService
-from tjipto.runtime.claim_support import _contradicts, _supports
+from tjipto.runtime.claim_support import _contains_tokens, _contradicts, _supports, _tokens
 from tjipto.runtime.query_semantics import PropositionClaim
 
 
@@ -40,11 +40,18 @@ class ClaimVerificationContractTest(unittest.TestCase):
                 self.assertEqual((result["status"], result["claim_support"][0]["status"]), ("insufficient_evidence", "insufficient"))
                 self.assertFalse(result["citations"])
 
+    def test_text_matching_preserves_complete_token_boundaries(self) -> None:
+        for needle, text in (("hakim", "kehakiman"), ("adil", "peradilan"), ("kerja", "pekerjaan")):
+            with self.subTest(needle=needle):
+                self.assertFalse(_contains_tokens(_tokens(needle), _tokens(text)))
+
     def test_textual_support_is_one_atomic_grounded_segment(self) -> None:
         for query in (
             "Pasal 12 menyebut keadaan bahaya syaratsyarat dan?",
             "Pasal 1 menyebut Negara Kesatuan yang berbentuk Republik?",
             "Pasal 7B menyebut memeriksa mengadili?",
+            "Pasal 7B menyebut perbuatan tercela dan atau pendapat?",
+            "Pasal 9 menyebut sebagai berikut sumpah presiden?",
         ):
             with self.subTest(query=query):
                 result = self.service.ask("uud", query)
@@ -63,6 +70,8 @@ class ClaimVerificationContractTest(unittest.TestCase):
                 self.assertTrue(segment["text_span_ids"])
                 self.assertTrue(segment["bbox_refs"])
                 self.assertTrue(segment["exact_quote"])
+                self.assertTrue(segment["segment_id"])
+                self.assertEqual(segment["start_selector"], segment["text_span_ids"][0])
 
     def test_explicit_normative_clause_supports_only_its_ordered_proposition(self) -> None:
         supported = self.service.ask("uud", "Pasal 28J mewajibkan setiap orang menghormati hak asasi manusia orang lain?")
@@ -100,6 +109,12 @@ class ClaimVerificationContractTest(unittest.TestCase):
             "exceptions": [],
         }
         self.assertTrue(_contradicts(claim, opposite))
+        unsupported_negation = self.service.ask("uud", "Pasal 7 tidak mengatur masa jabatan?")
+        self.assertEqual(
+            (unsupported_negation["status"], unsupported_negation["claim_support"][0]["status"]),
+            ("insufficient_evidence", "insufficient"),
+        )
+        self.assertFalse(unsupported_negation["citations"])
 
 
 if __name__ == "__main__":

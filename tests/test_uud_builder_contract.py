@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from collections import Counter
 import hashlib
@@ -28,7 +29,12 @@ from tjipto.corpora.uud.pages_builder import build_pages
 from tjipto.corpora.uud.retrieval_builder import build_retrieval_units
 from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_grounding, build_source_conflicts
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
-from tjipto.corpora.uud.validation import _REQUIRED_HEALTH_STATUSES, _derive_validation_status, build_validation_report
+from tjipto.corpora.uud.validation import (
+    _REQUIRED_HEALTH_STATUSES,
+    _derive_validation_status,
+    _selector_geometry_health,
+    build_validation_report,
+)
 from tjipto.corpora.uud_artifact_baseline import rebuild_uud_artifact_baseline
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
 
@@ -413,6 +419,94 @@ class UudBuilderContractTest(unittest.TestCase):
                     ("invalid", 1),
                 )
                 self.assertIn("selector_geometry_health", mutated["required_health"]["unsatisfied_sections"])
+
+    def test_overlay_lineage_mutations_fail_selector_and_top_level_health(self) -> None:
+        propositions = read_jsonl(FINAL / "propositions.jsonl")
+        word_bboxes = read_jsonl(FINAL / "word_bboxes.jsonl")
+        evidence = read_jsonl(FINAL / "evidence_registry.jsonl")
+        page_text_spans = read_jsonl(FINAL / "page_text_spans.jsonl")
+        base = next(
+            row
+            for row in propositions
+            if len(row["viewer_overlay"]["rectangles"]) > 1
+            and any(
+                rectangle["selected_character_end"] - rectangle["selected_character_start"] > 1
+                for rectangle in row["viewer_overlay"]["rectangles"]
+            )
+        )
+        clipped_base = next(row for row in propositions if row["viewer_overlay"]["clipped_rectangle_indexes"])
+
+        mutations: dict[str, dict] = {}
+        for name in (
+            "shifted", "shrunk", "expanded", "missing", "extra", "duplicate",
+            "reordered", "wrong_slice", "wrong_space",
+        ):
+            mutations[name] = deepcopy(base)
+        mutations["shifted"]["viewer_overlay"]["rectangles"][0]["x0"] += 0.1
+        mutations["shifted"]["viewer_overlay"]["rectangles"][0]["y0"] += 0.1
+        mutations["shrunk"]["viewer_overlay"]["rectangles"][0]["x1"] -= 0.1
+        mutations["expanded"]["viewer_overlay"]["rectangles"][0]["x1"] += 0.1
+        mutations["missing"]["viewer_overlay"]["rectangles"].pop()
+        mutations["extra"]["viewer_overlay"]["rectangles"].append(
+            deepcopy(mutations["extra"]["viewer_overlay"]["rectangles"][-1])
+        )
+        mutations["duplicate"]["viewer_overlay"]["rectangles"].insert(
+            0, deepcopy(mutations["duplicate"]["viewer_overlay"]["rectangles"][0])
+        )
+        mutations["reordered"]["viewer_overlay"]["rectangles"].reverse()
+        sliced = next(
+            rectangle
+            for rectangle in mutations["wrong_slice"]["viewer_overlay"]["rectangles"]
+            if rectangle["selected_character_end"] - rectangle["selected_character_start"] > 1
+        )
+        sliced["selected_character_start"] += 1
+        mutations["wrong_space"]["viewer_overlay"]["rectangles"][0]["geometry_space_index"] = len(
+            mutations["wrong_space"]["viewer_overlay"]["geometry_spaces"]
+        )
+
+        mutations["wrong_clipping"] = deepcopy(clipped_base)
+        mutations["wrong_clipping"]["viewer_overlay"]["clipped_rectangle_indexes"] = []
+
+        mutations["unrelated_character"] = deepcopy(base)
+        original_id = mutations["unrelated_character"]["bbox_refs"][0]
+        first_character = next(
+            word | character
+            for word in word_bboxes
+            for character in word.get("characters") or ()
+            if character["character_bbox_id"] == original_id
+        )
+        unrelated_id = next(
+            merged["character_bbox_id"]
+            for word in word_bboxes
+            for character in word.get("characters") or ()
+            if (merged := word | character)["character_bbox_id"] not in base["bbox_refs"]
+            and merged["source_document_id"] == first_character["source_document_id"]
+            and merged["page_number"] == first_character["page_number"]
+        )
+        mutations["unrelated_character"]["bbox_refs"][0] = unrelated_id
+        for selector in mutations["unrelated_character"]["source_selectors"]:
+            selector["character_bbox_ids"] = [
+                unrelated_id if character_id == original_id else character_id
+                for character_id in selector["character_bbox_ids"]
+            ]
+
+        for name, proposition in mutations.items():
+            with self.subTest(mutation=name):
+                health = _selector_geometry_health(
+                    propositions=[proposition],
+                    evidence=evidence,
+                    page_text_spans=page_text_spans,
+                    word_bboxes=word_bboxes,
+                )
+                self.assertGreater(health["viewer_geometry_without_exact_selector_lineage_count"], 0)
+                self.assertEqual(health["status"], "incomplete")
+                report = {
+                    key: {"status": expected}
+                    for key, expected in _REQUIRED_HEALTH_STATUSES.items()
+                }
+                report["selector_geometry_health"] = health
+                _derive_validation_status(report)
+                self.assertEqual(report["status"], "invalid")
 
     def test_source_conflicts_rebuild_from_specs_and_grounding(self) -> None:
         source_conflicts = build_source_conflicts()

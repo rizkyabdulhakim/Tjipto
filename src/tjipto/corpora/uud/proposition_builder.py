@@ -7,10 +7,8 @@ import re
 import unicodedata
 
 from tjipto.evidence.bbox import (
-    GEOMETRY_IDENTITY_FIELDS,
-    VIEWER_RECTANGLE_FIELDS,
-    positive_area_intersection,
-    subtract_rectangle,
+    derive_viewer_overlay,
+    geometry_space_key,
 )
 
 _BOUNDARY = re.compile(r"[.!?;,:]")
@@ -46,7 +44,7 @@ def build_propositions(
     }
     marker_boxes: dict[tuple[object, ...], list[dict]] = {}
     for marker in source_marker_character_boxes(word_bboxes):
-        marker_boxes.setdefault(_geometry_space_key(marker), []).append(marker)
+        marker_boxes.setdefault(geometry_space_key(marker), []).append(marker)
     rows: list[dict] = []
     for unit in legal_units:
         unit_id = str(unit.get("legal_unit_id") or "")
@@ -236,78 +234,8 @@ def _with_viewer_overlay(
     characters_by_id: dict[str, dict],
     marker_boxes: dict[tuple[object, ...], list[dict]],
 ) -> dict:
-    selected_ids = tuple(str(value) for value in proposition.get("bbox_refs") or ())
-    selected = [characters_by_id[value] for value in selected_ids if value in characters_by_id]
-    grouped: dict[str, list[dict]] = {}
-    for character in selected:
-        grouped.setdefault(str(character.get("word_bbox_id") or character["character_bbox_id"]), []).append(character)
-    rectangles = []
-    clipped_rectangle_indexes = []
-    covered_ids: set[str] = set()
-    clipped_ids: set[str] = set()
-    selected_index = {character_id: index for index, character_id in enumerate(selected_ids)}
-    geometry_spaces: list[dict] = []
-    geometry_space_indexes: dict[tuple[object, ...], int] = {}
-    for characters in grouped.values():
-        first = characters[0]
-        character_ids = tuple(str(character["character_bbox_id"]) for character in characters)
-        geometry_space = {field: first.get(field) for field in VIEWER_RECTANGLE_FIELDS if field not in {"x0", "y0", "x1", "y1"}}
-        geometry_key = tuple(geometry_space[field] for field in geometry_space)
-        if geometry_key not in geometry_space_indexes:
-            geometry_space_indexes[geometry_key] = len(geometry_spaces)
-            geometry_spaces.append(geometry_space)
-        geometry_space_index = geometry_space_indexes[geometry_key]
-        base = {
-            "x0": min(float(character["x0"]) for character in characters),
-            "y0": min(float(character["y0"]) for character in characters),
-            "x1": max(float(character["x1"]) for character in characters),
-            "y1": max(float(character["y1"]) for character in characters),
-            "selected_character_start": selected_index[character_ids[0]],
-            "selected_character_end": selected_index[character_ids[-1]] + 1,
-            "geometry_space_index": geometry_space_index,
-        }
-        pieces = [geometry_space | base]
-        clipped = False
-        for marker in marker_boxes.get(_geometry_space_key(first), ()):
-            clipped = clipped or any(positive_area_intersection(piece, marker) for piece in pieces)
-            pieces = [piece for candidate in pieces for piece in subtract_rectangle(candidate, marker)]
-        if pieces:
-            covered_ids.update(character_ids)
-        if clipped:
-            clipped_ids.update(character_ids)
-        for piece in pieces:
-            rectangles.append({
-                key: piece[key]
-                for key in (
-                    "selected_character_start", "selected_character_end", "geometry_space_index",
-                    "x0", "y0", "x1", "y1",
-                )
-            })
-            if clipped:
-                clipped_rectangle_indexes.append(len(rectangles) - 1)
-    complete = (
-        len(selected) == len(selected_ids)
-        and covered_ids == set(selected_ids)
-    )
-    proposition["viewer_overlay"] = {
-        "status": "complete" if complete else "unavailable",
-        "reason_code": None if complete else "exact_viewer_geometry_unavailable",
-        "proposition_id": proposition["proposition_id"],
-        "source_document_id": proposition.get("source_document_id"),
-        "source_sha256": proposition.get("source_sha256"),
-        "selector_field": "source_selectors",
-        "selected_character_field": "bbox_refs",
-        "geometry_spaces": geometry_spaces if complete else [],
-        "clipped_character_count": len(clipped_ids),
-        "rectangles": rectangles if complete else [],
-        "clipped_rectangle_indexes": clipped_rectangle_indexes if complete else [],
-    }
+    proposition["viewer_overlay"] = derive_viewer_overlay(proposition, characters_by_id, marker_boxes)
     return proposition
-
-
-def _geometry_space_key(row: dict) -> tuple[object, ...]:
-    return tuple(row.get(field) for field in GEOMETRY_IDENTITY_FIELDS)
-
 
 def _normalize(text: str) -> str:
     return " ".join(_TOKEN.findall(text.casefold()))

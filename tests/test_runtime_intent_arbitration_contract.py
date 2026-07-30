@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 import unittest
 
@@ -7,6 +8,7 @@ from tjipto.corpora.capabilities import resolve_capability
 from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.intent import classify_relation_intent
+from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -107,6 +109,11 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
         for query in ("Pasal 7 setelah Pasal 6", "Siapa Presiden setelah Pasal 7?"):
             with self.subTest(query=query):
                 self.assertNotEqual(self.service.ask("uud", query)["route"], "structural_navigation")
+
+    def test_interpreted_query_is_immutable(self) -> None:
+        semantics = interpret_query(self.store, "uud", "Pasal berikutnya setelah Pasal 7")
+        with self.assertRaises(FrozenInstanceError):
+            semantics.requested_function = "other"  # type: ignore[misc]
 
     def test_current_fact_precedes_legal_reference_and_discovery_precedes_domain(self) -> None:
         for query in ("siapa Presiden setelah Pasal 7?", "siapa presiden menurut Pasal 7?"):

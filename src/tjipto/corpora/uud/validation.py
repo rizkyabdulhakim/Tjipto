@@ -45,7 +45,12 @@ from tjipto.corpora.uud.span_disposition_policy import role_for_legal_unit, subs
 from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
 from tjipto.corpora.uud.proposition_builder import source_marker_character_boxes
-from tjipto.evidence.bbox import positive_area_intersection, viewer_overlay_rectangles
+from tjipto.evidence.bbox import (
+    derive_viewer_overlay,
+    geometry_space_key,
+    positive_area_intersection,
+    viewer_overlay_rectangles,
+)
 from tjipto.core.manifest import artifact_set_digest, read_json, read_jsonl, validate_manifest
 
 
@@ -2498,7 +2503,7 @@ def _selector_geometry_health(
     characters_by_id = {character["character_bbox_id"]: character for character in characters}
     marker_boxes: dict[tuple[object, ...], list[dict]] = defaultdict(list)
     for marker in source_marker_character_boxes(word_bboxes):
-        marker_boxes[_geometry_space_key(marker)].append(marker)
+        marker_boxes[geometry_space_key(marker)].append(marker)
     evidence_by_id = {row.get("evidence_id"): row for row in evidence}
     round_trip_mismatches = 0
     absolute_selector_mismatches = 0
@@ -2537,36 +2542,23 @@ def _selector_geometry_health(
         if marker_pattern.search(str(exact_quote or "")):
             marker_text_in_quotes += 1
         overlay = proposition.get("viewer_overlay") or {}
+        expected_overlay = derive_viewer_overlay(proposition, characters_by_id, marker_boxes)
         rectangles = viewer_overlay_rectangles(proposition, characters_by_id)
         covered_character_ids = {
             character_id
             for rectangle in rectangles
             for character_id in rectangle.get("character_bbox_ids") or ()
         }
-        clipped_indexes = set(overlay.get("clipped_rectangle_indexes") or ())
-        clipped_character_ids = {
-            character_id
-            for index, rectangle in enumerate(rectangles)
-            if index in clipped_indexes
-            for character_id in rectangle.get("character_bbox_ids") or ()
-        }
         if (
-            overlay.get("status") != "complete"
-            or overlay.get("proposition_id") != proposition.get("proposition_id")
-            or overlay.get("source_document_id") != proposition.get("source_document_id")
-            or overlay.get("source_sha256") != proposition.get("source_sha256")
-            or overlay.get("selector_field") != "source_selectors"
-            or overlay.get("selected_character_field") != "bbox_refs"
-            or clipped_character_ids - set(geometry)
-            or any(not isinstance(index, int) or index < 0 or index >= len(rectangles) for index in clipped_indexes)
-            or overlay.get("clipped_character_count") != len(clipped_character_ids)
+            expected_overlay.get("status") != "complete"
+            or overlay != expected_overlay
             or covered_character_ids != set(geometry)
         ):
             overlay_lineage_failures += 1
         marker_geometry_intersections += sum(
             1
             for rectangle in rectangles
-            for marker in marker_boxes.get(_geometry_space_key(rectangle), ())
+            for marker in marker_boxes.get(geometry_space_key(rectangle), ())
             if positive_area_intersection(rectangle, marker)
         )
         evidence_row = evidence_by_id.get(proposition.get("evidence_id"), {})
@@ -2584,17 +2576,6 @@ def _selector_geometry_health(
         "citable_support_without_valid_geometry_count": citable_without_geometry,
     }
     return counts | {"status": "complete" if not any(counts.values()) else "incomplete"}
-
-
-def _geometry_space_key(row: dict) -> tuple[object, ...]:
-    return tuple(
-        row.get(field)
-        for field in (
-            "source_document_id", "source_sha256", "page_number", "coordinate_space",
-            "coordinate_origin", "page_rotation", "page_box_basis", "transform_version",
-        )
-    )
-
 
 def _pdf_health_summary(report: dict) -> dict:
     pages = report.get("pages") or ()

@@ -31,7 +31,18 @@ class SourceTemporalArbitrationContractTest(unittest.TestCase):
         self.assertEqual(result["citations"][0]["source_role"], "amendment_1_historical")
 
     def test_temporal_language_never_activates_navigation(self) -> None:
-        for suffix in ("setelah perubahan", "sesudah perubahan", "pasca amandemen", "naskah konsolidasi"):
+        for suffix in (
+            "setelah perubahan",
+            "sesudah perubahan",
+            "pasca perubahan",
+            "setelah diubah",
+            "sesudah diubah",
+            "setelah diamandemen",
+            "sesudah diamandemen",
+            "pasca amandemen",
+            "saat ini",
+            "naskah konsolidasi",
+        ):
             with self.subTest(suffix=suffix):
                 result = self.service.ask("uud", f"Apa isi Pasal 7 {suffix}?")
                 self.assertEqual((result["route"], result["citations"][0]["citation"]), ("legal_reference", "Pasal 7"))
