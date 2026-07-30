@@ -22,7 +22,6 @@ const started = [];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
-const normalizedClipboardText = (text) => text.replace(/\r\n?/g, "\n");
 
 async function waitFor(url) {
   for (let attempts = 0; attempts < 50; attempts += 1) {
@@ -83,7 +82,6 @@ async function run() {
     window.__TJIPTO_RUNTIME_CONFIG__ = { apiBase, corpusId };
   }, { apiBase: backendUrl, corpusId: "uud" });
   const page = await context.newPage();
-  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: frontendUrl });
   const payloads = [];
   page.on("response", async (response) => {
     if (response.url().includes("/legal/")) {
@@ -93,76 +91,86 @@ async function run() {
   });
   try {
     await ask(page, "Pasal 28A");
-    await page.locator('[data-citation-footer="true"] button').first().click();
+    const legalCitation = page.locator('[data-citation-footer="true"] button').first();
+    assert(await legalCitation.getAttribute("data-citation-kind") === "legal_citation", "Legal citation is not typed.");
+    await legalCitation.click();
     await page.locator('[data-evidence-panel="normal"]').waitFor();
     await page.locator('[data-bbox-highlight="active"]').first().waitFor();
-    const quote = page.locator("blockquote").first();
-    await page.getByLabel("Salin kutipan relevan").click();
-    const fullCopy = await page.evaluate(() => navigator.clipboard.readText());
-    const canonicalFullCopy = normalizedClipboardText(fullCopy);
-    assert(canonicalFullCopy.length > 0 && !/[*]{1,4}\)/.test(canonicalFullCopy), "Full copy is not canonical legal text.");
-    await page.evaluate(() => {
-      document.addEventListener("copy", (event) => {
-        window.__tjiptoCopyTypes = Array.from(event.clipboardData?.types ?? []);
-      }, { once: true });
-    });
-    await quote.selectText();
-    await page.keyboard.press(process.platform === "darwin" ? "Meta+C" : "Control+C");
-    const selectedCopy = await page.evaluate(() => navigator.clipboard.readText());
-    const selectedTypes = await page.evaluate(() => window.__tjiptoCopyTypes);
-    assert(normalizedClipboardText(selectedCopy) === canonicalFullCopy && !/[*]{1,4}\)/.test(selectedCopy), "Selected copy is not canonical text/plain.");
-    assert(JSON.stringify(selectedTypes) === JSON.stringify(["text/plain"]), "Selected copy published a non-text MIME payload.");
+    assert(await page.locator("blockquote").count() === 0, "Visible quote card remains.");
+    assert(await page.getByLabel("Salin kutipan relevan").count() === 0, "Quote copy control remains.");
+    const supportPayload = payloads.map((body) => {
+      try { return JSON.parse(body); } catch { return null; }
+    }).find((body) => body?.supports?.[0]?.authority_kind === "legal_citation");
+    assert(supportPayload?.supports[0].citation_final === true, "Public support finality is not typed.");
+    for (const field of ["copy_text", "layout_lines", "legal_citation_available", "relevant_quote_eligible", "panel_section"]) {
+      assert(!(field in supportPayload.supports[0]), `Public quote-only field remains: ${field}.`);
+    }
 
-    const partialSelection = await page.evaluate(() => {
-      const quote = document.querySelector("blockquote");
-      const walker = document.createTreeWalker(quote, NodeFilter.SHOW_TEXT);
-      const text = walker.nextNode();
-      if (!text) throw new Error("Legal quote has no selectable text.");
-      const range = document.createRange();
-      range.setStart(text, 0);
-      range.setEnd(text, Math.min(12, text.textContent?.length ?? 0));
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      return selection?.toString() ?? "";
-    });
-    await page.evaluate(() => {
-      document.addEventListener("copy", (event) => {
-        window.__tjiptoCopyTypes = Array.from(event.clipboardData?.types ?? []);
-      }, { once: true });
-    });
-    await page.keyboard.press(process.platform === "darwin" ? "Meta+C" : "Control+C");
-    const partialCopy = await page.evaluate(() => navigator.clipboard.readText());
-    const partialTypes = await page.evaluate(() => window.__tjiptoCopyTypes);
-    const canonicalSubset = partialSelection.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trimStart()).join("\n").trim();
-    assert(normalizedClipboardText(partialCopy) === canonicalSubset, "Selected subset copy is not the canonical selected text.");
-    assert(canonicalFullCopy.replace(/\s+/g, " ").includes(normalizedClipboardText(partialCopy).replace(/\s+/g, " ")), "Selected subset falls outside canonical legal text.");
-    assert(JSON.stringify(partialTypes) === JSON.stringify(["text/plain"]), "Selected subset published a non-text MIME payload.");
+    const document = page.locator("[data-pdf-document]").first();
+    const targetPage = Number(await page.locator('[data-bbox-highlight="active"]').first().locator("xpath=ancestor::*[@data-pdf-page][1]").getAttribute("data-pdf-page"));
+    assert(Number(await document.getAttribute("data-first-rendered-page")) === targetPage, "Target page did not render first.");
+    const canvas = page.locator(`[data-pdf-page="${targetPage}"] canvas`);
+    const at100 = await canvas.evaluate((node) => ({
+      logicalWidth: node.clientWidth,
+      backingWidth: node.width,
+      dpr: window.devicePixelRatio,
+      scrollWidth: node.closest("[data-evidence-pdf-area]")?.clientWidth ?? 0,
+    }));
+    assert(Math.abs(at100.backingWidth - Math.ceil(at100.logicalWidth * at100.dpr)) <= 1, "Canvas backing store does not match DPR.");
+    assert(at100.logicalWidth <= at100.scrollWidth && at100.logicalWidth >= at100.scrollWidth - 80, "100% PDF does not fit viewer width.");
 
-    const crossLine = await page.evaluate(() => {
-      const lines = [...document.querySelectorAll("blockquote [data-canonical-start]")];
-      if (lines.length < 2) throw new Error("Cross-line copy fixture did not render multiple source lines.");
-      const first = lines[0].firstChild;
-      const second = lines[1].firstChild;
-      if (!first || !second) throw new Error("Canonical lines have no text nodes.");
-      const range = document.createRange();
-      range.setStart(first, 0);
-      range.setEnd(second, Math.min(6, second.textContent?.length ?? 0));
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      return [Number(lines[0].dataset.canonicalStart), Number(lines[1].dataset.canonicalStart) + Math.min(6, second.textContent?.length ?? 0)];
+    await page.getByLabel("Zoom out").click();
+    await page.waitForFunction((width) => {
+      const node = document.querySelector("[data-bbox-highlight='active']")?.closest("[data-pdf-page]")?.querySelector("canvas");
+      return node?.dataset.rendered === "true" && node.clientWidth < width * 0.8;
+    }, at100.logicalWidth);
+    const at75 = await canvas.evaluate((node) => node.clientWidth);
+    assert(Math.abs(at75 / at100.logicalWidth - 0.75) < 0.03, "75% zoom did not re-render the PDF.");
+
+    for (let index = 0; index < 5; index += 1) {
+      await page.getByLabel("Zoom in").evaluate((button) => button.click());
+    }
+    await page.getByText("200%", { exact: true }).waitFor();
+    await canvas.waitFor();
+    await page.waitForFunction(
+      (pageNumber) => document.querySelector(`[data-pdf-page="${pageNumber}"] canvas`)?.dataset.rendered === "true",
+      targetPage,
+    );
+    const at200 = await canvas.evaluate((node) => node.clientWidth);
+    assert(Math.abs(at200 / at100.logicalWidth - 2) < 0.03, "200% zoom did not re-render the PDF.");
+    await page.getByLabel("Zoom out").evaluate((button) => button.click());
+    await page.getByLabel("Zoom in").evaluate((button) => button.click());
+    await canvas.waitFor({ state: "visible" });
+    assert(await page.getByText("Rendering PDF/BBox belum tersedia").count() === 0, "Cancelled render was reported as a failure.");
+
+    const renderWindowValid = await page.evaluate(() => {
+      const root = document.querySelector("[data-evidence-pdf-area]");
+      if (!root) return false;
+      const rootRect = root.getBoundingClientRect();
+      const pages = [...document.querySelectorAll("[data-pdf-page]")];
+      const visible = pages.filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.bottom > rootRect.top && rect.top < rootRect.bottom;
+      }).map((node) => Number(node.dataset.pdfPage));
+      const canvases = [...document.querySelectorAll("[data-pdf-page] canvas")]
+        .map((node) => Number(node.closest("[data-pdf-page]").dataset.pdfPage));
+      return canvases.every((pageNumber) => visible.some((visiblePage) => Math.abs(pageNumber - visiblePage) <= 1));
     });
-    await page.keyboard.press(process.platform === "darwin" ? "Meta+C" : "Control+C");
-    const crossLineCopy = await page.evaluate(() => navigator.clipboard.readText());
-    assert(normalizedClipboardText(crossLineCopy) === canonicalFullCopy.slice(crossLine[0], crossLine[1]), "Cross-line copy did not use canonical offsets.");
+    assert(renderWindowValid, "A canvas exists outside the visible-plus-adjacent page window.");
+
+    const separator = page.getByRole("separator", { name: "Resize evidence panel" });
+    assert(await separator.getAttribute("aria-orientation") === "vertical", "Splitter orientation is missing.");
+    assert(await separator.getAttribute("aria-controls") === "tjipto-evidence-panel", "Splitter controlled pane identity is missing.");
+    await separator.focus();
+    await page.keyboard.press("Home");
+    assert(await separator.getAttribute("aria-valuenow") === await separator.getAttribute("aria-valuemin"), "Splitter Home key failed.");
+    await page.keyboard.press("End");
+    assert(await separator.getAttribute("aria-valuenow") === await separator.getAttribute("aria-valuemax"), "Splitter End key failed.");
 
     await ask(page, "BAB XA");
     await page.locator('[data-citation-footer="true"] button').first().click();
     await page.locator('[data-evidence-panel="normal"]').waitFor();
     await page.locator('[data-bbox-highlight="active"]').first().waitFor();
-    const headingQuote = await page.locator("blockquote").innerText();
-    assert(headingQuote.includes("BAB XA") && headingQuote.includes("HAK ASASI MANUSIA") && !headingQuote.includes("Pasal 28A"), "BAB heading leaked descendant text into its quote.");
     const headingHighlightCount = await page.locator('[data-bbox-highlight="active"]').count();
     assert(headingHighlightCount === 2, `BAB heading did not retain its exact heading geometry (${headingHighlightCount}).`);
 
@@ -198,6 +206,27 @@ async function run() {
       assert(!overflow, `Viewport ${width} has horizontal content loss.`);
     }
     assert(await page.getByLabel("Panel sempit").count() === 0, "Legacy panel preset controls remain.");
+
+    const highDprContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 });
+    await highDprContext.addInitScript(({ apiBase, corpusId }) => {
+      window.__TJIPTO_RUNTIME_CONFIG__ = { apiBase, corpusId };
+    }, { apiBase: backendUrl, corpusId: "uud" });
+    const highDprPage = await highDprContext.newPage();
+    await ask(highDprPage, "Pasal 28A");
+    await highDprPage.locator('[data-citation-footer="true"] button').first().click();
+    const highDprCanvas = highDprPage.locator('[data-bbox-highlight="active"]').first().locator("xpath=ancestor::*[@data-pdf-page][1]").locator("canvas");
+    await highDprCanvas.waitFor();
+    const highDprMetrics = await highDprCanvas.evaluate((node) => ({
+      logicalWidth: node.clientWidth,
+      logicalHeight: node.clientHeight,
+      backingWidth: node.width,
+      backingHeight: node.height,
+      dpr: window.devicePixelRatio,
+    }));
+    assert(highDprMetrics.dpr === 2, "High-DPR smoke context is not DPR 2.");
+    assert(Math.abs(highDprMetrics.backingWidth - Math.ceil(highDprMetrics.logicalWidth * 2)) <= 1, "DPR 2 canvas width is incorrect.");
+    assert(Math.abs(highDprMetrics.backingHeight - Math.ceil(highDprMetrics.logicalHeight * 2)) <= 1, "DPR 2 canvas height is incorrect.");
+    await highDprContext.close();
 
     const publicText = `${(await page.locator("body").innerText())}\n${payloads.join("\n")}`;
     for (const forbidden of ["evidence_id", "legal_unit_id", "source_document_id", "source_bbox_refs", "bbox_id", "manifest_digest", "artifact_set_digest"]) {

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ClipboardEvent, CSSProperties, PointerEvent, ReactNode } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, KeyboardEvent, PointerEvent, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import * as pdfjs from "pdfjs-dist";
@@ -10,7 +10,6 @@ import {
   Plus,
   Maximize2,
   Minimize2,
-  Copy,
   Check,
   FileText,
   Bookmark,
@@ -18,6 +17,7 @@ import {
 import type { Citation } from "../../lib/types";
 import { getLegalViewerPayload, pdfAccessUrl, saveLegalBookmark, type ViewerPayload } from "../../lib/api";
 import { bboxToViewportPercent } from "../../lib/pdfBBox";
+import { canvasBackingStore, fitWidthScale, isRenderCancellation, RenderTaskOwner, visiblePageWindow } from "../../lib/pdfViewer";
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -45,6 +45,7 @@ export function EvidencePanel({
   const [pdfOnly, setPdfOnly] = useState(false);
   const [split, setSplit] = useState(false);
   const [availableWidth, setAvailableWidth] = useState(0);
+  const sidebarMaxWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, availableWidth - CHAT_MIN_WIDTH));
 
   useEffect(() => {
     const splitQuery = window.matchMedia("(min-width: 768px)");
@@ -93,7 +94,19 @@ export function EvidencePanel({
   const resize = (event: PointerEvent<HTMLButtonElement>) => {
     if (!isResizing) return;
     const nextWidth = window.innerWidth - event.clientX;
-    setSidebarWidth(clamp(nextWidth, SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, availableWidth - CHAT_MIN_WIDTH)));
+    setSidebarWidth(clamp(nextWidth, SIDEBAR_MIN_WIDTH, sidebarMaxWidth));
+  };
+
+  const resizeWithKeyboard = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const next = {
+      ArrowLeft: sidebarWidth + 16,
+      ArrowRight: sidebarWidth - 16,
+      Home: SIDEBAR_MIN_WIDTH,
+      End: sidebarMaxWidth,
+    }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    setSidebarWidth(clamp(next, SIDEBAR_MIN_WIDTH, sidebarMaxWidth));
   };
 
   useEffect(() => {
@@ -105,9 +118,9 @@ export function EvidencePanel({
 
   useEffect(() => {
     if (split) {
-      setSidebarWidth((width) => clamp(width, SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, availableWidth - CHAT_MIN_WIDTH)));
+      setSidebarWidth((width) => clamp(width, SIDEBAR_MIN_WIDTH, sidebarMaxWidth));
     }
-  }, [availableWidth, split]);
+  }, [sidebarMaxWidth, split]);
 
   return (
     <AnimatePresence>
@@ -123,6 +136,7 @@ export function EvidencePanel({
             className={`${split ? "hidden" : ""} fixed inset-0 z-40 bg-black/40`}
           />
           <motion.aside
+            id="tjipto-evidence-panel"
             key="ev-panel"
             initial={pdfOnly ? { opacity: 0 } : { opacity: 0 }}
             animate={pdfOnly ? { opacity: 1 } : { x: 0, opacity: 1 }}
@@ -137,11 +151,18 @@ export function EvidencePanel({
               <button
                 type="button"
                 aria-label="Resize evidence panel"
+                aria-controls="tjipto-evidence-panel"
+                aria-orientation="vertical"
+                aria-valuemin={SIDEBAR_MIN_WIDTH}
+                aria-valuemax={sidebarMaxWidth}
+                aria-valuenow={Math.round(sidebarWidth)}
+                role="separator"
                 title="Resize evidence panel"
                 onPointerDown={startResize}
                 onPointerMove={resize}
                 onPointerUp={stopResize}
                 onPointerCancel={stopResize}
+                onKeyDown={resizeWithKeyboard}
                 className={`hidden md:block absolute inset-y-0 -left-1.5 z-20 w-3 cursor-col-resize touch-none transition-colors ${isResizing ? "bg-[var(--tj-accent-soft)]" : "hover:bg-[var(--tj-accent-soft)]"}`}
                 data-evidence-resize-handle="true"
               />
@@ -171,15 +192,13 @@ function EvidenceContent({
   onTogglePdfOnly: () => void;
 }) {
   const documentMode = citation.viewerMode === "document";
-  const isLegalExcerpt = citation.supportKind === "legal_unit" && citation.relevantQuoteEligible === true;
   const [zoom, setZoom] = useState(100);
-  const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [viewer, setViewer] = useState<ViewerPayload | null>(null);
   const [viewerError, setViewerError] = useState(false);
   const [renderFailed, setRenderFailed] = useState(false);
   const pdfScrollRef = useRef<HTMLDivElement | null>(null);
-  const zoomAnchorRef = useRef<{ top: number; scrollable: number } | null>(null);
+  const zoomAnchorRef = useRef<{ page: number; ratio: number } | null>(null);
   const location = legalUnitLabel(citation.article, citation.paragraph);
   const pageNumber = viewer?.page_numbers?.[0] ?? citation.pageNumber;
   const sourceStatus = viewer?.source_status_label ?? citation.sourceStatusLabel ?? sourceStatusLabel(citation.sourceRole, citation.temporalContext);
@@ -208,30 +227,6 @@ function EvidenceContent({
     };
   }, [citation.publicTargetId, citation.viewerMode]);
 
-  const copyExcerpt = async () => {
-    const text = (citation.copyText ?? citation.excerpt).replace(/\r\n?/g, "\n");
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  const normalizeSelectionCopy = (event: ClipboardEvent<HTMLElement>) => {
-    const range = window.getSelection()?.rangeCount ? window.getSelection()!.getRangeAt(0) : null;
-    if (!range) return;
-    event.preventDefault();
-    event.clipboardData.clearData();
-    const start = canonicalOffset(range.startContainer, range.startOffset);
-    const end = canonicalOffset(range.endContainer, range.endOffset);
-    const text = start !== null && end !== null && end >= start
-      ? (citation.copyText ?? citation.excerpt).slice(start, end)
-      : "";
-    event.clipboardData.setData("text/plain", text.replace(/\r\n?/g, "\n"));
-  };
-
   const savePointer = async () => {
     try {
       const bookmark = await saveLegalBookmark(citation.publicTargetId);
@@ -243,9 +238,25 @@ function EvidenceContent({
 
   const changeZoom = (delta: number) => {
     const scroller = pdfScrollRef.current;
-    zoomAnchorRef.current = scroller
-      ? { top: scroller.scrollTop, scrollable: scroller.scrollHeight - scroller.clientHeight }
-      : null;
+    if (scroller) {
+      const center = scroller.getBoundingClientRect().top + scroller.clientHeight / 2;
+      const pages = [...scroller.querySelectorAll<HTMLElement>("[data-pdf-page]")];
+      const page = pages.reduce<HTMLElement | null>((nearest, candidate) => {
+        if (!nearest) return candidate;
+        const distance = (node: HTMLElement) => {
+          const rect = node.getBoundingClientRect();
+          return center < rect.top ? rect.top - center : center > rect.bottom ? center - rect.bottom : 0;
+        };
+        return distance(candidate) < distance(nearest) ? candidate : nearest;
+      }, null);
+      if (page) {
+        const rect = page.getBoundingClientRect();
+        zoomAnchorRef.current = {
+          page: Number(page.dataset.pdfPage),
+          ratio: clamp((center - rect.top) / rect.height, 0, 1),
+        };
+      }
+    }
     setZoom((value) => clamp(value + delta, 50, 200));
   };
 
@@ -253,10 +264,13 @@ function EvidenceContent({
     const anchor = zoomAnchorRef.current;
     const scroller = pdfScrollRef.current;
     if (!anchor || !scroller) return;
-    const nextScrollable = scroller.scrollHeight - scroller.clientHeight;
-    scroller.scrollTop = anchor.scrollable > 0
-      ? (anchor.top / anchor.scrollable) * nextScrollable
-      : anchor.top;
+    const page = scroller.querySelector<HTMLElement>(`[data-pdf-page="${anchor.page}"]`);
+    if (page) {
+      const scrollerRect = scroller.getBoundingClientRect();
+      const pageRect = page.getBoundingClientRect();
+      const anchoredPosition = pageRect.top + pageRect.height * anchor.ratio;
+      scroller.scrollTop += anchoredPosition - (scrollerRect.top + scroller.clientHeight / 2);
+    }
     zoomAnchorRef.current = null;
   }, [zoom]);
 
@@ -292,7 +306,7 @@ function EvidenceContent({
       <div className="px-4 sm:px-6 h-12 flex items-center gap-3 border-b border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)]/40 shrink-0">
         <div className="flex items-center bg-[var(--tj-surface)]/80 rounded-xl border border-[var(--tj-border-subtle)] p-0.5 shadow-sm">
           <ToolbarBtn
-            onClick={() => changeZoom(-10)}
+            onClick={() => changeZoom(-25)}
             disabled={zoom <= 50}
             aria-label="Zoom out"
             title="Zoom out"
@@ -312,7 +326,7 @@ function EvidenceContent({
             {zoom}%
           </span>
           <ToolbarBtn
-            onClick={() => changeZoom(10)}
+            onClick={() => changeZoom(25)}
             disabled={zoom >= 200}
             aria-label="Zoom in"
             title="Zoom in"
@@ -349,12 +363,9 @@ function EvidenceContent({
           data-evidence-pdf-area={pdfOnly ? "expanded" : documentMode ? "document" : "normal"}
         >
           <div
-            className={`relative mx-auto rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] overflow-hidden shadow-sm ${pdfOnly ? "max-w-[min(1180px,100%)]" : ""}`}
+            className="relative mx-auto w-full min-w-0 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] shadow-sm"
             style={{
-              width: `${zoom}%`,
-              maxWidth: zoom <= 100 ? "100%" : "none",
               minHeight: pdfOnly ? PDF_ONLY_MIN_HEIGHT : PDF_NORMAL_MIN_HEIGHT,
-              transition: "width 220ms cubic-bezier(0.2, 0.8, 0.2, 1)",
             }}
           >
             {viewer?.pdf_access_available && viewer.pdf?.access_url && !renderFailed ? (
@@ -362,6 +373,8 @@ function EvidenceContent({
                 key={`${citation.viewerMode ?? "evidence"}:${citation.publicTargetId}:${viewer.bbox_rectangles?.length ?? 0}`}
                 viewer={viewer}
                 targetPage={pageNumber}
+                zoom={zoom / 100}
+                scrollRoot={pdfScrollRef}
                 onRenderFailed={markRenderFailed}
               />
             ) : (
@@ -376,60 +389,6 @@ function EvidenceContent({
         </div>
 
         {!pdfOnly && !documentMode && <div className="flex-1 min-h-0 overflow-y-auto tj-scroll px-6 py-6" data-evidence-detail-area="normal">
-          {/* EXCERPT CARD */}
-          {isLegalExcerpt && <section className="mb-6">
-            <div className="flex items-center justify-between mb-3 px-1">
-              <h3
-                className="uppercase"
-                style={{
-                  fontSize: 11,
-                  letterSpacing: "0.1em",
-                  fontWeight: 700,
-                  color: "var(--tj-text-muted)",
-                }}
-              >
-                {citation.panelSection ?? "Kutipan Relevan"}
-              </h3>
-              <button
-                type="button"
-                aria-label="Salin kutipan relevan"
-                onClick={copyExcerpt}
-                className={`flex items-center gap-1.5 h-7 px-3 rounded-lg transition-all active:scale-95 ${copied ? "bg-[var(--tj-success)]/10 text-[var(--tj-success)]" : "bg-[var(--tj-surface)] text-[var(--tj-text-secondary)] hover:bg-[var(--tj-surface-hover)]"}`}
-                style={{ fontSize: 12, fontWeight: 600 }}
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-                {copied ? "Tersalin" : "Salin"}
-              </button>
-            </div>
-            <p className="sr-only" aria-live="polite">{copied ? "Kutipan relevan tersalin sebagai teks biasa." : ""}</p>
-            <div className="min-w-0 overflow-x-hidden rounded-2xl bg-[var(--tj-surface)] border border-[var(--tj-border-subtle)] p-5 shadow-sm relative group">
-              <div className="absolute top-0 left-0 w-1 h-full bg-[var(--tj-accent)] opacity-80" />
-              <blockquote
-                onCopy={normalizeSelectionCopy}
-                tabIndex={0}
-                style={{
-                  fontSize: 15,
-                  lineHeight: "24px",
-                  color: "var(--tj-text-primary)",
-                  whiteSpace: "pre-wrap",
-                  overflowWrap: "anywhere",
-                }}
-              >
-                {(citation.layoutLines ?? [{ text: citation.displayText ?? citation.excerpt, line_order: 0, paragraph_id: "support", alignment: "unknown", indent: 0 }]).map((line) => (
-                  <span
-                    key={`${line.paragraph_id}:${line.line_order}`}
-                    data-copy-line={line.line_order}
-                    data-canonical-start={line.canonical_start}
-                    data-canonical-end={line.canonical_end}
-                    style={{ display: "block", textAlign: line.alignment === "unknown" ? "left" : line.alignment, paddingLeft: line.indent ? `${line.indent}px` : undefined }}
-                  >
-                    {line.text}
-                  </span>
-                ))}
-              </blockquote>
-            </div>
-          </section>}
-
           {/* DETAILS */}
           <section className="mb-6">
             <h3
@@ -522,41 +481,92 @@ function MetaRow({
 function RenderedViewer({
   viewer,
   targetPage,
+  zoom,
+  scrollRoot,
   onRenderFailed,
 }: {
   viewer: ViewerPayload;
   targetPage: number;
+  zoom: number;
+  scrollRoot: RefObject<HTMLDivElement | null>;
   onRenderFailed: () => void;
 }) {
+  const documentRef = useRef<HTMLDivElement | null>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const intersectingPages = useRef(new Set<number>());
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
-  const [renderedPages, setRenderedPages] = useState(0);
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const [pageRatio, setPageRatio] = useState(Math.SQRT2);
+  const [visiblePages, setVisiblePages] = useState(() => new Set([targetPage]));
+  const [targetRendered, setTargetRendered] = useState(false);
+  const [firstRenderedPage, setFirstRenderedPage] = useState<number | null>(null);
   const pdfUrl = pdfAccessUrl(viewer);
-  const markRendered = useCallback(() => setRenderedPages((count) => count + 1), []);
+  const markRendered = useCallback((pageNumber: number) => {
+    setFirstRenderedPage((current) => current ?? pageNumber);
+    if (pageNumber === targetPage) setTargetRendered(true);
+  }, [targetPage]);
 
   useEffect(() => {
-    let cancelled = false;
+    let stale = false;
     setPdf(null);
-    setRenderedPages(0);
+    setTargetRendered(false);
+    setFirstRenderedPage(null);
+    setVisiblePages(new Set([targetPage]));
     if (!pdfUrl) return;
 
-    pdfjs.getDocument({ url: pdfUrl }).promise
-      .then((document) => {
-        if (!cancelled) setPdf(document);
+    const loadingTask = pdfjs.getDocument({ url: pdfUrl });
+    loadingTask.promise
+      .then((loaded) => {
+        if (!stale) setPdf(loaded);
       })
       .catch(() => {
-        if (!cancelled) onRenderFailed();
+        if (!stale) onRenderFailed();
       });
 
     return () => {
-      cancelled = true;
+      stale = true;
+      void loadingTask.destroy();
     };
-  }, [pdfUrl, onRenderFailed]);
+  }, [pdfUrl, onRenderFailed, targetPage]);
+
+  useLayoutEffect(() => {
+    const node = documentRef.current?.parentElement;
+    if (!node) return;
+    const update = () => setAvailableWidth(Math.max(1, node.clientWidth - 24));
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    update();
+    return () => observer.disconnect();
+  }, [pdf]);
 
   useEffect(() => {
-    if (!pdf || renderedPages < 1) return;
-    pageRefs.current[targetPage]?.scrollIntoView({ block: "center" });
-  }, [pdf, renderedPages, targetPage]);
+    if (!pdf || !scrollRoot.current) return;
+    const intersections = intersectingPages.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const page = Number((entry.target as HTMLElement).dataset.pdfPage);
+          if (entry.isIntersecting) intersections.add(page);
+          else intersections.delete(page);
+        }
+        const next = new Set(intersections);
+        if (next.size) setVisiblePages(next);
+      },
+      { root: scrollRoot.current },
+    );
+    Object.values(pageRefs.current).forEach((node) => {
+      if (node) observer.observe(node);
+    });
+    return () => {
+      observer.disconnect();
+      intersections.clear();
+    };
+  }, [pdf, scrollRoot]);
+
+  useEffect(() => {
+    if (!pdf) return;
+    requestAnimationFrame(() => pageRefs.current[targetPage]?.scrollIntoView({ block: "center" }));
+  }, [pdf, targetPage]);
 
   if (!pdf) {
     return (
@@ -566,10 +576,21 @@ function RenderedViewer({
     );
   }
 
+  const target = clamp(targetPage, 1, pdf.numPages);
+  const renderPages = targetRendered ? visiblePageWindow(visiblePages, pdf.numPages) : new Set([target]);
+  const logicalWidth = Math.max(1, availableWidth * zoom);
   return (
-    <div className="bg-white px-3 py-4 space-y-4" data-pdf-document="full" data-page-count={pdf.numPages}>
+    <div
+      ref={documentRef}
+      className="w-max min-w-full bg-white px-3 py-4 space-y-4"
+      data-pdf-document="windowed"
+      data-page-count={pdf.numPages}
+      data-active-canvas-count={renderPages.size}
+      data-first-rendered-page={firstRenderedPage ?? ""}
+    >
       {Array.from({ length: pdf.numPages }, (_, index) => {
         const pageNumber = index + 1;
+        const shouldRender = renderPages.has(pageNumber);
         return (
           <div
             key={pageNumber}
@@ -577,17 +598,21 @@ function RenderedViewer({
               pageRefs.current[pageNumber] = node;
             }}
             data-pdf-page={pageNumber}
+            data-canvas-active={shouldRender ? "true" : "false"}
             className="relative mx-auto overflow-hidden bg-white shadow-sm"
-            style={{ width: "100%" }}
+            style={{ width: logicalWidth, height: logicalWidth * pageRatio }}
           >
-            <PdfPage
+            {shouldRender && <PdfPage
               pdf={pdf}
               pageNumber={pageNumber}
-              active={pageNumber === targetPage}
+              active={pageNumber === target}
               boxes={viewer.bbox_rectangles ?? []}
+              availableWidth={availableWidth}
+              zoom={zoom}
               onRenderFailed={onRenderFailed}
               onRendered={markRendered}
-            />
+              onPageRatio={setPageRatio}
+            />}
           </div>
         );
       })}
@@ -600,18 +625,24 @@ function PdfPage({
   pageNumber,
   active,
   boxes,
+  availableWidth,
+  zoom,
   onRenderFailed,
   onRendered,
+  onPageRatio,
 }: {
   pdf: PDFDocumentProxy;
   pageNumber: number;
   active: boolean;
   boxes: NonNullable<ViewerPayload["bbox_rectangles"]>;
+  availableWidth: number;
+  zoom: number;
   onRenderFailed: () => void;
-  onRendered: () => void;
+  onRendered: (pageNumber: number) => void;
+  onPageRatio: (ratio: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
+  const renderTaskOwner = useRef(new RenderTaskOwner<ReturnType<PDFPageProxy["render"]>>());
   const [pageViewport, setPageViewport] = useState<ReturnType<PDFPageProxy["getViewport"]> | null>(null);
   const [rendered, setRendered] = useState(false);
   const pageBoxes = boxes.filter(
@@ -619,38 +650,54 @@ function PdfPage({
   );
 
   useEffect(() => {
-    let cancelled = false;
+    let stale = false;
+    let currentTask: ReturnType<PDFPageProxy["render"]> | null = null;
+    const taskOwner = renderTaskOwner.current;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || availableWidth <= 0) return;
     setRendered(false);
+    taskOwner.cancel();
 
     pdf.getPage(pageNumber)
       .then((page) => {
-        if (cancelled) return;
-        const viewport = page.getViewport({ scale: 1.35 });
+        if (stale) return null;
+        const baseViewport = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({ scale: fitWidthScale(baseViewport.width, availableWidth, zoom) });
+        const backingStore = canvasBackingStore(viewport.width, viewport.height, window.devicePixelRatio);
         const context = canvas.getContext("2d");
         if (!context) throw new Error("canvas_unavailable");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const pageViewport = page.getViewport({ scale: 1 });
-        setPageSize({ width: pageViewport.width, height: pageViewport.height });
-        setPageViewport(pageViewport);
-        return renderPdfPage(page, canvas, context, viewport);
+        canvas.width = backingStore.width;
+        canvas.height = backingStore.height;
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
+        setPageViewport(viewport);
+        onPageRatio(baseViewport.height / baseViewport.width);
+        const task = page.render({
+          canvas,
+          canvasContext: context,
+          viewport,
+          transform: backingStore.ratio === 1 ? undefined : [backingStore.ratio, 0, 0, backingStore.ratio, 0, 0],
+        });
+        currentTask = task;
+        taskOwner.replace(task);
+        return task.promise;
       })
       .then(() => {
-        if (!cancelled) {
+        if (!stale && currentTask && taskOwner.isCurrent(currentTask)) {
           setRendered(true);
-          onRendered();
+          taskOwner.finish(currentTask);
+          onRendered(pageNumber);
         }
       })
-      .catch(() => {
-        if (!cancelled) onRenderFailed();
+      .catch((error: unknown) => {
+        if (!stale && !isRenderCancellation(error)) onRenderFailed();
       });
 
     return () => {
-      cancelled = true;
+      stale = true;
+      taskOwner.cancel();
     };
-  }, [pdf, pageNumber, onRenderFailed, onRendered]);
+  }, [availableWidth, onPageRatio, onRenderFailed, onRendered, pageNumber, pdf, zoom]);
 
   return (
     <>
@@ -658,14 +705,14 @@ function PdfPage({
         ref={canvasRef}
         aria-label={`Halaman sumber ${pageNumber}`}
         data-rendered={rendered ? "true" : "false"}
-        className="block w-full h-auto"
+        className="block"
       />
       {!rendered && (
         <div className="absolute inset-0 min-h-[260px] flex items-center justify-center text-sm text-[var(--tj-text-secondary)]">
           Memuat halaman PDF
         </div>
       )}
-      {pageSize && pageViewport && rendered && <div className="absolute inset-0 pointer-events-none">
+      {pageViewport && rendered && <div className="absolute inset-0 pointer-events-none">
         {pageBoxes.map((box) => {
           const rect = bboxToViewportPercent(box, pageViewport);
           if (!rect.ok) return null;
@@ -689,15 +736,6 @@ function PdfPage({
       </div>}
     </>
   );
-}
-
-function renderPdfPage(
-  page: PDFPageProxy,
-  canvas: HTMLCanvasElement,
-  context: CanvasRenderingContext2D,
-  viewport: ReturnType<PDFPageProxy["getViewport"]>,
-) {
-  return page.render({ canvas, canvasContext: context, viewport }).promise;
 }
 
 function UnavailableViewer({
@@ -743,41 +781,6 @@ function sourceStatusLabel(sourceRole?: string, temporalContext?: string) {
   if (role?.startsWith("amendment_")) return "Historis (sumber perubahan)";
   if (role === "original_historical") return "Historis (naskah asli)";
   return "Status sumber tidak tersedia";
-}
-
-function canonicalOffset(node: Node, offset: number): number | null {
-  if (node.nodeType === Node.ELEMENT_NODE) {
-    const container = node as HTMLElement;
-    const lines = [...container.querySelectorAll<HTMLElement>("[data-canonical-start][data-canonical-end]")];
-    if (lines.length) {
-      const first = lines[0];
-      const last = lines[lines.length - 1];
-      if (!first || !last) return null;
-      if (offset <= 0) return canonicalLineOffset(first, "canonicalStart");
-      if (offset >= container.childNodes.length) return canonicalLineOffset(last, "canonicalEnd");
-      const after = lineForNode(container.childNodes[offset]);
-      if (after) return canonicalLineOffset(after, "canonicalStart");
-      const before = lineForNode(container.childNodes[offset - 1]);
-      if (before) return canonicalLineOffset(before, "canonicalEnd");
-      return null;
-    }
-  }
-  const line = lineForNode(node);
-  if (!line) return null;
-  const start = canonicalLineOffset(line, "canonicalStart");
-  const end = canonicalLineOffset(line, "canonicalEnd");
-  if (start === null || end === null) return null;
-  return Math.min(end, start + offset);
-}
-
-function lineForNode(node: Node | undefined): HTMLElement | null {
-  const element = node?.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node?.parentElement;
-  return element?.closest<HTMLElement>("[data-canonical-start][data-canonical-end]") ?? null;
-}
-
-function canonicalLineOffset(line: HTMLElement, field: "canonicalStart" | "canonicalEnd"): number | null {
-  const value = Number(line.dataset[field]);
-  return Number.isSafeInteger(value) ? value : null;
 }
 
 function clamp(value: number, min: number, max: number) {

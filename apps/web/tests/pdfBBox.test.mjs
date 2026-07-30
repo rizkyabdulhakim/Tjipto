@@ -4,6 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { bboxToViewportPercent } from "../src/lib/pdfBBox.ts";
+import { canvasBackingStore } from "../src/lib/pdfViewer.ts";
 
 const artifactPath = path.resolve(process.cwd(), "../../data/final/uud/bbox_registry.jsonl");
 const rows = fs.readFileSync(artifactPath, "utf8").trim().split("\n").map(JSON.parse);
@@ -27,6 +28,11 @@ test("all exact corpus bboxes pass the frontend transform at zoom", () => {
       assert.equal(result.ok, true, box.bbox_id);
       assert.ok(Math.abs(result.left - 100 * box.x0 / box.page_width) <= 1e-9, box.bbox_id);
       assert.ok(Math.abs(result.top - 100 * box.y0 / box.page_height) <= 1e-9, box.bbox_id);
+      for (const dpr of [1, 2]) {
+        const backing = canvasBackingStore(box.page_width * scale, box.page_height * scale, dpr);
+        assert.equal(backing.width, Math.ceil(box.page_width * scale * dpr), box.bbox_id);
+        assert.equal(backing.height, Math.ceil(box.page_height * scale * dpr), box.bbox_id);
+      }
     }
   }
 });
