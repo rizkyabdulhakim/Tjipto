@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from tjipto.contracts.source_text import (
     SourceSelector,
     SourceTextCapability,
@@ -48,24 +46,11 @@ def source_text_response(store, corpus_id: str, query: str) -> dict | None:
 
 
 def source_text_record(row: dict) -> SourceTextRecord:
-    marker = row.get("classification") == "source_annotation_marker"
-    legal = row.get("legal_text") is True
     semantic = str(row.get("semantic_text") or "").strip()
-    if marker:
-        disposition = SourceTextDisposition.SOURCE_ANNOTATION
-        capabilities = (SourceTextCapability.ANNOTATION_ANSWER,)
-    elif legal:
-        disposition = SourceTextDisposition.LEGAL_TEXT
-        capabilities = (SourceTextCapability.LEGAL_ANSWER,)
-    elif semantic and row.get("citation_eligible") is True:
-        disposition = SourceTextDisposition.SOURCE_FACT
-        capabilities = (SourceTextCapability.SOURCE_FACT_ANSWER,)
-    else:
-        disposition = SourceTextDisposition.EXTRACTION_ARTIFACT
-        capabilities = (SourceTextCapability.AUDIT_ONLY,)
     source_value = str(row.get("raw_text") or "")
     normalized_value = semantic or " ".join(source_value.split())
     return SourceTextRecord(
+        raw_source_span_id=str(row.get("raw_source_span_id") or ""),
         source_value=source_value,
         normalized_value=normalized_value,
         source_document_id=str(row.get("source_document_id") or ""),
@@ -78,35 +63,33 @@ def source_text_record(row: dict) -> SourceTextRecord:
             int(row.get("raw_text_end") or 0),
         ),
         geometry_available=all(row.get(key) is not None for key in ("x0", "y0", "x1", "y1")),
-        disposition=disposition,
-        legal_force="legal_norm" if legal else "source_annotation" if marker else "source_fact" if semantic else "none",
-        capabilities=capabilities,
-        legal_answer_eligible=legal,
-        source_answer_eligible=legal or marker or bool(semantic),
-        legal_citation_eligible=legal and row.get("citation_eligible") is True,
-        source_citation_eligible=not marker and row.get("citation_eligible") is True,
-        default_highlight_eligible=not marker and row.get("default_highlight_eligible") is True,
-        abstention_reason=None if legal or marker or semantic else str(row.get("disposition_reason") or "audit_only"),
+        semantic_text_span_id=str(row["semantic_text_span_id"]) if row.get("semantic_text_span_id") else None,
+        semantic_classification=str(row["semantic_classification"]) if row.get("semantic_classification") else None,
+        semantic_join_status=str(row.get("semantic_join_status") or "missing"),
+        source_role=str(row.get("source_role") or ""),
+        temporal_context=str(row.get("temporal_context") or row.get("source_role") or ""),
+        disposition=SourceTextDisposition(str(row.get("disposition") or "")),
+        legal_force=str(row.get("legal_force") or ""),
+        capabilities=tuple(SourceTextCapability(str(value)) for value in row.get("capabilities") or ()),
+        legal_answer_eligible=row.get("legal_answer_eligible") is True,
+        source_answer_eligible=row.get("source_answer_eligible") is True,
+        legal_citation_eligible=row.get("legal_citation_eligible") is True,
+        source_citation_eligible=row.get("source_citation_eligible") is True,
+        default_highlight_eligible=row.get("default_highlight_eligible") is True,
+        abstention_reason=str(row["abstention_reason"]) if row.get("abstention_reason") else None,
     )
 
 
 def source_text_health(store) -> dict[str, int]:
-    record_count = 0
+    records = tuple(source_text_record(row) for row in store.raw_source_spans if str(row.get("raw_text") or "").strip())
+    record_count = len(records)
     without_route = 0
     without_selector = 0
     without_geometry_or_reason = 0
-    with store.config.artifact_path("raw_source_spans").open(encoding="utf-8") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            if not str(row.get("raw_text") or "").strip():
-                continue
-            record = source_text_record(row)
-            record_count += 1
-            without_route += not record.capabilities and not record.abstention_reason
-            without_selector += not record.selector.stream_id
-            without_geometry_or_reason += not record.geometry_available and not record.abstention_reason
+    for record in records:
+        without_route += not record.capabilities and not record.abstention_reason
+        without_selector += not record.selector.stream_id
+        without_geometry_or_reason += not record.geometry_available and not record.abstention_reason
     annotation_health = getattr(getattr(store.config, "strategy", None), "source_text_health", None)
     annotation = annotation_health(store) if annotation_health is not None else {}
     return {
@@ -114,5 +97,7 @@ def source_text_health(store) -> dict[str, int]:
         "meaningful_source_span_without_route_count": without_route,
         "source_text_without_selector_count": without_selector,
         "source_text_without_geometry_or_reason_count": without_geometry_or_reason,
+        "semantic_join_missing_count": sum(record.semantic_join_status == "missing" for record in records),
+        "semantic_join_duplicate_count": sum(record.semantic_join_status == "duplicate" for record in records),
         **annotation,
     }

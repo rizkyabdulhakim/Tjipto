@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tjipto.contracts.relations import is_relevance_relation, is_query_relation
+from tjipto.corpora.uud.policy.source_text import project_source_text_rows
 
 RUNTIME_ARTIFACTS = (
     "evidence_registry",
@@ -24,12 +25,17 @@ _GRAPH_EDGE_FIELDS = (
 )
 
 _SOURCE_SPAN_FIELDS = (
+    "raw_source_span_id",
     "source_support_id",
     "source_document_id",
     "source_sha256",
     "source_pdf_path",
     "source_role",
     "page_number",
+    "extraction_order",
+    "raw_stream_id",
+    "raw_text_start",
+    "raw_text_end",
     "raw_text",
     "semantic_text",
     "semantic_exact_quote",
@@ -46,6 +52,20 @@ _SOURCE_SPAN_FIELDS = (
     "viewer_highlightable",
     "classification",
     "disposition_reason",
+    "semantic_text_span_id",
+    "semantic_classification",
+    "semantic_join_status",
+    "temporal_context",
+    "disposition",
+    "legal_force",
+    "capabilities",
+    "legal_answer_eligible",
+    "source_answer_eligible",
+    "legal_citation_eligible",
+    "source_citation_eligible",
+    "abstention_reason",
+    "target_legal_unit_id",
+    "annotation_target_basis",
 )
 
 _RUNTIME_PAGE_SPAN_FIELDS = (
@@ -85,14 +105,15 @@ def build_runtime_projection(**artifacts: list[dict]) -> dict:
             compact["characters"] = characters
         words.append(compact)
     rows["word_bboxes"] = words
+    source_rows = project_source_text_rows(
+        artifacts.get("raw_source_spans", ()),
+        artifacts.get("page_text_spans", ()),
+    )
     rows["raw_source_spans"] = [
         {key: row.get(key) for key in _SOURCE_SPAN_FIELDS if key in row}
-        for row in artifacts.get("raw_source_spans", ())
-        if row.get("semantic_text")
-        and row.get("citation_eligible") is True
-        and row.get("default_highlight_eligible") is True
+        for row in source_rows
     ]
-    return {"schema": 1, "artifacts": rows}
+    return {"schema": 2, "artifacts": rows}
 
 
 def _bbox_refs(artifact_sets) -> set[str]:

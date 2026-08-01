@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
-import json
 import re
 import unicodedata
 
-from tjipto.contracts.source_text import SourceAnnotation, SourceSelector, SourceTextQueryResult
+from tjipto.contracts.source_text import (
+    SourceAnnotation,
+    SourceAnnotationOccurrence,
+    SourceSelector,
+    SourceTextQueryResult,
+)
 
 
 _ANNOTATION_QUERY_TERMS = ("arti tanda", "arti marker", "perbedaan *", "diberi tanda", "marker gabungan")
@@ -29,53 +33,30 @@ def query_source_annotations(store, query: str) -> SourceTextQueryResult | None:
         return None
 
     annotations = tuple(legends[marker] for marker in requested)
-    target_labels: tuple[str, ...] = ()
     pasal = _PASAL_QUERY.search(normalized)
-    if pasal:
-        label = f"Pasal {pasal.group(1).upper()}"
-        target_labels = (label,) if _unit_marker(store, label) in requested else ()
-    elif origin:
-        target_labels = tuple(
-            sorted(
-                (
-                    str(unit["unit_label"])
-                    for unit in store.legal_units
-                    if unit.get("unit_type") == "pasal_record"
-                    and unit.get("source_role") == "current_consolidated"
-                    and _unit_marker(store, str(unit.get("unit_label") or "")) in requested
-                ),
-                key=_pasal_order,
-            )
-        )
-
     supports = tuple(_legend_support(store, annotation) for annotation in annotations)
     meanings = "; ".join(f"{annotation.marker} berarti {annotation.meaning}" for annotation in annotations)
     if origin:
-        answer = f"{origin.group(1).title()} ditandai oleh legenda sumber sebagai {meanings}. Pasal terkait: {', '.join(target_labels) or 'tidak dapat dipastikan'}."
-    elif pasal:
         answer = (
-            f"{pasal.group(0).title()} memakai anotasi sumber {meanings}."
-            if target_labels
-            else f"Legenda menjelaskan {meanings}, tetapi keterkaitannya dengan {pasal.group(0).title()} tidak dapat dipastikan."
+            f"Legenda sumber menjelaskan {meanings}, tetapi target pasal yang tepat untuk "
+            f"{origin.group(1).title()} tidak dapat dipastikan dari naskah sumber."
         )
+    elif pasal:
+        answer = f"Legenda menjelaskan {meanings}, tetapi keterkaitannya dengan {pasal.group(0).title()} tidak dapat dipastikan."
     else:
         answer = f"Legenda sumber menjelaskan: {meanings}."
-    return SourceTextQueryResult("source_annotation", answer, annotations, supports, target_labels)
+    return SourceTextQueryResult("source_annotation", answer, annotations, supports)
 
 
 def annotation_health(store) -> dict[str, int]:
-    legends = _verified_legends(store)
-    markers = []
-    nonempty_count = 0
-    for row in _artifact_rows(store):
-        nonempty_count += bool(str(row.get("raw_text") or "").strip())
-        if row.get("classification") == "source_annotation_marker":
-            markers.append(row)
-    mapped = [row for row in markers if _marker_parts(str(row.get("raw_text") or ""), legends)]
+    rows = tuple(_artifact_rows(store))
+    markers = [row for row in rows if row.get("classification") == "source_annotation_marker"]
+    occurrences = source_annotation_occurrences(store)
+    valid_targets = {str(row.get("legal_unit_id")) for row in store.legal_units}
     return {
-        "raw_nonempty_source_span_count": nonempty_count,
+        "raw_nonempty_source_span_count": sum(bool(str(row.get("raw_text") or "").strip()) for row in rows),
         "source_annotation_occurrence_count": len(markers),
-        "unmapped_source_annotation_count": len(markers) - len(mapped),
+        "unmapped_source_annotation_count": len(markers) - len(occurrences),
         "ordinary_punctuation_annotation_count": sum(
             1 for row in markers if str(row.get("raw_text") or "").strip() == ":"
         ),
@@ -83,11 +64,73 @@ def annotation_health(store) -> dict[str, int]:
         "source_annotation_default_highlight_count": sum(
             1 for row in markers if row.get("default_highlight_eligible") is True
         ),
+        "source_annotation_occurrence_without_selector_or_geometry_count": len(markers) - len(occurrences),
+        "source_annotation_occurrence_without_target_or_reason_count": sum(
+            not occurrence.target_legal_unit_id and not occurrence.target_reason for occurrence in occurrences
+        ),
+        "fabricated_annotation_target_count": sum(
+            bool(row.get("target_legal_unit_id"))
+            and (
+                row.get("annotation_target_basis") != "exact_source_selector"
+                or str(row.get("target_legal_unit_id")) not in valid_targets
+            )
+            for row in markers
+        ),
     }
 
 
 def document_annotations(store) -> tuple[SourceAnnotation, ...]:
     return tuple(_verified_legends(store).values())
+
+
+def source_annotation_occurrences(store) -> tuple[SourceAnnotationOccurrence, ...]:
+    legends = _verified_legends(store)
+    legend_selectors = {
+        (annotation.selector.stream_id, annotation.selector.start, annotation.selector.end)
+        for annotation in legends.values()
+    }
+    legal_unit_ids = {str(row.get("legal_unit_id")) for row in store.legal_units}
+    occurrences = []
+    for row in _artifact_rows(store):
+        if row.get("classification") != "source_annotation_marker":
+            continue
+        marker_parts = _marker_parts(str(row.get("raw_text") or ""), legends)
+        if not marker_parts or any(row.get(field) is None for field in ("x0", "y0", "x1", "y1")):
+            continue
+        selector = SourceSelector(
+            str(row.get("raw_stream_id") or ""),
+            int(row.get("raw_text_start") or 0),
+            int(row.get("raw_text_end") or 0),
+        )
+        requested_target = str(row.get("target_legal_unit_id") or "")
+        exact_target = (
+            requested_target
+            if row.get("annotation_target_basis") == "exact_source_selector" and requested_target in legal_unit_ids
+            else None
+        )
+        selector_key = (selector.stream_id, selector.start, selector.end)
+        occurrences.append(
+            SourceAnnotationOccurrence(
+                occurrence_id=str(row.get("raw_source_span_id") or ""),
+                marker=str(row.get("raw_text") or ""),
+                legend_markers=marker_parts,
+                source_document_id=str(row.get("source_document_id") or ""),
+                source_sha256=str(row.get("source_sha256") or ""),
+                page_number=int(row.get("page_number") or 0),
+                extraction_order=int(row.get("extraction_order") or 0),
+                selector=selector,
+                geometry=(float(row["x0"]), float(row["y0"]), float(row["x1"]), float(row["y1"])),
+                target_legal_unit_id=exact_target,
+                target_reason=None
+                if exact_target
+                else "legend_definition"
+                if selector_key in legend_selectors
+                else "needs_review"
+                if requested_target
+                else "ambiguous_target",
+            )
+        )
+    return tuple(occurrences)
 
 
 def _verified_legends(store) -> dict[str, SourceAnnotation]:
@@ -160,54 +203,6 @@ def _marker_parts(value: str, legends: dict[str, SourceAnnotation]) -> tuple[str
     return tuple(marker for marker in legends if marker in parts)
 
 
-def _unit_marker(store, label: str) -> str | None:
-    return _unit_markers(store).get(label)
-
-
-def _unit_markers(store) -> dict[str, str]:
-    units = tuple(
-        row
-        for row in store.legal_units
-        if row.get("unit_type") == "pasal_record" and row.get("source_role") == "current_consolidated"
-    )
-    pages = {int(row["page_start"]) for row in units}
-    rows_by_page: dict[int, list[dict]] = defaultdict(list)
-    for row in _artifact_rows(store):
-        if row.get("source_role") == "current_consolidated" and row.get("page_number") in pages:
-            rows_by_page[int(row["page_number"])].append(
-                {
-                    "extraction_order": row.get("extraction_order"),
-                    "raw_text": row.get("raw_text"),
-                    "semantic_text": row.get("semantic_text"),
-                    "classification": row.get("classification"),
-                }
-            )
-    result: dict[str, str] = {}
-    for unit in units:
-        rows = rows_by_page[int(unit["page_start"])]
-        unit_text = _normalize(str(unit.get("text") or ""))
-        matching = [
-            row
-            for row in rows
-            if row.get("semantic_text") and _normalize(str(row["semantic_text"])) in unit_text
-        ]
-        if not matching:
-            continue
-        last_order = max(int(row["extraction_order"]) for row in matching)
-        marker = next(
-            (
-                str(row["raw_text"])
-                for row in rows
-                if int(row["extraction_order"]) == last_order + 1
-                and row.get("classification") == "source_annotation_marker"
-            ),
-            None,
-        )
-        if marker:
-            result[str(unit["unit_label"])] = marker
-    return result
-
-
 def _legend_support(store, annotation: SourceAnnotation) -> dict:
     row = store.source_span_for_support(annotation.legend_support_id) or {}
     source: dict = next(
@@ -230,14 +225,9 @@ def _legend_support(store, annotation: SourceAnnotation) -> dict:
         "source_document_id": annotation.source_document_id,
         "source_role": row.get("source_role"),
         "page_numbers": (annotation.page_number,),
-        "viewer_highlightable": row.get("default_highlight_eligible") is True,
+        "viewer_highlightable": row.get("source_citation_eligible") is True,
         "viewer_target": {"can_resolve": True},
     }
-
-
-def _pasal_order(label: str) -> tuple[int, str]:
-    match = re.search(r"(\d+)([A-Z]?)", label)
-    return (int(match.group(1)), match.group(2)) if match else (10_000, label)
 
 
 def _normalize(value: str) -> str:
@@ -245,7 +235,4 @@ def _normalize(value: str) -> str:
 
 
 def _artifact_rows(store):
-    with store.config.artifact_path("raw_source_spans").open(encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                yield json.loads(line)
+    yield from store.raw_source_spans
