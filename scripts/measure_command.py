@@ -129,7 +129,7 @@ def _environment_report(corpus_ids: list[str] | None = None) -> dict:
         "tree_sha": _command_output(root, "git", "rev-parse", "HEAD^{tree}"),
         "parent_sha": _command_output(root, "git", "rev-parse", "HEAD^"),
         "branch": os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME") or _command_output(root, "git", "branch", "--show-current"),
-        "workflow_ref": os.environ.get("GITHUB_WORKFLOW_REF"),
+        "workflow_ref": identity["workflow_ref"],
         "run_id": os.environ.get("GITHUB_RUN_ID"),
         "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
         "event": os.environ.get("GITHUB_EVENT_NAME"),
@@ -159,7 +159,10 @@ def _execution_identity(root: Path | None = None) -> dict:
     values = {
         "repository": os.environ.get("GITHUB_REPOSITORY") or _command_output(root, "git", "config", "--get", "remote.origin.url"),
         "workflow_name": os.environ.get("GITHUB_WORKFLOW"),
-        "workflow_ref": os.environ.get("GITHUB_WORKFLOW_REF"),
+        "workflow_ref": os.environ.get("TJIPTO_JOB_WORKFLOW_REF") or os.environ.get("GITHUB_WORKFLOW_REF"),
+        "workflow_sha": os.environ.get("TJIPTO_JOB_WORKFLOW_SHA") or os.environ.get("GITHUB_WORKFLOW_SHA"),
+        "workflow_repository": os.environ.get("TJIPTO_JOB_WORKFLOW_REPOSITORY"),
+        "workflow_file_path": os.environ.get("TJIPTO_JOB_WORKFLOW_FILE_PATH"),
         "commit_sha": os.environ.get("GITHUB_SHA") or _command_output(root, "git", "rev-parse", "HEAD"),
         "tree_sha": _command_output(root, "git", "rev-parse", "HEAD^{tree}"),
         "parent_sha": _command_output(root, "git", "rev-parse", "HEAD^"),
@@ -168,10 +171,61 @@ def _execution_identity(root: Path | None = None) -> dict:
         "run_id": os.environ.get("GITHUB_RUN_ID"),
         "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
         "job_key": os.environ.get("GITHUB_JOB"),
+        "job_check_run_id": os.environ.get("TJIPTO_JOB_CHECK_RUN_ID"),
     }
-    run_fields = {key: values[key] for key in ("repository", "workflow_ref", "commit_sha", "run_id", "run_attempt")}
+    run_fields = {
+        key: values[key]
+        for key in (
+            "repository",
+            "workflow_ref",
+            "workflow_sha",
+            "workflow_repository",
+            "workflow_file_path",
+            "commit_sha",
+            "tree_sha",
+            "parent_sha",
+            "ref",
+            "run_id",
+            "run_attempt",
+        )
+    }
     values["run_identity_id"] = sha256(json.dumps(run_fields, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    values["job_identity_id"] = _job_identity_id(values)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        _validate_ci_identity(values)
     return values
+
+
+def _job_identity_id(identity: dict) -> str:
+    fields = {key: identity.get(key) for key in ("run_identity_id", "job_key", "job_check_run_id")}
+    return sha256(json.dumps(fields, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _validate_ci_identity(identity: dict) -> None:
+    required = (
+        "repository",
+        "workflow_ref",
+        "workflow_sha",
+        "workflow_repository",
+        "workflow_file_path",
+        "commit_sha",
+        "tree_sha",
+        "parent_sha",
+        "ref",
+        "run_id",
+        "run_attempt",
+        "job_key",
+        "job_check_run_id",
+    )
+    missing = [key for key in required if not identity.get(key)]
+    if missing:
+        raise ValueError(f"missing typed CI identity: {', '.join(missing)}")
+    if not str(identity["job_check_run_id"]).isdigit() or int(identity["job_check_run_id"]) <= 0:
+        raise ValueError("invalid typed CI identity: job_check_run_id")
+    if not str(identity["workflow_sha"]).isalnum() or len(str(identity["workflow_sha"])) != 40:
+        raise ValueError("invalid typed CI identity: workflow_sha")
+    if not str(identity["workflow_file_path"]).startswith(".github/workflows/"):
+        raise ValueError("invalid typed CI identity: workflow_file_path")
 
 
 def _mupdf_version() -> str:

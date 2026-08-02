@@ -84,7 +84,7 @@ def create_archive(repo_root: Path, commit_sha: str, archive_path: Path) -> dict
     archive_path = archive_path.resolve()
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(  # nosec B603 B607 - exact commit SHA and fixed git subcommand.
-        ["git", "archive", "--format=zip", commit_sha, "-o", str(archive_path)],
+        ["git", "-c", "core.autocrlf=false", "archive", "--format=zip", commit_sha, "-o", str(archive_path)],
         cwd=repo_root,
         check=True,
     )
@@ -93,6 +93,28 @@ def create_archive(repo_root: Path, commit_sha: str, archive_path: Path) -> dict
         "tree_sha": tree_sha,
         "archive_sha256": _sha256(archive_path),
     }
+
+
+def archive_inventory(repo_root: Path, commit_sha: str, archive_path: Path) -> dict:
+    expected = set(_git(repo_root, "ls-tree", "-r", "--name-only", commit_sha).splitlines())
+    with zipfile.ZipFile(archive_path) as archive:
+        actual = {name for name in archive.namelist() if not name.endswith("/")}
+        mismatches = sorted(
+            name for name in expected & actual
+            if hashlib.sha256(archive.read(name)).hexdigest()
+            != hashlib.sha256(
+                subprocess.check_output(["git", "show", f"{commit_sha}:{name}"], cwd=repo_root)  # nosec B603 B607
+            ).hexdigest()
+        )
+    inventory = {
+        "expected_file_count": len(expected),
+        "archive_file_count": len(actual),
+        "missing_files": sorted(expected - actual),
+        "extra_files": sorted(actual - expected),
+        "digest_mismatches": mismatches,
+    }
+    inventory["status"] = "passed" if not any(inventory[key] for key in ("missing_files", "extra_files", "digest_mismatches")) else "failed"
+    return inventory
 
 
 def forbidden_entries(path: Path) -> list[str]:
@@ -143,17 +165,19 @@ def run_candidate_checks(path: Path) -> dict[str, int]:
 def release_candidate(repo_root: Path, commit_sha: str, archive_path: Path, corpus_ids: list[str] | None = None) -> dict:
     identity = create_archive(repo_root, commit_sha, archive_path)
     archive_forbidden = verify_candidate(archive_path)
-    checks = run_candidate_checks(archive_path) if not archive_forbidden else {"compileall": 1, "unittest": 1}
+    inventory = archive_inventory(repo_root, identity["commit_sha"], archive_path)
+    checks = run_candidate_checks(archive_path) if not archive_forbidden and inventory["status"] == "passed" else {"compileall": 1, "unittest": 1}
     result = {
         **identity,
         "archive_forbidden_entries": archive_forbidden,
+        "archive_inventory": inventory,
         "candidate_checks": checks,
     }
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
     from tjipto.telemetry import event_record
     result["telemetry"] = event_record(
         "release_validation",
-        status="passed" if not archive_forbidden and all(value == 0 for value in checks.values()) else "failed",
+        status="passed" if not archive_forbidden and inventory["status"] == "passed" and all(value == 0 for value in checks.values()) else "failed",
         forbidden_entry_count=len(archive_forbidden),
         archive_sha256=identity["archive_sha256"],
     )
@@ -173,6 +197,7 @@ def _release_sidecar(repo_root: Path, archive_path: Path, result: dict, corpus_i
     return {
         "archive_byte_representation": "git archive ZIP entry bytes",
         "archive_sha256": result["archive_sha256"],
+        "archive_inventory": result["archive_inventory"],
         "candidate_checks": result["candidate_checks"],
         "commit_sha": result["commit_sha"],
         "corpora": corpora,
@@ -284,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     result = release_candidate(Path.cwd(), args.commit_sha, args.archive, args.corpus)
     print(json.dumps(result, sort_keys=True))
-    return 0 if not result["archive_forbidden_entries"] and all(value == 0 for value in result["candidate_checks"].values()) else 1
+    return 0 if not result["archive_forbidden_entries"] and result["archive_inventory"]["status"] == "passed" and all(value == 0 for value in result["candidate_checks"].values()) else 1
 
 
 if __name__ == "__main__":
