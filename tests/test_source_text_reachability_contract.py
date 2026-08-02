@@ -4,9 +4,11 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+import weakref
 
 from tjipto.evidence.store import EvidenceStore
-from tjipto.corpora.uud.policy.source_text import project_source_text_rows, validate_source_text_closure
+from tjipto.corpora.uud.policy.source_text import project_source_text_rows, source_text_semantics, validate_source_text_closure
 from tjipto.corpora.uud.source_annotations import source_annotation_occurrences
 from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
@@ -23,11 +25,6 @@ class SourceTextReachabilityContractTests(unittest.TestCase):
         cls.service = LegalRuntimeService(ROOT)
         cls.store = cls.service._store("uud")
         assert cls.store is not None
-        cls.raw_rows = [
-            json.loads(line)
-            for line in cls.store.config.artifact_path("raw_source_spans").read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
         cls.semantic_rows = [
             json.loads(line)
             for line in cls.store.config.artifact_path("page_text_spans").read_text(encoding="utf-8").splitlines()
@@ -37,6 +34,14 @@ class SourceTextReachabilityContractTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         EvidenceStore.clear_shared_cache()
+        del cls.store, cls.service, cls.semantic_rows
+
+    @classmethod
+    def raw_rows(cls):
+        with cls.store.config.artifact_path("raw_source_spans").open(encoding="utf-8") as handle:
+            for line in handle:
+                if line.strip():
+                    yield json.loads(line)
 
     def test_every_nonempty_raw_span_has_typed_route_or_reviewed_abstention(self) -> None:
         records = [source_text_record(row) for row in self.store.raw_source_spans]
@@ -104,7 +109,7 @@ class SourceTextReachabilityContractTests(unittest.TestCase):
                 self.assertEqual(len(response["supports"]), support_count)
                 self.assertTrue(all(row["authority_kind"] == "source_annotation" for row in response["supports"]))
                 self.assertTrue(all(row["citation_final"] is False for row in response["supports"]))
-                self.assertTrue(all(row["viewer_target"]["can_resolve"] is True for row in response["supports"]))
+                self.assertTrue(all(row["viewer_target"]["can_resolve"] is False for row in response["supports"]))
                 if "Pasal" in query:
                     self.assertIn("tidak dapat dipastikan", response["answer"])
 
@@ -138,7 +143,7 @@ class SourceTextReachabilityContractTests(unittest.TestCase):
 
     def test_row_level_evaluator_rejects_unsafe_mutations(self) -> None:
         baseline = [dict(row) for row in self.store.raw_source_spans]
-        self.assertEqual(evaluate_projection(self.raw_rows, self.semantic_rows, baseline)["status"], "PASS")
+        self.assertEqual(evaluate_projection(self.raw_rows(), self.semantic_rows, baseline)["status"], "PASS")
         mutations = []
 
         structural = next(index for index, row in enumerate(baseline) if row.get("disposition") == "structural_text")
@@ -158,10 +163,76 @@ class SourceTextReachabilityContractTests(unittest.TestCase):
             with self.subTest(name=name):
                 rows = [dict(row) for row in baseline]
                 rows[index].update(mutation)
-                self.assertEqual(evaluate_projection(self.raw_rows, self.semantic_rows, rows)["status"], "FAIL")
+                self.assertEqual(evaluate_projection(self.raw_rows(), self.semantic_rows, rows)["status"], "FAIL")
+
+    def test_evaluator_streams_raw_rows_without_retaining_the_input_owner(self) -> None:
+        joined = next(row for row in self.raw_rows() if str(row.get("semantic_text") or "").strip())
+        key = (
+            joined["source_document_id"], joined["page_number"],
+            joined["semantic_text_start"], joined["semantic_text_end"],
+        )
+        semantic = next(
+            row for row in self.semantic_rows
+            if (row["source_document_id"], row["page_number"], row["text_start"], row["text_end"]) == key
+        )
+        projected = project_source_text_rows([joined], [semantic])
+
+        class WeakRow(dict):
+            pass
+
+        class OneShot:
+            def __init__(self, row):
+                self.row = row
+
+            def __iter__(self):
+                row, self.row = self.row, None
+                yield row
+
+        rows = OneShot(WeakRow(joined))
+        owner = weakref.ref(rows.row)
+        self.assertEqual(evaluate_projection(rows, [semantic], projected)["status"], "PASS")
+        self.assertIsNone(owner())
+
+    def test_independent_oracle_rejects_systematic_production_mapper_mutations(self) -> None:
+        mutations = {
+            ("normative_constitutional_text", "canonical_normative"): {"legal_force": "historical_normative"},
+            ("normative_constitutional_text", "historical_normative"): {"legal_answer_eligible": True},
+            ("structural_heading", "metadata_only"): {"disposition": "legal_text"},
+            ("amendment_instrument_text", "amendment_instrument"): {"disposition": "legal_text"},
+            ("session_institution_metadata", "metadata_only"): {"legal_citation_eligible": True},
+        }
+        for (classification, legal_force), mutation in mutations.items():
+            with self.subTest(classification=classification, legal_force=legal_force):
+                semantic = next(
+                    row
+                    for row in self.semantic_rows
+                    if row.get("semantic_classification") == classification and row.get("legal_force") == legal_force
+                )
+                raw = next(
+                    row
+                    for row in self.raw_rows()
+                    if (
+                        row.get("source_document_id"), row.get("page_number"),
+                        row.get("semantic_text_start"), row.get("semantic_text_end"),
+                    ) == (
+                        semantic.get("source_document_id"), semantic.get("page_number"),
+                        semantic.get("text_start"), semantic.get("text_end"),
+                    )
+                )
+
+                def mutated_mapper(raw_row, semantic_row):
+                    return source_text_semantics(raw_row, semantic_row) | mutation
+
+                with patch("tjipto.corpora.uud.policy.source_text.source_text_semantics", side_effect=mutated_mapper):
+                    projected = project_source_text_rows([raw], [semantic])
+                self.assertEqual(evaluate_projection([raw], [semantic], projected)["status"], "FAIL")
+
+        evaluator = (ROOT / "scripts" / "evaluate_source_text_reachability.py").read_text(encoding="utf-8")
+        self.assertNotIn("source_text_semantics", evaluator)
+        self.assertNotIn("corpora.uud.policy.source_text", evaluator)
 
     def test_evaluator_rejects_missing_and_duplicate_semantic_joins(self) -> None:
-        joined = next(row for row in self.raw_rows if str(row.get("semantic_text") or "").strip())
+        joined = next(row for row in self.raw_rows() if str(row.get("semantic_text") or "").strip())
         key = (
             joined["source_document_id"],
             joined["page_number"],
@@ -173,15 +244,15 @@ class SourceTextReachabilityContractTests(unittest.TestCase):
             for row in self.semantic_rows
             if (row["source_document_id"], row["page_number"], row["text_start"], row["text_end"]) == key
         )
-        missing_semantics = [row for row in self.semantic_rows if row is not target]
-        missing_projection = project_source_text_rows(self.raw_rows, missing_semantics)
-        missing = evaluate_projection(self.raw_rows, missing_semantics, missing_projection)
+        missing_semantics: list[dict] = []
+        missing_projection = project_source_text_rows([joined], missing_semantics)
+        missing = evaluate_projection([joined], missing_semantics, missing_projection)
         self.assertEqual(missing["status"], "FAIL")
         self.assertEqual(missing["semantic_join_missing_count"], 1)
 
-        duplicated_semantics = self.semantic_rows + [deepcopy(target)]
-        duplicate_projection = project_source_text_rows(self.raw_rows, duplicated_semantics)
-        duplicate = evaluate_projection(self.raw_rows, duplicated_semantics, duplicate_projection)
+        duplicated_semantics = [target, deepcopy(target)]
+        duplicate_projection = project_source_text_rows([joined], duplicated_semantics)
+        duplicate = evaluate_projection([joined], duplicated_semantics, duplicate_projection)
         self.assertEqual(duplicate["status"], "FAIL")
         self.assertEqual(duplicate["semantic_join_duplicate_count"], 1)
 

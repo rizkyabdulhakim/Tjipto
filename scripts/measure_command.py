@@ -6,6 +6,10 @@ from pathlib import Path
 import subprocess  # nosec B404
 import sys
 import time
+from datetime import datetime, timezone
+from hashlib import sha256
+import importlib.metadata
+import platform
 
 from tjipto.core.manifest import artifact_set_digest
 from tjipto.corpora.registry import CorpusRegistry
@@ -63,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     if not command:
         print("usage: python scripts/measure_command.py command [args...]", file=sys.stderr)
         return 2
+    started_at = datetime.now(timezone.utc)
     started = time.perf_counter()
     process = subprocess.Popen(command)  # nosec B603
     peak = 0
@@ -70,9 +75,23 @@ def main(argv: list[str] | None = None) -> int:
         peak = max(peak, _rss_bytes(process))
         time.sleep(0.05)
     peak = max(peak, _rss_bytes(process))
-    result = {"command": command, "exit_code": process.returncode, "wall_seconds": round(time.perf_counter() - started, 3), "peak_rss_bytes": peak}
+    finished_at = datetime.now(timezone.utc)
+    result = {
+        "command": command,
+        "exit_code": process.returncode,
+        "wall_seconds": round(time.perf_counter() - started, 3),
+        "peak_rss_bytes": peak,
+        "started_at_utc": started_at.isoformat(),
+        "finished_at_utc": finished_at.isoformat(),
+    }
     if args.gate:
-        record = event_record("ci_gate", gate=args.gate, status="passed" if process.returncode == 0 else "failed", duration_ms=round(result["wall_seconds"] * 1000, 3))
+        identity = _execution_identity()
+        record = event_record(
+            "ci_gate",
+            gate=args.gate,
+            status="passed" if process.returncode == 0 else "failed",
+            duration_ms=round(result["wall_seconds"] * 1000, 3),
+        ) | result | identity
         if args.report:
             args.report.parent.mkdir(parents=True, exist_ok=True)
             with args.report.open("a", encoding="utf-8") as handle:
@@ -104,7 +123,8 @@ def _environment_report(corpus_ids: list[str] | None = None) -> dict:
             "schema_version": manifest.get("schema_version"),
         }
     files = {name: _sha256(root / name) for name in ("requirements.lock", "apps/web/package-lock.json", "data/corpus_registry.json")}
-    return {
+    identity = _execution_identity(root)
+    return identity | {
         "commit_sha": _command_output(root, "git", "rev-parse", "HEAD"),
         "tree_sha": _command_output(root, "git", "rev-parse", "HEAD^{tree}"),
         "parent_sha": _command_output(root, "git", "rev-parse", "HEAD^"),
@@ -120,10 +140,44 @@ def _environment_report(corpus_ids: list[str] | None = None) -> dict:
         "package_lock_sha256": files["apps/web/package-lock.json"],
         "corpus_registry_sha256": files["data/corpus_registry.json"],
         "python_version": sys.version.split()[0],
+        "pytest_version": importlib.metadata.version("pytest"),
+        "pymupdf_version": importlib.metadata.version("PyMuPDF"),
+        "mupdf_version": _mupdf_version(),
         "runner_image_os": os.environ.get("ImageOS"),
         "runner_image_version": os.environ.get("ImageVersion"),
+        "runner_os": os.environ.get("RUNNER_OS") or platform.system(),
+        "runner_arch": os.environ.get("RUNNER_ARCH") or platform.machine(),
+        "runner_environment": os.environ.get("RUNNER_ENVIRONMENT"),
+        "runner_name": os.environ.get("RUNNER_NAME"),
+        "platform": platform.platform(),
         "corpora": corpora,
     }
+
+
+def _execution_identity(root: Path | None = None) -> dict:
+    root = root or Path(__file__).resolve().parents[1]
+    values = {
+        "repository": os.environ.get("GITHUB_REPOSITORY") or _command_output(root, "git", "config", "--get", "remote.origin.url"),
+        "workflow_name": os.environ.get("GITHUB_WORKFLOW"),
+        "workflow_ref": os.environ.get("GITHUB_WORKFLOW_REF"),
+        "commit_sha": os.environ.get("GITHUB_SHA") or _command_output(root, "git", "rev-parse", "HEAD"),
+        "tree_sha": _command_output(root, "git", "rev-parse", "HEAD^{tree}"),
+        "parent_sha": _command_output(root, "git", "rev-parse", "HEAD^"),
+        "ref": os.environ.get("GITHUB_REF") or _command_output(root, "git", "symbolic-ref", "-q", "HEAD"),
+        "branch": os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME") or _command_output(root, "git", "branch", "--show-current"),
+        "run_id": os.environ.get("GITHUB_RUN_ID"),
+        "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+        "job_key": os.environ.get("GITHUB_JOB"),
+    }
+    run_fields = {key: values[key] for key in ("repository", "workflow_ref", "commit_sha", "run_id", "run_attempt")}
+    values["run_identity_id"] = sha256(json.dumps(run_fields, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return values
+
+
+def _mupdf_version() -> str:
+    import pymupdf
+
+    return str(getattr(pymupdf, "mupdf_version", None) or getattr(pymupdf, "VersionBind", "unknown"))
 
 
 def _command_output(root: Path, *command: str) -> str:

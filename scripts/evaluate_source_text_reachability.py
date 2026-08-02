@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict
+from hashlib import sha256
 import json
 from pathlib import Path
+from typing import Iterable
 
-from tjipto.corpora.uud.policy.source_text import source_text_semantics
 from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.source_text import source_text_health
@@ -13,9 +14,15 @@ from tjipto.runtime.source_text import source_text_health
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "tests" / "fixtures" / "source_text_reachability_cases.json"
+ORACLE = ROOT / "tests" / "fixtures" / "source_text_semantic_oracle.json"
 
 
-def evaluate_projection(raw_rows: list[dict], semantic_rows: list[dict], projected_rows: list[dict]) -> dict:
+def evaluate_projection(raw_rows: Iterable[dict], semantic_rows: list[dict], projected_rows: list[dict]) -> dict:
+    oracle = json.loads(ORACLE.read_text(encoding="utf-8"))
+    matrix = {
+        (row["semantic_classification"], row["legal_force"]): row
+        for row in oracle["semantic_matrix"]
+    }
     semantic_index: dict[tuple[object, ...], list[dict]] = defaultdict(list)
     for span in semantic_rows:
         semantic_index[(span.get("source_document_id"), span.get("page_number"), span.get("text_start"), span.get("text_end"))].append(span)
@@ -24,9 +31,11 @@ def evaluate_projection(raw_rows: list[dict], semantic_rows: list[dict], project
     counts = Counter()
     class_counts = Counter()
     force_counts = Counter()
+    raw_nonempty_row_count = 0
     for raw in raw_rows:
         if not str(raw.get("raw_text") or "").strip():
             continue
+        raw_nonempty_row_count += 1
         row_id = str(raw.get("raw_source_span_id") or "")
         semantic_text = str(raw.get("semantic_text") or "").strip()
         matches = semantic_index[
@@ -39,9 +48,24 @@ def evaluate_projection(raw_rows: list[dict], semantic_rows: list[dict], project
         ] if semantic_text else []
         if semantic_text and len(matches) != 1:
             counts["semantic_join_missing_count" if not matches else "semantic_join_duplicate_count"] += 1
-            expected = source_text_semantics(raw, None)
+            reason = "semantic_join_missing" if not matches else "semantic_join_duplicate"
+            expected = _fail_closed_expected(oracle, raw, reason)
+        elif raw.get("classification") == "source_annotation_marker":
+            expected = _expected(oracle["source_annotation"], raw, None)
+        elif matches:
+            semantic = matches[0]
+            specification = matrix.get((semantic.get("semantic_classification"), semantic.get("legal_force")))
+            expected = (
+                _expected(specification, raw, semantic)
+                if specification is not None
+                else _fail_closed_expected(oracle, raw, "unsupported_semantic_mapping")
+            )
         else:
-            expected = source_text_semantics(raw, matches[0] if matches else None)
+            expected = _fail_closed_expected(
+                oracle,
+                raw,
+                str(raw.get("disposition_reason") or "nonsemantic_source_text"),
+            )
         expected["source_role"] = raw.get("source_role")
         actual = projected_by_id.get(row_id)
         if actual is None:
@@ -108,7 +132,7 @@ def evaluate_projection(raw_rows: list[dict], semantic_rows: list[dict], project
     total = sum(confusion_row.total() for confusion_row in confusion.values())
     return {
         "status": "PASS" if mismatch_count + unsafe_count == 0 else "FAIL",
-        "raw_nonempty_row_count": sum(1 for row in raw_rows if str(row.get("raw_text") or "").strip()),
+        "raw_nonempty_row_count": raw_nonempty_row_count,
         "projected_row_count": len(projected_rows),
         "semantic_disposition_accuracy": 1.0 if total and not counts["disposition_mismatch_count"] else 0.0,
         "legal_force_accuracy": 1.0 if total and not counts["legal_force_mismatch_count"] else 0.0,
@@ -121,15 +145,47 @@ def evaluate_projection(raw_rows: list[dict], semantic_rows: list[dict], project
     }
 
 
+def _expected(specification: dict, raw: dict, semantic: dict | None) -> dict:
+    geometry = all(raw.get(key) is not None for key in ("x0", "y0", "x1", "y1"))
+    expected = dict(specification)
+    for field in ("source_citation_eligible", "legal_citation_eligible", "default_highlight_eligible"):
+        if expected.get(field) == "geometry":
+            expected[field] = geometry
+        elif expected.get(field) == "viewer_highlightable":
+            expected[field] = (semantic or {}).get("viewer_highlightable") is True
+    expected.update({
+        "semantic_text_span_id": (semantic or {}).get("text_span_id"),
+        "semantic_classification": (semantic or {}).get("semantic_classification"),
+        "semantic_join_status": expected.get("semantic_join_status", "exact"),
+        "temporal_context": str((semantic or {}).get("temporal_context") or raw.get("source_role") or ""),
+        "abstention_reason": expected.get("abstention_reason"),
+    })
+    return expected
+
+
+def _fail_closed_expected(oracle: dict, raw: dict, reason: str) -> dict:
+    expected = _expected(oracle["fail_closed"], raw, None)
+    expected["abstention_reason"] = reason
+    expected["semantic_join_status"] = reason.removeprefix("semantic_join_") if reason.startswith("semantic_join_") else "not_applicable"
+    return expected
+
+
+def _jsonl(path: Path):
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                yield json.loads(line)
+
+
 def evaluate(repo_root: Path = ROOT) -> dict:
     cases = json.loads(CASES.read_text(encoding="utf-8"))
     service = LegalRuntimeService(repo_root)
     store = service._store("uud")
     if store is None:
         raise RuntimeError("uud_corpus_unavailable")
-    raw_rows = [json.loads(line) for line in store.config.artifact_path("raw_source_spans").read_text(encoding="utf-8").splitlines() if line.strip()]
+    raw_path = store.config.artifact_path("raw_source_spans")
     semantic_rows = [json.loads(line) for line in store.config.artifact_path("page_text_spans").read_text(encoding="utf-8").splitlines() if line.strip()]
-    projection = evaluate_projection(raw_rows, semantic_rows, store.raw_source_spans)
+    projection = evaluate_projection(_jsonl(raw_path), semantic_rows, store.raw_source_spans)
     results = []
     for case in cases:
         raw = service.ask("uud", case["query"])
@@ -140,19 +196,50 @@ def evaluate(repo_root: Path = ROOT) -> dict:
         viewer_targets = tuple(
             row for row in supports if row.get("viewer_target", {}).get("can_resolve") is True
         )
+        expected_support = None
+        resolved = None
+        target_request = None
+        if case["expected_exact_support"]:
+            for support in viewer_targets:
+                target = support.get("viewer_target", {}).get("public_target_id")
+                request = service._public_target_request("uud", target)
+                if request and request.get("evidence_id") == case["expected_support_identity"]:
+                    expected_support = support
+                    target_request = request
+                    resolved = handle_request("uud", "viewer", {"target": target}, repo_root, service)
+                    break
+        exact_rectangles = tuple((resolved or {}).get("bbox_rectangles") or ())
+        exact_target_valid = bool(
+            expected_support
+            and target_request
+            and resolved
+            and target_request.get("source_document_id") == case["expected_source_document_id"]
+            and tuple(expected_support.get("page_numbers") or ()) == (case["expected_page_number"],)
+            and case["expected_page_number"] in tuple(resolved.get("page_numbers") or ())
+            and resolved.get("status") == "viewer_payload_ready"
+            and resolved.get("viewer_highlightable") is True
+            and exact_rectangles
+            and all(row.get("bbox_precision") == "exact" and row.get("viewer_highlightable") is True for row in exact_rectangles)
+            and case["expected_page_number"] in {row.get("page_number") for row in exact_rectangles}
+            and resolved.get("quoted_text") == expected_support.get("text") == target_request.get("quoted_text")
+            and sha256(str(resolved.get("quoted_text") or "").encode("utf-8")).hexdigest() == case["expected_text_sha256"]
+            and (
+                bool(target_request.get("bbox_refs"))
+                if case["expected_lineage"] == "bbox_refs"
+                else str(target_request.get("evidence_id") or "").startswith("uud_metadata_field_grounding::")
+            )
+        )
+        nonexact_not_promoted = not case["expected_exact_support"] and all(
+            support.get("citation_final") is not True
+            and support.get("viewer_target", {}).get("can_resolve") is not True
+            for support in supports
+        )
         checks = {
             "route": raw.get("route") == case["expected_route"],
             "answerability": (public.get("kind") == "answer" and public.get("status") in {"answer_ready", "limited_answer"})
             is case["expected_answerability"],
             "authority": case["expected_authority"] in authorities,
-            "viewer_target_resolution": (
-                bool(viewer_targets)
-                and all(
-                    support.get("page_numbers")
-                    and support.get("viewer_target", {}).get("public_target_id")
-                    for support in viewer_targets
-                )
-            ) is case["expected_exact_support"],
+            "viewer_target_resolution": exact_target_valid if case["expected_exact_support"] else nonexact_not_promoted,
             "citation_presence": bool(citations) is case["expected_citation"],
             "viewer_target_presence": bool(viewer_targets) is case["expected_highlight"],
             "abstention": (public.get("status") == "insufficient_evidence") is case["expected_abstention"],

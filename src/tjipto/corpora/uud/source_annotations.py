@@ -225,8 +225,8 @@ def _legend_support(store, annotation: SourceAnnotation) -> dict:
         "source_document_id": annotation.source_document_id,
         "source_role": row.get("source_role"),
         "page_numbers": (annotation.page_number,),
-        "viewer_highlightable": row.get("source_citation_eligible") is True,
-        "viewer_target": {"can_resolve": True},
+        "viewer_highlightable": row.get("default_highlight_eligible") is True,
+        "viewer_target": {"can_resolve": row.get("default_highlight_eligible") is True},
     }
 
 

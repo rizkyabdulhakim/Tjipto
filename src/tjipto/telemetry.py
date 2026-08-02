@@ -85,7 +85,7 @@ _CI_GATES = frozenset(
     {
         "compileall", "unittest", "pytest", "pytest_run_1", "pytest_run_2", "retrieval_evaluation", "source_text_evaluation", "artifact_validate", "artifact_rebuild", "ruff", "mypy",
         "bandit", "pip_check", "pip_audit", "clean_tree", "release_validation", "web_test", "web_lint", "web_typecheck",
-        "web_build", "web_smoke",
+        "web_build", "web_smoke", "toolchain", "release_a", "release_b",
     }
 )
 
