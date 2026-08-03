@@ -301,6 +301,11 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "raw_source_spans.jsonl", raw_source_spans)
     write_jsonl(final_dir / "source_objects.jsonl", source_objects)
     write_jsonl(final_dir / "word_bboxes.jsonl", word_bboxes)
+    review_decisions = json.loads(
+        (repo_root / "data" / "review" / "uud" / "meaningful_support_review_decisions.json").read_text(
+            encoding="utf-8"
+        )
+    )
     meaningful_support_units = build_meaningful_support_units(
         page_text_spans=page_text_spans,
         raw_source_spans=raw_source_spans,
@@ -309,6 +314,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
         bbox_registry=bbox_rows,
         word_bboxes=word_bboxes,
+        review_decisions=review_decisions,
     )
     write_jsonl(final_dir / "meaningful_support_units.jsonl", meaningful_support_units)
     write_jsonl(final_dir / "propositions.jsonl", propositions)

@@ -32,7 +32,7 @@
     "metadata_graph_edges": 635,
     "metadata_grounding": 68,
     "metadata_grounding_records": 320,
-    "meaningful_support_units": 660,
+    "meaningful_support_units": 665,
     "not_promoted_amends_edges": 8,
     "pages": 63,
     "promotion_decisions": 75,
@@ -385,8 +385,8 @@
       "format": "jsonl",
       "artifact_schema": 7,
       "primary_id": "support_unit_id",
-      "bytes": 1240610,
-      "sha256": "b738567fb82cc42654de010ffe8e44600667edb9a902ddeabafc976f57d2e453"
+      "bytes": 1610889,
+      "sha256": "f2facc91b59b38e1fa22ab1c34491283e28b4a63129b3ad3c8ad67e8910bb80d"
     },
     "pages.jsonl": {
       "origin": "generated",
@@ -652,7 +652,7 @@
       "format": "json",
       "artifact_schema": 7,
       "bytes": 25364,
-      "sha256": "a9e4a29c3dfac179be01f1a1be5ee8cf0d00a2ab926c257b087002938a9f7a42"
+      "sha256": "531dd7b35df8736657df3389f10f58926c2bf8b9fc061e0403f0d1e7fa2df516"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

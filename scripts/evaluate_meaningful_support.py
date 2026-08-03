@@ -5,18 +5,19 @@ from collections import Counter
 from hashlib import sha256
 import json
 from pathlib import Path
+import re
+import unicodedata
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FINAL = ROOT / "data" / "final" / "uud"
 ORACLE = ROOT / "tests" / "fixtures" / "uud" / "meaningful_support_oracle.json"
 REQUIRED_FIELDS = {
     "support_unit_id", "decision_kind", "support_kind", "owner_type", "owner_id",
     "source_document_id", "source_role", "temporal_context", "semantic_classification",
-    "legal_force", "authority_kind", "citation_final", "text_span_ids",
-    "raw_source_span_ids", "page_numbers", "selector_refs", "bbox_refs", "bbox_precision",
-    "quoted_text_sha256", "answer_eligible", "citation_eligible", "viewer_eligible",
-    "highlight_eligible", "decision_status", "decision_reason",
+    "legal_force", "authority_kind", "citation_final", "text_span_ids", "raw_source_span_ids",
+    "page_numbers", "selector_refs", "bbox_refs", "bbox_precision", "quoted_text_sha256",
+    "answer_eligible", "citation_eligible", "viewer_eligible", "highlight_eligible",
+    "decision_status", "decision_reason",
 }
 
 
@@ -24,164 +25,290 @@ def _rows(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
-def load_artifacts(final_dir: Path = FINAL) -> dict[str, list[dict]]:
+def load_artifacts(final: Path) -> dict[str, list[dict]]:
     return {
-        name: _rows(final_dir / filename)
-        for name, filename in {
-            "spans": "page_text_spans.jsonl",
-            "raw": "raw_source_spans.jsonl",
-            "evidence": "evidence_registry.jsonl",
-            "metadata": "metadata_grounding.jsonl",
-            "conflicts": "source_conflicts.jsonl",
-            "bboxes": "bbox_registry.jsonl",
-            "words": "word_bboxes.jsonl",
-        }.items()
+        "spans": _rows(final / "page_text_spans.jsonl"),
+        "raw": _rows(final / "raw_source_spans.jsonl"),
+        "evidence": _rows(final / "evidence_registry.jsonl"),
+        "metadata": _rows(final / "metadata_grounding.jsonl"),
+        "conflicts": _rows(final / "source_conflicts.jsonl"),
+        "bboxes": _rows(final / "bbox_registry.jsonl"),
+        "words": _rows(final / "word_bboxes.jsonl"),
     }
+
+
+def _canonical_owners(artifacts: dict[str, list[dict]]) -> list[tuple[str, str, dict]]:
+    return [
+        *(("evidence_registry", row["evidence_id"], row) for row in artifacts["evidence"]),
+        *(("metadata_grounding", row["metadata_grounding_id"], row) for row in artifacts["metadata"]),
+        *(("source_conflict", row["source_conflict_id"], row) for row in artifacts["conflicts"]),
+    ]
+
+
+def _compatible(span: dict, owner_type: str, owner: dict) -> bool:
+    if owner.get("source_document_id") != span["source_document_id"]:
+        return False
+    role = owner.get("source_role") or (owner.get("source_anomaly_policy") or {}).get("source_role")
+    if role != span["source_role"] or (owner.get("temporal_context") or role) != span["temporal_context"]:
+        return False
+    authority = str(owner.get("authority_kind") or "")
+    if owner_type != "source_conflict" and authority != span.get("linked_authority"):
+        return False
+    return span["legal_force"] in {
+        "normative_legal_text": {"canonical_normative", "historical_normative"},
+        "structural_context": {"canonical_normative", "historical_normative", "metadata_only"},
+        "instrument_provenance": {"amendment_instrument"},
+        "metadata": {"metadata_only"},
+        "source_anomaly_provenance": {"historical_normative", "amendment_instrument", "metadata_only"},
+    }.get(authority, set())
+
+
+def _expected_owner(span: dict, owners: list[tuple[str, str, dict]]) -> tuple[str, str, dict] | None:
+    candidates = [
+        item for item in owners
+        if span["text_span_id"] in (item[2].get("text_span_ids") or ()) and _compatible(span, item[0], item[2])
+    ]
+    return min(candidates, key=lambda item: (len(item[2].get("text_span_ids") or ()), item[1], item[0])) if candidates else None
+
+
+def _compact(text: object) -> str:
+    normalized = unicodedata.normalize("NFKC", str(text or "")).replace("\u00ad", "").replace("\xa0", " ")
+    return "".join(re.findall(r"\w+", normalized.casefold()))
+
+
+def _inside(geometry: dict, raw: dict) -> bool:
+    return (
+        geometry.get("source_document_id") == raw["source_document_id"]
+        and geometry.get("page_number") == raw["page_number"]
+        and geometry["x0"] >= raw["x0"] - 0.01
+        and geometry["x1"] <= raw["x1"] + 0.01
+        and geometry["y0"] >= raw["y0"] - 0.01
+        and geometry["y1"] <= raw["y1"] + 0.01
+    )
+
+
+def _fallback_refs(span: dict, raw: dict, words: list[dict]) -> list[str]:
+    page_words = [
+        word for word in words
+        if word["source_document_id"] == span["source_document_id"]
+        and word["page_number"] == span["page_number"] and _inside(word, raw)
+    ]
+    target = _compact(span["exact_quote"])
+    candidates: list[list[dict]] = []
+    for start in range(len(page_words)):
+        matched: list[dict] = []
+        for word in page_words[start:]:
+            matched.append(word)
+            joined = _compact(" ".join(item["text"] for item in matched))
+            if joined == target:
+                candidates.append(matched)
+                break
+            if len(joined) > len(target) + 24 or not target.startswith(joined):
+                break
+    if not candidates:
+        return []
+    candidates.sort(key=lambda rows: (sum(_distance(item, raw) for item in rows), rows[0]["word_bbox_id"]))
+    return [row["word_bbox_id"] for row in candidates[0]]
+
+
+def _distance(left: dict, right: dict) -> float:
+    left_x = (left["x0"] + left["x1"]) / 2
+    left_y = (left["y0"] + left["y1"]) / 2
+    right_x = (right["x0"] + right["x1"]) / 2
+    right_y = (right["y0"] + right["y1"]) / 2
+    return (left_x - right_x) ** 2 + (left_y - right_y) ** 2
+
+
+def _expected_geometry(
+    spans: list[dict], raw_rows: list[dict], artifacts: dict[str, list[dict]]
+) -> list[str]:
+    geometry = {
+        str(row.get("bbox_id") or row.get("word_bbox_id")): row
+        for row in (*artifacts["bboxes"], *artifacts["words"])
+        if row.get("bbox_id") or row.get("word_bbox_id")
+    }
+    refs: list[str] = []
+    for span, raw in zip(spans, raw_rows):
+        selected = list(dict.fromkeys(span.get("span_bbox_ids") or ()))
+        if selected and all(
+            ref in geometry
+            and geometry[ref].get("source_document_id") == span["source_document_id"]
+            and geometry[ref].get("page_number") == span["page_number"]
+            for ref in selected
+        ):
+            refs.extend(selected)
+            continue
+        selected = _fallback_refs(span, raw, artifacts["words"])
+        if not selected:
+            return []
+        refs.extend(selected)
+    return list(dict.fromkeys(refs))
 
 
 def evaluate_rows(rows: list[dict], artifacts: dict[str, list[dict]], oracle: dict) -> dict:
     counts: Counter[str] = Counter()
-    meaningful_forces = set(oracle["meaningful_legal_forces"])
     spans = {row["text_span_id"]: row for row in artifacts["spans"]}
-    meaningful = {key: row for key, row in spans.items() if row["legal_force"] in meaningful_forces}
     raw = {row["raw_source_span_id"]: row for row in artifacts["raw"]}
-    evidence = {row["evidence_id"]: row for row in artifacts["evidence"]}
-    metadata = {row["metadata_grounding_id"]: row for row in artifacts["metadata"]}
-    conflicts = {row["source_conflict_id"]: row for row in artifacts["conflicts"]}
-    geometry = {
-        row.get("bbox_id") or row.get("word_bbox_id"): row
-        for row in (*artifacts["bboxes"], *artifacts["words"])
+    owners = _canonical_owners(artifacts)
+    owner_lookup = {(owner_type, owner_id): owner for owner_type, owner_id, owner in owners}
+    reviews = oracle["reviewed_decisions"]
+    expected_spans = {
+        span_id for span_id, span in spans.items()
+        if span["legal_force"] in oracle["meaningful_legal_forces"] or span_id in reviews
     }
-    seen_units: set[str] = set()
     decisions: Counter[str] = Counter()
+    seen_units: set[str] = set()
 
     for row in rows:
-        missing = REQUIRED_FIELDS - row.keys()
-        counts["missing_required_field_count"] += len(missing)
-        unit_id = row.get("support_unit_id")
+        counts["missing_required_field_count"] += len(REQUIRED_FIELDS - row.keys())
+        unit_id = str(row.get("support_unit_id") or "")
         counts["duplicate_support_unit_id_count"] += unit_id in seen_units
         seen_units.add(unit_id)
         span_rows = [spans.get(span_id) for span_id in row.get("text_span_ids", [])]
         counts["unresolved_span_count"] += sum(span is None for span in span_rows)
         if not span_rows or any(span is None for span in span_rows):
             continue
-        resolved_spans = [span for span in span_rows if span is not None]
-        for span in resolved_spans:
+        selected = [span for span in span_rows if span is not None]
+        for span in selected:
             decisions[span["text_span_id"]] += 1
-        counts["nonmeaningful_span_promoted_count"] += sum(
-            span["text_span_id"] not in meaningful for span in resolved_spans
-        )
+        counts["unexpected_span_decision_count"] += sum(span["text_span_id"] not in expected_spans for span in selected)
+
         for field in ("source_document_id", "source_role", "temporal_context", "semantic_classification", "legal_force"):
-            values = {span[field] for span in resolved_spans}
+            values = {span[field] for span in selected}
             counts[f"cross_{field}_group_count"] += len(values) != 1 or row.get(field) not in values
-        pages = sorted({span["page_number"] for span in resolved_spans})
+        pages = sorted({span["page_number"] for span in selected})
         counts["page_mismatch_count"] += row.get("page_numbers") != pages
-        ordered_positions = sorted(
-            (span["page_number"], int(span["text_span_id"].rsplit("::", 1)[1])) for span in resolved_spans
-        )
+        positions = sorted((span["page_number"], int(span["text_span_id"].rsplit("::", 1)[1])) for span in selected)
         counts["noncontiguous_group_count"] += any(
-            current_page != prior_page or current_index != prior_index + 1
-            for (prior_page, prior_index), (current_page, current_index) in zip(ordered_positions, ordered_positions[1:])
+            page != prior_page or index != prior_index + 1
+            for (prior_page, prior_index), (page, index) in zip(positions, positions[1:])
         )
-        expected_hash = sha256("\n".join(span["exact_quote"] for span in resolved_spans).encode()).hexdigest()
+        expected_hash = sha256("\n".join(span["exact_quote"] for span in selected).encode()).hexdigest()
         counts["quote_reconstruction_mismatch_count"] += row.get("quoted_text_sha256") != expected_hash
 
-        expected_raw = []
-        for span in resolved_spans:
+        raw_rows: list[dict] = []
+        for span in selected:
             matches = [
-                item["raw_source_span_id"]
-                for item in artifacts["raw"]
+                item for item in artifacts["raw"]
                 if item["source_document_id"] == span["source_document_id"]
                 and item["page_number"] == span["page_number"]
                 and item.get("semantic_text_start") == span["text_start"]
                 and item.get("semantic_text_end") == span["text_end"]
             ]
             counts["raw_span_join_count_mismatch"] += len(matches) != 1
-            expected_raw.extend(matches)
+            if len(matches) == 1:
+                raw_rows.append(matches[0])
+        expected_raw = [item["raw_source_span_id"] for item in raw_rows]
         counts["raw_span_reference_mismatch_count"] += row.get("raw_source_span_ids") != expected_raw
         counts["selector_reference_mismatch_count"] += row.get("selector_refs") != expected_raw
         counts["unresolved_selector_count"] += sum(selector not in raw for selector in row.get("selector_refs", []))
-        for bbox_id in row.get("bbox_refs", []):
-            bbox = geometry.get(bbox_id)
-            counts["unresolved_bbox_count"] += bbox is None
-            if bbox:
-                counts["bbox_source_mismatch_count"] += bbox.get("source_document_id") != row.get("source_document_id")
-                counts["bbox_page_mismatch_count"] += bbox.get("page_number") not in pages
-
-        owner_type, owner_id = row.get("owner_type"), row.get("owner_id")
-        owner = (
-            evidence.get(owner_id) if owner_type == "evidence_registry"
-            else metadata.get(owner_id) if owner_type == "metadata_grounding"
-            else conflicts.get(owner_id) if owner_type == "source_conflict"
-            else spans.get(owner_id) if owner_type == "page_text_span_review"
-            else None
-        )
-        counts["missing_owner_count"] += owner is None
-        if owner is None:
+        if len(raw_rows) != len(selected):
             continue
-        if owner_type != "page_text_span_review":
-            counts["owner_span_mismatch_count"] += any(
-                span["text_span_id"] not in (owner.get("text_span_ids") or []) for span in resolved_spans
+
+        reviewed = [reviews.get(span["text_span_id"]) for span in selected]
+        if any(reviewed):
+            counts["mixed_review_group_count"] += any(review is None for review in reviewed)
+            expected = reviewed[0]
+            if expected is None:
+                continue
+            counts["reviewed_decision_mismatch_count"] += any(
+                row.get(field) != expected.get(field)
+                for field in (
+                    "decision_kind", "support_kind", "owner_type", "owner_id", "source_document_id",
+                    "source_role", "temporal_context", "semantic_classification", "legal_force",
+                    "authority_kind", "decision_reason",
+                )
             )
-        expected_authority = owner.get("authority_kind") or "structural_context"
-        expected_kind = oracle["authority_support_kinds"].get(expected_authority)
-        if owner_type == "page_text_span_review":
-            expected_kind = oracle["audited_spans"][owner_id]["support_kind"]
-        counts["authority_kind_mismatch_count"] += row.get("authority_kind") != expected_authority
-        counts["support_kind_mismatch_count"] += row.get("support_kind") != expected_kind
-        owner_final = owner.get("citation_final") is True if owner_type != "page_text_span_review" else False
-        counts["fabricated_finality_count"] += row.get("citation_final") is not owner_final
-        owner_bbox = set(
-            owner.get("raw_provenance_bbox_ids") or owner.get("bbox_refs") or owner.get("bbox_ids") or []
-        )
-        if owner_type != "page_text_span_review":
-            counts["owner_bbox_mismatch_count"] += not set(row.get("bbox_refs", [])) <= owner_bbox
-        expected_viewer = bool(row.get("bbox_refs")) and (
-            owner_type == "page_text_span_review" or owner.get("viewer_highlightable") is not False
-        )
-        counts["viewer_eligibility_mismatch_count"] += row.get("viewer_eligible") is not expected_viewer
-        counts["highlight_eligibility_mismatch_count"] += row.get("highlight_eligible") is not expected_viewer
-        counts["bbox_precision_mismatch_count"] += row.get("bbox_precision") != (
-            "exact" if row.get("bbox_refs") else "page_grounded_only"
-        )
-        expected_answer = expected_authority == "normative_legal_text" and row.get("legal_force") == "canonical_normative"
-        expected_citation = owner.get("citable") is True if owner_type == "evidence_registry" else False
-        counts["answer_eligibility_mismatch_count"] += row.get("answer_eligible") is not expected_answer
-        counts["citation_eligibility_mismatch_count"] += row.get("citation_eligible") is not expected_citation
+            exclusion = expected["decision_kind"] == "typed_exclusion"
+            expected_owner = expected
+        else:
+            selected_owners = [_expected_owner(span, owners) for span in selected]
+            counts["missing_owner_count"] += sum(owner is None for owner in selected_owners)
+            if any(owner is None for owner in selected_owners):
+                continue
+            expected_keys = {(owner[0], owner[1]) for owner in selected_owners if owner is not None}
+            counts["canonical_owner_arbitration_mismatch_count"] += (
+                len(expected_keys) != 1 or (row.get("owner_type"), row.get("owner_id")) not in expected_keys
+            )
+            owner_key = (str(row.get("owner_type") or ""), str(row.get("owner_id") or ""))
+            expected_owner = owner_lookup.get(owner_key)
+            counts["missing_owner_count"] += expected_owner is None
+            if expected_owner is None:
+                continue
+            exclusion = False
+            authority = expected_owner.get("authority_kind")
+            expected_kind = oracle["authority_support_kinds"].get(authority)
+            counts["authority_kind_mismatch_count"] += row.get("authority_kind") != authority
+            counts["support_kind_mismatch_count"] += row.get("support_kind") != expected_kind
+            counts["decision_kind_mismatch_count"] += row.get("decision_kind") != "canonical_owner_support"
+
+        if exclusion:
+            counts["exclusion_capability_count"] += sum(
+                row.get(field) is not False
+                for field in ("answer_eligible", "citation_eligible", "viewer_eligible", "highlight_eligible", "citation_final")
+            )
+            counts["exclusion_geometry_count"] += bool(row.get("bbox_refs")) or row.get("bbox_precision") != "not_applicable"
+            expected_geometry: list[str] = []
+        else:
+            expected_geometry = _expected_geometry(selected, raw_rows, artifacts)
+            if row.get("bbox_precision") == "exact":
+                unexpected_geometry = set(row.get("bbox_refs") or ()) - set(expected_geometry)
+                counts["owner_wide_segment_bbox_count"] += bool(unexpected_geometry)
+                counts["exact_highlight_outside_selected_span_count"] += bool(unexpected_geometry)
+                counts["segment_geometry_mismatch_count"] += row.get("bbox_refs") != expected_geometry or not expected_geometry
+            else:
+                counts["page_grounding_mismatch_count"] += (
+                    row.get("bbox_precision") != "page_grounded_only" or bool(row.get("bbox_refs"))
+                )
+            owner_highlightable = expected_owner.get("viewer_highlightable") is not False
+            expected_highlight = bool(expected_geometry) and owner_highlightable
+            counts["viewer_eligibility_mismatch_count"] += row.get("viewer_eligible") is not True
+            counts["highlight_eligibility_mismatch_count"] += row.get("highlight_eligible") is not expected_highlight
+
+            authority = expected_owner.get("authority_kind")
+            expected_final = expected_owner.get("citation_final") is True if row.get("owner_type") != "review_decision" else False
+            expected_answer = authority == "normative_legal_text" and row.get("legal_force") == "canonical_normative"
+            expected_citation = row.get("owner_type") == "evidence_registry" and expected_owner.get("citable") is True
+            counts["finality_mismatch_count"] += row.get("citation_final") is not expected_final
+            counts["answer_eligibility_mismatch_count"] += row.get("answer_eligible") is not expected_answer
+            counts["citation_eligibility_mismatch_count"] += row.get("citation_eligible") is not expected_citation
+            counts["valid_legal_support_lost_only_for_geometry_count"] += (
+                not expected_geometry
+                and (
+                    (expected_answer and row.get("answer_eligible") is not True)
+                    or (expected_citation and row.get("citation_eligible") is not True)
+                )
+            )
+
         counts["legal_force_escalation_count"] += row.get("answer_eligible") is True and row.get("legal_force") != "canonical_normative"
         counts["historical_as_current_count"] += row.get("answer_eligible") is True and row.get("source_role") != "current_consolidated"
         counts["trace_or_metadata_final_count"] += row.get("support_kind") in {"trace", "metadata"} and row.get("citation_final") is True
-        counts["furniture_as_legal_count"] += row.get("support_kind") == "document_title" and any(
-            row.get(field) is True for field in ("answer_eligible", "citation_eligible", "citation_final")
-        )
+        counts["layout_separator_published_count"] += row.get("support_kind") == "layout_separator" and row.get("decision_kind") != "typed_exclusion"
 
-    missing_decisions = set(meaningful) - set(decisions)
-    counts["meaningful_span_without_decision_count"] = len(missing_decisions)
+    counts["meaningful_span_without_decision_count"] = len(expected_spans - set(decisions))
     counts["duplicate_ownership_count"] = sum(value - 1 for value in decisions.values() if value > 1)
-    counts["unexpected_meaningful_span_count"] = len(meaningful) != oracle["expected_meaningful_span_count"]
-    canonical_owned = sum(
-        1 for row in rows if row.get("owner_type") != "page_text_span_review" for _ in row.get("text_span_ids", [])
-    )
-    counts["canonical_owner_span_count_mismatch"] = canonical_owned != oracle["expected_canonical_owner_span_count"]
-    audited: dict[str, bool] = {}
-    for span_id, expected in oracle["audited_spans"].items():
-        matches = [row for row in rows if span_id in row.get("text_span_ids", [])]
-        audited[span_id] = len(matches) == 1 and all(
-            matches[0].get(field) == value for field, value in expected.items() if field != "page_number"
-        ) and expected["page_number"] in matches[0].get("page_numbers", [])
-    counts["audited_decision_mismatch_count"] = sum(not value for value in audited.values())
+    counts["decision_for_unknown_span_count"] = len(set(decisions) - expected_spans)
     failures = sum(counts.values())
+    support_rows = [row for row in rows if row.get("decision_kind") != "typed_exclusion"]
+    exclusion_rows = [row for row in rows if row.get("decision_kind") == "typed_exclusion"]
     return {
         "status": "PASS" if failures == 0 else "FAIL",
-        "support_unit_count": len(rows),
-        "meaningful_span_count": len(meaningful),
-        "canonical_owner_span_count": canonical_owned,
+        "decision_unit_count": len(rows),
+        "support_unit_count": len(support_rows),
+        "exclusion_unit_count": len(exclusion_rows),
+        "decision_span_count": sum(len(row.get("text_span_ids", [])) for row in rows),
+        "support_span_count": sum(len(row.get("text_span_ids", [])) for row in support_rows),
+        "exclusion_span_count": sum(len(row.get("text_span_ids", [])) for row in exclusion_rows),
+        "canonical_owner_span_count": sum(
+            len(row.get("text_span_ids", [])) for row in support_rows if row.get("owner_type") != "review_decision"
+        ),
+        "exact_geometry_unit_count": sum(row.get("bbox_precision") == "exact" for row in support_rows),
+        "page_grounded_unit_count": sum(row.get("bbox_precision") == "page_grounded_only" for row in support_rows),
         "support_kind_unit_counts": dict(sorted(Counter(row.get("support_kind") for row in rows).items())),
         "support_kind_span_counts": dict(sorted(Counter(
             row.get("support_kind") for row in rows for _ in row.get("text_span_ids", [])
         ).items())),
         "counters": dict(sorted(counts.items())),
-        "audited_spans": audited,
     }
 
 
