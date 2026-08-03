@@ -9,7 +9,7 @@ import sys
 
 BACKEND_GATES = frozenset((
     "toolchain", "compileall", "unittest", "pytest_run_1", "retrieval_evaluation",
-    "source_text_evaluation", "artifact_validate", "clean_tree", "artifact_rebuild",
+    "source_text_evaluation", "meaningful_support_evaluation", "artifact_validate", "clean_tree", "artifact_rebuild",
     "ruff", "mypy", "bandit", "pip_check", "pip_audit", "pytest_run_2", "release_a", "release_b",
 ))
 WEB_GATES = frozenset(("toolchain", "web_test", "web_lint", "web_typecheck", "web_build", "web_smoke"))

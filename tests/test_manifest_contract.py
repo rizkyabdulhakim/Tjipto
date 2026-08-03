@@ -102,6 +102,7 @@ def _expected_manifest_counts() -> dict[str, int]:
         "metadata_graph_edges": _jsonl_count("metadata_graph_edges.jsonl"),
         "metadata_grounding": _jsonl_count("metadata_grounding.jsonl"),
         "metadata_grounding_records": _jsonl_count("metadata_grounding_registry.jsonl"),
+        "meaningful_support_units": _jsonl_count("meaningful_support_units.jsonl"),
         "not_promoted_amends_edges": 8,
         "page_text_spans": _jsonl_count("page_text_spans.jsonl"),
         "raw_source_spans": _jsonl_count("raw_source_spans.jsonl"),

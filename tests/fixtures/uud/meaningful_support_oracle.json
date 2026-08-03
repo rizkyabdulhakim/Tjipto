@@ -1,0 +1,77 @@
+{
+  "meaningful_legal_forces": [
+    "canonical_normative",
+    "historical_normative",
+    "amendment_instrument",
+    "metadata_only"
+  ],
+  "authority_support_kinds": {
+    "normative_legal_text": "normative",
+    "structural_context": "structural",
+    "instrument_provenance": "instrument",
+    "metadata": "metadata",
+    "source_anomaly_provenance": "trace"
+  },
+  "expected_meaningful_span_count": 1837,
+  "expected_canonical_owner_span_count": 1835,
+  "audited_spans": {
+    "uud_text_span::current_consolidated::0001::0008": {
+      "owner_type": "metadata_grounding",
+      "owner_id": "uud_metadata_block_final_evidence::current_consolidated::source_publication_page_0001",
+      "support_kind": "metadata",
+      "page_number": 1,
+      "citation_final": false
+    },
+    "uud_text_span::current_consolidated::0001::0009": {
+      "owner_type": "metadata_grounding",
+      "owner_id": "uud_metadata_block_final_evidence::current_consolidated::source_publication_page_0001",
+      "support_kind": "metadata",
+      "page_number": 1,
+      "citation_final": false
+    },
+    "uud_text_span::current_consolidated::0001::0010": {
+      "owner_type": "metadata_grounding",
+      "owner_id": "uud_metadata_block_final_evidence::current_consolidated::source_publication_page_0001",
+      "support_kind": "metadata",
+      "page_number": 1,
+      "citation_final": false
+    },
+    "uud_text_span::current_consolidated::0001::0011": {
+      "owner_type": "metadata_grounding",
+      "owner_id": "uud_metadata_block_final_evidence::current_consolidated::source_publication_page_0001",
+      "support_kind": "metadata",
+      "page_number": 1,
+      "citation_final": false
+    },
+    "uud_text_span::current_consolidated::0001::0012": {
+      "owner_type": "metadata_grounding",
+      "owner_id": "uud_metadata_block_final_evidence::current_consolidated::source_publication_page_0001",
+      "support_kind": "metadata",
+      "page_number": 1,
+      "citation_final": false
+    },
+    "uud_text_span::amendment_4_historical::0006::0000": {
+      "owner_type": "source_conflict",
+      "owner_id": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict",
+      "support_kind": "trace",
+      "page_number": 6,
+      "citation_final": false
+    },
+    "uud_text_span::current_consolidated::0002::0010": {
+      "owner_type": "page_text_span_review",
+      "owner_id": "uud_text_span::current_consolidated::0002::0010",
+      "support_kind": "document_title",
+      "page_number": 2,
+      "citation_final": false,
+      "decision_reason": "reviewed_publication_title_block_before_preamble"
+    },
+    "uud_text_span::current_consolidated::0003::0017": {
+      "owner_type": "page_text_span_review",
+      "owner_id": "uud_text_span::current_consolidated::0003::0017",
+      "support_kind": "structural",
+      "page_number": 3,
+      "citation_final": false,
+      "decision_reason": "reviewed_document_title_before_operational_body"
+    }
+  }
+}

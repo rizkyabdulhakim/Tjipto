@@ -13,3 +13,9 @@ Telemetry is generic and disabled unless `TJIPTO_TELEMETRY=stderr`. It emits loc
 Every record is allowlisted by event schema. It may contain only bounded scalar operational attributes; `corpus_id` is an attribute, never a routing branch. Query text, legal text or quotations, tokens, credentials, filesystem paths, and personal data are not accepted attributes. Request IDs are correlation-only and the one intentional high-cardinality attribute. Producers must use fixed route/status/reason/gate values, not user input.
 
 The implemented boundary and deterministic contract tests live in `src/tjipto/telemetry.py` and `tests/test_telemetry_contract.py`. The threat records and future trust boundaries are in [threat_model.json](threat_model.json).
+
+## Meaningful-support ownership
+
+`page_text_spans.jsonl` owns span-level `artifact_status`, `promotion_status`, semantic classification, and source selectors; those fields describe ingestion and promotion, not the final support decision. Authority and citation finality remain owned by `evidence_registry.jsonl`, `metadata_grounding.jsonl`, and `source_conflicts.jsonl`. Exact renderability remains owned by `bbox_registry.jsonl`, `word_bboxes.jsonl`, and raw character lineage. In particular, a rejected span can still have reviewed metadata or source-anomaly support.
+
+`meaningful_support_units.jsonl` is the generated reachability projection across those owners. Its `viewer_eligible`, `highlight_eligible`, and support decision fields are derived references, not new authority or text. The two reviewed repeated document titles are non-final structural source support; compatibility fields in the canonical owner artifacts are unchanged, so no migration or removal version is introduced.

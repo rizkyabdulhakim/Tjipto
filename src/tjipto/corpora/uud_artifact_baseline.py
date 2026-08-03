@@ -11,6 +11,7 @@ from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
 from tjipto.artifacts.writer import write_json, write_jsonl
 from tjipto.corpora.uud.legal_unit_builder import build_legal_units_from_sources
+from tjipto.corpora.uud.meaningful_support_builder import build_meaningful_support_units
 from tjipto.contracts.structure import apply_chunk_structural_contract
 from tjipto.corpora.uud.manifest import build_manifest, refresh_manifest
 from tjipto.corpora.uud.metadata_builder import (
@@ -300,6 +301,16 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     write_jsonl(final_dir / "raw_source_spans.jsonl", raw_source_spans)
     write_jsonl(final_dir / "source_objects.jsonl", source_objects)
     write_jsonl(final_dir / "word_bboxes.jsonl", word_bboxes)
+    meaningful_support_units = build_meaningful_support_units(
+        page_text_spans=page_text_spans,
+        raw_source_spans=raw_source_spans,
+        evidence=evidence,
+        metadata_grounding=metadata_grounding,
+        source_conflicts=source_conflicts,
+        bbox_registry=bbox_rows,
+        word_bboxes=word_bboxes,
+    )
+    write_jsonl(final_dir / "meaningful_support_units.jsonl", meaningful_support_units)
     write_jsonl(final_dir / "propositions.jsonl", propositions)
     write_json(final_dir / "runtime_projection.json", build_runtime_projection(
         evidence_registry=evidence,
@@ -362,6 +373,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         "graph_nodes": len(graph_nodes),
         "graph_edges": len(graph_edges),
         "source_objects": len(source_objects),
+        "meaningful_support_units": len(meaningful_support_units),
     }
 
 

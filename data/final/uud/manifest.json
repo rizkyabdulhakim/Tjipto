@@ -32,6 +32,7 @@
     "metadata_graph_edges": 635,
     "metadata_grounding": 68,
     "metadata_grounding_records": 320,
+    "meaningful_support_units": 660,
     "not_promoted_amends_edges": 8,
     "pages": 63,
     "promotion_decisions": 75,
@@ -374,6 +375,19 @@
       "bytes": 535833,
       "sha256": "d22ffee83a685f6837f2431cb07102e5e69fdb24f4ddc6750da2ac53c6224f7e"
     },
+    "meaningful_support_units.jsonl": {
+      "origin": "generated",
+      "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
+      "producer": "meaningful_support_builder",
+      "build_stage": "support_projection",
+      "logical_key": "meaningful_support_units",
+      "artifact_kind": "meaningful_support_units",
+      "format": "jsonl",
+      "artifact_schema": 7,
+      "primary_id": "support_unit_id",
+      "bytes": 1240610,
+      "sha256": "b738567fb82cc42654de010ffe8e44600667edb9a902ddeabafc976f57d2e453"
+    },
     "pages.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
@@ -638,7 +652,7 @@
       "format": "json",
       "artifact_schema": 7,
       "bytes": 25364,
-      "sha256": "5fae9eab7ee1aea399ae7ba1d6bcd8b7bd544b2cc35acca726d534026ad43dbe"
+      "sha256": "a9e4a29c3dfac179be01f1a1be5ee8cf0d00a2ab926c257b087002938a9f7a42"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -778,6 +792,7 @@
   "metadata_graph_edges": "metadata_graph_edges.jsonl",
   "metadata_grounding": "metadata_grounding.jsonl",
   "metadata_grounding_registry": "metadata_grounding_registry.jsonl",
+  "meaningful_support_units": "meaningful_support_units.jsonl",
   "pages": "pages.jsonl",
   "pdf_health_report": "pdf_health_report.json",
   "promotion_decisions": "promotion_decisions.jsonl",

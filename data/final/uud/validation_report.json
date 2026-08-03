@@ -373,11 +373,11 @@
     "runtime_check_count": 0
   },
   "artifact_origin_health": {
-    "manifest_file_rows": 32,
-    "files_with_origin": 32,
+    "manifest_file_rows": 33,
+    "files_with_origin": 33,
     "files_missing_origin": 0,
     "invalid_origin_values": 0,
-    "generated_count": 27,
+    "generated_count": 28,
     "carried_forward_count": 3,
     "manual_review_artifact_count": 2,
     "deprecated_count": 0,
@@ -701,7 +701,7 @@
       "source_anomaly_trace": 4
     }
   },
-  "validated_artifact_set_digest": "91ab84bc1115632d6ff1c7061b281a1a0b621eb409af5195cf380fd14c129de8",
+  "validated_artifact_set_digest": "6095896a4d2e5c860304e8cabfe096d839ccef3d3c3b70d8960d30cb57ced0ea",
   "required_health": {
     "status": "complete",
     "required_section_count": 15,

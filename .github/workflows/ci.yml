@@ -81,6 +81,8 @@ jobs:
         run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps
       - name: Source-text reachability evaluation
         run: python scripts/measure_command.py --gate source_text_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_source_text_reachability.py --report reports/source-text-evaluation.json
+      - name: Meaningful-support evaluation
+        run: python scripts/measure_command.py --gate meaningful_support_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_meaningful_support.py --report reports/meaningful-support-evaluation.json
       - name: Artifact validation
         run: python scripts/measure_command.py --gate artifact_validate --report reports/ci-gates.jsonl -- python -m tjipto.corpora.uud_artifact_baseline validate
       - name: Clean exact-head worktree before rebuild

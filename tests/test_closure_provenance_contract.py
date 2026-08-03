@@ -62,7 +62,7 @@ class ClosureProvenanceContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             backend, web = self._evidence(Path(temporary))
             result = closure.assemble(backend, web)
-        self.assertEqual(sum(len(gates) for gates in result["gates"].values()), 23)
+            self.assertEqual(sum(len(gates) for gates in result["gates"].values()), 24)
 
     def test_identity_mutation_and_missing_artifact_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
