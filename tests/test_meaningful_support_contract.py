@@ -4,6 +4,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import unittest
+import unicodedata
 
 from scripts.evaluate_meaningful_support import evaluate_rows, load_artifacts
 from tjipto.corpora.uud.meaningful_support_builder import build_meaningful_support_units
@@ -17,6 +18,13 @@ REVIEWS_PATH = ROOT / "data" / "review" / "uud" / "meaningful_support_review_dec
 
 def _rows(name: str) -> list[dict]:
     return [json.loads(line) for line in (FINAL / name).read_text(encoding="utf-8").splitlines() if line]
+
+
+def _visible(value: str) -> str:
+    return "".join(
+        character for character in unicodedata.normalize("NFKC", value).replace("\u00ad", "")
+        if not character.isspace()
+    )
 
 
 class MeaningfulSupportContractTests(unittest.TestCase):
@@ -60,11 +68,18 @@ class MeaningfulSupportContractTests(unittest.TestCase):
         self.assertEqual(report["status"], "PASS", report)
         self.assertEqual(report["exclusion_span_count"], 1)
         self.assertEqual(report["decision_span_count"], report["support_span_count"] + 1)
-        self.assertEqual(report["page_grounded_unit_count"], 2)
+        self.assertTrue(all(
+            row["viewer_eligible"] and not row["highlight_eligible"]
+            for row in self.rows if row["bbox_precision"] == "page_grounded_only"
+        ))
         self.assertTrue(all(value == 0 for value in report["counters"].values()), report)
 
     def test_exact_geometry_is_segment_local_and_never_owner_wide(self) -> None:
-        spans = {row["text_span_id"]: row for row in self.artifacts["spans"]}
+        characters = {
+            character["character_bbox_id"]: word | character
+            for word in self.artifacts["words"]
+            for character in word.get("characters") or ()
+        }
         owners = {
             ("evidence_registry", row["evidence_id"]): row for row in self.artifacts["evidence"]
         }
@@ -73,15 +88,37 @@ class MeaningfulSupportContractTests(unittest.TestCase):
         for row in self.rows:
             if row["bbox_precision"] != "exact":
                 continue
-            segment_refs = {
-                ref for span_id in row["text_span_ids"] for ref in spans[span_id].get("span_bbox_ids") or ()
-            }
-            if segment_refs:
-                self.assertEqual(set(row["bbox_refs"]), segment_refs, row["support_unit_id"])
+            self.assertTrue(set(row["bbox_refs"]) <= characters.keys(), row["support_unit_id"])
             owner = owners.get((row["owner_type"], row["owner_id"]))
             if owner and set(owner.get("text_span_ids") or ()) - set(row["text_span_ids"]):
                 owner_wide += set(row["bbox_refs"]) == set(owner.get("bbox_refs") or owner.get("bbox_ids") or ())
         self.assertEqual(owner_wide, 0)
+
+    def test_exact_character_refs_reconstruct_only_selected_quote(self) -> None:
+        spans = {row["text_span_id"]: row for row in self.artifacts["spans"]}
+        characters = {
+            character["character_bbox_id"]: character
+            for word in self.artifacts["words"]
+            for character in word.get("characters") or ()
+        }
+        for row in self.rows:
+            if row["bbox_precision"] != "exact":
+                continue
+            actual = "".join(characters[ref]["text"] for ref in row["bbox_refs"])
+            expected = "".join(spans[span_id]["exact_quote"] for span_id in row["text_span_ids"])
+            self.assertEqual(_visible(actual), _visible(expected), row["support_unit_id"])
+
+    def test_marker_suffixes_are_not_selected(self) -> None:
+        characters = {
+            character["character_bbox_id"]: character
+            for word in self.artifacts["words"]
+            for character in word.get("characters") or ()
+        }
+        for suffix in ("9289abf66c0f03d8", "95cc3b98fa209081"):
+            row = next(item for item in self.rows if item["support_unit_id"].endswith(suffix))
+            selected = "".join(characters[ref]["text"] for ref in row["bbox_refs"])
+            self.assertNotIn("*", selected)
+            self.assertFalse(selected.endswith(")"))
 
     def test_heading_and_article_label_do_not_inherit_full_legal_unit_overlay(self) -> None:
         evidence = {row["evidence_id"]: row for row in self.artifacts["evidence"]}
@@ -199,6 +236,19 @@ class MeaningfulSupportContractTests(unittest.TestCase):
         self.assertFalse(row["highlight_eligible"])
         self.assertEqual(row["bbox_refs"], [])
         self.assertEqual(row["bbox_precision"], "page_grounded_only")
+        self.assertEqual(evaluate_rows(rebuilt, artifacts, self.oracle)["status"], "PASS")
+
+    def test_upstream_span_geometry_injection_is_not_propagated_or_trusted(self) -> None:
+        artifacts = {**self.artifacts, "spans": deepcopy(self.artifacts["spans"])}
+        target = next(row for row in artifacts["spans"] if row.get("span_bbox_ids"))
+        sibling = next(
+            ref for row in artifacts["spans"]
+            if row["page_number"] == target["page_number"] and row["text_span_id"] != target["text_span_id"]
+            for ref in row.get("span_bbox_ids") or () if ref not in target["span_bbox_ids"]
+        )
+        target["span_bbox_ids"].append(sibling)
+        rebuilt = self._build(artifacts)
+        self.assertEqual(rebuilt, self.rows)
         self.assertEqual(evaluate_rows(rebuilt, artifacts, self.oracle)["status"], "PASS")
 
     def test_metadata_historical_and_source_conflict_support_never_gain_finality(self) -> None:

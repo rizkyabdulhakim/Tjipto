@@ -5,7 +5,6 @@ from collections import Counter
 from hashlib import sha256
 import json
 from pathlib import Path
-import re
 import unicodedata
 
 
@@ -71,74 +70,50 @@ def _expected_owner(span: dict, owners: list[tuple[str, str, dict]]) -> tuple[st
     return min(candidates, key=lambda item: (len(item[2].get("text_span_ids") or ()), item[1], item[0])) if candidates else None
 
 
-def _compact(text: object) -> str:
-    normalized = unicodedata.normalize("NFKC", str(text or "")).replace("\u00ad", "").replace("\xa0", " ")
-    return "".join(re.findall(r"\w+", normalized.casefold()))
-
-
-def _inside(geometry: dict, raw: dict) -> bool:
-    return (
-        geometry.get("source_document_id") == raw["source_document_id"]
-        and geometry.get("page_number") == raw["page_number"]
-        and geometry["x0"] >= raw["x0"] - 0.01
-        and geometry["x1"] <= raw["x1"] + 0.01
-        and geometry["y0"] >= raw["y0"] - 0.01
-        and geometry["y1"] <= raw["y1"] + 0.01
+def _visible_text(value: object) -> str:
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKC", str(value or "")).replace("\u00ad", "")
+        if not character.isspace()
     )
 
 
-def _fallback_refs(span: dict, raw: dict, words: list[dict]) -> list[str]:
-    page_words = [
-        word for word in words
-        if word["source_document_id"] == span["source_document_id"]
-        and word["page_number"] == span["page_number"] and _inside(word, raw)
-    ]
-    target = _compact(span["exact_quote"])
-    candidates: list[list[dict]] = []
-    for start in range(len(page_words)):
-        matched: list[dict] = []
-        for word in page_words[start:]:
-            matched.append(word)
-            joined = _compact(" ".join(item["text"] for item in matched))
-            if joined == target:
-                candidates.append(matched)
-                break
-            if len(joined) > len(target) + 24 or not target.startswith(joined):
-                break
-    if not candidates:
+def _glyph_key(text: object, bbox: dict) -> tuple[object, ...]:
+    return (_visible_text(text), *(round(float(bbox[key]), 2) for key in ("x0", "y0", "x1", "y1")))
+
+
+def _oracle_character_refs(span: dict, raw: dict, page_glyphs: dict[tuple[object, ...], list[dict]]) -> list[str]:
+    if raw.get("semantic_exact_quote") != span.get("exact_quote"):
         return []
-    candidates.sort(key=lambda rows: (sum(_distance(item, raw) for item in rows), rows[0]["word_bbox_id"]))
-    return [row["word_bbox_id"] for row in candidates[0]]
-
-
-def _distance(left: dict, right: dict) -> float:
-    left_x = (left["x0"] + left["x1"]) / 2
-    left_y = (left["y0"] + left["y1"]) / 2
-    right_x = (right["x0"] + right["x1"]) / 2
-    right_y = (right["y0"] + right["y1"]) / 2
-    return (left_x - right_x) ** 2 + (left_y - right_y) ** 2
+    raw_glyphs = [
+        (str(text), bbox)
+        for text, bbox in zip(raw.get("character_texts") or (), raw.get("character_bboxes") or ())
+        if _visible_text(text)
+    ]
+    result: list[dict] = []
+    consumed: set[str] = set()
+    for text, bbox in raw_glyphs:
+        candidates = [
+            glyph for glyph in page_glyphs.get(_glyph_key(text, bbox), ())
+            if str(glyph.get("character_bbox_id") or "") not in consumed
+        ]
+        if len(candidates) != 1:
+            return []
+        result.append(candidates[0])
+        consumed.add(str(candidates[0]["character_bbox_id"]))
+    if _visible_text("".join(str(glyph.get("text") or "") for glyph in result)) != _visible_text(span["exact_quote"]):
+        return []
+    return [str(glyph["character_bbox_id"]) for glyph in result]
 
 
 def _expected_geometry(
-    spans: list[dict], raw_rows: list[dict], artifacts: dict[str, list[dict]]
+    spans: list[dict], raw_rows: list[dict], glyphs_by_page: dict[tuple[str, int], dict[tuple[object, ...], list[dict]]]
 ) -> list[str]:
-    geometry = {
-        str(row.get("bbox_id") or row.get("word_bbox_id")): row
-        for row in (*artifacts["bboxes"], *artifacts["words"])
-        if row.get("bbox_id") or row.get("word_bbox_id")
-    }
     refs: list[str] = []
     for span, raw in zip(spans, raw_rows):
-        selected = list(dict.fromkeys(span.get("span_bbox_ids") or ()))
-        if selected and all(
-            ref in geometry
-            and geometry[ref].get("source_document_id") == span["source_document_id"]
-            and geometry[ref].get("page_number") == span["page_number"]
-            for ref in selected
-        ):
-            refs.extend(selected)
-            continue
-        selected = _fallback_refs(span, raw, artifacts["words"])
+        selected = _oracle_character_refs(
+            span, raw, glyphs_by_page.get((str(span["source_document_id"]), int(span["page_number"])), {})
+        )
         if not selected:
             return []
         refs.extend(selected)
@@ -150,6 +125,11 @@ def evaluate_rows(rows: list[dict], artifacts: dict[str, list[dict]], oracle: di
     spans = {row["text_span_id"]: row for row in artifacts["spans"]}
     raw = {row["raw_source_span_id"]: row for row in artifacts["raw"]}
     owners = _canonical_owners(artifacts)
+    glyphs_by_page: dict[tuple[str, int], dict[tuple[object, ...], list[dict]]] = {}
+    for word in artifacts["words"]:
+        index = glyphs_by_page.setdefault((str(word["source_document_id"]), int(word["page_number"])), {})
+        for glyph in word.get("characters") or ():
+            index.setdefault(_glyph_key(glyph.get("text"), glyph), []).append(glyph)
     owner_lookup = {(owner_type, owner_id): owner for owner_type, owner_id, owner in owners}
     reviews = oracle["reviewed_decisions"]
     expected_spans = {
@@ -250,7 +230,7 @@ def evaluate_rows(rows: list[dict], artifacts: dict[str, list[dict]], oracle: di
             counts["exclusion_geometry_count"] += bool(row.get("bbox_refs")) or row.get("bbox_precision") != "not_applicable"
             expected_geometry: list[str] = []
         else:
-            expected_geometry = _expected_geometry(selected, raw_rows, artifacts)
+            expected_geometry = _expected_geometry(selected, raw_rows, glyphs_by_page)
             if row.get("bbox_precision") == "exact":
                 unexpected_geometry = set(row.get("bbox_refs") or ()) - set(expected_geometry)
                 counts["owner_wide_segment_bbox_count"] += bool(unexpected_geometry)

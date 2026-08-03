@@ -78,7 +78,7 @@
     "unresolved_text_span_ref_count": 0,
     "missing_lineage_count": 0,
     "extraction_failed_count": 0,
-    "needs_review_count": 34,
+    "needs_review_count": 0,
     "status": "complete"
   },
   "chunk_self_contained_health": {
@@ -701,7 +701,7 @@
       "source_anomaly_trace": 4
     }
   },
-  "validated_artifact_set_digest": "db0d1b76198c5a677f0f607f23b9988b6472e2fd42c4e0cff30c0c15c44547d8",
+  "validated_artifact_set_digest": "c5c4c53dd2149e2754a61435e8457b026775cc10b953ae83ecb109cd57f0e4a1",
   "required_health": {
     "status": "complete",
     "required_section_count": 15,

@@ -190,6 +190,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     source_objects = build_source_object_inventory(
         source_objects=tuple(item for extraction in extracted_pdfs.values() for item in extraction.source_objects),
         page_text_spans=page_text_spans,
+        raw_source_spans=raw_source_spans,
         source_documents=source_documents,
     )
     # Extraction rows are fully represented by the persisted source objects,

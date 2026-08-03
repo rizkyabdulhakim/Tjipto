@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from hashlib import sha256
-
-from tjipto.ingestion.pdf.words import align_text_to_word_bboxes
+import unicodedata
 
 
 REVIEW_CONTRACT_ID = "tjipto.uud.meaningful-support-review"
@@ -38,14 +37,12 @@ def build_meaningful_support_units(
         for row in raw_source_spans
         if row.get("semantic_text")
     }
-    words_by_page: dict[tuple[str, int], list[dict]] = defaultdict(list)
-    for row in word_bboxes:
-        words_by_page[(row["source_document_id"], row["page_number"])].append(row)
-    geometry_by_id = {
-        str(row.get("bbox_id") or row.get("word_bbox_id")): row
-        for row in (*bbox_registry, *word_bboxes)
-        if row.get("bbox_id") or row.get("word_bbox_id")
-    }
+    characters_by_page: dict[tuple[str, int], dict[tuple[object, ...], list[dict]]] = defaultdict(lambda: defaultdict(list))
+    for word in word_bboxes:
+        for character in word.get("characters") or ():
+            characters_by_page[(word["source_document_id"], word["page_number"])][
+                _character_key(character.get("text"), character)
+            ].append(character)
     canonical_owners = _canonical_owners(evidence, metadata_grounding, source_conflicts)
 
     assignments: dict[tuple[str, str], list[dict]] = defaultdict(list)
@@ -77,7 +74,7 @@ def build_meaningful_support_units(
             ]
             review_exclusion = owner_type == "review_decision" and owner["decision_kind"] == "typed_exclusion"
             bbox_refs = [] if review_exclusion else _segment_bbox_refs(
-                segment, raw_rows, words_by_page, geometry_by_id
+                segment, raw_rows, characters_by_page
             )
             classification = segment[0]["semantic_classification"]
             legal_force = segment[0]["legal_force"]
@@ -211,47 +208,52 @@ def _segments(spans: list[dict]) -> list[list[dict]]:
 def _segment_bbox_refs(
     spans: list[dict],
     raw_rows: list[dict],
-    words_by_page: dict[tuple[str, int], list[dict]],
-    geometry_by_id: dict[str, dict],
+    characters_by_page: dict[tuple[str, int], dict[tuple[object, ...], list[dict]]],
 ) -> list[str]:
     refs: list[str] = []
     for span, raw in zip(spans, raw_rows):
-        span_refs = list(dict.fromkeys(span.get("span_bbox_ids") or ()))
-        if span_refs and all(_geometry_matches_span(geometry_by_id.get(ref), span) for ref in span_refs):
-            refs.extend(span_refs)
-            continue
-        match = align_text_to_word_bboxes(
-            text=span.get("exact_quote"),
-            source_document_id=span["source_document_id"],
-            page_numbers=[span["page_number"]],
-            words_by_page=words_by_page,
-            reference_bbox=raw,
-        )
-        fallback = list(match.get("matched_word_bbox_ids") or ()) if match else []
-        if not fallback or not all(_geometry_inside_raw(geometry_by_id.get(ref), raw) for ref in fallback):
+        selected = _selected_character_refs(span, raw, characters_by_page)
+        if not selected:
             return []
-        refs.extend(fallback)
+        refs.extend(selected)
     return list(dict.fromkeys(refs))
 
 
-def _geometry_matches_span(geometry: dict | None, span: dict) -> bool:
-    return bool(
-        geometry
-        and geometry.get("source_document_id") == span["source_document_id"]
-        and geometry.get("page_number") == span["page_number"]
+def _selected_character_refs(
+    span: dict, raw: dict, characters_by_page: dict[tuple[str, int], dict[tuple[object, ...], list[dict]]]
+) -> list[str]:
+    """Map the immutable raw selector to nested word characters, never to its upstream word boxes."""
+    if raw.get("semantic_exact_quote") != span.get("exact_quote"):
+        return []
+    raw_characters = [
+        (str(text), bbox)
+        for text, bbox in zip(raw.get("character_texts") or (), raw.get("character_bboxes") or ())
+        if _visible(str(text))
+    ]
+    candidates = characters_by_page.get((span["source_document_id"], span["page_number"]), {})
+    selected: list[dict] = []
+    used: set[str] = set()
+    for text, raw_bbox in raw_characters:
+        matches = [character for character in candidates.get(_character_key(text, raw_bbox), ()) if str(character.get("character_bbox_id") or "") not in used]
+        if len(matches) != 1:
+            return []
+        selected.append(matches[0])
+        used.add(str(matches[0]["character_bbox_id"]))
+    if _visible("".join(str(character.get("text") or "") for character in selected)) != _visible(span["exact_quote"]):
+        return []
+    return [str(character["character_bbox_id"]) for character in selected]
+
+
+def _visible(value: str) -> str:
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKC", value).replace("\u00ad", "")
+        if not character.isspace()
     )
 
 
-def _geometry_inside_raw(geometry: dict | None, raw: dict) -> bool:
-    return bool(
-        geometry
-        and geometry.get("source_document_id") == raw["source_document_id"]
-        and geometry.get("page_number") == raw["page_number"]
-        and geometry["x0"] >= raw["x0"] - 0.01
-        and geometry["x1"] <= raw["x1"] + 0.01
-        and geometry["y0"] >= raw["y0"] - 0.01
-        and geometry["y1"] <= raw["y1"] + 0.01
-    )
+def _character_key(text: object, bbox: dict) -> tuple[object, ...]:
+    return (_visible(str(text or "")), *(round(float(bbox[field]), 2) for field in ("x0", "y0", "x1", "y1")))
 
 
 def _support_decision(owner_type: str, owner: dict, authority_kind: str) -> tuple[str, str]:
