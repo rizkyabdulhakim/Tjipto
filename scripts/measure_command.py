@@ -16,6 +16,10 @@ from tjipto.corpora.registry import CorpusRegistry
 from tjipto.telemetry import event_record
 
 
+RSS_LIMIT_BYTES = 721 * 1024 * 1024
+RSS_RATIO_LIMIT = 1.05
+
+
 def _rss_bytes(process: subprocess.Popen) -> int:
     if sys.platform == "win32":
         import ctypes
@@ -48,6 +52,37 @@ def _rss_bytes(process: subprocess.Popen) -> int:
             if line.startswith("VmHWM:"):
                 return int(line.split()[1]) * 1024
     return 0
+
+
+def compare_pytest_resources(first: dict, second: dict, identity: dict) -> dict:
+    """Apply the release RSS policy and retain wall time as diagnostic evidence."""
+    rss_values = (first.get("peak_rss_bytes"), second.get("peak_rss_bytes"))
+    rss_ratio = max(rss_values) / min(rss_values) if all(isinstance(value, int) and value > 0 for value in rss_values) else None
+    wall_values = (first.get("wall_seconds"), second.get("wall_seconds"))
+    wall_ratio = max(wall_values) / min(wall_values) if all(isinstance(value, (int, float)) and value > 0 for value in wall_values) else None
+    return {
+        "run_identity_id": identity["run_identity_id"],
+        "both_pytest_runs_pass": first.get("exit_code") == 0 and second.get("exit_code") == 0,
+        "run_1_peak_rss_bytes": rss_values[0],
+        "run_2_peak_rss_bytes": rss_values[1],
+        "rss_limit_bytes": RSS_LIMIT_BYTES,
+        "rss_ratio": rss_ratio,
+        "rss_limit_pass": rss_ratio is not None and max(rss_values) <= RSS_LIMIT_BYTES,
+        "rss_stability_pass": rss_ratio is not None and rss_ratio <= RSS_RATIO_LIMIT,
+        "run_1_wall_seconds": wall_values[0],
+        "run_2_wall_seconds": wall_values[1],
+        "wall_ratio": wall_ratio,
+        "wall_status": "unavailable" if wall_ratio is None else ("stable" if wall_ratio <= 1.10 else "variable"),
+        "wall_policy": "diagnostic_not_benchmark",
+        "run_1_started_at_utc": first.get("started_at_utc"),
+        "run_1_finished_at_utc": first.get("finished_at_utc"),
+        "run_2_started_at_utc": second.get("started_at_utc"),
+        "run_2_finished_at_utc": second.get("finished_at_utc"),
+        "runner_identity": {key: identity.get(key) for key in (
+            "runner_name", "runner_os", "runner_arch", "runner_environment",
+            "runner_image_os", "runner_image_version", "platform",
+        )},
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

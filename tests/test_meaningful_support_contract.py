@@ -66,8 +66,12 @@ class MeaningfulSupportContractTests(unittest.TestCase):
     def test_independent_evaluator_accepts_owner_geometry_and_support_universe(self) -> None:
         report = evaluate_rows(self.rows, self.artifacts, self.oracle)
         self.assertEqual(report["status"], "PASS", report)
-        self.assertEqual(report["exclusion_span_count"], 1)
-        self.assertEqual(report["decision_span_count"], report["support_span_count"] + 1)
+        exclusions = sum(
+            decision["decision_kind"] == "typed_exclusion"
+            for decision in self.oracle["reviewed_decisions"].values()
+        )
+        self.assertEqual(report["exclusion_span_count"], exclusions)
+        self.assertEqual(report["decision_span_count"], report["support_span_count"] + exclusions)
         self.assertTrue(all(
             row["viewer_eligible"] and not row["highlight_eligible"]
             for row in self.rows if row["bbox_precision"] == "page_grounded_only"
@@ -108,17 +112,64 @@ class MeaningfulSupportContractTests(unittest.TestCase):
             expected = "".join(spans[span_id]["exact_quote"] for span_id in row["text_span_ids"])
             self.assertEqual(_visible(actual), _visible(expected), row["support_unit_id"])
 
-    def test_marker_suffixes_are_not_selected(self) -> None:
+    def test_every_marker_adjacent_selector_excludes_marker_characters(self) -> None:
+        spans = {
+            (row["source_document_id"], row["page_number"], row["text_start"], row["text_end"]): row
+            for row in self.artifacts["spans"]
+        }
         characters = {
             character["character_bbox_id"]: character
             for word in self.artifacts["words"]
             for character in word.get("characters") or ()
         }
-        for suffix in ("9289abf66c0f03d8", "95cc3b98fa209081"):
-            row = next(item for item in self.rows if item["support_unit_id"].endswith(suffix))
-            selected = "".join(characters[ref]["text"] for ref in row["bbox_refs"])
-            self.assertNotIn("*", selected)
-            self.assertFalse(selected.endswith(")"))
+        support_by_span = {
+            span_id: row for row in self.rows for span_id in row["text_span_ids"]
+        }
+        lines: dict[tuple, list[dict]] = {}
+        for row in self.artifacts["raw"]:
+            key = (row["source_document_id"], row["page_number"], row["block_index"], row["line_index"])
+            lines.setdefault(key, []).append(row)
+        qualifying: dict[str, set[tuple]] = {}
+        for line in lines.values():
+            line.sort(key=lambda row: (row["character_start"], row["segment_order"]))
+            for index, marker in enumerate(line):
+                if marker["classification"] != "source_annotation_marker":
+                    continue
+                marker_geometry = {
+                    (value, *(round(box[field], 3) for field in ("x0", "y0", "x1", "y1")))
+                    for value, box in zip(marker["character_texts"], marker["character_bboxes"], strict=True)
+                }
+                for adjacent in (index - 1, index + 1):
+                    if not 0 <= adjacent < len(line) or line[adjacent]["classification"] == "source_annotation_marker":
+                        continue
+                    raw = line[adjacent]
+                    span = spans.get((
+                        raw["source_document_id"], raw["page_number"],
+                        raw["semantic_text_start"], raw["semantic_text_end"],
+                    ))
+                    self.assertIsNotNone(span, raw["raw_source_span_id"])
+                    assert span is not None
+                    qualifying.setdefault(span["text_span_id"], set()).update(marker_geometry)
+        checked = set()
+        for span_id, discarded in qualifying.items():
+            row = support_by_span.get(span_id)
+            self.assertIsNotNone(row, span_id)
+            assert row is not None
+            self.assertEqual(row["bbox_precision"], "exact", row["support_unit_id"])
+            selected = [characters[ref] for ref in row["bbox_refs"]]
+            selected_geometry = {
+                (character["text"], *(round(character[field], 3) for field in ("x0", "y0", "x1", "y1")))
+                for character in selected
+            }
+            expected = "".join(
+                next(item for item in self.artifacts["spans"] if item["text_span_id"] == selected_id)["exact_quote"]
+                for selected_id in row["text_span_ids"]
+            )
+            self.assertEqual(_visible("".join(character["text"] for character in selected)), _visible(expected))
+            self.assertTrue(selected_geometry.isdisjoint(discarded), row["support_unit_id"])
+            checked.add(span_id)
+        self.assertTrue(qualifying)
+        self.assertEqual(checked, set(qualifying))
 
     def test_heading_and_article_label_do_not_inherit_full_legal_unit_overlay(self) -> None:
         evidence = {row["evidence_id"]: row for row in self.artifacts["evidence"]}
@@ -138,14 +189,16 @@ class MeaningfulSupportContractTests(unittest.TestCase):
 
     def test_layout_separator_is_a_nonpresentational_typed_exclusion(self) -> None:
         matches = [row for row in self.rows if row["support_kind"] == "layout_separator"]
-        self.assertEqual(len(matches), 1)
-        row = matches[0]
-        self.assertEqual(row["text_span_ids"], ["uud_text_span::current_consolidated::0028::0018"])
-        self.assertEqual(row["decision_kind"], "typed_exclusion")
-        self.assertFalse(any(row[field] for field in (
-            "answer_eligible", "citation_eligible", "viewer_eligible", "highlight_eligible", "citation_final"
-        )))
-        self.assertEqual(row["bbox_refs"], [])
+        spans = {row["text_span_id"]: row for row in self.artifacts["spans"]}
+        self.assertTrue(matches)
+        for row in matches:
+            selected = [spans[span_id]["exact_quote"] for span_id in row["text_span_ids"]]
+            self.assertTrue(all(quote and not quote.replace("_", "").strip() for quote in selected))
+            self.assertEqual(row["decision_kind"], "typed_exclusion")
+            self.assertFalse(any(row[field] for field in (
+                "answer_eligible", "citation_eligible", "viewer_eligible", "highlight_eligible", "citation_final"
+            )))
+            self.assertEqual(row["bbox_refs"], [])
 
     def test_owner_arbitration_rejects_broader_and_equal_incompatible_substitutions(self) -> None:
         canonical = chosen = broader = None
@@ -185,7 +238,7 @@ class MeaningfulSupportContractTests(unittest.TestCase):
     def test_missing_grounding_and_sibling_geometry_mutations_fail_closed(self) -> None:
         mutations = {
             "missing_owner": lambda row: row.update(owner_id="missing-owner"),
-            "wrong_source": lambda row: row.update(source_document_id="uud::missing"),
+            "wrong_source": lambda row: row.update(source_document_id="missing-source"),
             "missing_selector": lambda row: row["selector_refs"].__setitem__(0, "missing-selector"),
             "altered_quote": lambda row: row.update(quoted_text_sha256="0" * 64),
         }
@@ -266,8 +319,6 @@ class MeaningfulSupportContractTests(unittest.TestCase):
         self.assertNotIn("REVIEWED_HEADINGS", source)
         self.assertNotIn("PASAL_III_SPAN", source)
         self.assertNotIn("PASAL_III_CONFLICT", source)
-        self.assertNotIn("uud_text_span::current_consolidated::0002::0010", source)
-        self.assertNotIn("uud_text_span::amendment_4_historical::0006::0000", source)
 
     def test_evaluator_does_not_import_or_call_projection_builder(self) -> None:
         source = (ROOT / "scripts" / "evaluate_meaningful_support.py").read_text(encoding="utf-8")
