@@ -6,7 +6,6 @@ import unittest
 import fitz
 
 from tjipto.core.manifest import read_jsonl
-from tjipto.ingestion.pdf.bbox import extract_pdf
 from tjipto.ingestion.pdf.source_objects import TERMINAL_DISPOSITIONS, build_source_object_inventory
 
 
@@ -53,11 +52,28 @@ class SourceObjectDispositionContractTest(unittest.TestCase):
         cls.spans = read_jsonl(FINAL / "page_text_spans.jsonl")
         cls.raw_spans = read_jsonl(FINAL / "raw_source_spans.jsonl")
         cls.sources = {row["source_document_id"]: row for row in read_jsonl(FINAL / "source_documents.jsonl")}
-        objects = []
+        span_objects = {str(span["source_object_id"]) for span in cls.spans}
+        raw_text: dict[str, str] = {}
         for source_id, source in cls.sources.items():
             with fitz.open(ROOT / source["path"]) as document:
-                objects.extend(extract_pdf(document, source_id).source_objects)
-        cls.raw_objects = tuple(objects)
+                targets = {
+                    (row["page_number"], row["block_index"]): row["source_object_id"]
+                    for row in cls.published
+                    if row["source_document_id"] == source_id and row["source_object_id"] not in span_objects
+                }
+                for (page_number, block_index), object_id in targets.items():
+                    block = document[page_number - 1].get_text("rawdict")["blocks"][block_index]
+                    raw_text[object_id] = "".join(
+                        str(character.get("c") or "")
+                        for line in block.get("lines", ())
+                        for span in line.get("spans", ())
+                        for character in span.get("chars", ())
+                    )
+        derived = {"source_sha256", "source_pdf_path", "object_role", "text_span_ids", "target_refs", "disposition", "reason"}
+        cls.raw_objects = tuple(
+            {**{key: value for key, value in row.items() if key not in derived}, "_raw_character_text": raw_text.get(row["source_object_id"], "")}
+            for row in cls.published
+        )
 
     def test_every_published_pdf_object_has_one_terminal_disposition(self) -> None:
         rows = self.published
