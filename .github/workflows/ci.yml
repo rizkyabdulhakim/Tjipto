@@ -11,6 +11,9 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    outputs:
+      artifact_id: ${{ steps.upload_backend.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload_backend.outputs.artifact-digest }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -45,7 +48,7 @@ jobs:
       - name: Compile
         run: python scripts/measure_command.py --gate compileall --report reports/ci-gates.jsonl -- python -m compileall -q src tests scripts
       - name: Unit tests
-        run: python scripts/measure_command.py --gate unittest --report reports/ci-gates.jsonl -- python -m unittest discover -s tests -v
+        run: python scripts/measure_command.py --gate unittest --report reports/ci-gates.jsonl --result-report reports/unittest.json -- python -m unittest discover -s tests -v
       - name: Profile suspected memory owners
         run: |
           for file in \
@@ -78,17 +81,17 @@ jobs:
       - name: Pytest run 1
         run: python scripts/measure_command.py --gate pytest_run_1 --report reports/ci-gates.jsonl --result-report reports/pytest-run-1.json -- python -m pytest -q -p no:cacheprovider
       - name: Retrieval evaluation
-        run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps
+        run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl --result-report reports/retrieval-evaluation-command.json -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps --report reports/retrieval-evaluation.json
       - name: Source-text reachability evaluation
         run: python scripts/measure_command.py --gate source_text_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_source_text_reachability.py --report reports/source-text-evaluation.json
       - name: Meaningful-support evaluation
         run: python scripts/measure_command.py --gate meaningful_support_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_meaningful_support.py --report reports/meaningful-support-evaluation.json
       - name: Artifact validation
-        run: python scripts/measure_command.py --gate artifact_validate --report reports/ci-gates.jsonl -- python -m tjipto.corpora.uud_artifact_baseline validate
+        run: python scripts/measure_command.py --gate artifact_validate --report reports/ci-gates.jsonl --result-report reports/artifact-validation.json -- python -m tjipto.corpora.uud_artifact_baseline validate
       - name: Clean exact-head worktree before rebuild
         run: python scripts/measure_command.py --gate clean_tree --report reports/ci-gates.jsonl -- bash -o pipefail -c 'test -z "$(git status --porcelain=v1 --untracked-files=all)"'
       - name: Artifact rebuild
-        run: python scripts/measure_command.py --gate artifact_rebuild --report reports/ci-gates.jsonl -- python -m tjipto.corpora.uud_artifact_baseline rebuild
+        run: python scripts/measure_command.py --gate artifact_rebuild --report reports/ci-gates.jsonl --result-report reports/artifact-rebuild.json -- python -m tjipto.corpora.uud_artifact_baseline rebuild
       - name: Ruff
         run: python scripts/measure_command.py --gate ruff --report reports/ci-gates.jsonl -- ruff check src tests scripts
       - name: MyPy
@@ -112,23 +115,14 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
+          from scripts.measure_command import compare_pytest_resources
 
           first = json.loads(Path("reports/pytest-run-1.json").read_text(encoding="utf-8"))
           second = json.loads(Path("reports/pytest-run-2.json").read_text(encoding="utf-8"))
           identity = json.loads(Path("reports/run-identity.json").read_text(encoding="utf-8"))
-          comparison = {
-              "run_identity_id": identity["run_identity_id"],
-              "run_1_peak_rss_bytes": first["peak_rss_bytes"],
-              "run_2_peak_rss_bytes": second["peak_rss_bytes"],
-              "run_1_wall_seconds": first["wall_seconds"],
-              "run_2_wall_seconds": second["wall_seconds"],
-              "rss_limit_bytes": 721 * 1024 * 1024,
-          }
-          comparison["rss_limit_pass"] = max(comparison["run_1_peak_rss_bytes"], comparison["run_2_peak_rss_bytes"]) <= comparison["rss_limit_bytes"]
-          comparison["rss_stability_pass"] = comparison["run_2_peak_rss_bytes"] <= comparison["run_1_peak_rss_bytes"] * 1.05
-          comparison["wall_stability_pass"] = comparison["run_2_wall_seconds"] <= comparison["run_1_wall_seconds"] * 1.10
+          comparison = compare_pytest_resources(first, second, identity)
           Path("reports/pytest-resource-comparison.json").write_text(json.dumps(comparison, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          if not all(comparison[key] for key in ("rss_limit_pass", "rss_stability_pass", "wall_stability_pass")):
+          if not all(comparison[key] for key in ("both_pytest_runs_pass", "rss_limit_pass", "rss_stability_pass")):
               raise SystemExit("pytest resource limits exceeded")
           PY
       - name: Verify exact archive (first build)
@@ -182,6 +176,7 @@ jobs:
               raise SystemExit("release reproducibility comparison failed")
           PY
       - name: Upload backend evidence
+        id: upload_backend
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -191,6 +186,9 @@ jobs:
 
   web:
     runs-on: ubuntu-24.04
+    outputs:
+      artifact_id: ${{ steps.upload_web.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload_web.outputs.artifact-digest }}
     defaults:
       run:
         working-directory: apps/web
@@ -251,6 +249,7 @@ jobs:
         run: |
           node -e "const b=require('./node_modules/playwright-core/browsers.json').browsers.find((x)=>x.name==='chromium'); console.log(JSON.stringify(b))" > reports/browser.json
       - name: Upload web evidence
+        id: upload_web
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -261,6 +260,7 @@ jobs:
 
   closure:
     needs: [backend, web]
+    if: always()
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -285,18 +285,34 @@ jobs:
       - name: Record closure job identity
         run: python scripts/measure_command.py --environment-report closure-evidence/closure-run-identity.json -- python --version
       - name: Download backend evidence
+        continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: backend-evidence
           path: closure-evidence/backend
       - name: Download web evidence
+        continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: web-evidence
           path: closure-evidence/web
       - name: Assemble closure provenance
-        run: python scripts/assemble_closure_provenance.py --backend-dir closure-evidence/backend --web-dir closure-evidence/web --closure-identity closure-evidence/closure-run-identity.json --output closure-evidence/closure-provenance.json
+        if: always()
+        run: >-
+          python scripts/assemble_closure_provenance.py
+          --backend-dir closure-evidence/backend
+          --web-dir closure-evidence/web
+          --closure-identity closure-evidence/closure-run-identity.json
+          --backend-result '${{ needs.backend.result }}'
+          --web-result '${{ needs.web.result }}'
+          --backend-artifact-id '${{ needs.backend.outputs.artifact_id }}'
+          --backend-artifact-digest '${{ needs.backend.outputs.artifact_digest }}'
+          --web-artifact-id '${{ needs.web.outputs.artifact_id }}'
+          --web-artifact-digest '${{ needs.web.outputs.artifact_digest }}'
+          --output closure-evidence/closure-provenance.json
       - name: Upload closure provenance
+        id: upload_closure
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: closure-provenance

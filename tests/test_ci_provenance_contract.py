@@ -49,3 +49,16 @@ class CiProvenanceContractTests(unittest.TestCase):
         invalid = self._environment("backend", "not-a-number")
         with self.assertRaisesRegex(ValueError, "job_check_run_id"):
             self._identity(invalid)
+
+    def test_resource_policy_is_symmetric_and_wall_is_diagnostic(self) -> None:
+        first = {"exit_code": 0, "peak_rss_bytes": 700 * 1024 * 1024, "wall_seconds": 10}
+        second = {"exit_code": 0, "peak_rss_bytes": 680 * 1024 * 1024, "wall_seconds": 20}
+        identity = {"run_identity_id": "identity"}
+        forward = measure_command.compare_pytest_resources(first, second, identity)
+        reverse = measure_command.compare_pytest_resources(second, first, identity)
+        for key in ("rss_ratio", "rss_limit_pass", "rss_stability_pass", "wall_ratio", "wall_status"):
+            self.assertEqual(forward[key], reverse[key])
+        self.assertTrue(forward["rss_limit_pass"])
+        self.assertTrue(forward["rss_stability_pass"])
+        self.assertEqual(forward["wall_status"], "variable")
+        self.assertEqual(forward["wall_policy"], "diagnostic_not_benchmark")

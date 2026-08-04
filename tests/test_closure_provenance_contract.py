@@ -9,6 +9,11 @@ from scripts import assemble_closure_provenance as closure
 
 
 class ClosureProvenanceContractTests(unittest.TestCase):
+    uploads = {
+        "backend": {"artifact_id": "201", "artifact_digest": "1" * 64},
+        "web": {"artifact_id": "202", "artifact_digest": "2" * 64},
+    }
+
     def _identity(self, job: str, check_run_id: str) -> dict:
         identity = {
             "repository": "rizkyabdulhakim/Tjipto",
@@ -56,13 +61,42 @@ class ClosureProvenanceContractTests(unittest.TestCase):
         self._write(backend / "release-one.sidecar.json", sidecar)
         self._write(backend / "release-two.sidecar.json", sidecar)
         self._write(backend / "release-comparison.json", {"run_identity_id": backend_identity["run_identity_id"], "archive_sha256_equal": True, "corpora_equal": True, "sidecars_equal": True, "forbidden_entry_count": 0})
+        command = {"exit_code": 0, "peak_rss_bytes": 1, "wall_seconds": 1}
+        for name in closure.BACKEND_EVIDENCE:
+            path = backend / name
+            if path.exists():
+                continue
+            if path.suffix == ".txt":
+                path.write_text("", encoding="utf-8")
+            elif name == "pytest-resource-comparison.json":
+                self._write(path, closure.compare_pytest_resources(command, command, backend_identity))
+            else:
+                self._write(path, command)
+        for name in closure.WEB_EVIDENCE:
+            self._write(web / name, {})
         return backend, web
 
     def test_assembles_complete_bound_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             backend, web = self._evidence(Path(temporary))
-            result = closure.assemble(backend, web)
-            self.assertEqual(sum(len(gates) for gates in result["gates"].values()), 24)
+            result = closure.assemble(backend, web, artifact_uploads=self.uploads)
+            self.assertEqual(result["status"], "complete")
+            self.assertEqual(
+                sum(len(gates) for gates in result["gates"].values()),
+                len(closure.BACKEND_GATES) + len(closure.WEB_GATES),
+            )
+            self.assertEqual(set(result["evidence"]), {"backend", "web"})
+
+    def test_failed_upstream_produces_typed_partial_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            backend, web = self._evidence(Path(temporary))
+            result = closure.assemble(
+                backend, web, upstream_results={"backend": "failure", "web": "success"},
+                artifact_uploads=self.uploads,
+            )
+            self.assertEqual(result["status"], "partial")
+            self.assertEqual(result["upstream_results"], {"backend": "failure", "web": "success"})
+            self.assertTrue(result["available_evidence"]["backend"])
 
     def test_identity_mutation_and_missing_artifact_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -73,10 +107,10 @@ class ClosureProvenanceContractTests(unittest.TestCase):
             rows[0] = json.dumps(changed)
             (backend / "ci-gates.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
             with self.assertRaisesRegex(closure.ClosureError, "gate identity mismatch"):
-                closure.assemble(backend, web)
+                closure.assemble(backend, web, artifact_uploads=self.uploads)
             (web / "ci-gates.jsonl").unlink()
             with self.assertRaisesRegex(closure.ClosureError, "missing artifact"):
-                closure.assemble(backend, web)
+                closure.assemble(backend, web, artifact_uploads=self.uploads)
 
     def test_duplicate_job_identity_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -84,4 +118,4 @@ class ClosureProvenanceContractTests(unittest.TestCase):
             duplicate = self._identity("web", "101")
             self._write(web / "run-identity.json", duplicate)
             with self.assertRaisesRegex(closure.ClosureError, "duplicate backend/web"):
-                closure.assemble(backend, web)
+                closure.assemble(backend, web, artifact_uploads=self.uploads)

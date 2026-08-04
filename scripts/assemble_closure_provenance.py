@@ -6,6 +6,11 @@ from hashlib import sha256
 from pathlib import Path
 import sys
 
+try:
+    from scripts.measure_command import compare_pytest_resources
+except ModuleNotFoundError:  # Direct script execution places scripts/ on sys.path.
+    from measure_command import compare_pytest_resources
+
 
 BACKEND_GATES = frozenset((
     "toolchain", "compileall", "unittest", "pytest_run_1", "retrieval_evaluation",
@@ -18,6 +23,12 @@ SHARED_FIELDS = (
     "commit_sha", "tree_sha", "parent_sha", "ref", "run_id", "run_attempt", "run_identity_id",
 )
 JOB_FIELDS = ("job_key", "job_check_run_id", "job_identity_id")
+BACKEND_EVIDENCE = frozenset((
+    "unittest.json", "pytest-run-1.json", "pytest-run-2.json", "pytest-resource-comparison.json",
+    "retrieval-evaluation.json", "retrieval-evaluation-command.json", "source-text-evaluation.json", "meaningful-support-evaluation.json",
+    "artifact-validation.json", "artifact-rebuild.json", "pip-audit.json", "pip-inspect.json", "clean-tree.txt",
+))
+WEB_EVIDENCE = frozenset(("npm-audit.json", "browser.json"))
 
 
 class ClosureError(ValueError):
@@ -74,6 +85,47 @@ def _validate_gates(gates: list[dict], identity: dict, expected: frozenset[str],
             raise ClosureError(f"gate identity mismatch: {name}")
 
 
+def _evidence_manifest(root: Path) -> dict[str, dict[str, int | str]]:
+    return {
+        path.relative_to(root).as_posix(): {
+            "sha256": sha256(path.read_bytes()).hexdigest(),
+            "size_bytes": path.stat().st_size,
+        }
+        for path in sorted(root.rglob("*")) if path.is_file()
+    }
+
+
+def _validate_evidence(root: Path, required: frozenset[str], job_key: str) -> None:
+    missing = sorted(name for name in required if not (root / name).is_file())
+    if missing:
+        raise ClosureError(f"missing {job_key} evidence: {', '.join(missing)}")
+
+
+def _validate_resource(backend: Path, identity: dict) -> dict:
+    first = _load(backend / "pytest-run-1.json")
+    second = _load(backend / "pytest-run-2.json")
+    comparison = _load(backend / "pytest-resource-comparison.json")
+    if first.get("exit_code") != 0 or second.get("exit_code") != 0:
+        raise ClosureError("full pytest run failed")
+    if comparison.get("run_identity_id") != identity["run_identity_id"]:
+        raise ClosureError("resource comparison provenance mismatch")
+    expected = compare_pytest_resources(first, second, identity)
+    if any(comparison.get(key) != expected[key] for key in expected):
+        raise ClosureError("resource comparison content mismatch")
+    if not all(comparison.get(key) is True for key in ("both_pytest_runs_pass", "rss_limit_pass", "rss_stability_pass")):
+        raise ClosureError("pytest RSS policy failed")
+    if comparison.get("wall_status") not in {"stable", "variable", "unavailable"}:
+        raise ClosureError("invalid diagnostic wall status")
+    return {"run_1": first, "run_2": second, "comparison": comparison}
+
+
+def _validate_uploads(uploads: dict[str, dict[str, str]]) -> None:
+    for job_key in ("backend", "web"):
+        upload = uploads.get(job_key, {})
+        if not str(upload.get("artifact_id", "")).isdigit() or len(str(upload.get("artifact_digest", ""))) != 64:
+            raise ClosureError(f"invalid {job_key} artifact upload identity")
+
+
 def _release(backend: Path, identity: dict) -> dict:
     first = _load(backend / "release-one.json")
     second = _load(backend / "release-two.json")
@@ -95,7 +147,35 @@ def _release(backend: Path, identity: dict) -> dict:
     return {"a": first, "b": second, "a_sidecar": first_sidecar, "b_sidecar": second_sidecar, "comparison": comparison}
 
 
-def assemble(backend: Path, web: Path, closure_identity_path: Path | None = None) -> dict:
+def assemble(
+    backend: Path,
+    web: Path,
+    closure_identity_path: Path | None = None,
+    *,
+    upstream_results: dict[str, str] | None = None,
+    artifact_uploads: dict[str, dict[str, str]] | None = None,
+) -> dict:
+    results = upstream_results or {"backend": "success", "web": "success"}
+    uploads = artifact_uploads or {}
+    if set(results) != {"backend", "web"}:
+        raise ClosureError("missing upstream job result")
+    if any(result != "success" for result in results.values()):
+        jobs = {}
+        if closure_identity_path and closure_identity_path.is_file():
+            closure_identity = _load(closure_identity_path)
+            _validate_job(closure_identity, "closure")
+            jobs["closure"] = closure_identity
+        return {
+            "schema_version": 1,
+            "status": "partial",
+            "upstream_results": results,
+            "jobs": jobs,
+            "artifact_uploads": uploads,
+            "available_evidence": {
+                "backend": _evidence_manifest(backend) if backend.is_dir() else {},
+                "web": _evidence_manifest(web) if web.is_dir() else {},
+            },
+        }
     backend_identity = _load(backend / "run-identity.json")
     web_identity = _load(web / "run-identity.json")
     _validate_job(backend_identity, "backend")
@@ -108,6 +188,9 @@ def assemble(backend: Path, web: Path, closure_identity_path: Path | None = None
     web_gates = _load_lines(web / "ci-gates.jsonl")
     _validate_gates(backend_gates, backend_identity, BACKEND_GATES, "backend")
     _validate_gates(web_gates, web_identity, WEB_GATES, "web")
+    _validate_evidence(backend, BACKEND_EVIDENCE, "backend")
+    _validate_evidence(web, WEB_EVIDENCE, "web")
+    _validate_uploads(uploads)
     jobs = {"backend": backend_identity, "web": web_identity}
     if closure_identity_path:
         closure_identity = _load(closure_identity_path)
@@ -119,9 +202,14 @@ def assemble(backend: Path, web: Path, closure_identity_path: Path | None = None
         jobs["closure"] = closure_identity
     return {
         "schema_version": 1,
+        "status": "complete",
+        "upstream_results": results,
         "run_identity": {key: backend_identity[key] for key in SHARED_FIELDS},
         "jobs": jobs,
         "gates": {"backend": backend_gates, "web": web_gates},
+        "resource": _validate_resource(backend, backend_identity),
+        "artifact_uploads": uploads,
+        "evidence": {"backend": _evidence_manifest(backend), "web": _evidence_manifest(web)},
         "release": _release(backend, backend_identity),
     }
 
@@ -131,16 +219,39 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backend-dir", type=Path, required=True)
     parser.add_argument("--web-dir", type=Path, required=True)
     parser.add_argument("--closure-identity", type=Path)
+    parser.add_argument("--backend-result", required=True)
+    parser.add_argument("--web-result", required=True)
+    parser.add_argument("--backend-artifact-id", default="")
+    parser.add_argument("--backend-artifact-digest", default="")
+    parser.add_argument("--web-artifact-id", default="")
+    parser.add_argument("--web-artifact-digest", default="")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
+    results = {"backend": args.backend_result, "web": args.web_result}
+    uploads = {
+        "backend": {"artifact_id": args.backend_artifact_id, "artifact_digest": args.backend_artifact_digest},
+        "web": {"artifact_id": args.web_artifact_id, "artifact_digest": args.web_artifact_digest},
+    }
     try:
-        result = assemble(args.backend_dir, args.web_dir, args.closure_identity)
+        result = assemble(
+            args.backend_dir, args.web_dir, args.closure_identity,
+            upstream_results=results, artifact_uploads=uploads,
+        )
     except ClosureError as error:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps({
+            "schema_version": 1, "status": "invalid", "upstream_results": results,
+            "artifact_uploads": uploads, "error": str(error),
+        }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"closure provenance failed: {error}", file=sys.stderr)
         return 1
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"gate_count": sum(len(rows) for rows in result["gates"].values()), "run_identity_id": result["run_identity"]["run_identity_id"]}, sort_keys=True))
+    print(json.dumps({
+        "status": result["status"],
+        "gate_count": sum(len(rows) for rows in result.get("gates", {}).values()),
+        "run_identity_id": result.get("run_identity", {}).get("run_identity_id"),
+    }, sort_keys=True))
     return 0
 
 
