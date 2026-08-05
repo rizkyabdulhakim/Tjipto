@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from copy import deepcopy
+import gc
 import json
 from pathlib import Path
 
@@ -142,9 +143,14 @@ def evaluate(repo_root: Path = ROOT) -> dict:
     target = next(row for row in mutated if row["bbox_precision"] == "exact")
     target["bbox_refs"].append("foreign-character")
     mutation_escapes += evaluate_meaningful_rows(mutated, artifacts, oracle)["status"] != "FAIL"
+    reachability_artifacts = {
+        name: artifacts[name] for name in ("documents", "spans", "words")
+    }
+    del artifacts, mutated, oracle
+    gc.collect()
     service = LegalRuntimeService(repo_root)
-    first = _reachability_snapshot(rows, artifacts, service)
-    second = _reachability_snapshot(rows, artifacts, service)
+    first = _reachability_snapshot(rows, reachability_artifacts, service)
+    second = _reachability_snapshot(rows, reachability_artifacts, service)
     counters = Counter(first["counters"])
     counters["meaningful_support_evaluator_failure_count"] = int(meaningful["status"] != "PASS")
     counters["mutation_escape_count"] = mutation_escapes
