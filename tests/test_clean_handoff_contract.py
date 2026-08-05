@@ -26,7 +26,7 @@ class CleanHandoffContractTest(unittest.TestCase):
             (root / "private.key").write_text("secret", encoding="utf-8")
             self.assertEqual(handoff.forbidden_entries(root), ["credentials-prod.json", "private.key"])
 
-    def test_archive_uses_exact_commit_and_ignores_dirty_attributes_and_source(self) -> None:
+    def test_archive_inventory_detects_export_ignored_tracked_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._init_git(root)
@@ -46,7 +46,23 @@ class CleanHandoffContractTest(unittest.TestCase):
             self.assertEqual(identity["archive_sha256"], hashlib.sha256(archive.read_bytes()).hexdigest())
             with zipfile.ZipFile(archive) as source:
                 self.assertNotIn("src/value.txt", source.namelist())
+            self.assertEqual(handoff.archive_inventory(root, commit, archive)["missing_files"], ["src/value.txt"])
             self.assertEqual((root / "src/value.txt").read_text(encoding="utf-8"), "dirty\n")
+
+    def test_archive_inventory_requires_exact_tracked_file_set_and_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git(root)
+            (root / "src").mkdir()
+            (root / "src/value.txt").write_text("committed\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "baseline")
+            commit = self._git(root, "rev-parse", "HEAD")
+            archive = root / "candidate.zip"
+            handoff.create_archive(root, commit, archive)
+            inventory = handoff.archive_inventory(root, commit, archive)
+            self.assertEqual(inventory["status"], "passed")
+            self.assertEqual(inventory["expected_file_count"], inventory["archive_file_count"])
 
     def test_archive_rejects_non_exact_ref(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

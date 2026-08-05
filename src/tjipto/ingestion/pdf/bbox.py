@@ -153,6 +153,12 @@ def extract_pdf(doc, source_document_id: str) -> PdfExtraction:
             continue
         for block_index, block in enumerate(raw_payload.get("blocks", [])):
             object_id = f"pdf_object::{source_document_id}::{page_number:04d}::{block_index:04d}"
+            raw_character_text = "".join(
+                str(character.get("c") or "")
+                for line in block.get("lines", [])
+                for span in line.get("spans", [])
+                for character in span.get("chars", [])
+            )
             source_objects.append(
                 {
                     "source_object_id": object_id,
@@ -169,6 +175,7 @@ def extract_pdf(doc, source_document_id: str) -> PdfExtraction:
                         f"pdf_line::{source_document_id}::{page_number:04d}::{block_index:04d}::{line_index:04d}"
                         for line_index, _ in enumerate(block.get("lines") or ())
                     ),
+                    "_raw_character_text": raw_character_text,
                 }
             )
             if block.get("type") != 0:

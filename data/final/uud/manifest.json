@@ -32,6 +32,7 @@
     "metadata_graph_edges": 635,
     "metadata_grounding": 68,
     "metadata_grounding_records": 320,
+    "meaningful_support_units": 665,
     "not_promoted_amends_edges": 8,
     "pages": 63,
     "promotion_decisions": 75,
@@ -374,6 +375,19 @@
       "bytes": 535833,
       "sha256": "d22ffee83a685f6837f2431cb07102e5e69fdb24f4ddc6750da2ac53c6224f7e"
     },
+    "meaningful_support_units.jsonl": {
+      "origin": "generated",
+      "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
+      "producer": "meaningful_support_builder",
+      "build_stage": "support_projection",
+      "logical_key": "meaningful_support_units",
+      "artifact_kind": "meaningful_support_units",
+      "format": "jsonl",
+      "artifact_schema": 7,
+      "primary_id": "support_unit_id",
+      "bytes": 5855891,
+      "sha256": "6540330664afe68c25e44faf83daf6084b872b77aabe0cd683496805a74d7d40"
+    },
     "pages.jsonl": {
       "origin": "generated",
       "origin_reason": "rebuilt by the UUD artifact baseline pipeline from source PDFs, corpus specs, and generated grounding artifacts",
@@ -489,8 +503,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 17406055,
-      "sha256": "c45257cc85ddebbe099f15a753ebd2765e8badf3098f0f5b10be62ba22b353d3"
+      "bytes": 19848736,
+      "sha256": "d1eba750d012b0682ad55ebb7b673656db403cd6a1380f514a1a68c0b325bf7a"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -560,8 +574,8 @@
         "reason",
         "object_role"
       ],
-      "bytes": 762977,
-      "sha256": "3ed6759a883193208f005632544d73103934c730f8eb1a28f036f6563923105b"
+      "bytes": 763341,
+      "sha256": "e11d00817662ccd047025c5488f8cfb1a24c8a0c3fffab17ac22e4c6eee62faf"
     },
     "source_integrity.json": {
       "origin": "carried_forward",
@@ -637,8 +651,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 25364,
-      "sha256": "a1b6ae86ce177f33d29ee6d9c508b3e7f962248a1ea9c21321d556265a627245"
+      "bytes": 25363,
+      "sha256": "56fc3a03e39ea0b60ef205a706e3a3f07b5fdb9bd01333224cd9a79b0353ee47"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -778,6 +792,7 @@
   "metadata_graph_edges": "metadata_graph_edges.jsonl",
   "metadata_grounding": "metadata_grounding.jsonl",
   "metadata_grounding_registry": "metadata_grounding_registry.jsonl",
+  "meaningful_support_units": "meaningful_support_units.jsonl",
   "pages": "pages.jsonl",
   "pdf_health_report": "pdf_health_report.json",
   "promotion_decisions": "promotion_decisions.jsonl",

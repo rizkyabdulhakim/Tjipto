@@ -78,7 +78,7 @@
     "unresolved_text_span_ref_count": 0,
     "missing_lineage_count": 0,
     "extraction_failed_count": 0,
-    "needs_review_count": 34,
+    "needs_review_count": 0,
     "status": "complete"
   },
   "chunk_self_contained_health": {
@@ -373,11 +373,11 @@
     "runtime_check_count": 0
   },
   "artifact_origin_health": {
-    "manifest_file_rows": 32,
-    "files_with_origin": 32,
+    "manifest_file_rows": 33,
+    "files_with_origin": 33,
     "files_missing_origin": 0,
     "invalid_origin_values": 0,
-    "generated_count": 27,
+    "generated_count": 28,
     "carried_forward_count": 3,
     "manual_review_artifact_count": 2,
     "deprecated_count": 0,
@@ -701,7 +701,7 @@
       "source_anomaly_trace": 4
     }
   },
-  "validated_artifact_set_digest": "c6d96cf0d867fe4e98788dd0ab3948929b969f7fc6fd4e39edfb29461f6179f4",
+  "validated_artifact_set_digest": "c5c4c53dd2149e2754a61435e8457b026775cc10b953ae83ecb109cd57f0e4a1",
   "required_health": {
     "status": "complete",
     "required_section_count": 15,

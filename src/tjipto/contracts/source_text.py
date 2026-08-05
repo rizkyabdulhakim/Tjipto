@@ -40,6 +40,7 @@ class SourceSelector:
 
 @dataclass(frozen=True)
 class SourceTextRecord:
+    raw_source_span_id: str
     source_value: str
     normalized_value: str
     source_document_id: str
@@ -48,6 +49,11 @@ class SourceTextRecord:
     extraction_order: int
     selector: SourceSelector
     geometry_available: bool
+    semantic_text_span_id: str | None
+    semantic_classification: str | None
+    semantic_join_status: str
+    source_role: str
+    temporal_context: str
     disposition: SourceTextDisposition
     legal_force: str
     capabilities: tuple[SourceTextCapability, ...]
@@ -59,15 +65,45 @@ class SourceTextRecord:
     abstention_reason: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.source_value or not self.normalized_value:
+        if not self.raw_source_span_id or not self.source_value or not self.normalized_value:
             raise ValueError("empty_source_text")
         if not self.source_document_id or not self.source_sha256 or self.page_number < 1 or self.extraction_order < 0:
             raise ValueError("invalid_source_identity")
         if not self.capabilities and not self.abstention_reason:
             raise ValueError("source_text_without_route_or_review")
-        if self.disposition is SourceTextDisposition.SOURCE_ANNOTATION and (
+        if self.disposition is not SourceTextDisposition.LEGAL_TEXT and (
             self.legal_answer_eligible or self.legal_citation_eligible or self.default_highlight_eligible
         ):
+            raise ValueError("nonnormative_source_text_promoted_to_law")
+
+
+@dataclass(frozen=True)
+class SourceAnnotationOccurrence:
+    occurrence_id: str
+    marker: str
+    legend_markers: tuple[str, ...]
+    source_document_id: str
+    source_sha256: str
+    page_number: int
+    extraction_order: int
+    selector: SourceSelector
+    geometry: tuple[float, float, float, float]
+    target_legal_unit_id: str | None = None
+    target_reason: str | None = None
+    legal_citation_eligible: bool = False
+    default_highlight_eligible: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.occurrence_id or not self.marker or not self.legend_markers:
+            raise ValueError("incomplete_source_annotation_occurrence")
+        if not self.source_document_id or not self.source_sha256 or self.page_number < 1 or self.extraction_order < 0:
+            raise ValueError("invalid_source_annotation_identity")
+        x0, y0, x1, y1 = self.geometry
+        if x1 <= x0 or y1 <= y0:
+            raise ValueError("invalid_source_annotation_geometry")
+        if bool(self.target_legal_unit_id) == bool(self.target_reason):
+            raise ValueError("source_annotation_target_or_reason_required")
+        if self.legal_citation_eligible or self.default_highlight_eligible:
             raise ValueError("source_annotation_promoted_to_law")
 
 

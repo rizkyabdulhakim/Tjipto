@@ -1,0 +1,58 @@
+{
+  "oracle_contract_id": "tjipto.tests.meaningful-support-oracle",
+  "oracle_contract_version": 2,
+  "meaningful_legal_forces": [
+    "canonical_normative",
+    "historical_normative",
+    "amendment_instrument",
+    "metadata_only"
+  ],
+  "authority_support_kinds": {
+    "normative_legal_text": "normative",
+    "structural_context": "structural",
+    "instrument_provenance": "instrument",
+    "metadata": "metadata",
+    "source_anomaly_provenance": "trace"
+  },
+  "reviewed_decisions": {
+    "uud_text_span::current_consolidated::0002::0010": {
+      "decision_kind": "reviewed_support",
+      "support_kind": "document_title",
+      "owner_type": "review_decision",
+      "owner_id": "uud_meaningful_support_review::current_consolidated::0002::0010",
+      "source_document_id": "uud::current_consolidated",
+      "source_role": "current_consolidated",
+      "temporal_context": "current_consolidated",
+      "semantic_classification": "structural_heading",
+      "legal_force": "metadata_only",
+      "authority_kind": "structural_context",
+      "decision_reason": "reviewed_publication_title_block_before_preamble"
+    },
+    "uud_text_span::current_consolidated::0003::0017": {
+      "decision_kind": "reviewed_support",
+      "support_kind": "structural",
+      "owner_type": "review_decision",
+      "owner_id": "uud_meaningful_support_review::current_consolidated::0003::0017",
+      "source_document_id": "uud::current_consolidated",
+      "source_role": "current_consolidated",
+      "temporal_context": "current_consolidated",
+      "semantic_classification": "structural_heading",
+      "legal_force": "metadata_only",
+      "authority_kind": "structural_context",
+      "decision_reason": "reviewed_document_title_before_operational_body"
+    },
+    "uud_text_span::current_consolidated::0028::0018": {
+      "decision_kind": "typed_exclusion",
+      "support_kind": "layout_separator",
+      "owner_type": "review_decision",
+      "owner_id": "uud_meaningful_support_review::current_consolidated::0028::0018",
+      "source_document_id": "uud::current_consolidated",
+      "source_role": "current_consolidated",
+      "temporal_context": "current_consolidated",
+      "semantic_classification": "normative_constitutional_text",
+      "legal_force": "canonical_normative",
+      "authority_kind": "none",
+      "decision_reason": "reviewed_layout_separator_not_legal_text"
+    }
+  }
+}

@@ -65,6 +65,7 @@ UUD_ARTIFACT_ORIGIN_POLICY = {
     "metadata_graph_edges.jsonl": _generated("metadata_builder", "graph_build"),
     "metadata_grounding.jsonl": _generated("metadata_builder", "metadata_build"),
     "metadata_grounding_registry.jsonl": _generated("metadata_builder", "metadata_build"),
+    "meaningful_support_units.jsonl": _generated("meaningful_support_builder", "support_projection"),
     "pages.jsonl": _generated("pages_builder", "ingestion"),
     "pdf_health_report.json": _generated("pdf_health_builder", "ingestion"),
     "promotion_decisions.jsonl": _generated("promotion_builder", "promotion_audit"),

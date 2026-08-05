@@ -6,10 +6,14 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    outputs:
+      artifact_id: ${{ steps.upload_backend.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload_backend.outputs.artifact-digest }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -20,6 +24,15 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24.14.0"
+      - name: Export typed job identity
+        run: |
+          {
+            echo "TJIPTO_JOB_CHECK_RUN_ID=${{ job.check_run_id }}"
+            echo "TJIPTO_JOB_WORKFLOW_REF=${{ job.workflow_ref }}"
+            echo "TJIPTO_JOB_WORKFLOW_SHA=${{ job.workflow_sha }}"
+            echo "TJIPTO_JOB_WORKFLOW_REPOSITORY=${{ job.workflow_repository }}"
+            echo "TJIPTO_JOB_WORKFLOW_FILE_PATH=${{ job.workflow_file_path }}"
+          } >> "$GITHUB_ENV"
       - name: Install canonical Python environment
         run: |
           python -m pip install --require-hashes --upgrade -r requirements.lock
@@ -29,13 +42,13 @@ jobs:
           rm -rf reports
           mkdir reports
       - name: Validate canonical toolchain
-        run: python scripts/validate_toolchain.py
+        run: python scripts/measure_command.py --gate toolchain --report reports/ci-gates.jsonl -- python scripts/validate_toolchain.py
       - name: Record environment identity
         run: python scripts/measure_command.py --environment-report reports/run-identity.json -- python --version
       - name: Compile
         run: python scripts/measure_command.py --gate compileall --report reports/ci-gates.jsonl -- python -m compileall -q src tests scripts
       - name: Unit tests
-        run: python scripts/measure_command.py --gate unittest --report reports/ci-gates.jsonl -- python -m unittest discover -s tests -v
+        run: python scripts/measure_command.py --gate unittest --report reports/ci-gates.jsonl --result-report reports/unittest.json -- python -m unittest discover -s tests -v
       - name: Profile suspected memory owners
         run: |
           for file in \
@@ -63,17 +76,22 @@ jobs:
         run: |
           python -m pytest -q -p no:cacheprovider -p scripts.pytest_memory_profile \
             tests/test_uud_builder_contract.py::UudBuilderContractTest::test_evidence_rebuild_identity_from_rebuilt_chunks_without_seed \
-            tests/test_uud_builder_contract.py::UudBuilderContractTest::test_word_bbox_registry_exists_and_is_deterministic
+            tests/test_uud_builder_contract.py::UudBuilderContractTest::test_word_bbox_registry_exists_and_is_deterministic \
+            tests/test_source_text_reachability_contract.py::SourceTextReachabilityContractTests::test_evaluator_streams_raw_rows_without_retaining_the_input_owner
       - name: Pytest run 1
         run: python scripts/measure_command.py --gate pytest_run_1 --report reports/ci-gates.jsonl --result-report reports/pytest-run-1.json -- python -m pytest -q -p no:cacheprovider
       - name: Retrieval evaluation
-        run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps
+        run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl --result-report reports/retrieval-evaluation-command.json -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps --report reports/retrieval-evaluation.json
       - name: Source-text reachability evaluation
         run: python scripts/measure_command.py --gate source_text_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_source_text_reachability.py --report reports/source-text-evaluation.json
+      - name: Meaningful-support evaluation
+        run: python scripts/measure_command.py --gate meaningful_support_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_meaningful_support.py --report reports/meaningful-support-evaluation.json
       - name: Artifact validation
-        run: python scripts/measure_command.py --gate artifact_validate --report reports/ci-gates.jsonl -- python -m tjipto.corpora.uud_artifact_baseline validate
+        run: python scripts/measure_command.py --gate artifact_validate --report reports/ci-gates.jsonl --result-report reports/artifact-validation.json -- python -m tjipto.corpora.uud_artifact_baseline validate
+      - name: Clean exact-head worktree before rebuild
+        run: python scripts/measure_command.py --gate clean_tree --report reports/ci-gates.jsonl -- bash -o pipefail -c 'test -z "$(git status --porcelain=v1 --untracked-files=all)"'
       - name: Artifact rebuild
-        run: python scripts/measure_command.py --gate artifact_rebuild --report reports/ci-gates.jsonl -- python -m tjipto.corpora.uud_artifact_baseline rebuild
+        run: python scripts/measure_command.py --gate artifact_rebuild --report reports/ci-gates.jsonl --result-report reports/artifact-rebuild.json -- python -m tjipto.corpora.uud_artifact_baseline rebuild
       - name: Ruff
         run: python scripts/measure_command.py --gate ruff --report reports/ci-gates.jsonl -- ruff check src tests scripts
       - name: MyPy
@@ -97,27 +115,20 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
+          from scripts.measure_command import compare_pytest_resources
 
           first = json.loads(Path("reports/pytest-run-1.json").read_text(encoding="utf-8"))
           second = json.loads(Path("reports/pytest-run-2.json").read_text(encoding="utf-8"))
-          comparison = {
-              "run_1_peak_rss_bytes": first["peak_rss_bytes"],
-              "run_2_peak_rss_bytes": second["peak_rss_bytes"],
-              "run_1_wall_seconds": first["wall_seconds"],
-              "run_2_wall_seconds": second["wall_seconds"],
-              "rss_limit_bytes": 721 * 1024 * 1024,
-          }
-          comparison["rss_limit_pass"] = max(comparison["run_1_peak_rss_bytes"], comparison["run_2_peak_rss_bytes"]) <= comparison["rss_limit_bytes"]
-          comparison["rss_stability_pass"] = comparison["run_2_peak_rss_bytes"] <= comparison["run_1_peak_rss_bytes"] * 1.05
-          comparison["wall_stability_pass"] = comparison["run_2_wall_seconds"] <= comparison["run_1_wall_seconds"] * 1.10
+          identity = json.loads(Path("reports/run-identity.json").read_text(encoding="utf-8"))
+          comparison = compare_pytest_resources(first, second, identity)
           Path("reports/pytest-resource-comparison.json").write_text(json.dumps(comparison, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          if not all(comparison[key] for key in ("rss_limit_pass", "rss_stability_pass", "wall_stability_pass")):
+          if not all(comparison[key] for key in ("both_pytest_runs_pass", "rss_limit_pass", "rss_stability_pass")):
               raise SystemExit("pytest resource limits exceeded")
           PY
       - name: Verify exact archive (first build)
         run: |
           set -euo pipefail
-          python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" | tee "$RUNNER_TEMP/tjipto-release-one.json"'
+          python scripts/measure_command.py --gate release_a --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" | tee "$RUNNER_TEMP/tjipto-release-one.json"'
           test -s "$RUNNER_TEMP/tjipto-release-one.json"
           test -s "$RUNNER_TEMP/tjipto-release-one.zip.sidecar.json"
           cp "$RUNNER_TEMP/tjipto-release-one.json" reports/release-one.json
@@ -125,7 +136,7 @@ jobs:
       - name: Verify exact archive (second build)
         run: |
           set -euo pipefail
-          python scripts/measure_command.py --gate release_validation --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" | tee "$RUNNER_TEMP/tjipto-release-two.json"'
+          python scripts/measure_command.py --gate release_b --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" | tee "$RUNNER_TEMP/tjipto-release-two.json"'
           test -s "$RUNNER_TEMP/tjipto-release-two.json"
           test -s "$RUNNER_TEMP/tjipto-release-two.zip.sidecar.json"
           cp "$RUNNER_TEMP/tjipto-release-two.json" reports/release-two.json
@@ -149,18 +160,23 @@ jobs:
           second = load_report("reports/release-two.json")
           first_sidecar = load_report("reports/release-one.sidecar.json")
           second_sidecar = load_report("reports/release-two.sidecar.json")
+          identity = load_report("reports/run-identity.json")
           comparison = {
+              "run_identity_id": identity["run_identity_id"],
               "archive_sha256_equal": first["archive_sha256"] == second["archive_sha256"],
               "corpora_equal": first_sidecar["corpora"] == second_sidecar["corpora"],
+              "sidecars_equal": first_sidecar == second_sidecar,
+              "forbidden_entry_count": len(first["archive_forbidden_entries"]) + len(second["archive_forbidden_entries"]),
               "first_archive_sha256": first["archive_sha256"],
               "second_archive_sha256": second["archive_sha256"],
               "corpora": first_sidecar["corpora"],
           }
           Path("reports/release-comparison.json").write_text(json.dumps(comparison, indent=2, sort_keys=True) + "\n")
-          if not all(comparison[key] for key in ("archive_sha256_equal", "corpora_equal")):
+          if not all(comparison[key] for key in ("archive_sha256_equal", "corpora_equal", "sidecars_equal")) or comparison["forbidden_entry_count"]:
               raise SystemExit("release reproducibility comparison failed")
           PY
       - name: Upload backend evidence
+        id: upload_backend
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -170,6 +186,9 @@ jobs:
 
   web:
     runs-on: ubuntu-24.04
+    outputs:
+      artifact_id: ${{ steps.upload_web.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload_web.outputs.artifact-digest }}
     defaults:
       run:
         working-directory: apps/web
@@ -185,6 +204,15 @@ jobs:
           node-version: "24.14.0"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
+      - name: Export typed job identity
+        run: |
+          {
+            echo "TJIPTO_JOB_CHECK_RUN_ID=${{ job.check_run_id }}"
+            echo "TJIPTO_JOB_WORKFLOW_REF=${{ job.workflow_ref }}"
+            echo "TJIPTO_JOB_WORKFLOW_SHA=${{ job.workflow_sha }}"
+            echo "TJIPTO_JOB_WORKFLOW_REPOSITORY=${{ job.workflow_repository }}"
+            echo "TJIPTO_JOB_WORKFLOW_FILE_PATH=${{ job.workflow_file_path }}"
+          } >> "$GITHUB_ENV"
       - name: Install canonical Python environment for smoke
         working-directory: .
         run: |
@@ -196,7 +224,7 @@ jobs:
           mkdir reports
       - name: Validate canonical toolchain
         working-directory: .
-        run: python scripts/validate_toolchain.py
+        run: python scripts/measure_command.py --gate toolchain --report apps/web/reports/ci-gates.jsonl -- python scripts/validate_toolchain.py
       - name: Record run identity
         working-directory: .
         run: python scripts/measure_command.py --environment-report apps/web/reports/run-identity.json -- python --version
@@ -221,6 +249,7 @@ jobs:
         run: |
           node -e "const b=require('./node_modules/playwright-core/browsers.json').browsers.find((x)=>x.name==='chromium'); console.log(JSON.stringify(b))" > reports/browser.json
       - name: Upload web evidence
+        id: upload_web
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -228,3 +257,64 @@ jobs:
           path: |
             apps/web/reports/
           if-no-files-found: warn
+
+  closure:
+    needs: [backend, web]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12.10"
+      - name: Export typed job identity
+        run: |
+          {
+            echo "TJIPTO_JOB_CHECK_RUN_ID=${{ job.check_run_id }}"
+            echo "TJIPTO_JOB_WORKFLOW_REF=${{ job.workflow_ref }}"
+            echo "TJIPTO_JOB_WORKFLOW_SHA=${{ job.workflow_sha }}"
+            echo "TJIPTO_JOB_WORKFLOW_REPOSITORY=${{ job.workflow_repository }}"
+            echo "TJIPTO_JOB_WORKFLOW_FILE_PATH=${{ job.workflow_file_path }}"
+          } >> "$GITHUB_ENV"
+      - name: Install canonical Python environment
+        run: |
+          python -m pip install --require-hashes --upgrade -r requirements.lock
+          python -m pip install --no-deps --no-build-isolation -e .
+      - name: Record closure job identity
+        run: python scripts/measure_command.py --environment-report closure-evidence/closure-run-identity.json -- python --version
+      - name: Download backend evidence
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: backend-evidence
+          path: closure-evidence/backend
+      - name: Download web evidence
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: web-evidence
+          path: closure-evidence/web
+      - name: Assemble closure provenance
+        if: always()
+        run: >-
+          python scripts/assemble_closure_provenance.py
+          --backend-dir closure-evidence/backend
+          --web-dir closure-evidence/web
+          --closure-identity closure-evidence/closure-run-identity.json
+          --backend-result '${{ needs.backend.result }}'
+          --web-result '${{ needs.web.result }}'
+          --backend-artifact-id '${{ needs.backend.outputs.artifact_id }}'
+          --backend-artifact-digest '${{ needs.backend.outputs.artifact_digest }}'
+          --web-artifact-id '${{ needs.web.outputs.artifact_id }}'
+          --web-artifact-digest '${{ needs.web.outputs.artifact_digest }}'
+          --output closure-evidence/closure-provenance.json
+      - name: Upload closure provenance
+        id: upload_closure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: closure-provenance
+          path: closure-evidence/
+          if-no-files-found: error

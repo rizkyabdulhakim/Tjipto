@@ -1,0 +1,45 @@
+{
+  "contract_id": "tjipto.uud.meaningful-support-review",
+  "contract_version": 1,
+  "decisions": [
+    {
+      "review_decision_id": "uud_meaningful_support_review::current_consolidated::0002::0010",
+      "text_span_id": "uud_text_span::current_consolidated::0002::0010",
+      "decision_kind": "reviewed_support",
+      "support_kind": "document_title",
+      "source_document_id": "uud::current_consolidated",
+      "source_role": "current_consolidated",
+      "temporal_context": "current_consolidated",
+      "semantic_classification": "structural_heading",
+      "legal_force": "metadata_only",
+      "authority_kind": "structural_context",
+      "decision_reason": "reviewed_publication_title_block_before_preamble"
+    },
+    {
+      "review_decision_id": "uud_meaningful_support_review::current_consolidated::0003::0017",
+      "text_span_id": "uud_text_span::current_consolidated::0003::0017",
+      "decision_kind": "reviewed_support",
+      "support_kind": "structural",
+      "source_document_id": "uud::current_consolidated",
+      "source_role": "current_consolidated",
+      "temporal_context": "current_consolidated",
+      "semantic_classification": "structural_heading",
+      "legal_force": "metadata_only",
+      "authority_kind": "structural_context",
+      "decision_reason": "reviewed_document_title_before_operational_body"
+    },
+    {
+      "review_decision_id": "uud_meaningful_support_review::current_consolidated::0028::0018",
+      "text_span_id": "uud_text_span::current_consolidated::0028::0018",
+      "decision_kind": "typed_exclusion",
+      "support_kind": "layout_separator",
+      "source_document_id": "uud::current_consolidated",
+      "source_role": "current_consolidated",
+      "temporal_context": "current_consolidated",
+      "semantic_classification": "normative_constitutional_text",
+      "legal_force": "canonical_normative",
+      "authority_kind": "none",
+      "decision_reason": "reviewed_layout_separator_not_legal_text"
+    }
+  ]
+}
