@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from copy import deepcopy
 import json
 from pathlib import Path
 
@@ -126,11 +127,27 @@ def evaluate(repo_root: Path = ROOT) -> dict:
     artifacts["documents"] = _rows(final / "source_documents.jsonl")
     oracle = json.loads((repo_root / ORACLE.relative_to(ROOT)).read_text(encoding="utf-8"))
     meaningful = evaluate_meaningful_rows(rows, artifacts, oracle)
+    mutation_escapes = 0
+    for field, value in (
+        ("owner_id", "missing-owner"),
+        ("page_numbers", [999]),
+        ("quoted_text_sha256", "0" * 64),
+        ("authority_kind", "normative_legal_text"),
+    ):
+        mutated = deepcopy(rows)
+        target = next(row for row in mutated if row["decision_kind"] == "canonical_owner_support")
+        target[field] = value
+        mutation_escapes += evaluate_meaningful_rows(mutated, artifacts, oracle)["status"] != "FAIL"
+    mutated = deepcopy(rows)
+    target = next(row for row in mutated if row["bbox_precision"] == "exact")
+    target["bbox_refs"].append("foreign-character")
+    mutation_escapes += evaluate_meaningful_rows(mutated, artifacts, oracle)["status"] != "FAIL"
     service = LegalRuntimeService(repo_root)
     first = _reachability_snapshot(rows, artifacts, service)
     second = _reachability_snapshot(rows, artifacts, service)
     counters = Counter(first["counters"])
     counters["meaningful_support_evaluator_failure_count"] = int(meaningful["status"] != "PASS")
+    counters["mutation_escape_count"] = mutation_escapes
     counters["repeat_evaluation_mismatch_count"] = first != second
     failures = sum(counters.values())
     support_rows = [row for row in rows if row.get("decision_kind") != "typed_exclusion"]
