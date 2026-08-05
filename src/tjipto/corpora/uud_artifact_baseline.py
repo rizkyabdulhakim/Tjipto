@@ -334,6 +334,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         document_relations=document_relations,
         article_amendment_relations=article_amendment_relations,
         source_conflicts=source_conflicts,
+        meaningful_support_units=meaningful_support_units,
         raw_source_spans=raw_source_spans,
         word_bboxes=word_bboxes,
     ))

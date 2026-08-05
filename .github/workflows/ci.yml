@@ -86,6 +86,10 @@ jobs:
         run: python scripts/measure_command.py --gate source_text_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_source_text_reachability.py --report reports/source-text-evaluation.json
       - name: Meaningful-support evaluation
         run: python scripts/measure_command.py --gate meaningful_support_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_meaningful_support.py --report reports/meaningful-support-evaluation.json
+      - name: Support reachability evaluation
+        run: python scripts/measure_command.py --gate support_reachability_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_support_reachability.py --report reports/support-reachability-evaluation.json
+      - name: QREL v0 evaluation
+        run: python scripts/measure_command.py --gate qrel_v0_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_qrel.py --report reports/qrel-v0-evaluation.json
       - name: Artifact validation
         run: python scripts/measure_command.py --gate artifact_validate --report reports/ci-gates.jsonl --result-report reports/artifact-validation.json -- python -m tjipto.corpora.uud_artifact_baseline validate
       - name: Clean exact-head worktree before rebuild

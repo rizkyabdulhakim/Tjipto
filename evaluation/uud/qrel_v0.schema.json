@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tjipto.local/evaluation/uud/qrel-v0.schema.json",
+  "title": "Tjipto UUD expert QREL v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id", "case_kind", "query", "intent", "answerability", "gold_support_ids",
+    "alternative_valid_support_ids", "forbidden_support_ids", "minimal_relevant_spans",
+    "required_claims", "permitted_partial_claims", "source_role", "temporal_scope",
+    "authority_kind", "citation_finality", "expected_public_targets",
+    "expected_recovery_behavior", "split", "review_status", "reviewer_role", "reviewed_at",
+    "corpus_identity", "coverage_tags"
+  ],
+  "properties": {
+    "case_id": {"type": "string", "minLength": 1},
+    "case_kind": {"enum": ["primary", "adversarial"]},
+    "query": {"type": "string", "minLength": 1},
+    "intent": {"type": "string", "minLength": 1},
+    "answerability": {"enum": ["answerable", "unanswerable", "clarification_required"]},
+    "gold_support_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "alternative_valid_support_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "forbidden_support_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "minimal_relevant_spans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["support_id", "text_span_ids"],
+        "properties": {
+          "support_id": {"type": "string"},
+          "text_span_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+        }
+      }
+    },
+    "required_claims": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "permitted_partial_claims": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "source_role": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "temporal_scope": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "authority_kind": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "citation_finality": {"enum": ["final", "nonfinal", "mixed", "not_applicable"]},
+    "expected_public_targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["support_id", "source_document_id", "page_numbers", "viewer_eligible", "highlight_eligible"],
+        "properties": {
+          "support_id": {"type": "string"},
+          "source_document_id": {"type": "string"},
+          "page_numbers": {"type": "array", "items": {"type": "integer", "minimum": 1}, "uniqueItems": true},
+          "viewer_eligible": {"type": "boolean"},
+          "highlight_eligible": {"type": "boolean"}
+        }
+      }
+    },
+    "expected_recovery_behavior": {"enum": ["retrieve", "abstain", "clarify"]},
+    "split": {"enum": ["dev", "acceptance"]},
+    "review_status": {"enum": ["candidate", "reviewed", "adjudicated", "rejected"]},
+    "reviewer_role": {"type": ["string", "null"]},
+    "reviewed_at": {"type": ["string", "null"]},
+    "corpus_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["corpus_id", "artifact_set_sha256", "manifest_sha256"],
+      "properties": {
+        "corpus_id": {"const": "uud"},
+        "artifact_set_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "coverage_tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  }
+}
