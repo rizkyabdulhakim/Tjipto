@@ -106,7 +106,7 @@ def build_runtime_projection(**artifacts: list[dict]) -> dict:
         )
     ]
     rows["meaningful_support_units"] = _meaningful_support_projection(
-        artifacts.get("meaningful_support_units", ()), artifacts.get("word_bboxes", ())
+        artifacts.get("meaningful_support_units", []), artifacts.get("word_bboxes", [])
     )
     refs = _bbox_refs(rows.values())
     words = []
