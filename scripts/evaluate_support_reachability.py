@@ -27,25 +27,28 @@ def _quote(row: dict, spans: dict[str, dict]) -> str:
     return "\n".join(str(spans[span_id]["exact_quote"]) for span_id in row.get("text_span_ids") or ())
 
 
-def _expected_rectangles(row: dict, characters: dict[str, dict]) -> list[tuple[object, ...]]:
-    grouped: dict[str, list[dict]] = {}
+def _expected_rectangles(
+    row: dict, characters: dict[str, tuple[dict, dict]]
+) -> list[tuple[object, ...]]:
+    grouped: dict[str, tuple[dict, list[dict]]] = {}
     for ref in row.get("bbox_refs") or ():
-        character = characters.get(ref)
-        if character is not None:
-            grouped.setdefault(str(character.get("word_bbox_id") or ref), []).append(character)
+        selected = characters.get(ref)
+        if selected is not None:
+            word, character = selected
+            grouped.setdefault(str(word["word_bbox_id"]), (word, []))[1].append(character)
     return [
         (
-            selected[0]["page_number"],
+            word["page_number"],
             min(character["x0"] for character in selected),
             min(character["y0"] for character in selected),
             max(character["x1"] for character in selected),
             max(character["y1"] for character in selected),
-            selected[0].get("page_width"),
-            selected[0].get("page_height"),
+            word.get("page_width"),
+            word.get("page_height"),
             "exact",
             True,
         )
-        for selected in grouped.values()
+        for word, selected in grouped.values()
     ]
 
 
@@ -71,7 +74,7 @@ def _reachability_snapshot(rows: list[dict], artifacts: dict[str, list[dict]], s
     documents = {row["source_document_id"]: row for row in artifacts["documents"]}
     spans = {row["text_span_id"]: row for row in artifacts["spans"]}
     characters = {
-        character["character_bbox_id"]: word | character | {"bbox_precision": "exact", "viewer_highlightable": True}
+        character["character_bbox_id"]: (word, character)
         for word in artifacts["words"]
         for character in word.get("characters") or ()
     }
