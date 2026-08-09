@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -13,6 +14,7 @@ from tjipto.runtime.service import LegalRuntimeService
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASES = ROOT / "tests/fixtures/uud/retrieval_cases.jsonl"
+EVALUATION_CUTOFF = 10
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -40,6 +42,16 @@ def main(argv: list[str] | None = None) -> int:
         "acceptance_counters": acceptance_counters,
         "results": results,
         "metrics": _retrieval_metrics(cases, results),
+        "evaluation_identity": {
+            "case_set_sha256": _sha256(args.cases),
+            "evaluator_sha256": _sha256(Path(__file__)),
+            "case_count": len(cases),
+            "behavior_counts": {
+                behavior: sum(row["expected_behavior"] == behavior for row in cases)
+                for behavior in ("retrieve", "abstain", "clarify")
+            },
+            "cutoff": EVALUATION_CUTOFF,
+        },
     }
     if args.scope_performance:
         performance = _scope_performance()
@@ -237,28 +249,30 @@ def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, A
     }
 
 
-def _retrieval_metrics(cases: list[dict[str, Any]], results: list[dict[str, Any]]) -> dict[str, float]:
+def _retrieval_metrics(cases: list[dict[str, Any]], results: list[dict[str, Any]]) -> dict[str, Any]:
     by_id = {row["id"]: row for row in results}
     retrieve = [row for row in cases if row["expected_behavior"] == "retrieve"]
     retrieved_relevant = retrieved_total = relevant_total = reciprocal_rank = dcg = ideal_dcg = 0.0
+    ranked_case_count = 0
     expected_spans: set[tuple[str, str]] = set()
     actual_spans: set[tuple[str, str]] = set()
     role_hits = temporal_hits = target_hits = 0
     for case in retrieve:
         actual = by_id[case["id"]]["actual"]
         relevant = set(case["gold_support_ids"]) | set(case["alternative_support_ids"])
-        ranked = actual["support_ids"]
+        ranked = actual["support_ids"][:EVALUATION_CUTOFF]
         hits = [support_id for support_id in ranked if support_id in relevant]
         retrieved_relevant += len(hits)
         retrieved_total += len(ranked)
-        relevant_total += bool(relevant)
+        relevant_total += len(relevant)
+        ranked_case_count += bool(relevant)
         if hits:
             rank = next(index for index, support_id in enumerate(ranked, 1) if support_id in relevant)
             reciprocal_rank += 1 / rank
         for index, support_id in enumerate(ranked, 1):
             if support_id in relevant:
                 dcg += 1 / math.log2(index + 1)
-        ideal_dcg += sum(1 / math.log2(index + 1) for index in range(1, min(len(relevant), len(ranked)) + 1))
+        ideal_dcg += sum(1 / math.log2(index + 1) for index in range(1, min(len(relevant), EVALUATION_CUTOFF) + 1))
         expected_spans.update((case["id"], span_id) for span_id in case["minimal_span_ids"])
         actual_spans.update((case["id"], span_id) for span_id in actual["text_span_ids"])
         role_hits += not case["expected_source_roles"] or bool(set(case["expected_source_roles"]) & set(actual["source_roles"]))
@@ -271,10 +285,27 @@ def _retrieval_metrics(cases: list[dict[str, Any]], results: list[dict[str, Any]
     expected_abstain = {row["id"] for row in negatives}
     clarify = [row for row in cases if row["expected_behavior"] == "clarify"]
     span_hits = expected_spans & actual_spans
+    denominators = {
+        "recall": relevant_total,
+        "precision": retrieved_total,
+        "mrr": ranked_case_count,
+        "ndcg": ideal_dcg,
+        "minimal_span_recall": len(expected_spans),
+        "minimal_span_precision": len(actual_spans),
+        "over_highlight_ratio": len(actual_spans),
+        "wrong_page_rate": len(retrieve),
+        "source_role_accuracy": len(retrieve),
+        "temporal_accuracy": len(retrieve),
+        "citation_target_accuracy": len(retrieve),
+        "hard_negative_false_positive_rate": len(negatives),
+        "abstention_precision": len(predicted_abstain),
+        "abstention_recall": len(expected_abstain),
+        "clarification_accuracy": len(clarify),
+    }
     return {
         "recall": _ratio(retrieved_relevant, relevant_total),
         "precision": _ratio(retrieved_relevant, retrieved_total),
-        "mrr": _ratio(reciprocal_rank, relevant_total),
+        "mrr": _ratio(reciprocal_rank, ranked_case_count),
         "ndcg": _ratio(dcg, ideal_dcg),
         "minimal_span_recall": _ratio(len(span_hits), len(expected_spans)),
         "minimal_span_precision": _ratio(len(span_hits), len(actual_spans)),
@@ -287,11 +318,16 @@ def _retrieval_metrics(cases: list[dict[str, Any]], results: list[dict[str, Any]
         "abstention_precision": _ratio(len(predicted_abstain & expected_abstain), len(predicted_abstain)),
         "abstention_recall": _ratio(len(predicted_abstain & expected_abstain), len(expected_abstain)),
         "clarification_accuracy": _ratio(sum(by_id[row["id"]]["actual"]["status"] == "clarification_required" for row in clarify), len(clarify)),
+        "denominators": denominators,
     }
 
 
-def _ratio(numerator: float, denominator: float) -> float:
-    return round(numerator / denominator, 6) if denominator else 1.0
+def _ratio(numerator: float, denominator: float) -> float | None:
+    return round(numerator / denominator, 6) if denominator else None
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _validate(case: dict[str, Any], response: dict[str, Any], internal: dict[str, Any]) -> list[str]:

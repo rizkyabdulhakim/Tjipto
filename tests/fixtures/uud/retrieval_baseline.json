@@ -1,0 +1,56 @@
+{
+  "base_commit": "c49291201c1f97d081454d1312dfc76aea0a1d2f",
+  "case_set_sha256": "394ec06fd985b837fbb25093749fb109895603c0f9c6cba8ebba85f9fcb55c49",
+  "evaluator_sha256": "85b3aa0a48bfc3aa137796264a7ed5988417b1faf711e8061a6d4191a2bb6e86",
+  "evaluation_cutoff": 10,
+  "case_count": 67,
+  "behavior_counts": {
+    "retrieve": 32,
+    "abstain": 33,
+    "clarify": 2
+  },
+  "result_counts": {
+    "pass": 63,
+    "fail": 4,
+    "known_gap": 0
+  },
+  "metrics": {
+    "recall": 0.870968,
+    "precision": 1.0,
+    "mrr": 0.870968,
+    "ndcg": 0.870968,
+    "minimal_span_recall": 0.34507,
+    "minimal_span_precision": 1.0,
+    "over_highlight_ratio": 0.0,
+    "wrong_page_rate": 0.125,
+    "source_role_accuracy": 0.875,
+    "temporal_accuracy": 0.875,
+    "citation_target_accuracy": 0.875,
+    "hard_negative_false_positive_rate": 0.0,
+    "abstention_precision": 0.942857,
+    "abstention_recall": 1.0,
+    "clarification_accuracy": 1.0
+  },
+  "denominators": {
+    "recall": 31.0,
+    "precision": 27.0,
+    "mrr": 31,
+    "ndcg": 31.0,
+    "minimal_span_recall": 142,
+    "minimal_span_precision": 49,
+    "over_highlight_ratio": 49,
+    "wrong_page_rate": 32,
+    "source_role_accuracy": 32,
+    "temporal_accuracy": 32,
+    "citation_target_accuracy": 32,
+    "hard_negative_false_positive_rate": 33,
+    "abstention_precision": 35,
+    "abstention_recall": 33,
+    "clarification_accuracy": 2
+  },
+  "reproduction": {
+    "method": "detached worktree at base_commit with the recorded case set and evaluator copied byte-for-byte, then evaluate_uud_retrieval.py --strict-known-gaps --report",
+    "python": "3.12.10",
+    "report_sha256": "3af2f0f95e347f278ca4ed9d46ce640bde3227e0c2945e50b45c876e920d4550"
+  }
+}
