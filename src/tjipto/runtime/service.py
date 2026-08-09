@@ -824,6 +824,9 @@ class LegalRuntimeService:
                 or semantics.capability_decision.missing_capabilities
                 or not _scope_has_verified_support(store, scoped_routed)
             ):
+                decision = clarification_decision(store, semantics, scoped_routed, entity_query=_is_entity_support_query(store, scoped_routed))
+                if decision:
+                    return scoped_routed | _clarification_response(store, scoped_routed, decision)
                 templates = _answer_templates(store)
                 capability = semantics.capability_decision
                 missing_corpora = capability.missing_corpora

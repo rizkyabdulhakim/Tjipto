@@ -21,7 +21,7 @@ class ClarificationDecision:
 
 def clarification_decision(store, semantics, routed: dict, *, entity_query: bool) -> ClarificationDecision | None:
     """Offer choices only when distinct, already-published interpretations exist."""
-    if semantics.legal_references and len(semantics.legal_references) > 1:
+    if semantics.legal_references and len(semantics.legal_references) > 1 and routed.get("route") != "document_relation":
         options = tuple(
             ClarificationOption(reference, {"query": reference})
             for reference in semantics.legal_references
@@ -56,7 +56,8 @@ def _metadata_options(store, routed: dict, *, entity_query: bool) -> tuple[Clari
     roles = tuple(routed.get("metadata_source_roles") or ())
     if not roles:
         roles = tuple(sorted({row.get("source_role") for row in routed.get("matches", ()) if row.get("source_role")}))
-    if len(roles) < 2 or (entity_query and all(row.get("metadata_field") == "signatories" for row in routed.get("matches", ()))):
+    matches = tuple(routed.get("matches", ()))
+    if len(roles) < 2 or (entity_query and matches and all(row.get("metadata_field") == "signatories" for row in matches)):
         return ()
     intent = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
     labels = intent.get("source_role_labels", {})
