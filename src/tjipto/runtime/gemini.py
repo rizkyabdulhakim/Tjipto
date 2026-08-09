@@ -34,23 +34,30 @@ class GeminiAnswerProvider:
             timeout = 12.0
         return cls(api_key, model=model, endpoint=endpoint, timeout=max(1.0, timeout))
 
-    def answer(self, query: str, evidence: tuple[dict, ...]) -> str | None:
-        context = "\n\n".join(
-            f"Evidence {index}: {row.get('quoted_text') or row.get('citation') or ''}"
-            for index, row in enumerate(evidence, start=1)
-        ).strip()
-        if not context:
+    def answer(self, deterministic_answer: str, facts: tuple[dict, ...]) -> dict | None:
+        if not deterministic_answer or not facts:
             return None
         prompt = (
-            "Jawab pertanyaan pengguna hanya berdasarkan konteks evidence berikut. "
-            "Jika konteks tidak cukup, katakan bukti tidak cukup. Jangan membuat fakta, "
-            "tanggal, pasal, citation, page, BBox, atau source baru. Jangan menyebut ID "
-            "internal.\n\nPertanyaan: "
-            f"{query}\n\nKonteks evidence:\n{context}"
+            "Susun jawaban dengan mempertahankan deterministic_answer secara utuh dan hanya "
+            "menambahkan frasa pengantar netral. Jangan menambah atau mengubah fakta. Kembalikan "
+            "JSON sesuai schema.\n\n"
+            + json.dumps({"deterministic_answer": deterministic_answer, "allowed_facts": facts}, ensure_ascii=False)
         )
         payload = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"candidateCount": 1, "temperature": 0},
+            "generationConfig": {
+                "candidateCount": 1,
+                "temperature": 0,
+                "responseMimeType": "application/json",
+                "responseSchema": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "answer": {"type": "STRING"},
+                        "referenced_fact_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                    "required": ["answer", "referenced_fact_ids"],
+                },
+            },
         }
         request = Request(
             self._endpoint,
@@ -62,7 +69,12 @@ class GeminiAnswerProvider:
             with urlopen(request, timeout=self._timeout) as response:  # nosec B310 - endpoint is restricted to HTTPS above.
                 result = json.load(response)
             parts = result["candidates"][0]["content"]["parts"]
-            text = "".join(str(part.get("text") or "") for part in parts).strip()
-            return text or None
+            proposal = json.loads("".join(str(part.get("text") or "") for part in parts))
+            if not isinstance(proposal, dict) or not isinstance(proposal.get("answer"), str):
+                return None
+            identifiers = proposal.get("referenced_fact_ids")
+            if not isinstance(identifiers, list) or not all(isinstance(item, str) for item in identifiers):
+                return None
+            return {"answer": proposal["answer"].strip(), "referenced_fact_ids": tuple(identifiers)}
         except (OSError, ValueError, KeyError, TypeError, IndexError):
             return None

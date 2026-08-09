@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import re
 from threading import RLock
@@ -41,10 +42,8 @@ from tjipto.catalog import CatalogService
 _ANSWER_TEMPLATES = {
     "insufficient": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
     "clarification": "Naskah sumber mana yang dimaksud? Pilih salah satu konteks berikut: {options}.",
-    "metadata": "{answer} (from grounded document metadata).",
     "legal_relation": "Dukungan relasi hukum berbasis bukti tersedia; sistem tidak menghasilkan kesimpulan hukum.",
     "citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum.",
-    "limited": "Dukungan bukti terbatas tersedia; sistem tidak menghasilkan kesimpulan hukum.",
 }
 
 
@@ -85,7 +84,13 @@ def _has_resolved_legal_target(corpus_id: str, query: str, *, config=None) -> bo
 
 class LegalRuntimeService:
     def __init__(
-        self, repo_root: Path | None = None, telemetry: Telemetry | None = None, strategy_registry: StrategyRegistry | None = None
+        self,
+        repo_root: Path | None = None,
+        telemetry: Telemetry | None = None,
+        strategy_registry: StrategyRegistry | None = None,
+        *,
+        answer_provider=None,
+        external_wording: bool | None = None,
     ):
         self.registry = CorpusRegistry(repo_root, strategies=strategy_registry)
         self.repository = VerifiedCorpusRepository(self.registry)
@@ -99,6 +104,16 @@ class LegalRuntimeService:
         self._public_target_lock = RLock()
         self._catalog_service = None
         self._bookmarks = BookmarkRepository()
+        self._external_wording = (
+            os.environ.get("TJIPTO_EXTERNAL_WORDING", "").strip().casefold() == "gemini"
+            if external_wording is None
+            else external_wording
+        )
+        self._answer_provider = answer_provider
+        if self._external_wording and self._answer_provider is None:
+            from tjipto.runtime.gemini import GeminiAnswerProvider
+
+            self._answer_provider = GeminiAnswerProvider.from_environment()
 
     def _store(self, corpus_id: str):
         cached = self._store_cache.get(corpus_id)
@@ -773,7 +788,7 @@ class LegalRuntimeService:
                 "matches": (row,),
                 "reason": None,
                 "answer_type": "quoted_evidence",
-                "answer": self._answer_text(instrument_status, evidence, templates),
+                "answer": self._answer_text(store, instrument_status, evidence, templates),
                 "context_pack": context_pack,
                 "evidence": evidence,
                 "citations": tuple(_citation_with_authority(store, item) for item in context_pack["citation_payloads"]),
@@ -922,7 +937,7 @@ class LegalRuntimeService:
                     "insufficient_evidence",
                     ask_route,
                     "none",
-                    templates["insufficient"],
+                    _claim_answer(claim_support),
                     empty_context_pack(claim_reason),
                     insufficient_reasons=(claim_reason,),
                     reason_code=claim_reason,
@@ -946,14 +961,9 @@ class LegalRuntimeService:
             )
             viewer_refs = tuple(row["viewer_ref"] for row in citations)
         if metadata_support:
-            values = tuple(dict.fromkeys(
-                str(row.get("display_text") or row.get("answer") or "") for row in metadata_support
-                if row.get("display_text") or row.get("answer")
-            ))
-            names = _unique_printed_names(metadata_support)
-            deterministic_answer = ", ".join(names) if names else templates["metadata"].format(answer=", ".join(values))
+            deterministic_answer = _metadata_answer(store, metadata_support)
         else:
-            deterministic_answer = self._answer_text(status, evidence, templates)
+            deterministic_answer = self._answer_text(store, status, evidence, templates, claim_support)
             if routed.get("route") == "structure_list":
                 labels = tuple(dict.fromkeys(
                     str(row.get("citation") or row.get("label") or "").strip() for row in evidence
@@ -961,7 +971,7 @@ class LegalRuntimeService:
                 labels = tuple(label for label in labels if label)
                 if labels:
                     deterministic_answer = ", ".join(labels)
-        answer = self._agent_answer(query, evidence, deterministic_answer)
+        answer = self._agent_answer(evidence, deterministic_answer)
         return project_response(
             routed,
             AnswerDecision(
@@ -988,18 +998,92 @@ class LegalRuntimeService:
             ),
         )
 
-    def _agent_answer(self, query: str, evidence: tuple[dict, ...], fallback: str) -> str:
-        return fallback
+    def _agent_answer(self, evidence: tuple[dict, ...], fallback: str) -> str:
+        if not self._external_wording or self._answer_provider is None:
+            return fallback
+        facts = ({"fact_id": "deterministic_answer", "text": fallback},) + tuple(
+            {
+                "fact_id": str(row["evidence_id"]),
+                "text": _compact_text(row.get("metadata_answer") or row.get("quoted_text") or row.get("citation") or ""),
+            }
+            for row in evidence
+            if row.get("evidence_id")
+        )
+        try:
+            proposal = self._answer_provider.answer(fallback, facts)
+        except Exception:
+            return fallback
+        return _validated_wording(proposal, fallback, {row["fact_id"] for row in facts}) or fallback
 
-    def _answer_text(self, status: str, evidence: tuple[dict, ...], templates: dict[str, str]) -> str:
+    def _answer_text(
+        self,
+        store,
+        status: str,
+        evidence: tuple[dict, ...],
+        templates: dict[str, str],
+        claims=(),
+    ) -> str:
         if evidence[0].get("metadata_answer"):
-            return templates["metadata"].format(answer=evidence[0]["metadata_answer"])
+            return _metadata_answer(store, tuple(evidence))
         if evidence[0].get("legal_relation"):
-            return templates["legal_relation"]
-        citation = evidence[0].get("label") or evidence[0].get("citation") or "evidence"
-        if status == "answer_ready":
-            return templates["citation"].format(citation=citation)
-        return templates["limited"]
+            relations = tuple(row["legal_relation"] for row in evidence)
+            sources = tuple(dict.fromkeys(str(row.get("source_label") or "") for row in relations if row.get("source_label")))
+            targets = tuple(dict.fromkeys(str(row.get("target_label") or "") for row in relations if row.get("target_label")))
+            return f"{sources[0]} memuat: {', '.join(targets)}." if len(sources) == 1 and targets else templates["legal_relation"]
+        quote = " ".join(_compact_text(row.get("quoted_text") or row.get("display_text") or "") for row in evidence).strip()
+        if claims:
+            claim = claims[0]
+            segment = next((item.get("exact_quote") for item in claim.support_segments if item.get("exact_quote")), None)
+            return f"Klaim “{claim.claim_text}” didukung oleh segmen terverifikasi: {segment or quote}."
+        source_label = _source_status_label(evidence[0], store)
+        citation = evidence[0].get("label") or evidence[0].get("citation") or "Bukti"
+        prefix = f"{source_label} — " if evidence[0].get("source_role") != "current_consolidated" and source_label else ""
+        return f"{prefix}{citation}: {quote}" if quote else templates["citation"].format(citation=citation)
+
+
+def _compact_text(value: object) -> str:
+    return " ".join(str(value or "").split())
+
+
+def _metadata_answer(store, rows: tuple[dict, ...]) -> str:
+    names = _unique_printed_names(rows)
+    values = names or tuple(
+        dict.fromkeys(
+            _compact_text(row.get("display_text") or row.get("answer") or row.get("metadata_answer"))
+            for row in rows
+            if row.get("display_text") or row.get("answer") or row.get("metadata_answer")
+        )
+    )
+    source_label = _source_status_label(rows[0], store) if rows else None
+    suffix = f" Sumber: {source_label}." if source_label else ""
+    return f"{', '.join(values)}.{suffix}" if values else "Bukti metadata terverifikasi tidak memuat nilai."
+
+
+def _claim_answer(claims) -> str:
+    claim = claims[0]
+    if claim.status == "contradicted":
+        return f"Klaim “{claim.claim_text}” bertentangan dengan segmen terverifikasi."
+    return f"Klaim “{claim.claim_text}” tidak didukung oleh segmen terverifikasi dalam korpus ini."
+
+
+def _validated_wording(proposal: object, fallback: str, allowed_ids: set[str]) -> str | None:
+    if not isinstance(proposal, dict):
+        return None
+    answer = proposal.get("answer")
+    referenced = proposal.get("referenced_fact_ids")
+    if not isinstance(answer, str) or not isinstance(referenced, (list, tuple)):
+        return None
+    if "deterministic_answer" not in referenced or any(not isinstance(item, str) or item not in allowed_ids for item in referenced):
+        return None
+    if answer.count(fallback) != 1:
+        return None
+    framing = answer.replace(fallback, "", 1)
+    words = {word.casefold() for word in re.findall(r"[A-Za-zÀ-ÿ]+", framing)}
+    if words - {"berdasarkan", "bukti", "terverifikasi", "menurut", "sumber", "jawaban", "adalah", "dan", "serta"}:
+        return None
+    if re.search(r"\d|https?://|www\.", framing, re.IGNORECASE):
+        return None
+    return answer.strip() or None
 
 
 def _empty_citation_fields() -> dict:

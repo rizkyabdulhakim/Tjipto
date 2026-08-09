@@ -13,7 +13,7 @@ except ModuleNotFoundError:  # Direct script execution places scripts/ on sys.pa
 
 
 BACKEND_GATES = frozenset((
-    "toolchain", "compileall", "unittest", "pytest_run_1", "retrieval_evaluation",
+    "toolchain", "compileall", "unittest", "pytest_run_1", "retrieval_evaluation", "answer_evaluation",
     "source_text_evaluation", "meaningful_support_evaluation", "support_reachability_evaluation",
     "artifact_validate", "clean_tree", "artifact_rebuild",
     "ruff", "mypy", "bandit", "pip_check", "pip_audit", "pytest_run_2", "release_a", "release_b",
@@ -26,7 +26,8 @@ SHARED_FIELDS = (
 JOB_FIELDS = ("job_key", "job_check_run_id", "job_identity_id")
 BACKEND_EVIDENCE = frozenset((
     "unittest.json", "pytest-run-1.json", "pytest-run-2.json", "pytest-resource-comparison.json",
-    "retrieval-evaluation.json", "retrieval-evaluation-command.json", "source-text-evaluation.json", "meaningful-support-evaluation.json",
+    "retrieval-evaluation.json", "retrieval-evaluation-command.json", "answer-evaluation.json", "answer-evaluation-command.json",
+    "source-text-evaluation.json", "meaningful-support-evaluation.json",
     "support-reachability-evaluation.json",
     "artifact-validation.json", "artifact-rebuild.json", "pip-audit.json", "pip-inspect.json", "clean-tree.txt",
 ))
