@@ -1,0 +1,32 @@
+{
+  "runtime_commit": "106006d575e0a2f9e978911c7867b808810cdd2b",
+  "case_set_sha256": "c874d4062019dad6db468f099325768ba6a96351226984f82773775e71f56f9a",
+  "evaluator_sha256": "571acf893d8f87c799dab7e8cd085bf4f3fe5f94d98e7161df5750c4f3871e95",
+  "full_report_sha256": "c608477b7aa21420db976446f6194b84d2abbaa3e6e0ca49d8ff5e0d92fd2b60",
+  "counts": {
+    "pass": 8,
+    "fail": 8
+  },
+  "metrics": {
+    "case_pass_rate": 0.5,
+    "behavior_accuracy": 1.0,
+    "factual_unit_recall": 0.48,
+    "required_support_recall": 1.0,
+    "forbidden_support_false_positive_rate": 0.0,
+    "source_role_accuracy": 1.0,
+    "temporal_accuracy": 1.0,
+    "public_target_accuracy": 1.0,
+    "claim_verdict_accuracy": 1.0,
+    "denominators": {
+      "case_pass_rate": 16,
+      "behavior_accuracy": 16,
+      "factual_unit_recall": 25,
+      "required_support_recall": 14,
+      "forbidden_support_false_positive_rate": 2,
+      "source_role_accuracy": 16,
+      "temporal_accuracy": 16,
+      "public_target_accuracy": 16,
+      "claim_verdict_accuracy": 2
+    }
+  }
+}

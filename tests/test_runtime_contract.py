@@ -352,7 +352,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(answer["route"], "legal_reference")
         self.assertEqual(answer["intent"], "exact_citation")
         self.assertEqual(answer["normalized_query"], "Pasal 1 ayat (3)")
-        self.assertIn("Dukungan sitasi berbasis bukti", answer["answer"])
+        self.assertIn("Negara Indonesia adalah negara hukum", answer["answer"])
         self.assertNotIn("Evidence-grounded", answer["answer"])
         self.assertTrue(answer["evidence"])
         first = answer["evidence"][0]
@@ -494,7 +494,8 @@ class RuntimeContractTest(unittest.TestCase):
     def test_scoped_person_role_projects_only_the_exact_name(self) -> None:
         result = self.service.ask("uud", "ketua Majelis Permusyawaratan Rakyat Republik Indonesia UUD amandemen pertama")
         self.assertEqual(result["status"], "answer_ready")
-        self.assertEqual(result["answer"], "Prof. Dr. H.M. Amien Rais")
+        self.assertIn("Prof. Dr. H.M. Amien Rais", result["answer"])
+        self.assertIn("Historis", result["answer"])
         self.assertEqual(result["metadata_support"][0]["printed_role"], "Ketua")
 
     def test_unscoped_metadata_requests_clarification_without_combined_citations(self) -> None:
@@ -549,7 +550,7 @@ class RuntimeContractTest(unittest.TestCase):
                 return False
 
             def read(self):
-                return b'{"candidates":[{"content":{"parts":[{"text":"Jawaban terverifikasi."}]}}]}'
+                return b'{"candidates":[{"content":{"parts":[{"text":"{\\"answer\\":\\"Berdasarkan bukti terverifikasi, Jawaban deterministik.\\",\\"referenced_fact_ids\\":[\\"deterministic_answer\\"]}"}]}}]}'
 
         with patch.dict(
             os.environ,
@@ -559,12 +560,20 @@ class RuntimeContractTest(unittest.TestCase):
             provider = GeminiAnswerProvider.from_environment()
             self.assertIsNotNone(provider)
             answer = provider.answer(
-                "Apa isi pertanyaan?",
-                ({"quoted_text": "Bukti resmi", "source_role": "current_consolidated"},),
+                "Jawaban deterministik.",
+                ({"fact_id": "deterministic_answer", "text": "Jawaban deterministik."},),
             )
-        self.assertEqual(answer, "Jawaban terverifikasi.")
+        self.assertEqual(
+            answer,
+            {
+                "answer": "Berdasarkan bukti terverifikasi, Jawaban deterministik.",
+                "referenced_fact_ids": ("deterministic_answer",),
+            },
+        )
         payload = request.call_args.args[0].data.decode("utf-8")
-        self.assertIn("Bukti resmi", payload)
+        self.assertIn("Jawaban deterministik.", payload)
+        self.assertIn("responseMimeType", payload)
+        self.assertIn("responseSchema", payload)
         self.assertNotIn("test-secret", payload)
 
     def test_original_metadata_role_does_not_fall_back_to_amendments(self) -> None:

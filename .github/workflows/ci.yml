@@ -82,6 +82,8 @@ jobs:
         run: python scripts/measure_command.py --gate pytest_run_1 --report reports/ci-gates.jsonl --result-report reports/pytest-run-1.json -- python -m pytest -q -p no:cacheprovider
       - name: Retrieval evaluation
         run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl --result-report reports/retrieval-evaluation-command.json -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps --report reports/retrieval-evaluation.json
+      - name: Grounded-answer evaluation
+        run: python scripts/measure_command.py --gate answer_evaluation --report reports/ci-gates.jsonl --result-report reports/answer-evaluation-command.json -- python scripts/evaluate_uud_answers.py --runtime-commit "$GITHUB_SHA" --report reports/answer-evaluation.json
       - name: Source-text reachability evaluation
         run: python scripts/measure_command.py --gate source_text_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_source_text_reachability.py --report reports/source-text-evaluation.json
       - name: Meaningful-support evaluation
