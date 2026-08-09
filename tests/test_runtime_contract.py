@@ -25,6 +25,7 @@ from tjipto.retrieval.structured import structured_lookup
 from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candidate
 from tjipto.runtime.api import _public_bbox, handle_request
 from tjipto.runtime.gemini import GeminiAnswerProvider
+from tjipto.runtime.openai_compatible import OpenAICompatibleWordingProvider
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.viewer import viewer_payload
@@ -508,7 +509,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertFalse(result["viewer_refs"], query)
             self.assertFalse(result["metadata_facts"], query)
             self.assertEqual(
-                {row["source_role"] for row in result["clarification_options"]},
+                {row["resolution"]["source_role"] for row in result["clarification_options"]},
                 {
                     "amendment_1_historical",
                     "amendment_2_historical",
@@ -517,6 +518,27 @@ class RuntimeContractTest(unittest.TestCase):
                 },
                 query,
             )
+
+    def test_non_metadata_ambiguities_offer_opaque_resumable_choices(self) -> None:
+        cases = (
+            "Pasal 7 atau Pasal 7A",
+            "perubahan keempat mengubah atau menghapus Pasal 16",
+            "Presiden atau DPR",
+        )
+        for query in cases:
+            with self.subTest(query=query):
+                result = self.service.ask("uud", query)
+                self.assertEqual(result["status"], "clarification_required")
+                self.assertGreaterEqual(len(result["clarification_options"]), 2)
+                public = handle_request("uud", "ask", {"query": query}, service=self.service)
+                target = public["clarification_options"][0]["context_target"]
+                resumed = handle_request("uud", "ask", {"query": query, "source_context": target}, service=self.service)
+                self.assertNotEqual(resumed["status"], "clarification_required")
+
+    def test_noisy_and_out_of_corpus_queries_do_not_clarify(self) -> None:
+        for query in ("berapa lama presiden menjabat", "apa hukuman pidana korupsi"):
+            with self.subTest(query=query):
+                self.assertNotEqual(self.service.ask("uud", query)["status"], "clarification_required")
 
     def test_inflected_metadata_wording_requires_source_clarification(self) -> None:
         for query in ("siapa yang menandatangani UUD", "siapa yang menandatangi UUD"):
@@ -550,23 +572,19 @@ class RuntimeContractTest(unittest.TestCase):
                 return False
 
             def read(self):
-                return b'{"candidates":[{"content":{"parts":[{"text":"{\\"answer\\":\\"Berdasarkan bukti terverifikasi, Jawaban deterministik.\\",\\"referenced_fact_ids\\":[\\"deterministic_answer\\"]}"}]}}]}'
+                return b'{"candidates":[{"content":{"parts":[{"text":"{\\"presentation\\":\\"grounded\\",\\"referenced_fact_ids\\":[\\"deterministic_answer\\"]}"}]}}]}'
 
-        with patch.dict(
-            os.environ,
-            {"GEMINI_API_KEY": "test-secret", "GEMINI_MODEL": "test-model"},
-            clear=False,
-        ), patch("tjipto.runtime.gemini.urlopen", return_value=Response()) as request:
-            provider = GeminiAnswerProvider.from_environment()
-            self.assertIsNotNone(provider)
-            answer = provider.answer(
-                "Jawaban deterministik.",
-                ({"fact_id": "deterministic_answer", "text": "Jawaban deterministik."},),
+        with patch("tjipto.runtime.gemini.urlopen", return_value=Response()) as request:
+            provider = GeminiAnswerProvider(
+                "test-secret",
+                model="test-model",
+                endpoint="https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
             )
+            answer = provider.propose("Jawaban deterministik.")
         self.assertEqual(
             answer,
             {
-                "answer": "Berdasarkan bukti terverifikasi, Jawaban deterministik.",
+                "presentation": "grounded",
                 "referenced_fact_ids": ("deterministic_answer",),
             },
         )
@@ -575,6 +593,29 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertIn("responseMimeType", payload)
         self.assertIn("responseSchema", payload)
         self.assertNotIn("test-secret", payload)
+
+    def test_openai_compatible_provider_uses_generic_configuration_contract(self) -> None:
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self):
+                return b'{"choices":[{"message":{"content":"{\\"presentation\\":\\"direct\\",\\"referenced_fact_ids\\":[\\"deterministic_answer\\"]}"}}]}'
+
+        with patch("tjipto.runtime.openai_compatible.urlopen", return_value=Response()) as request:
+            provider = OpenAICompatibleWordingProvider("test-secret", model="test-model", endpoint="https://example.invalid/v1/chat/completions")
+            self.assertEqual(provider.propose("Jawaban deterministik."), {"presentation": "direct", "referenced_fact_ids": ("deterministic_answer",)})
+        http_request = request.call_args.args[0]
+        self.assertEqual(http_request.get_header("Authorization"), "Bearer test-secret")
+        self.assertNotIn("test-secret", http_request.data.decode("utf-8"))
+
+    def test_wording_adapter_timeout_or_network_error_has_no_proposal(self) -> None:
+        provider = OpenAICompatibleWordingProvider("test-secret", model="test-model", endpoint="https://example.invalid/v1/chat/completions")
+        with patch("tjipto.runtime.openai_compatible.urlopen", side_effect=OSError("network unavailable")):
+            self.assertIsNone(provider.propose("Jawaban deterministik."))
 
     def test_original_metadata_role_does_not_fall_back_to_amendments(self) -> None:
         for query in ("kapan UUD asli ditetapkan", "kapan naskah asli ditetapkan"):

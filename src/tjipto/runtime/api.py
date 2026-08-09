@@ -55,12 +55,20 @@ def handle_request(
     if action == "ask":
         filters = dict(_filters(payload) or {})
         source_context = _optional_str(payload, "source_context")
+        clarification = None
         if source_context:
-            role = service.public_source_context(corpus_id, source_context)
-            if role is None:
+            clarification = service.public_clarification_context(corpus_id, source_context)
+            if clarification is None:
                 raise BadRequest()
-            filters["source_role"] = role
-        result = service.ask(corpus_id, _query(payload), _limit(payload, default=3), filters or None)
+            if clarification.get("source_role"):
+                filters["source_role"] = clarification["source_role"]
+        result = service.ask(
+            corpus_id,
+            clarification.get("query", _query(payload)) if clarification else _query(payload),
+            _limit(payload, default=3),
+            filters or None,
+            clarification,
+        )
         return _public_ask(result, service, corpus_id)
     if action == "capabilities":
         return _public_capabilities(service.capabilities(corpus_id))
@@ -366,7 +374,7 @@ def _support_group_label(group_kind: str, members: list[dict]) -> str:
 def _public_clarification_option(row: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
     target = service.register_public_target(
         corpus_id,
-        {"kind": "source_context", "source_role": row.get("source_role")},
+        {"kind": "clarification_context", "resolution": row.get("resolution")},
     )
     return {"context_target": target, "label": row.get("label")}
 

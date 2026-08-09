@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
-from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+
+from tjipto.runtime.wording import valid_proposal
 
 
 class GeminiAnswerProvider:
@@ -15,33 +15,13 @@ class GeminiAnswerProvider:
         self._endpoint = endpoint.format(model=model)
         self._timeout = timeout
 
-    @classmethod
-    def from_environment(cls) -> GeminiAnswerProvider | None:
-        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        if not api_key:
-            return None
-        model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").strip()
-        endpoint = os.environ.get(
-            "GEMINI_API_ENDPOINT",
-            "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-        ).strip()
-        parsed_endpoint = urlparse(endpoint)
-        if parsed_endpoint.scheme != "https" or not parsed_endpoint.netloc:
-            return None
-        try:
-            timeout = float(os.environ.get("GEMINI_TIMEOUT_SECONDS", "12"))
-        except ValueError:
-            timeout = 12.0
-        return cls(api_key, model=model, endpoint=endpoint, timeout=max(1.0, timeout))
-
-    def answer(self, deterministic_answer: str, facts: tuple[dict, ...]) -> dict | None:
-        if not deterministic_answer or not facts:
+    def propose(self, deterministic_answer: str) -> dict[str, object] | None:
+        if not deterministic_answer:
             return None
         prompt = (
-            "Susun jawaban dengan mempertahankan deterministic_answer secara utuh dan hanya "
-            "menambahkan frasa pengantar netral. Jangan menambah atau mengubah fakta. Kembalikan "
-            "JSON sesuai schema.\n\n"
-            + json.dumps({"deterministic_answer": deterministic_answer, "allowed_facts": facts}, ensure_ascii=False)
+            "Kembalikan JSON saja. Anda tidak boleh menulis fakta atau prosa. Pilih presentation 'direct' atau "
+            "'grounded' dan referenced_fact_ids ['deterministic_answer'].\n\n"
+            + json.dumps({"deterministic_answer": deterministic_answer}, ensure_ascii=False)
         )
         payload = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -52,10 +32,10 @@ class GeminiAnswerProvider:
                 "responseSchema": {
                     "type": "OBJECT",
                     "properties": {
-                        "answer": {"type": "STRING"},
+                        "presentation": {"type": "STRING", "enum": ["direct", "grounded"]},
                         "referenced_fact_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
                     },
-                    "required": ["answer", "referenced_fact_ids"],
+                    "required": ["presentation", "referenced_fact_ids"],
                 },
             },
         }
@@ -70,11 +50,6 @@ class GeminiAnswerProvider:
                 result = json.load(response)
             parts = result["candidates"][0]["content"]["parts"]
             proposal = json.loads("".join(str(part.get("text") or "") for part in parts))
-            if not isinstance(proposal, dict) or not isinstance(proposal.get("answer"), str):
-                return None
-            identifiers = proposal.get("referenced_fact_ids")
-            if not isinstance(identifiers, list) or not all(isinstance(item, str) for item in identifiers):
-                return None
-            return {"answer": proposal["answer"].strip(), "referenced_fact_ids": tuple(identifiers)}
+            return valid_proposal(proposal)
         except (OSError, ValueError, KeyError, TypeError, IndexError):
             return None

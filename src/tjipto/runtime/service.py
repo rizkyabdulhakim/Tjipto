@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
-import os
 from pathlib import Path
 import re
 from threading import RLock
@@ -28,10 +27,12 @@ from tjipto.corpora.source_arbitration import resolve_source_scope
 from tjipto.retrieval.relations import amendment_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.runtime.claim_support import all_supported, verify_claims
+from tjipto.runtime.clarification import clarification_decision
 from tjipto.runtime.answer_arbitration import document_summary_query, source_document_response
 from tjipto.runtime.bookmarks import BookmarkRepository
 from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.response import AnswerDecision, project_response
+from tjipto.runtime.wording import wording_enabled_from_environment, wording_provider_from_environment
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.source_text import source_text_response
 from tjipto.telemetry import Telemetry
@@ -104,16 +105,10 @@ class LegalRuntimeService:
         self._public_target_lock = RLock()
         self._catalog_service = None
         self._bookmarks = BookmarkRepository()
-        self._external_wording = (
-            os.environ.get("TJIPTO_EXTERNAL_WORDING", "").strip().casefold() == "gemini"
-            if external_wording is None
-            else external_wording
-        )
+        self._external_wording = wording_enabled_from_environment() if external_wording is None else external_wording
         self._answer_provider = answer_provider
         if self._external_wording and self._answer_provider is None:
-            from tjipto.runtime.gemini import GeminiAnswerProvider
-
-            self._answer_provider = GeminiAnswerProvider.from_environment()
+            self._answer_provider = wording_provider_from_environment()
 
     def _store(self, corpus_id: str):
         cached = self._store_cache.get(corpus_id)
@@ -180,10 +175,12 @@ class LegalRuntimeService:
             self._public_targets.move_to_end(target)
             return dict(record[1])
 
-    def public_source_context(self, corpus_id: str, target: str | None) -> str | None:
+    def public_clarification_context(self, corpus_id: str, target: str | None) -> dict[str, str] | None:
         request = self._public_target_request(corpus_id, target)
-        role = request.get("source_role") if request and request.get("kind") == "source_context" else None
-        return str(role) if role else None
+        resolution = request.get("resolution") if request and request.get("kind") == "clarification_context" else None
+        if not isinstance(resolution, dict) or set(resolution) - {"query", "source_role", "relation_family"}:
+            return None
+        return {str(key): str(value) for key, value in resolution.items() if isinstance(value, str) and value}
 
     def public_source_status_label(self, corpus_id: str, source_role: object) -> str | None:
         store = self._store(corpus_id)
@@ -680,7 +677,9 @@ class LegalRuntimeService:
         status = "active" if evidence and evidence.get("status") == "final" else "unavailable"
         return bookmark | {"status": status}
 
-    def ask(self, corpus_id: str, query: str, limit: int = 3, filters: dict | None = None) -> dict:
+    def ask(
+        self, corpus_id: str, query: str, limit: int = 3, filters: dict | None = None, clarification: dict[str, str] | None = None
+    ) -> dict:
         store = self._store(corpus_id)
         if store is None:
             return _integrity_failure(corpus_id, query, self._integrity_error)
@@ -711,7 +710,8 @@ class LegalRuntimeService:
             return source_document
         # A resolved legal target has precedence over the instrument classifier.
         # Amendment wording then scopes the structured lookup to that source role.
-        amendment_target = amendment_relation_target(store, query)
+        relation_family = (clarification or {}).get("relation_family")
+        amendment_target = amendment_relation_target(store, query, relation_family=relation_family)
         instrument = None if (
             semantics.requested_function == "temporal_quotation"
             or _has_resolved_legal_target(corpus_id, query, config=store.config)
@@ -817,6 +817,7 @@ class LegalRuntimeService:
                 metadata_filters=filters,
                 allow_navigation=semantics.requested_function != "temporal_quotation",
                 allow_relation=semantics.requested_function != "temporal_quotation",
+                relation_family=relation_family,
             )
             if (
                 scope["route"] == "current_fact_unsupported"
@@ -876,14 +877,15 @@ class LegalRuntimeService:
             metadata_filters=semantic_filters,
             allow_navigation=semantics.requested_function != "temporal_quotation",
             allow_relation=semantics.requested_function != "temporal_quotation",
+            relation_family=relation_family,
         )
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
+        decision = None if clarification else clarification_decision(store, semantics, routed, entity_query=_is_entity_support_query(store, routed))
+        if decision:
+            return routed | _clarification_response(store, routed, decision)
         if routed.get("route") == "document_relation":
             return _relation_response(store, routed)
-        clarification = _metadata_scope_clarification(store, routed)
-        if clarification:
-            return routed | clarification
         if routed["status"] != "found":
             public_status = (
                 "insufficient_evidence"
@@ -1001,19 +1003,11 @@ class LegalRuntimeService:
     def _agent_answer(self, evidence: tuple[dict, ...], fallback: str) -> str:
         if not self._external_wording or self._answer_provider is None:
             return fallback
-        facts = ({"fact_id": "deterministic_answer", "text": fallback},) + tuple(
-            {
-                "fact_id": str(row["evidence_id"]),
-                "text": _compact_text(row.get("metadata_answer") or row.get("quoted_text") or row.get("citation") or ""),
-            }
-            for row in evidence
-            if row.get("evidence_id")
-        )
         try:
-            proposal = self._answer_provider.answer(fallback, facts)
+            proposal = self._answer_provider.propose(fallback)
         except Exception:
             return fallback
-        return _validated_wording(proposal, fallback, {row["fact_id"] for row in facts}) or fallback
+        return _render_wording(proposal, fallback)
 
     def _answer_text(
         self,
@@ -1066,24 +1060,15 @@ def _claim_answer(claims) -> str:
     return f"Klaim “{claim.claim_text}” tidak didukung oleh segmen terverifikasi dalam korpus ini."
 
 
-def _validated_wording(proposal: object, fallback: str, allowed_ids: set[str]) -> str | None:
-    if not isinstance(proposal, dict):
-        return None
-    answer = proposal.get("answer")
-    referenced = proposal.get("referenced_fact_ids")
-    if not isinstance(answer, str) or not isinstance(referenced, (list, tuple)):
-        return None
-    if "deterministic_answer" not in referenced or any(not isinstance(item, str) or item not in allowed_ids for item in referenced):
-        return None
-    if answer.count(fallback) != 1:
-        return None
-    framing = answer.replace(fallback, "", 1)
-    words = {word.casefold() for word in re.findall(r"[A-Za-zÀ-ÿ]+", framing)}
-    if words - {"berdasarkan", "bukti", "terverifikasi", "menurut", "sumber", "jawaban", "adalah", "dan", "serta"}:
-        return None
-    if re.search(r"\d|https?://|www\.", framing, re.IGNORECASE):
-        return None
-    return answer.strip() or None
+def _render_wording(proposal: object, fallback: str) -> str:
+    """Render only server-owned presentation primitives, never model prose."""
+    if not isinstance(proposal, dict) or set(proposal) != {"presentation", "referenced_fact_ids"}:
+        return fallback
+    if proposal.get("referenced_fact_ids") != ("deterministic_answer",):
+        return fallback
+    if proposal.get("presentation") == "grounded":
+        return f"Berdasarkan bukti terverifikasi, {fallback}"
+    return fallback
 
 
 def _empty_citation_fields() -> dict:
@@ -1104,54 +1089,18 @@ def _answer_templates(store) -> dict[str, str]:
     return _ANSWER_TEMPLATES | dict(configured or {})
 
 
-def _metadata_scope_clarification(store, routed: dict) -> dict | None:
-    if routed.get("route") not in {"metadata", "metadata_scope_unresolved"} or "source_role" in routed.get("applied_filters", {}):
-        return None
-    roles = tuple(routed.get("metadata_source_roles") or ())
-    if any(row.get("metadata_field") == "signatories" for row in routed.get("matches", ())) and _is_entity_support_query(store, routed):
-        return None
-    if not roles:
-        roles = tuple(
-            sorted(
-                {
-                    row.get("source_role")
-                    for row in routed.get("matches", ())
-                    if row.get("metadata_field") and row.get("source_role")
-                }
-            )
-        )
-    if len(roles) < 2:
-        return None
-    intent = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
-    labels = intent.get("source_role_labels", {})
-    titles = (store.config.setting("document_catalog", {}) or {}).get("titles", {})
-    options = tuple({"source_role": role, "label": titles.get(role, labels.get(role, role))} for role in roles)
+def _clarification_response(store, routed: dict, decision) -> dict:
+    options = tuple({"label": item.label, "resolution": item.resolution} for item in decision.options)
     answer = _answer_templates(store)["clarification"].format(options=", ".join(item["label"] for item in options))
     return {
-        "status": "clarification_required",
-        "route": "metadata_fact",
-        "intent": "metadata_lookup",
-        "reason": routed.get("reason") or "ambiguous_source_scope",
-        "answer_type": "clarification",
-        "answer": answer,
-        "answer_scope": "clarification",
-        "clarification_options": options,
-        "context_pack": empty_context_pack(routed.get("reason") or "ambiguous_source_scope"),
-        "evidence": (),
-        "citations": (),
-        "final_citations": (),
-        "historical_citations": (),
-        "metadata_support": (),
-        "structural_support": (),
-        "trace_support": (),
-        "viewer_refs": (),
-        "metadata_facts": (),
-        "legal_relations": (),
-        "warnings": ("source_scope_required",),
-        "insufficient_reasons": ("ambiguous_source_scope",),
+        "status": "clarification_required", "route": "metadata_fact", "intent": "metadata_lookup",
+        "reason": routed.get("reason") or "ambiguous_interpretation", "answer_type": "clarification", "answer": answer,
+        "answer_scope": "clarification", "clarification_options": options,
+        "context_pack": empty_context_pack(routed.get("reason") or "ambiguous_interpretation"), "evidence": (), "citations": (),
+        "final_citations": (), "historical_citations": (), "metadata_support": (), "structural_support": (), "trace_support": (),
+        "viewer_refs": (), "metadata_facts": (), "legal_relations": (), "warnings": ("clarification_required",),
+        "insufficient_reasons": ("ambiguous_interpretation",),
     }
-
-
 def _is_entity_support_query(store, routed: dict) -> bool:
     query = normalize_intent_text(routed.get("normalized_query") or routed.get("original_query") or "")
     if "wakil ketua" in query:
