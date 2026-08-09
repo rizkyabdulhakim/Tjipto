@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import ctypes
 import gc
 import json
 from collections import Counter
@@ -58,8 +59,16 @@ class UudBuilderContractTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
+        cls._release_word_bboxes()
+
+    @classmethod
+    def _release_word_bboxes(cls) -> None:
         cls._cached_word_bboxes = None
         gc.collect()
+        try:
+            ctypes.CDLL(None).malloc_trim(0)
+        except (AttributeError, OSError, TypeError):
+            pass
 
     def _source_documents_for_test(self) -> dict[str, dict]:
         return dict(self._source_documents)
@@ -374,8 +383,7 @@ class UudBuilderContractTest(unittest.TestCase):
         )
 
     def test_validation_report_rebuilds_from_artifact_rows(self) -> None:
-        type(self)._cached_word_bboxes = None
-        gc.collect()
+        type(self)._release_word_bboxes()
         self.assertEqual(
             build_validation_report(
                 chunks=read_jsonl(FINAL / "chunks.jsonl"),
@@ -531,8 +539,7 @@ class UudBuilderContractTest(unittest.TestCase):
             _canonicalize_numeric_rows(self._word_bboxes()),
             _canonicalize_numeric_rows(read_jsonl(FINAL / "word_bboxes.jsonl")),
         )
-        type(self)._cached_word_bboxes = None
-        gc.collect()
+        type(self)._release_word_bboxes()
 
     def test_absent_span_keys_are_fully_classified_with_specific_reasons(self) -> None:
         spans = read_jsonl(FINAL / "page_text_spans.jsonl")
