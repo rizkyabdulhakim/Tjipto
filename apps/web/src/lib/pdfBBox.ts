@@ -13,7 +13,7 @@ export interface PdfBBox {
 export interface PdfViewportLike {
   width: number;
   height: number;
-  convertToViewportRectangle(rect: [number, number, number, number]): number[];
+  convertToViewportPoint(x: number, y: number): number[];
 }
 export type BBoxViewportResult =
   | { ok: true; left: number; top: number; width: number; height: number }
@@ -39,7 +39,10 @@ export function bboxToViewportPercent(box: PdfBBox, viewport: PdfViewportLike): 
   ) {
     return { ok: false, reason: "invalid_bbox" };
   }
-  const rect = viewport.convertToViewportRectangle([box.x0!, box.page_height - box.y1!, box.x1!, box.page_height - box.y0!]);
+  const rect = [
+    ...viewport.convertToViewportPoint(box.x0!, box.page_height - box.y1!),
+    ...viewport.convertToViewportPoint(box.x1!, box.page_height - box.y0!),
+  ];
   if (rect.length !== 4 || !rect.every(Number.isFinite)) return { ok: false, reason: "invalid_viewport_transform" };
   const [a, b, c, d] = rect as [number, number, number, number];
   const left = Math.min(a, c);
