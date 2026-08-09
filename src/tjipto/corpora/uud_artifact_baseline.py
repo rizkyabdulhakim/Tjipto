@@ -44,6 +44,7 @@ from tjipto.corpora.uud.policy.relations import apply_graph_relation_policy
 from tjipto.contracts.relations import materialize_inverse_edges
 from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.verified import CorpusIntegrityError, require_canonical_build_environment
 from tjipto.grounding.promotion import build_promotion_decisions
 from tjipto.ingestion.pdf.health import build_pdf_health_report
 from tjipto.ingestion.pdf.source_objects import build_source_object_inventory
@@ -51,6 +52,10 @@ from tjipto.ingestion.pdf.words import build_word_bbox_rows
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
+    config = CorpusRegistry(repo_root).resolve("uud")
+    if config is None:
+        raise CorpusIntegrityError("unknown_corpus")
+    require_canonical_build_environment(config)
     final_dir = (repo_root / FINAL_DIR).resolve()
     result: dict = {}
 

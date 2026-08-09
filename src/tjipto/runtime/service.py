@@ -575,6 +575,8 @@ class LegalRuntimeService:
             "readiness": True,
             "manifest_digest": store.config.manifest_digest,
             "artifact_set_digest": store.config.artifact_set_digest,
+            "artifact_access_mode": store.config.artifact_access_mode,
+            "canonical_build_eligible": store.config.canonical_build_eligible,
             "capabilities": ("search", "ask", "citation", "viewer", "bookmarks"),
         }
 

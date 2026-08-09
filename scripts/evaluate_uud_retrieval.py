@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 import sys
 import time
@@ -11,7 +12,7 @@ from tjipto.runtime.service import LegalRuntimeService
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CASES = ROOT / "tests/fixtures/uud/retrieval_eval_cases.jsonl"
+DEFAULT_CASES = ROOT / "tests/fixtures/uud/retrieval_cases.jsonl"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,17 +32,19 @@ def main(argv: list[str] | None = None) -> int:
         "known_gap": sum(row["outcome"] == "KNOWN_GAP" for row in results),
     }
     acceptance_counters = _acceptance_counters(results) | _artifact_acceptance_counters()
-    report = {
+    report: dict[str, Any] = {
         "status": "fail"
         if counts["fail"] or (args.strict_known_gaps and counts["known_gap"]) or any(acceptance_counters.values())
         else "pass",
         "counts": counts,
         "acceptance_counters": acceptance_counters,
         "results": results,
+        "metrics": _retrieval_metrics(cases, results),
     }
     if args.scope_performance:
-        report["scope_performance"] = _scope_performance()
-        if report["scope_performance"].get("status") != "pass":
+        performance = _scope_performance()
+        report["scope_performance"] = performance
+        if performance.get("status") != "pass":
             report["status"] = "fail"
     if args.report:
         args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -188,14 +191,13 @@ def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, A
     errors = _validate(case, response, response)
     if not errors:
         outcome = "PASS"
-    elif case.get("case_status") == "known_gap":
+    elif case.get("known_gap") is True:
         outcome = "KNOWN_GAP"
     else:
         outcome = "FAIL"
     return {
         "id": case["id"],
         "query": case["query"],
-        "case_status": case.get("case_status", "accepted"),
         "outcome": outcome,
         "errors": errors,
         "expected_claim_support": case.get("expected_claim_support"),
@@ -220,8 +222,76 @@ def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, A
             "source_role": _source_attribute(internal, "source_role"),
             "temporal_context": _source_attribute(internal, "temporal_context"),
             "needed_corpora": list(response.get("needed_corpora", ())),
+            "support_ids": list(_support_ids(internal)),
+            "text_span_ids": list(_support_span_ids(internal)),
+            "public_targets": list(_public_targets(internal)),
+            "source_roles": list(dict.fromkeys(str(row["source_role"]) for row in _support_rows(internal) if row.get("source_role"))),
+            "temporal_scopes": list(
+                dict.fromkeys(
+                    str(row.get("temporal_context") or row.get("source_role"))
+                    for row in _support_rows(internal)
+                    if row.get("temporal_context") or row.get("source_role")
+                )
+            ),
         },
     }
+
+
+def _retrieval_metrics(cases: list[dict[str, Any]], results: list[dict[str, Any]]) -> dict[str, float]:
+    by_id = {row["id"]: row for row in results}
+    retrieve = [row for row in cases if row["expected_behavior"] == "retrieve"]
+    retrieved_relevant = retrieved_total = relevant_total = reciprocal_rank = dcg = ideal_dcg = 0.0
+    expected_spans: set[tuple[str, str]] = set()
+    actual_spans: set[tuple[str, str]] = set()
+    role_hits = temporal_hits = target_hits = 0
+    for case in retrieve:
+        actual = by_id[case["id"]]["actual"]
+        relevant = set(case["gold_support_ids"]) | set(case["alternative_support_ids"])
+        ranked = actual["support_ids"]
+        hits = [support_id for support_id in ranked if support_id in relevant]
+        retrieved_relevant += len(hits)
+        retrieved_total += len(ranked)
+        relevant_total += bool(relevant)
+        if hits:
+            rank = next(index for index, support_id in enumerate(ranked, 1) if support_id in relevant)
+            reciprocal_rank += 1 / rank
+        for index, support_id in enumerate(ranked, 1):
+            if support_id in relevant:
+                dcg += 1 / math.log2(index + 1)
+        ideal_dcg += sum(1 / math.log2(index + 1) for index in range(1, min(len(relevant), len(ranked)) + 1))
+        expected_spans.update((case["id"], span_id) for span_id in case["minimal_span_ids"])
+        actual_spans.update((case["id"], span_id) for span_id in actual["text_span_ids"])
+        role_hits += not case["expected_source_roles"] or bool(set(case["expected_source_roles"]) & set(actual["source_roles"]))
+        temporal_hits += not case["expected_temporal_scopes"] or bool(set(case["expected_temporal_scopes"]) & set(actual["temporal_scopes"]))
+        expected_targets = {(row["source_document_id"], tuple(row["page_numbers"])) for row in case["expected_public_targets"]}
+        actual_targets = {(row["source_document_id"], tuple(row["page_numbers"])) for row in actual["public_targets"]}
+        target_hits += not expected_targets or bool(expected_targets & actual_targets)
+    negatives = [row for row in cases if row["expected_behavior"] == "abstain"]
+    predicted_abstain = {row["id"] for row in results if row["actual"]["status"] in {"insufficient_evidence", "citation_not_found", "no_results"}}
+    expected_abstain = {row["id"] for row in negatives}
+    clarify = [row for row in cases if row["expected_behavior"] == "clarify"]
+    span_hits = expected_spans & actual_spans
+    return {
+        "recall": _ratio(retrieved_relevant, relevant_total),
+        "precision": _ratio(retrieved_relevant, retrieved_total),
+        "mrr": _ratio(reciprocal_rank, relevant_total),
+        "ndcg": _ratio(dcg, ideal_dcg),
+        "minimal_span_recall": _ratio(len(span_hits), len(expected_spans)),
+        "minimal_span_precision": _ratio(len(span_hits), len(actual_spans)),
+        "over_highlight_ratio": _ratio(len(actual_spans - expected_spans), len(actual_spans)),
+        "wrong_page_rate": _ratio(len(retrieve) - target_hits, len(retrieve)),
+        "source_role_accuracy": _ratio(role_hits, len(retrieve)),
+        "temporal_accuracy": _ratio(temporal_hits, len(retrieve)),
+        "citation_target_accuracy": _ratio(target_hits, len(retrieve)),
+        "hard_negative_false_positive_rate": _ratio(sum(bool(by_id[row["id"]]["actual"]["support_ids"]) for row in negatives), len(negatives)),
+        "abstention_precision": _ratio(len(predicted_abstain & expected_abstain), len(predicted_abstain)),
+        "abstention_recall": _ratio(len(predicted_abstain & expected_abstain), len(expected_abstain)),
+        "clarification_accuracy": _ratio(sum(by_id[row["id"]]["actual"]["status"] == "clarification_required" for row in clarify), len(clarify)),
+    }
+
+
+def _ratio(numerator: float, denominator: float) -> float:
+    return round(numerator / denominator, 6) if denominator else 1.0
 
 
 def _validate(case: dict[str, Any], response: dict[str, Any], internal: dict[str, Any]) -> list[str]:
@@ -335,6 +405,40 @@ def _claim_support_ids(response: dict[str, Any]) -> tuple[str, ...]:
     )
 
 
+def _support_rows(response: dict[str, Any]) -> tuple[dict, ...]:
+    return tuple(
+        row
+        for field in ("citations", "historical_citations", "metadata_support", "trace_support")
+        for row in response.get(field, ())
+        if isinstance(row, dict)
+    )
+
+
+def _support_ids(response: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            str(row.get("evidence_id") or row.get("metadata_grounding_id") or row.get("source_conflict_id"))
+            for row in _support_rows(response)
+            if row.get("evidence_id") or row.get("metadata_grounding_id") or row.get("source_conflict_id")
+        )
+    )
+
+
+def _support_span_ids(response: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(str(span_id) for row in _support_rows(response) for span_id in row.get("text_span_ids", ())))
+
+
+def _public_targets(response: dict[str, Any]) -> tuple[dict, ...]:
+    return tuple(
+        {
+            "source_document_id": row.get("source_document_id"),
+            "page_numbers": list(row.get("page_numbers") or (() if row.get("page_number") is None else (row["page_number"],))),
+        }
+        for row in _support_rows(response)
+        if row.get("source_document_id")
+    )
+
+
 def _reason_code(response: dict[str, Any]) -> str | None:
     if response.get("reason_code"):
         return str(response["reason_code"])
@@ -345,7 +449,13 @@ def _reason_code(response: dict[str, Any]) -> str | None:
 
 
 def _source_attribute(response: dict[str, Any], field: str) -> str | None:
-    for rows in (response.get("citations", ()), response.get("historical_citations", ()), response.get("claim_support", ())):
+    for rows in (
+        response.get("citations", ()),
+        response.get("historical_citations", ()),
+        response.get("metadata_support", ()),
+        response.get("trace_support", ()),
+        response.get("claim_support", ()),
+    ):
         for row in rows:
             if isinstance(row, dict) and row.get(field):
                 return str(row[field])

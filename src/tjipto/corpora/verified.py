@@ -27,6 +27,8 @@ class CorpusReadiness:
     manifest_digest: str | None = None
     artifact_set_digest: str | None = None
     error_code: str | None = None
+    access_mode: str = "verified"
+    canonical_build_eligible: bool = True
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,8 @@ VerifiedCorpusSnapshot = ValidatedCorpusSnapshot
 class CorpusPublicationService:
     def verify_and_publish(self, config) -> ValidatedCorpusSnapshot:
         manifest, manifest_digest = _read_trusted_manifest(config)
+        build_eligible = _canonical_extractor_matches(manifest)
+        access_mode = "verified" if build_eligible else "verified_read_only"
         runtime_required = tuple(config.setting("runtime_required_artifacts"))
         artifacts = _verify_artifacts(config.manifest_path.parent.resolve(), manifest, runtime_required)
         semantic_attestation = _runtime_attestation(manifest, artifacts)
@@ -74,9 +78,17 @@ class CorpusPublicationService:
             verified_artifacts=frozen_artifacts,
             manifest_digest=manifest_digest,
             artifact_set_digest=compute_artifact_set_digest(manifest),
+            artifact_access_mode=access_mode,
+            canonical_build_eligible=build_eligible,
         )
         artifact_set_digest = compute_artifact_set_digest(manifest)
-        readiness = CorpusReadiness(True, manifest_digest, artifact_set_digest)
+        readiness = CorpusReadiness(
+            True,
+            manifest_digest,
+            artifact_set_digest,
+            access_mode=access_mode,
+            canonical_build_eligible=build_eligible,
+        )
         return ValidatedCorpusSnapshot(
             config=verified,
             artifacts=frozen_artifacts,
@@ -188,10 +200,23 @@ def _read_trusted_manifest(config) -> tuple[dict, str]:
         or manifest.get("contract_fingerprint") != contract.contract_fingerprint
     ):
         raise CorpusIntegrityError("contract_fingerprint_mismatch")
-    expected_extractor = manifest.get("extractor_fingerprint")
-    if expected_extractor is not None and expected_extractor != extractor_fingerprint():
-        raise CorpusIntegrityError("extractor_fingerprint_mismatch")
     return manifest, manifest_digest
+
+
+def _canonical_extractor_matches(manifest: dict) -> bool:
+    expected = manifest.get("extractor_fingerprint")
+    if expected is None:
+        return True
+    try:
+        return expected == extractor_fingerprint()
+    except RuntimeError:
+        return False
+
+
+def require_canonical_build_environment(config) -> None:
+    manifest, _ = _read_trusted_manifest(config)
+    if not _canonical_extractor_matches(manifest):
+        raise CorpusIntegrityError("extractor_fingerprint_mismatch")
 
 
 def _manifest_digest(config) -> str:
