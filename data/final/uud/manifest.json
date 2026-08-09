@@ -503,8 +503,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 19848736,
-      "sha256": "d1eba750d012b0682ad55ebb7b673656db403cd6a1380f514a1a68c0b325bf7a"
+      "bytes": 25314570,
+      "sha256": "4dc5a34153a7888baffe966457cb7a416c263814e7b6eb97d12a7e81e32aaf60"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -652,7 +652,7 @@
       "format": "json",
       "artifact_schema": 7,
       "bytes": 25363,
-      "sha256": "56fc3a03e39ea0b60ef205a706e3a3f07b5fdb9bd01333224cd9a79b0353ee47"
+      "sha256": "b46260580e2568e6904a111b46638195385983a50dac9b4b91fc1b6f3d5942b3"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
@@ -781,9 +781,7 @@
     "graph_retrieval_eval_results": "tests/fixtures/uud/graph_retrieval_eval_results.jsonl",
     "graph_retrieval_traces": "tests/fixtures/uud/graph_retrieval_traces.jsonl",
     "orchestrator_eval_results": "tests/fixtures/uud/orchestrator_eval_results.jsonl",
-    "orchestrator_eval_summary": "tests/fixtures/uud/orchestrator_eval_summary.json",
-    "retrieval_metrics_baseline": "tests/fixtures/uud/retrieval_metrics_baseline.json",
-    "retrieval_summary_baseline": "tests/fixtures/uud/retrieval_summary_baseline.json"
+    "orchestrator_eval_summary": "tests/fixtures/uud/orchestrator_eval_summary.json"
   },
   "graph_edges": "graph_edges.jsonl",
   "graph_nodes": "graph_nodes.jsonl",

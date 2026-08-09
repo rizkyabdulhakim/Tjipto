@@ -23,6 +23,8 @@ class CorpusConfig:
     verified_artifacts: Mapping[str, object] | None = None
     manifest_digest: str | None = None
     artifact_set_digest: str | None = None
+    artifact_access_mode: str = "verified"
+    canonical_build_eligible: bool = True
     strategy: object | None = None
 
     def setting(self, key: str, default=None):

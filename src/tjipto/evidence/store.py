@@ -52,8 +52,11 @@ class EvidenceStore:
         self._page_text_spans: list[dict] | None = None
         self._page_text_span_by_id: dict[str, dict] | None = None
         self._raw_source_spans: list[dict] | None = None
+        self._meaningful_support_units: list[dict] | None = None
         self._propositions: list[dict] | None = None
         self._raw_source_span_by_support_id: dict[str, dict] | None = None
+        self._raw_source_span_by_id: dict[str, dict] | None = None
+        self._meaningful_support_unit_by_id: dict[str, dict] | None = None
 
     @property
     def evidence(self) -> list[dict]:
@@ -136,6 +139,12 @@ class EvidenceStore:
         return self._raw_source_spans
 
     @property
+    def meaningful_support_units(self) -> list[dict]:
+        if self._meaningful_support_units is None:
+            self._meaningful_support_units = _optional_jsonl(self.config, "meaningful_support_units")
+        return self._meaningful_support_units
+
+    @property
     def propositions(self) -> list[dict]:
         if self._propositions is None:
             self._propositions = _optional_jsonl(self.config, "propositions")
@@ -152,6 +161,27 @@ class EvidenceStore:
                 if isinstance(row.get("source_support_id"), str) and row["source_support_id"]
             }
         return self._raw_source_span_by_support_id.get(support_id)
+
+    def source_span(self, raw_source_span_id: str) -> dict | None:
+        if self._raw_source_span_by_id is None:
+            self._raw_source_span_by_id = {
+                str(row["raw_source_span_id"]): row
+                for row in self.raw_source_spans
+                if row.get("raw_source_span_id")
+            }
+        return self._raw_source_span_by_id.get(raw_source_span_id)
+
+    def meaningful_support_unit(self, support_unit_id: str) -> dict | None:
+        if self._meaningful_support_unit_by_id is None:
+            self._meaningful_support_unit_by_id = {
+                str(row["support_unit_id"]): row
+                for row in self.meaningful_support_units
+                if row.get("support_unit_id")
+            }
+        return self._meaningful_support_unit_by_id.get(support_unit_id)
+
+    def page_text_span(self, text_span_id: str) -> dict | None:
+        return self._page_text_span(text_span_id)
 
     def source_span_bboxes(self, support_id: str) -> list[dict]:
         row = self.source_span_for_support(support_id)

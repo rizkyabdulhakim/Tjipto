@@ -33,6 +33,7 @@ def load_artifacts(final: Path) -> dict[str, list[dict]]:
         "conflicts": _rows(final / "source_conflicts.jsonl"),
         "bboxes": _rows(final / "bbox_registry.jsonl"),
         "words": _rows(final / "word_bboxes.jsonl"),
+        "documents": _rows(final / "source_documents.jsonl"),
     }
 
 

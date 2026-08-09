@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from hashlib import sha256
+
 from tjipto.contracts.relations import is_relevance_relation, is_query_relation
 from tjipto.corpora.uud.policy.source_text import project_source_text_rows
+from tjipto.evidence.bbox import derive_viewer_overlay, viewer_overlay_rectangles
 
 RUNTIME_ARTIFACTS = (
     "evidence_registry",
@@ -16,6 +19,15 @@ RUNTIME_ARTIFACTS = (
     "metadata_grounding",
     "metadata_grounding_registry",
     "source_conflicts",
+)
+
+_MEANINGFUL_SUPPORT_FIELDS = (
+    "support_unit_id", "decision_kind", "owner_type", "owner_id", "source_document_id", "source_role",
+    "temporal_context", "text_span_ids", "page_numbers", "bbox_precision", "viewer_eligible", "highlight_eligible",
+)
+
+_SUPPORT_RECTANGLE_FIELDS = (
+    "page_number", "page_width", "page_height", "bbox_precision", "viewer_highlightable", "x0", "y0", "x1", "y1",
 )
 
 _GRAPH_EDGE_FIELDS = (
@@ -93,6 +105,9 @@ def build_runtime_projection(**artifacts: list[dict]) -> dict:
             and (is_relevance_relation(row.get("edge_type")) or is_query_relation(row.get("edge_type")))
         )
     ]
+    rows["meaningful_support_units"] = _meaningful_support_projection(
+        artifacts.get("meaningful_support_units", []), artifacts.get("word_bboxes", [])
+    )
     refs = _bbox_refs(rows.values())
     words = []
     for word in artifacts.get("word_bboxes", ()):
@@ -114,6 +129,33 @@ def build_runtime_projection(**artifacts: list[dict]) -> dict:
         for row in source_rows
     ]
     return {"schema": 2, "artifacts": rows}
+
+
+def _meaningful_support_projection(supports: list[dict], words: list[dict]) -> list[dict]:
+    characters = {
+        character["character_bbox_id"]: word | character
+        for word in words
+        for character in word.get("characters") or ()
+    }
+    projected = []
+    for support in supports:
+        row = {key: support[key] for key in _MEANINGFUL_SUPPORT_FIELDS if key in support}
+        if support.get("owner_type") == "review_decision":
+            row["raw_source_span_ids"] = support.get("raw_source_span_ids") or []
+        rectangles = viewer_overlay_rectangles(
+            support | {"viewer_overlay": derive_viewer_overlay(support, characters, {})}
+        ) if support.get("bbox_precision") == "exact" else ()
+        support_key = sha256(str(support["support_unit_id"]).encode()).hexdigest()[:16]
+        row["bbox_rectangles"] = [
+            {
+                **{key: rectangle[key] for key in _SUPPORT_RECTANGLE_FIELDS},
+                "bbox_id": f"support_rectangle::{support_key}::{index:04d}",
+            }
+            for index, rectangle in enumerate(rectangles)
+        ]
+        row["bbox_refs"] = [rectangle["bbox_id"] for rectangle in row["bbox_rectangles"]]
+        projected.append(row)
+    return projected
 
 
 def _bbox_refs(artifact_sets) -> set[str]:

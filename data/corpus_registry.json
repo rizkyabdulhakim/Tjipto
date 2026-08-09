@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "8aa9d5a5c9079f411d186b903a0a965f455afc39557f2890c998dba73ba4b959",
+    "manifest_sha256": "8c4f8617e7767072d09869f9413d5e63687f0b6196a539157e752062bd2e3409",
     "runtime_required_artifacts": [
       "runtime_projection",
       "validation_report",
@@ -25,8 +25,11 @@
         "sembilan": "9",
         "sepuluh": "10",
         "berhak": "hak",
+        "kebebasan": "hak",
         "bekerja": "kerja",
         "menjabat": "jabatan",
+        "memperoleh": "mendapat",
+        "pengajaran": "pendidikan",
         "pekerjaan": "kerja",
         "periode": "jabatan"
       }

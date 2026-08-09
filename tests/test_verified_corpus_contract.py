@@ -7,10 +7,12 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from tjipto.core.manifest import read_json, read_jsonl
 from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.corpora.uud.validation import validate_uud_artifact_dir
+from tjipto.corpora.uud_artifact_baseline import rebuild_uud_artifact_baseline
 from tjipto.runtime.api import handle_request
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.evidence.store import EvidenceStore
@@ -40,6 +42,17 @@ class VerifiedCorpusContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "artifact_size_mismatch|artifact_sha256_mismatch"):
                 service.repository.load("uud")
             self.assertEqual(service.repository.load_count, 1)
+
+    def test_noncanonical_extractor_can_read_verified_artifacts_but_cannot_build(self) -> None:
+        with patch("tjipto.corpora.verified.extractor_fingerprint", return_value={"python": "noncanonical"}):
+            service = LegalRuntimeService(ROOT)
+            result = service.ask("uud", "Pasal 1 ayat (3)")
+            capabilities = service.capabilities("uud")
+            self.assertEqual(result["status"], "answer_ready")
+            self.assertEqual(capabilities["artifact_access_mode"], "verified_read_only")
+            self.assertFalse(capabilities["canonical_build_eligible"])
+            with self.assertRaisesRegex(ValueError, "extractor_fingerprint_mismatch"):
+                rebuild_uud_artifact_baseline(ROOT)
 
     def test_cached_snapshot_rejects_semantic_mutation_with_new_hashes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

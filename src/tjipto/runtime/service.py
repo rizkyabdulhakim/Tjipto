@@ -347,8 +347,9 @@ class LegalRuntimeService:
     def viewer(
         self,
         corpus_id: str,
-        evidence_id: str | None,
+        evidence_id: str | None = None,
         *,
+        support_unit_id: str | None = None,
         source_support_id: str | None = None,
         relation_id: str | None = None,
         source_document_id: str | None = None,
@@ -363,6 +364,37 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return _integrity_failure(corpus_id, "", self._integrity_error)
+        support = store.meaningful_support_unit(support_unit_id) if support_unit_id else None
+        if support_unit_id and (
+            support is None
+            or support.get("decision_kind") == "typed_exclusion"
+            or support.get("viewer_eligible") is not True
+        ):
+            return {"status": "not_found", "reason": "invalid_support_target", "corpus_id": corpus_id}
+        if support is not None:
+            source_document_id = str(support["source_document_id"])
+            page_number = int(support["page_numbers"][0])
+            bbox_refs = tuple(support.get("bbox_refs") or ())
+            quoted_text = "\n".join(
+                str(store.page_text_span(span_id).get("exact_quote") or "")
+                for span_id in support.get("text_span_ids") or ()
+                if store.page_text_span(span_id) is not None
+            )
+            if support.get("owner_type") == "review_decision":
+                raw = store.source_span(str((support.get("raw_source_span_ids") or ("",))[0]))
+                evidence_id = str(raw.get("source_support_id")) if raw else None
+            else:
+                evidence_id = str(support["owner_id"])
+            if support.get("bbox_precision") == "page_grounded_only":
+                source = _source_document_by_id(store, source_document_id)
+                if source is None:
+                    return {"status": "not_found", "reason": "invalid_source", "corpus_id": corpus_id}
+                return document_viewer_payload(store, corpus_id, source, page_number=page_number) | {
+                    "quoted_text": quoted_text,
+                    "page_numbers": tuple(support["page_numbers"]),
+                    "source_role": support["source_role"],
+                    "temporal_context": support["temporal_context"],
+                }
         evidence_id = evidence_id or source_support_id
         if evidence_id is None:
             source = _source_document_by_id(store, source_document_id)
@@ -378,7 +410,7 @@ class LegalRuntimeService:
         evidence = store.get(evidence_id)
         if evidence is None:
             evidence = _metadata_grounding_evidence(store, evidence_id)
-        synthetic_bboxes: list[dict] | None = None
+        synthetic_bboxes: list[dict] | None = list(support.get("bbox_rectangles") or ()) if support is not None else None
         if evidence is None:
             evidence, synthetic_bboxes = _source_conflict_viewer_evidence(store, evidence_id)
         if evidence is None:
@@ -415,6 +447,17 @@ class LegalRuntimeService:
             }
         if quoted_text is not None:
             evidence = evidence | {"quoted_text": quoted_text}
+        if support is not None:
+            evidence = evidence | {
+                "bbox_refs": bbox_refs,
+                "bbox_precision": support["bbox_precision"],
+                "viewer_highlightable": support.get("highlight_eligible") is True,
+                "page_numbers": tuple(support["page_numbers"]),
+                "source_document_id": support["source_document_id"],
+                "source_role": support["source_role"],
+                "temporal_context": support["temporal_context"],
+            }
+            synthetic_bboxes = list(support.get("bbox_rectangles") or ())
         if support_projection:
             evidence = evidence | {
                 key: support_projection[key]
@@ -431,7 +474,7 @@ class LegalRuntimeService:
             if evidence.get("metadata_grounding")
             else store.bboxes_for_refs(tuple(relation.get("bbox_refs") or ())) if relation is not None else store.bboxes_for(evidence_id)
         )
-        if bbox_refs and proposition_id is None:
+        if bbox_refs and proposition_id is None and support is None:
             bboxes = store.bboxes_for_refs(bbox_refs)
         if proposition_id is None:
             bboxes = _select_viewer_bboxes(bboxes, bbox_refs)
@@ -532,6 +575,8 @@ class LegalRuntimeService:
             "readiness": True,
             "manifest_digest": store.config.manifest_digest,
             "artifact_set_digest": store.config.artifact_set_digest,
+            "artifact_access_mode": store.config.artifact_access_mode,
+            "canonical_build_eligible": store.config.canonical_build_eligible,
             "capabilities": ("search", "ask", "citation", "viewer", "bookmarks"),
         }
 

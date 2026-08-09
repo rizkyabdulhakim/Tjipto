@@ -90,8 +90,6 @@ FIXTURES = {
     "graph_retrieval_traces": "tests/fixtures/uud/graph_retrieval_traces.jsonl",
     "orchestrator_eval_results": "tests/fixtures/uud/orchestrator_eval_results.jsonl",
     "orchestrator_eval_summary": "tests/fixtures/uud/orchestrator_eval_summary.json",
-    "retrieval_metrics_baseline": "tests/fixtures/uud/retrieval_metrics_baseline.json",
-    "retrieval_summary_baseline": "tests/fixtures/uud/retrieval_summary_baseline.json",
 }
 
 PRIMARY_IDS = {

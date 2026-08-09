@@ -15,7 +15,7 @@ function viewport(box, scale = 1) {
   return {
     width: box.page_width * scale,
     height: box.page_height * scale,
-    convertToViewportRectangle: ([x0, y0, x1, y1]) => [x0 * scale, (box.page_height - y0) * scale, x1 * scale, (box.page_height - y1) * scale],
+    convertToViewportPoint: (x, y) => [x * scale, (box.page_height - y) * scale],
   };
 }
 
