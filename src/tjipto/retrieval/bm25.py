@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 import re
 from collections import Counter
+from dataclasses import dataclass
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
@@ -70,37 +73,121 @@ def lexical_search(
     k1: float = 1.5,
     b: float = 0.75,
 ) -> list[dict]:
-    aliases = _lexical_aliases(config)
-    query_terms = tokens(query, aliases=aliases)
-    if not query_terms:
-        return []
+    return SparseIndex.build(evidence, config=config, k1=k1, b=b).search(query, limit)
 
-    docs = [(row, tokens(_document_text(row), aliases=aliases)) for row in evidence]
-    if not docs:
-        return []
-    avgdl = sum(len(doc_terms) for _, doc_terms in docs) / len(docs) or 1.0
 
-    document_frequency: Counter[str] = Counter()
-    for _, doc_terms in docs:
-        document_frequency.update(set(doc_terms))
+@dataclass(frozen=True)
+class SparseIndex:
+    """Immutable BM25 collection statistics for one verified evidence snapshot."""
 
-    scored: list[tuple[float, str, dict]] = []
-    total_docs = len(docs)
-    for row, doc_terms in docs:
-        if not doc_terms:
-            continue
-        frequencies = Counter(doc_terms)
-        doc_len = len(doc_terms)
-        score = 0.0
-        for term in query_terms:
-            tf = frequencies.get(term, 0)
-            if not tf:
+    identity: str
+    aliases: tuple[tuple[str, str], ...]
+    k1: float
+    b: float
+    record_count: int
+    documents: tuple[tuple[dict, tuple[str, ...], tuple[tuple[str, int], ...]], ...]
+    document_frequency: tuple[tuple[str, int], ...]
+    avgdl: float
+
+    @classmethod
+    def build(cls, evidence: list[dict], *, config=None, k1: float = 1.5, b: float = 0.75) -> "SparseIndex":
+        aliases = _lexical_aliases(config)
+        alias_items = tuple(sorted(aliases.items()))
+        documents: list[tuple[dict, tuple[str, ...], tuple[tuple[str, int], ...]]] = []
+        document_frequency: Counter[str] = Counter()
+        total_length = 0
+        for row in evidence:
+            document_text = _document_text(row)
+            doc_terms = tuple(tokens(document_text, aliases=aliases))
+            frequencies = Counter(doc_terms)
+            documents.append((dict(row), doc_terms, tuple(sorted(frequencies.items()))))
+            document_frequency.update(frequencies.keys())
+            total_length += len(doc_terms)
+        identity = cls.snapshot_identity(evidence, config=config, k1=k1, b=b, aliases=alias_items)
+        return cls(
+            identity=identity,
+            aliases=alias_items,
+            k1=k1,
+            b=b,
+            record_count=len(documents),
+            documents=tuple(documents),
+            document_frequency=tuple(sorted(document_frequency.items())),
+            avgdl=(total_length / len(documents)) if documents else 1.0,
+        )
+
+    @staticmethod
+    def snapshot_identity(
+        evidence: list[dict], *, config=None, k1: float = 1.5, b: float = 0.75,
+        aliases: tuple[tuple[str, str], ...] | None = None,
+    ) -> str:
+        alias_items = aliases if aliases is not None else tuple(sorted(_lexical_aliases(config).items()))
+        snapshot = {
+            "corpus_id": getattr(config, "corpus_id", None),
+            "manifest_digest": getattr(config, "manifest_digest", None),
+            "artifact_set_digest": getattr(config, "artifact_set_digest", None),
+            "manifest_path": str(getattr(config, "manifest_path", "")),
+            "aliases": alias_items,
+            "k1": k1,
+            "b": b,
+            "record_count": len(evidence),
+            "records": tuple(sorted((str(row.get("evidence_id", "")), _document_text(row)) for row in evidence)),
+        }
+        return hashlib.sha256(
+            json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
+    def search(self, query: str, limit: int = 10) -> list[dict]:
+        aliases = dict(self.aliases)
+        query_terms = tokens(query, aliases=aliases)
+        if not query_terms or not self.documents:
+            return []
+        document_frequency = dict(self.document_frequency)
+        total_docs = self.record_count
+        scored: list[tuple[float, str, dict]] = []
+        for row, doc_terms, frequency_items in self.documents:
+            if not doc_terms:
                 continue
-            idf = math.log(1 + (total_docs - document_frequency[term] + 0.5) / (document_frequency[term] + 0.5))
-            score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * doc_len / avgdl))
-        if score > 0:
-            scored.append((score, row["evidence_id"], _with_relevance(row, query, aliases)))
-    return [row for _, _, row in sorted(scored, key=lambda item: (-item[0], item[1]))[:limit]]
+            frequencies = dict(frequency_items)
+            doc_len = len(doc_terms)
+            score = 0.0
+            for term in query_terms:
+                tf = frequencies.get(term, 0)
+                if not tf:
+                    continue
+                df = document_frequency[term]
+                idf = math.log(1 + (total_docs - df + 0.5) / (df + 0.5))
+                score += idf * (tf * (self.k1 + 1)) / (tf + self.k1 * (1 - self.b + self.b * doc_len / self.avgdl))
+            if score > 0:
+                scored.append((score, row["evidence_id"], _with_relevance(row, query, aliases)))
+        results = []
+        for rank, (score, _, row) in enumerate(sorted(scored, key=lambda item: (-item[0], item[1]))[:limit], start=1):
+            result = dict(row)
+            result["_bm25_provenance"] = {
+                "retriever": "bm25",
+                "raw_score": score,
+                "rank": rank,
+                "score_domain": "bm25",
+            }
+            results.append(result)
+        return results
+
+
+def sparse_index_for_store(store, *, k1: float = 1.5, b: float = 0.75) -> SparseIndex:
+    """Return the store-scoped index, rebuilding when its verified snapshot changes."""
+    index = getattr(store, "_sparse_index", None)
+    evidence = store.evidence
+    config = store.config
+    aliases = tuple(sorted(_lexical_aliases(config).items()))
+    cache_key = (
+        id(evidence), len(evidence), id(config),
+        getattr(config, "manifest_digest", None), getattr(config, "artifact_set_digest", None),
+        aliases, k1, b,
+    )
+    if index is None or getattr(store, "_sparse_index_cache_key", None) != cache_key:
+        store._sparse_index = SparseIndex.build(evidence, config=config, k1=k1, b=b)
+        store._sparse_index_cache_key = cache_key
+        return store._sparse_index
+    return index
 
 
 def _with_relevance(row: dict, query: str, aliases: dict[str, str]) -> dict:
