@@ -549,6 +549,26 @@ class RuntimeContractTest(unittest.TestCase):
             with self.subTest(query=query):
                 self.assertNotEqual(self.service.ask("uud", query)["status"], "clarification_required")
 
+    def test_selected_constraints_preserve_original_query(self) -> None:
+        for query, kind in (("Pasal 7 atau Pasal 7A", "legal_target"), ("hak warga negara", "concept_facet")):
+            with self.subTest(query=query):
+                result = self.service.ask("uud", query)
+                self.assertEqual(result["status"], "clarification_required")
+                self.assertEqual(result["clarification_kind"], kind)
+                public = handle_request("uud", "ask", {"query": query}, service=self.service)
+                target = public["clarification_options"][0]["context_target"]
+                with patch.object(self.service, "_route_retrieval", wraps=self.service._route_retrieval) as route:
+                    resumed = handle_request(
+                        "uud", "ask", {"query": query, "clarification_context": target}, service=self.service
+                    )
+                self.assertNotEqual(resumed["status"], "clarification_required")
+                self.assertTrue(route.call_args_list)
+                self.assertTrue(all(call.args[1] == query for call in route.call_args_list))
+
+    def test_multiword_ambiguity_has_no_length_gate(self) -> None:
+        result = self.service.ask("uud", "hak warga negara")
+        self.assertGreaterEqual(len(result["clarification_options"]), 2)
+
     def test_inflected_metadata_wording_requires_source_clarification(self) -> None:
         for query in ("siapa yang menandatangani UUD", "siapa yang menandatangi UUD"):
             result = self.service.ask("uud", query)

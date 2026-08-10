@@ -82,6 +82,36 @@ def _has_resolved_legal_target(corpus_id: str, query: str, *, config=None) -> bo
         return False
 
 
+def _apply_clarification_constraint(store: EvidenceStore, routed: dict, resolution: dict[str, str]) -> None:
+    """Filter routed candidates without changing the user's semantic query."""
+    legal_target = resolution.get("legal_target")
+    concept_facet = resolution.get("concept_facet")
+    if legal_target:
+        units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
+
+        def matches_target(row: dict) -> bool:
+            unit = units.get(str(row.get("legal_unit_id") or ""))
+            while unit is not None:
+                if str(unit.get("unit_label") or "").casefold() == legal_target.casefold():
+                    return True
+                unit = units.get(str(unit.get("parent_legal_unit_id") or ""))
+            return False
+
+        routed["matches"] = tuple(row for row in routed.get("matches", ()) if matches_target(row))
+    elif concept_facet:
+        from tjipto.retrieval.service import RetrievalService
+
+        facet_matches = tuple(
+            row for row in RetrievalService(store).search(concept_facet, len(store.evidence))
+            if row.get("lexical_relevance_ok")
+        )
+        allowed = {str(row.get("legal_unit_id")) for row in facet_matches}
+        constrained = tuple(row for row in routed.get("matches", ()) if str(row.get("legal_unit_id")) in allowed)
+        routed["matches"] = constrained or facet_matches[:10]
+    if resolution and not routed.get("matches"):
+        routed["status"] = "no_results"
+
+
 class LegalRuntimeService:
     def __init__(
         self,
@@ -718,7 +748,6 @@ class LegalRuntimeService:
         # Amendment wording then scopes the structured lookup to that source role.
         resolution = clarification or {}
         relation_family = resolution.get("relation_family")
-        retrieval_query = resolution.get("legal_target") or resolution.get("concept_facet") or query
         amendment_target = amendment_relation_target(store, query, relation_family=relation_family)
         instrument = None if (
             semantics.requested_function == "temporal_quotation"
@@ -819,7 +848,7 @@ class LegalRuntimeService:
             # placeholder retrieval attempt.
             scoped_routed = self._route_retrieval(
                 corpus_id,
-                retrieval_query,
+                query,
                 store,
                 limit=limit,
                 metadata_filters=filters,
@@ -828,12 +857,17 @@ class LegalRuntimeService:
                 relation_family=relation_family,
             )
             scoped_routed["original_query"] = query
+            _apply_clarification_constraint(store, scoped_routed, resolution)
             if (
                 scope["route"] == "current_fact_unsupported"
                 or semantics.capability_decision.missing_capabilities
                 or not _scope_has_verified_support(store, scoped_routed)
             ):
-                decision = clarification_decision(store, semantics, scoped_routed)
+                decision = (
+                    clarification_decision(store, semantics, scoped_routed)
+                    if scope["route"] != "current_fact_unsupported" and not semantics.capability_decision.missing_capabilities
+                    else None
+                )
                 if decision:
                     return scoped_routed | _clarification_response(scoped_routed, decision)
                 templates = _answer_templates(store)
@@ -885,7 +919,7 @@ class LegalRuntimeService:
             semantic_filters["source_role"] = semantics.source_role
         routed = scoped_routed or self._route_retrieval(
             corpus_id,
-            retrieval_query,
+            query,
             store,
             limit=limit,
             metadata_filters=semantic_filters,
@@ -893,6 +927,7 @@ class LegalRuntimeService:
             allow_relation=semantics.requested_function != "temporal_quotation",
             relation_family=relation_family,
         )
+        _apply_clarification_constraint(store, routed, resolution)
         if resolution.get("entity"):
             routed["matches"] = tuple(
                 row for row in routed.get("matches", ()) if row.get("entity_identity") == resolution["entity"]

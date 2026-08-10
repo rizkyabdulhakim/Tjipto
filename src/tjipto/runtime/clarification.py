@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
-from tjipto.retrieval.bm25 import lexical_search
+from tjipto.retrieval.bm25 import lexical_search, tokens
 
 
 @dataclass(frozen=True)
@@ -132,18 +132,21 @@ def _lexical_options(store, semantics, routed: dict, policy: dict, config: dict)
             if _clause_has_support(store, _concept_query(policy, clause))
         )
         return clause_options if len(clause_options) == len(clauses) else ()
-    word_count = len(normalize_intent_text(query).split())
-    relation_without_target = contains_intent_phrase(query, config.get("relation_words", ()))
-    if word_count > int(policy.get("underspecified_max_terms") or 0) and not relation_without_target:
+    if _uses_configured_normalization(query, store.config):
         return ()
+    relation_without_target = contains_intent_phrase(query, config.get("relation_words", ()))
     units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
     target_types = set(policy.get("legal_target_unit_types") or ())
     matches = routed.get("matches", ())
     if relation_without_target:
         matches = lexical_search(list(store.evidence), query, 10, config=store.config)
+    if _top_quote_contains_query(query, matches, store.config):
+        return ()
     options: list[ClarificationOption] = []
     seen: set[str] = set()
     for row in matches:
+        if not row.get("lexical_relevance_ok"):
+            continue
         unit = _target_unit(units, str(row.get("legal_unit_id") or ""), target_types)
         label = str(unit.get("unit_label") or "") if unit else ""
         if not label or label in seen or not _has_final_legal_target(store, label):
@@ -153,6 +156,36 @@ def _lexical_options(store, semantics, routed: dict, policy: dict, config: dict)
         if len(options) == int(policy.get("maximum_options") or 3):
             break
     return tuple(options)
+
+
+def _uses_configured_normalization(query: str, config) -> bool:
+    aliases = {
+        normalize_intent_text(key): normalize_intent_text(value)
+        for key, value in (config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
+    }
+    return any(aliases.get(token) and aliases[token] != token for token in normalize_intent_text(query).split())
+
+
+def _top_quote_contains_query(query: str, matches: tuple[dict, ...], config) -> bool:
+    aliases = {
+        str(key).casefold(): str(value).casefold()
+        for key, value in (config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
+    }
+    requested = tokens(query, aliases=aliases)
+    requested_pairs = tuple(zip(requested, requested[1:]))
+    if not requested_pairs or not matches:
+        return False
+    for line in str(matches[0].get("quoted_text") or "").splitlines():
+        quoted = tokens(line, aliases=aliases)
+        cursor = 0
+        for term in requested:
+            try:
+                cursor = quoted.index(term, cursor) + 1
+            except ValueError:
+                break
+        else:
+            return True
+    return False
 
 
 def _split_ambiguity(query: str, terms: tuple[str, ...]) -> tuple[str, ...]:

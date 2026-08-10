@@ -823,7 +823,6 @@
         "concept_aliases": {
           "dpr": "Dewan Perwakilan Rakyat"
         },
-        "underspecified_max_terms": 1,
         "maximum_options": 3,
         "legal_target_unit_types": [
           "pasal_record"
