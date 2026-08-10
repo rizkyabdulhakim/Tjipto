@@ -99,7 +99,12 @@ def _sha256(path: Path) -> str:
 
 
 def _git_head() -> str:
-    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    except (OSError, subprocess.CalledProcessError):
+        # Release candidates intentionally omit .git; the report remains valid
+        # with the archive's externally bound commit identity.
+        return "unavailable"
 
 
 if __name__ == "__main__":
