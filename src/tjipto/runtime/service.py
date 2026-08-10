@@ -42,7 +42,6 @@ from tjipto.catalog import CatalogService
 
 _ANSWER_TEMPLATES = {
     "insufficient": "Bukti tidak cukup atau database belum tersedia dalam korpus terverifikasi saat ini.",
-    "clarification": "Naskah sumber mana yang dimaksud? Pilih salah satu konteks berikut: {options}.",
     "legal_relation": "Dukungan relasi hukum berbasis bukti tersedia; sistem tidak menghasilkan kesimpulan hukum.",
     "citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum.",
 }
@@ -175,12 +174,19 @@ class LegalRuntimeService:
             self._public_targets.move_to_end(target)
             return dict(record[1])
 
-    def public_clarification_context(self, corpus_id: str, target: str | None) -> dict[str, str] | None:
+    def public_clarification_context(self, corpus_id: str, target: str | None) -> dict | None:
         request = self._public_target_request(corpus_id, target)
         resolution = request.get("resolution") if request and request.get("kind") == "clarification_context" else None
-        if not isinstance(resolution, dict) or set(resolution) - {"query", "source_role", "relation_family"}:
+        allowed = {"source_role", "legal_target", "relation_family", "entity", "temporal_scope", "concept_facet"}
+        if not isinstance(resolution, dict) or set(resolution) - allowed:
             return None
-        return {str(key): str(value) for key, value in resolution.items() if isinstance(value, str) and value}
+        original_query = request.get("original_query") if request else None
+        if not isinstance(original_query, str) or not original_query:
+            return None
+        return {
+            "original_query": original_query,
+            "resolution": {str(key): str(value) for key, value in resolution.items() if isinstance(value, str) and value},
+        }
 
     def public_source_status_label(self, corpus_id: str, source_role: object) -> str | None:
         store = self._store(corpus_id)
@@ -710,7 +716,9 @@ class LegalRuntimeService:
             return source_document
         # A resolved legal target has precedence over the instrument classifier.
         # Amendment wording then scopes the structured lookup to that source role.
-        relation_family = (clarification or {}).get("relation_family")
+        resolution = clarification or {}
+        relation_family = resolution.get("relation_family")
+        retrieval_query = resolution.get("legal_target") or resolution.get("concept_facet") or query
         amendment_target = amendment_relation_target(store, query, relation_family=relation_family)
         instrument = None if (
             semantics.requested_function == "temporal_quotation"
@@ -811,7 +819,7 @@ class LegalRuntimeService:
             # placeholder retrieval attempt.
             scoped_routed = self._route_retrieval(
                 corpus_id,
-                query,
+                retrieval_query,
                 store,
                 limit=limit,
                 metadata_filters=filters,
@@ -819,14 +827,15 @@ class LegalRuntimeService:
                 allow_relation=semantics.requested_function != "temporal_quotation",
                 relation_family=relation_family,
             )
+            scoped_routed["original_query"] = query
             if (
                 scope["route"] == "current_fact_unsupported"
                 or semantics.capability_decision.missing_capabilities
                 or not _scope_has_verified_support(store, scoped_routed)
             ):
-                decision = clarification_decision(store, semantics, scoped_routed, entity_query=_is_entity_support_query(store, scoped_routed))
+                decision = clarification_decision(store, semantics, scoped_routed)
                 if decision:
-                    return scoped_routed | _clarification_response(store, scoped_routed, decision)
+                    return scoped_routed | _clarification_response(scoped_routed, decision)
                 templates = _answer_templates(store)
                 capability = semantics.capability_decision
                 missing_corpora = capability.missing_corpora
@@ -870,11 +879,13 @@ class LegalRuntimeService:
                     "retrieval_candidate_count": len(scoped_routed["matches"]),
                 }
         semantic_filters = dict(filters or {})
+        if resolution.get("source_role"):
+            semantic_filters["source_role"] = resolution["source_role"]
         if semantics.source_role and "source_role" not in semantic_filters:
             semantic_filters["source_role"] = semantics.source_role
         routed = scoped_routed or self._route_retrieval(
             corpus_id,
-            query,
+            retrieval_query,
             store,
             limit=limit,
             metadata_filters=semantic_filters,
@@ -882,11 +893,22 @@ class LegalRuntimeService:
             allow_relation=semantics.requested_function != "temporal_quotation",
             relation_family=relation_family,
         )
+        if resolution.get("entity"):
+            routed["matches"] = tuple(
+                row for row in routed.get("matches", ()) if row.get("entity_identity") == resolution["entity"]
+            )
+        if resolution.get("temporal_scope"):
+            routed["matches"] = tuple(
+                row for row in routed.get("matches", ()) if row.get("temporal_context") == resolution["temporal_scope"]
+            )
+        if not routed.get("matches") and resolution:
+            routed["status"] = "no_results"
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
-        decision = None if clarification else clarification_decision(store, semantics, routed, entity_query=_is_entity_support_query(store, routed))
+        routed["original_query"] = query
+        decision = None if clarification else clarification_decision(store, semantics, routed)
         if decision:
-            return routed | _clarification_response(store, routed, decision)
+            return routed | _clarification_response(routed, decision)
         if routed.get("route") == "document_relation":
             return _relation_response(store, routed)
         if routed["status"] != "found":
@@ -1092,28 +1114,18 @@ def _answer_templates(store) -> dict[str, str]:
     return _ANSWER_TEMPLATES | dict(configured or {})
 
 
-def _clarification_response(store, routed: dict, decision) -> dict:
+def _clarification_response(routed: dict, decision) -> dict:
     options = tuple({"label": item.label, "resolution": item.resolution} for item in decision.options)
-    answer = _answer_templates(store)["clarification"].format(options=", ".join(item["label"] for item in options))
     return {
-        "status": "clarification_required", "route": "metadata_fact", "intent": "metadata_lookup",
-        "reason": routed.get("reason") or "ambiguous_interpretation", "answer_type": "clarification", "answer": answer,
-        "answer_scope": "clarification", "clarification_options": options,
+        "status": "clarification_required", "route": _ask_route(str(routed.get("route") or "")), "intent": routed.get("intent"),
+        "reason": routed.get("reason") or "ambiguous_interpretation", "answer_type": "clarification", "answer": decision.question,
+        "answer_scope": "clarification", "clarification_kind": decision.kind, "clarification_question": decision.question,
+        "clarification_options": options,
         "context_pack": empty_context_pack(routed.get("reason") or "ambiguous_interpretation"), "evidence": (), "citations": (),
         "final_citations": (), "historical_citations": (), "metadata_support": (), "structural_support": (), "trace_support": (),
         "viewer_refs": (), "metadata_facts": (), "legal_relations": (), "warnings": ("clarification_required",),
         "insufficient_reasons": ("ambiguous_interpretation",),
     }
-def _is_entity_support_query(store, routed: dict) -> bool:
-    query = normalize_intent_text(routed.get("normalized_query") or routed.get("original_query") or "")
-    if "wakil ketua" in query:
-        return True
-    intent = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
-    vocabulary = {normalize_intent_text(value) for value in intent.get("document_target_words", ())}
-    vocabulary.update(normalize_intent_text(value) for values in intent.get("metadata_fields", {}).values() for value in values)
-    vocabulary.update(normalize_intent_text(value) for values in intent.get("metadata_rules", {}).values() for value in values)
-    vocabulary.update({"siapa", "yang", "apa", "dengan", "dan", "atau"})
-    return any(token not in vocabulary and token not in {"menandatangani", "menandatangi", "penandatangan"} for token in query.split())
 
 
 def _scope_has_verified_support(store, routed: dict) -> bool:

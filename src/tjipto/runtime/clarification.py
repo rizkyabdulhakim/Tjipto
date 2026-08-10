@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
+from tjipto.retrieval.bm25 import lexical_search
 
 
 @dataclass(frozen=True)
@@ -16,29 +17,42 @@ class ClarificationOption:
 @dataclass(frozen=True)
 class ClarificationDecision:
     kind: str
+    question: str
     options: tuple[ClarificationOption, ...]
 
 
-def clarification_decision(store, semantics, routed: dict, *, entity_query: bool) -> ClarificationDecision | None:
+def clarification_decision(store, semantics, routed: dict) -> ClarificationDecision | None:
     """Offer choices only when distinct, already-published interpretations exist."""
+    config = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
+    policy = config.get("clarification", {})
     if semantics.legal_references and len(semantics.legal_references) > 1 and routed.get("route") != "document_relation":
         options = tuple(
-            ClarificationOption(reference, {"query": reference})
+            ClarificationOption(reference, {"legal_target": reference})
             for reference in semantics.legal_references
             if _has_final_legal_target(store, reference)
         )
         if len(options) > 1:
-            return ClarificationDecision("legal_target", options)
-    metadata = _metadata_options(store, routed, entity_query=entity_query)
+            return _decision(policy, "legal_target", options)
+    entities = _entity_options(routed)
+    if len(entities) > 1:
+        return _decision(policy, "entity", entities)
+    metadata = _metadata_options(store, routed)
     if metadata:
-        return ClarificationDecision("source_scope", metadata)
-    operations = _operation_options(store, semantics, routed)
+        return _decision(policy, "source_scope", metadata)
+    operations = _operation_options(store, semantics, routed, config)
     if len(operations) > 1:
-        return ClarificationDecision("relation_operation", operations)
-    lexical = _lexical_options(store, semantics, routed)
+        return _decision(policy, "relation_operation", operations)
+    lexical = _lexical_options(store, semantics, routed, policy, config)
     if len(lexical) > 1:
-        return ClarificationDecision("lexical_target", lexical)
+        kind = "legal_target" if contains_intent_phrase(routed.get("original_query") or "", config.get("relation_words", ())) else "concept_facet"
+        return _decision(policy, kind, lexical)
     return None
+
+
+def _decision(policy: dict, kind: str, options: tuple[ClarificationOption, ...]) -> ClarificationDecision:
+    questions = policy.get("questions", {})
+    question = str(questions.get(kind) or questions.get("default") or "Clarification required.")
+    return ClarificationDecision(kind, question, options)
 
 
 def _has_final_legal_target(store, reference: str) -> bool:
@@ -50,14 +64,16 @@ def _has_final_legal_target(store, reference: str) -> bool:
     return bool(unit_ids and any(row.get("legal_unit_id") in unit_ids and row.get("status") == "final" for row in store.evidence))
 
 
-def _metadata_options(store, routed: dict, *, entity_query: bool) -> tuple[ClarificationOption, ...]:
+def _metadata_options(store, routed: dict) -> tuple[ClarificationOption, ...]:
     if routed.get("route") not in {"metadata", "metadata_scope_unresolved"} or routed.get("metadata_filters", {}).get("source_role"):
         return ()
     roles = tuple(routed.get("metadata_source_roles") or ())
     if not roles:
         roles = tuple(sorted({row.get("source_role") for row in routed.get("matches", ()) if row.get("source_role")}))
-    matches = tuple(routed.get("matches", ()))
-    if len(roles) < 2 or (entity_query and matches and all(row.get("metadata_field") == "signatories" for row in matches)):
+    identities = {row.get("entity_identity") for row in routed.get("matches", ()) if row.get("entity_identity")}
+    if len(identities) == 1:
+        return ()
+    if len(roles) < 2:
         return ()
     intent = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
     labels = intent.get("source_role_labels", {})
@@ -68,38 +84,98 @@ def _metadata_options(store, routed: dict, *, entity_query: bool) -> tuple[Clari
     )
 
 
-def _operation_options(store, semantics, routed: dict) -> tuple[ClarificationOption, ...]:
-    if routed.get("route") != "document_relation" or not semantics.legal_references:
+def _entity_options(routed: dict) -> tuple[ClarificationOption, ...]:
+    if len(tuple(routed.get("metadata_source_roles") or ())) == 1:
         return ()
-    config = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
+    rows = {}
+    for row in routed.get("matches", ()):
+        identity = row.get("entity_identity")
+        label = row.get("printed_name") or row.get("metadata_answer")
+        if identity and label:
+            rows[str(identity)] = str(label)
+    return tuple(ClarificationOption(label, {"entity": identity}) for identity, label in sorted(rows.items()))
+
+
+def _operation_options(store, semantics, routed: dict, config: dict) -> tuple[ClarificationOption, ...]:
+    if routed.get("route") not in {"document_relation", "relation_not_found"} or not semantics.legal_references:
+        return ()
     families = config.get("document_relation", {}).get("relation_families", {})
+    explicit_families = {
+        name for name, family in families.items()
+        if contains_intent_phrase(routed["original_query"], tuple(family.get("terms") or ()))
+    }
     options = []
     for name, family in families.items():
-        if not contains_intent_phrase(routed["original_query"], tuple(family.get("terms") or ())):
-            continue
         types = set(family.get("relation_types") or ())
-        if any(edge.get("edge_type") in types and edge.get("relation_id") for edge in store.graph_edges):
+        supported = any(
+            edge.get("edge_type") in types
+            and edge.get("relation_id")
+            and str((edge.get("relation_projection") or {}).get("target_citation") or "").casefold()
+            in {reference.casefold() for reference in semantics.legal_references}
+            for edge in store.graph_edges
+        )
+        if name in explicit_families or (not explicit_families and supported):
             label = next((str(term) for term in family.get("terms") or () if term), str(name).replace("_", " ").title())
             options.append(ClarificationOption(label, {"relation_family": str(name)}))
     return tuple(options)
 
 
-def _lexical_options(store, semantics, routed: dict) -> tuple[ClarificationOption, ...]:
-    if (
-        routed.get("route") != "bm25"
-        or semantics.legal_references
-        or semantics.source_role
-        or "atau" not in normalize_intent_text(routed.get("original_query") or "").split()
-    ):
+def _lexical_options(store, semantics, routed: dict, policy: dict, config: dict) -> tuple[ClarificationOption, ...]:
+    if routed.get("route") != "bm25" or semantics.legal_references or semantics.source_role:
+        return ()
+    query = str(routed.get("original_query") or "")
+    clauses = _split_ambiguity(query, tuple(policy.get("choice_terms") or ()))
+    if len(clauses) > 1:
+        clause_options = tuple(
+            ClarificationOption(clause, {"concept_facet": _concept_query(policy, clause)})
+            for clause in clauses
+            if _clause_has_support(store, _concept_query(policy, clause))
+        )
+        return clause_options if len(clause_options) == len(clauses) else ()
+    word_count = len(normalize_intent_text(query).split())
+    relation_without_target = contains_intent_phrase(query, config.get("relation_words", ()))
+    if word_count > int(policy.get("underspecified_max_terms") or 0) and not relation_without_target:
         return ()
     units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
+    target_types = set(policy.get("legal_target_unit_types") or ())
+    matches = routed.get("matches", ())
+    if relation_without_target:
+        matches = lexical_search(list(store.evidence), query, 10, config=store.config)
     options: list[ClarificationOption] = []
     seen: set[str] = set()
-    for row in routed.get("matches", ()):
-        unit = units.get(str(row.get("legal_unit_id")))
+    for row in matches:
+        unit = _target_unit(units, str(row.get("legal_unit_id") or ""), target_types)
         label = str(unit.get("unit_label") or "") if unit else ""
-        if not label.startswith(("Pasal ", "BAB ")) or label in seen or not _has_final_legal_target(store, label):
+        if not label or label in seen or not _has_final_legal_target(store, label):
             continue
         seen.add(label)
-        options.append(ClarificationOption(label, {"query": label}))
+        options.append(ClarificationOption(label, {"legal_target": label}))
+        if len(options) == int(policy.get("maximum_options") or 3):
+            break
     return tuple(options)
+
+
+def _split_ambiguity(query: str, terms: tuple[str, ...]) -> tuple[str, ...]:
+    normalized = normalize_intent_text(query)
+    for term in terms:
+        token = normalize_intent_text(term)
+        parts = tuple(part.strip() for part in normalized.split(f" {token} ") if part.strip())
+        if len(parts) > 1:
+            return parts
+    return ()
+
+
+def _clause_has_support(store, clause: str) -> bool:
+    return any(row.get("lexical_relevance_ok") for row in lexical_search(list(store.evidence), clause, 1, config=store.config))
+
+
+def _concept_query(policy: dict, clause: str) -> str:
+    aliases = {normalize_intent_text(key): str(value) for key, value in (policy.get("concept_aliases") or {}).items()}
+    return aliases.get(normalize_intent_text(clause), clause)
+
+
+def _target_unit(units: dict[str, dict], unit_id: str, target_types: set[str]) -> dict | None:
+    unit = units.get(unit_id)
+    while unit is not None and target_types and unit.get("unit_type") not in target_types:
+        unit = units.get(str(unit.get("parent_legal_unit_id") or ""))
+    return unit

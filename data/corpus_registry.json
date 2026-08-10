@@ -816,6 +816,22 @@
         "amendment_3_historical": "Ketiga",
         "amendment_4_historical": "Keempat"
       },
+      "clarification": {
+        "choice_terms": ["atau"],
+        "concept_aliases": {"dpr": "Dewan Perwakilan Rakyat"},
+        "underspecified_max_terms": 1,
+        "maximum_options": 3,
+        "legal_target_unit_types": ["pasal_record"],
+        "questions": {
+          "default": "Mohon pilih konteks yang dimaksud.",
+          "legal_target": "Ketentuan hukum mana yang dimaksud?",
+          "source_scope": "Naskah sumber atau periode mana yang dimaksud?",
+          "temporal_scope": "Periode hukum mana yang dimaksud?",
+          "relation_operation": "Jenis perubahan atau hubungan hukum mana yang dimaksud?",
+          "entity": "Orang atau lembaga mana yang dimaksud?",
+          "concept_facet": "Aspek konsep mana yang dimaksud?"
+        }
+      },
       "temporal_current_terms": [
         "setelah perubahan",
         "sesudah perubahan",

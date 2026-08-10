@@ -521,19 +521,28 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_non_metadata_ambiguities_offer_opaque_resumable_choices(self) -> None:
         cases = (
-            "Pasal 7 atau Pasal 7A",
-            "perubahan keempat mengubah atau menghapus Pasal 16",
-            "Presiden atau DPR",
+            ("Pasal 7 atau Pasal 7A", "legal_target", "legal_reference"),
+            ("perubahan keempat mengubah atau menghapus Pasal 16", "relation_operation", "document_relation"),
+            ("Presiden atau DPR", "concept_facet", "lexical_fallback"),
+            ("pendidikan", "concept_facet", "lexical_fallback"),
+            ("hubungan Pasal 16", "relation_operation", "legal_relation"),
         )
-        for query in cases:
+        for query, kind, route in cases:
             with self.subTest(query=query):
                 result = self.service.ask("uud", query)
                 self.assertEqual(result["status"], "clarification_required")
+                self.assertEqual(result["clarification_kind"], kind)
+                self.assertEqual(result["route"], route)
                 self.assertGreaterEqual(len(result["clarification_options"]), 2)
                 public = handle_request("uud", "ask", {"query": query}, service=self.service)
+                self.assertEqual(public["original_query"], query)
+                self.assertEqual(public["clarification_kind"], kind)
+                self.assertEqual(public["question"], result["clarification_question"])
                 target = public["clarification_options"][0]["context_target"]
-                resumed = handle_request("uud", "ask", {"query": query, "source_context": target}, service=self.service)
+                resumed = handle_request("uud", "ask", {"query": query, "clarification_context": target}, service=self.service)
                 self.assertNotEqual(resumed["status"], "clarification_required")
+                with self.assertRaisesRegex(ValueError, "invalid_request"):
+                    handle_request("uud", "ask", {"query": query + " changed", "clarification_context": target}, service=self.service)
 
     def test_noisy_and_out_of_corpus_queries_do_not_clarify(self) -> None:
         for query in ("berapa lama presiden menjabat", "apa hukuman pidana korupsi"):

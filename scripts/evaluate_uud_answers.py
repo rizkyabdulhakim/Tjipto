@@ -72,6 +72,8 @@ def _evaluate(case: dict[str, Any], service, request_handler) -> dict[str, Any]:
     _expect(errors, "status", case["expected_status"], response.get("status"))
     _expect(errors, "route", case["expected_route"], response.get("route"))
     _expect(errors, "behavior", case["behavior"], _behavior(response.get("status")))
+    if case.get("expected_clarification_kind"):
+        _expect(errors, "clarification_kind", case["expected_clarification_kind"], response.get("clarification_kind"))
     for item in case["required_support_ids"]:
         if item not in support_ids:
             errors.append(f"missing_support:{item}")

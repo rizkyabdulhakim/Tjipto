@@ -16,7 +16,7 @@ class BadRequest(ValueError):
 
 
 _PUBLIC_REQUEST_FIELDS = {
-    "ask": {"query", "limit", "filters", "source_context"},
+    "ask": {"query", "limit", "filters", "clarification_context"},
     "search": {"query", "limit", "filters"},
     "citation": {"query", "source_role", "filters"},
     "viewer": {"target"},
@@ -54,17 +54,16 @@ def handle_request(
         return _public_viewer(service.viewer_public(corpus_id, target), service, corpus_id, target)
     if action == "ask":
         filters = dict(_filters(payload) or {})
-        source_context = _optional_str(payload, "source_context")
+        context_target = _optional_str(payload, "clarification_context")
         clarification = None
-        if source_context:
-            clarification = service.public_clarification_context(corpus_id, source_context)
-            if clarification is None:
+        if context_target:
+            context = service.public_clarification_context(corpus_id, context_target)
+            if context is None or context["original_query"] != _query(payload):
                 raise BadRequest()
-            if clarification.get("source_role"):
-                filters["source_role"] = clarification["source_role"]
+            clarification = context["resolution"]
         result = service.ask(
             corpus_id,
-            clarification.get("query", _query(payload)) if clarification else _query(payload),
+            _query(payload),
             _limit(payload, default=3),
             filters or None,
             clarification,
@@ -123,7 +122,13 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
             "kind": "clarification",
             "status": result.get("status"),
             "answer": result.get("answer"),
-            "clarification_options": tuple(_public_clarification_option(row, service, corpus_id) for row in result["clarification_options"]),
+            "clarification_kind": result.get("clarification_kind"),
+            "question": result.get("clarification_question"),
+            "original_query": result.get("original_query"),
+            "clarification_options": tuple(
+                _public_clarification_option(row, service, corpus_id, result.get("original_query"))
+                for row in result["clarification_options"]
+            ),
         }
     if result.get("document_source") is not None:
         source = result["document_source"]
@@ -371,10 +376,10 @@ def _support_group_label(group_kind: str, members: list[dict]) -> str:
     return str(members[0].get("source_label") or members[0].get("label") or "Sumber dokumen")
 
 
-def _public_clarification_option(row: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
+def _public_clarification_option(row: dict, service: LegalRuntimeService, corpus_id: str, original_query: str | None = None) -> dict:
     target = service.register_public_target(
         corpus_id,
-        {"kind": "clarification_context", "resolution": row.get("resolution")},
+        {"kind": "clarification_context", "original_query": original_query, "resolution": row.get("resolution")},
     )
     return {"context_target": target, "label": row.get("label")}
 
