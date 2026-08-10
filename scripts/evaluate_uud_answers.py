@@ -7,10 +7,6 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from tjipto.runtime.api import handle_request
-from tjipto.runtime.service import LegalRuntimeService
-
-
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASES = ROOT / "tests/fixtures/uud/answer_cases.jsonl"
 
@@ -20,16 +16,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--runtime-commit")
+    parser.add_argument("--repo-root", type=Path, default=ROOT)
     args = parser.parse_args(argv)
     cases = _read_jsonl(args.cases)
-    service = LegalRuntimeService(ROOT)
-    results = [_evaluate(case, service) for case in cases]
+    repo_root = args.repo_root.resolve()
+    service_type, request_handler = _runtime(repo_root)
+    service = service_type(repo_root)
+    results = [_evaluate(case, service, request_handler) for case in cases]
     report = {
         "status": "pass" if all(row["passed"] for row in results) else "fail",
         "counts": {"pass": sum(row["passed"] for row in results), "fail": sum(not row["passed"] for row in results)},
         "metrics": _metrics(cases, results),
         "identity": {
             "runtime_commit": args.runtime_commit,
+            "runtime_root": str(repo_root),
             "case_set_sha256": _digest(args.cases),
             "evaluator_sha256": _digest(Path(__file__)),
             "case_count": len(cases),
@@ -45,9 +45,9 @@ def main(argv: list[str] | None = None) -> int:
     return int(report["status"] != "pass")
 
 
-def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, Any]:
+def _evaluate(case: dict[str, Any], service, request_handler) -> dict[str, Any]:
     response = service.ask("uud", case["query"])
-    public = handle_request("uud", "ask", {"query": case["query"]}, service=service)
+    public = request_handler("uud", "ask", {"query": case["query"]}, service=service)
     support_rows = tuple(
         row
         for field in ("evidence", "citations", "historical_citations", "metadata_support", "trace_support", "relation_support")
@@ -71,6 +71,9 @@ def _evaluate(case: dict[str, Any], service: LegalRuntimeService) -> dict[str, A
     errors: list[str] = []
     _expect(errors, "status", case["expected_status"], response.get("status"))
     _expect(errors, "route", case["expected_route"], response.get("route"))
+    _expect(errors, "behavior", case["behavior"], _behavior(response.get("status")))
+    if case.get("expected_clarification_kind"):
+        _expect(errors, "clarification_kind", case["expected_clarification_kind"], response.get("clarification_kind"))
     for item in case["required_support_ids"]:
         if item not in support_ids:
             errors.append(f"missing_support:{item}")
@@ -154,12 +157,30 @@ def _ratio(numerator: int, denominator: int) -> float | None:
     return round(numerator / denominator, 6) if denominator else None
 
 
+def _behavior(status: object) -> str:
+    if status == "clarification_required":
+        return "clarify"
+    if status == "insufficient_evidence":
+        return "abstain"
+    return "answer"
+
+
 def _digest(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _runtime(repo_root: Path):
+    source = str(repo_root / "src")
+    if source not in sys.path:
+        sys.path.insert(0, source)
+    from tjipto.runtime.api import handle_request
+    from tjipto.runtime.service import LegalRuntimeService
+
+    return LegalRuntimeService, handle_request
 
 
 if __name__ == "__main__":

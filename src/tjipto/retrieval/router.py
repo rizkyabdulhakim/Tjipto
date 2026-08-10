@@ -28,6 +28,7 @@ def route_retrieval(
     allow_relation: bool = True,
     route: str = "auto",
     metadata_filters: dict | None = None,
+    relation_family: str | None = None,
 ) -> dict:
     config = getattr(store, "config", None)
     query_strategy = getattr(config, "query_strategy", "generic")
@@ -107,7 +108,9 @@ def route_retrieval(
         return envelope | dense_search(store, normalized["normalized_query"], limit)
 
     service = RetrievalService(store)
-    amendment_target, amendment_edges = amendment_relation_lookup(store, normalized["normalized_query"])
+    amendment_target, amendment_edges = amendment_relation_lookup(
+        store, normalized["normalized_query"], relation_family=relation_family
+    )
     if amendment_target.get("mode") is not None and allow_relation:
         return envelope | {
             "status": "found",

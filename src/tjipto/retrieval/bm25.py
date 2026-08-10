@@ -36,7 +36,11 @@ STOPWORDS = {
 
 
 def tokens(text: str, *, aliases: dict[str, str] | None = None) -> list[str]:
-    return [_normalize_token(token.casefold(), aliases or {}) for token in TOKEN_RE.findall(text or "")]
+    expanded: list[str] = []
+    for token in TOKEN_RE.findall(text or ""):
+        normalized = _normalize_token(token.casefold(), aliases or {})
+        expanded.extend(TOKEN_RE.findall(normalized))
+    return expanded
 
 
 def meaningful_tokens(text: str, *, aliases: dict[str, str] | None = None) -> set[str]:

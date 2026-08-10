@@ -71,7 +71,7 @@ export default function App() {
     setMobileNavOpen(false);
   };
 
-  const submit = async (value: string, sourceContext?: string, displayValue = value) => {
+  const submit = async (value: string, clarificationContext?: string, displayValue = value) => {
     if (!hasChat) setHasChat(true);
     setRoute("chat");
     setActiveCitation(null);
@@ -94,7 +94,7 @@ export default function App() {
     setIsStreaming(true);
 
     try {
-      const response = await askLegal(value, sourceContext);
+      const response = await askLegal(value, clarificationContext);
       const citations = mapAskResponseToCitations(response);
       const documentSource = mapAskResponseToDocumentSource(response);
       const supportGroups = mapAskResponseToSupportGroups(response);

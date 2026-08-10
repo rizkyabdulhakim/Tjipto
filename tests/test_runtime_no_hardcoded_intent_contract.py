@@ -20,6 +20,11 @@ def _intent_cases() -> tuple[dict, ...]:
 
 
 class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
+    def test_generic_clarification_contains_no_corpus_vocabulary(self) -> None:
+        source = (ROOT / "src/tjipto/runtime/clarification.py").read_text(encoding="utf-8").casefold()
+        for term in ("atau", "pasal", "bab", "penandatangan", "wakil ketua"):
+            self.assertNotIn(term, source)
+
     def test_uud_intent_terms_require_corpus_config(self) -> None:
         generic = intent_config_for("uud_1945")
         self.assertFalse(generic["metadata_fields"])

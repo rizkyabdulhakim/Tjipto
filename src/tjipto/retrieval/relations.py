@@ -69,9 +69,9 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     return tuple(rows[:limit])
 
 
-def amendment_relation_lookup(store, query: str) -> tuple[dict, tuple[dict, ...]]:
+def amendment_relation_lookup(store, query: str, *, relation_family: str | None = None) -> tuple[dict, tuple[dict, ...]]:
     """Select amendment relations from persisted graph edges, never a sidecar scan."""
-    target = amendment_relation_target(store, query)
+    target = amendment_relation_target(store, query, relation_family=relation_family)
     mode = target.get("mode")
     if mode is None or mode == "unsupported":
         return target, ()
@@ -101,7 +101,7 @@ def amendment_relation_lookup(store, query: str) -> tuple[dict, tuple[dict, ...]
     return target, tuple(rows)
 
 
-def amendment_relation_target(store, query: str) -> dict:
+def amendment_relation_target(store, query: str, *, relation_family: str | None = None) -> dict:
     config = getattr(store, "config", None)
     if getattr(config, "strategy", None) is None:
         return {"mode": None}
@@ -110,12 +110,14 @@ def amendment_relation_target(store, query: str) -> dict:
     relation_config = intent.get("document_relation", {})
     if not normalize_intent_text(query):
         return {"mode": None}
-    relation_type = _amendment_relation_type(store, query)
-    relation_family = (relation_config.get("relation_families") or {}).get(relation_type, {})
-    relation_types = tuple(relation_family.get("relation_types") or ())
+    relation_families = relation_config.get("relation_families") or {}
+    relation_type = relation_family if relation_family in relation_families else _amendment_relation_type(store, query)
+    relation_row = relation_families.get(relation_type, {}) if isinstance(relation_families, dict) else {}
+    relation_spec = relation_row if isinstance(relation_row, dict) else {}
+    relation_types = tuple(relation_spec.get("relation_types") or ())
     source_scope = resolve_source_scope(query, strategy=strategy, config=config)
     references = parse_legal_references(getattr(config, "corpus_id", ""), query, config=config)
-    relation_signal = bool(relation_family) or contains_intent_phrase(query, relation_config.get("change_terms", ()))
+    relation_signal = bool(relation_spec) or contains_intent_phrase(query, relation_config.get("change_terms", ()))
     add_signal = contains_intent_phrase(query, relation_config.get("add_terms", ()))
     if source_scope.explicit and len(references) == 1 and not relation_signal and not add_signal:
         return {"mode": None}

@@ -23,7 +23,7 @@ class AnswerEvaluationGateTest(unittest.TestCase):
         rows = [json.loads(line) for line in CASES.read_text(encoding="utf-8").splitlines() if line.strip()]
         self.assertEqual(len(rows), len({row["case_id"] for row in rows}))
         self.assertLessEqual(
-            {"exact_reference", "paraphrase", "concept_synonym", "person_institution", "date_metadata", "historical", "relation", "multi_support", "ambiguity", "typo_noise", "out_of_corpus", "source_annotation", "source_discrepancy", "proposition"},
+            {"exact_reference", "paraphrase", "concept_synonym", "person_institution", "date_metadata", "historical", "relation", "multi_support", "ambiguity_source_scope", "ambiguity_legal_target", "ambiguity_relation_operation", "ambiguity_concept", "ambiguity_entity", "typo_noise", "out_of_corpus", "source_annotation", "source_discrepancy", "proposition", "proposition_contradiction"},
             {row["category"] for row in rows},
         )
         self.assertEqual({"answer", "clarify", "abstain"}, {row["behavior"] for row in rows})

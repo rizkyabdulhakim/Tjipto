@@ -57,6 +57,9 @@ export interface TjiptoAskResponse {
   kind: "answer" | "document" | "clarification" | "unavailable";
   status: string;
   answer?: string;
+  clarification_kind?: "legal_target" | "source_scope" | "temporal_scope" | "relation_operation" | "entity" | "concept_facet";
+  question?: string;
+  original_query?: string;
   document?: { label?: string; source_status_label?: string; viewer_target?: ViewerTargetPayload };
   clarification_options?: { context_target?: string; label?: string }[];
   supports?: SupportPayload[];
@@ -163,8 +166,8 @@ export interface BookmarkPointer {
   document?: LegalDocumentPayload;
 }
 
-export async function askLegal(query: string, sourceContext?: string): Promise<TjiptoAskResponse> {
-  return request("ask", { query, ...(sourceContext ? { source_context: sourceContext } : {}) });
+export async function askLegal(query: string, clarificationContext?: string): Promise<TjiptoAskResponse> {
+  return request("ask", { query, ...(clarificationContext ? { clarification_context: clarificationContext } : {}) });
 }
 
 export async function searchLegal(query: string, filters: Record<string, string> = {}): Promise<CatalogResponse> {

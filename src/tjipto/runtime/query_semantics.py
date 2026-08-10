@@ -146,7 +146,8 @@ def _proposition(
         return None
     operator, predicate, modality = parsed
     text = re.sub(r"\bpasal\s+\d+[a-z]?(?:\s+ayat\s*\(?\d+\)?)?", "", normalized, flags=re.IGNORECASE)
-    for term in (operator, "apakah", "apa", "isi"):
+    negative = bool(re.search(rf"\btidak\s+{re.escape(operator)}\b", normalized))
+    for term in (operator, "apakah", "apa", "isi", "tidak" if negative else ""):
         text = re.sub(rf"\b{re.escape(term)}\b", " ", text)
     object_tokens = tuple(token for token in text.split() if token)
     if not object_tokens:
@@ -157,7 +158,7 @@ def _proposition(
         # subject of the proposition asserted by the source clause.
         subject=None,
         object=" ".join(object_tokens),
-        polarity="negative" if re.search(rf"\btidak\s+{re.escape(operator)}\b", normalized) else "positive",
+        polarity="negative" if negative else "positive",
         modality=modality,
         legal_references=references,
         source_role=source_role,
