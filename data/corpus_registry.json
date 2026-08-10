@@ -817,11 +817,17 @@
         "amendment_4_historical": "Keempat"
       },
       "clarification": {
-        "choice_terms": ["atau"],
-        "concept_aliases": {"dpr": "Dewan Perwakilan Rakyat"},
+        "choice_terms": [
+          "atau"
+        ],
+        "concept_aliases": {
+          "dpr": "Dewan Perwakilan Rakyat"
+        },
         "underspecified_max_terms": 1,
         "maximum_options": 3,
-        "legal_target_unit_types": ["pasal_record"],
+        "legal_target_unit_types": [
+          "pasal_record"
+        ],
         "questions": {
           "default": "Mohon pilih konteks yang dimaksud.",
           "legal_target": "Ketentuan hukum mana yang dimaksud?",
