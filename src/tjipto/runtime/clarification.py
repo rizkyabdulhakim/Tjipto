@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
-from tjipto.retrieval.bm25 import lexical_search, tokens
+from tjipto.retrieval.bm25 import lexical_search, meaningful_tokens, tokens
 
 
 @dataclass(frozen=True)
@@ -171,7 +171,9 @@ def _top_quote_contains_query(query: str, matches: tuple[dict, ...], config) -> 
         str(key).casefold(): str(value).casefold()
         for key, value in (config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
     }
-    requested = tokens(query, aliases=aliases)
+    query_tokens = tokens(query, aliases=aliases)
+    meaningful = meaningful_tokens(query, aliases=aliases)
+    requested = tuple(token for token in query_tokens if token in meaningful)
     requested_pairs = tuple(zip(requested, requested[1:]))
     if not requested_pairs or not matches:
         return False
