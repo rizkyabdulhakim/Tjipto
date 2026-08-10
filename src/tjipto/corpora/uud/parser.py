@@ -157,7 +157,11 @@ def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
         normalized,
     ):
         return target, "next"
-    if re.search(r"\b(?:pasal\s+)?sebelumnya\s+sebelum\b", normalized):
+    if re.search(
+        r"\b(?:pasal\s+)?sebelumnya\s+sebelum\b|"
+        r"\b(?:ketentuan|bagian|pasal)\s+sebelum\s+pasal\s+\d+[a-z]?\b",
+        normalized,
+    ):
         return target, "previous"
     return None
 

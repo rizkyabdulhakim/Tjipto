@@ -1,0 +1,171 @@
+{
+  "status": "research_gap",
+  "counts": {
+    "pass": 7,
+    "research_gap": 1,
+    "cases": 8
+  },
+  "results": [
+    {
+      "case_id": "structural_before_pasal_28",
+      "family": "structural_navigation",
+      "query": "apa ketentuan sebelum Pasal 28?",
+      "outcome": "RESEARCH_GAP",
+      "errors": [
+        "route:legal_reference!= structural_navigation",
+        "support_ids_missing",
+        "citations_missing"
+      ],
+      "actual": {
+        "status": "answer_ready",
+        "route": "legal_reference",
+        "intent": "exact_citation",
+        "support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00411"
+        ],
+        "citations": [
+          "Pasal 28"
+        ],
+        "clarification_kind": null
+      }
+    },
+    {
+      "case_id": "semantic_president_term",
+      "family": "semantic_paraphrase",
+      "query": "masa jabatan presiden",
+      "outcome": "PASS",
+      "errors": [],
+      "actual": {
+        "status": "limited_answer",
+        "route": "lexical_fallback",
+        "intent": "natural_language",
+        "support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00263"
+        ],
+        "citations": [
+          "Pasal 7"
+        ],
+        "clarification_kind": null
+      }
+    },
+    {
+      "case_id": "layperson_education_right",
+      "family": "layperson_legal_language",
+      "query": "hak memperoleh pengajaran",
+      "outcome": "PASS",
+      "errors": [],
+      "actual": {
+        "status": "limited_answer",
+        "route": "lexical_fallback",
+        "intent": "natural_language",
+        "support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00459"
+        ],
+        "citations": [
+          "(1)"
+        ],
+        "clarification_kind": null
+      }
+    },
+    {
+      "case_id": "broad_rights_concept",
+      "family": "broad_underspecified_concept",
+      "query": "hak warga negara",
+      "outcome": "PASS",
+      "errors": [],
+      "actual": {
+        "status": "clarification_required",
+        "route": "lexical_fallback",
+        "intent": "natural_language",
+        "support_ids": [],
+        "citations": [],
+        "clarification_kind": "concept_facet"
+      }
+    },
+    {
+      "case_id": "comparison_two_articles",
+      "family": "comparison",
+      "query": "perbedaan Pasal 7 dan Pasal 7A",
+      "outcome": "PASS",
+      "errors": [],
+      "actual": {
+        "status": "clarification_required",
+        "route": "legal_reference",
+        "intent": "exact_citation",
+        "support_ids": [],
+        "citations": [],
+        "clarification_kind": "legal_target"
+      }
+    },
+    {
+      "case_id": "multi_concept_president_dpr",
+      "family": "multi_concept",
+      "query": "Presiden atau DPR",
+      "outcome": "PASS",
+      "errors": [],
+      "actual": {
+        "status": "clarification_required",
+        "route": "lexical_fallback",
+        "intent": "natural_language",
+        "support_ids": [],
+        "citations": [],
+        "clarification_kind": "concept_facet"
+      }
+    },
+    {
+      "case_id": "multi_hop_amendment_relation",
+      "family": "multi_hop_procedure",
+      "query": "perubahan keempat mengubah pasal 16?",
+      "outcome": "PASS",
+      "errors": [],
+      "actual": {
+        "status": "answer_ready",
+        "route": "document_relation",
+        "intent": "document_amendment_relation",
+        "support_ids": [
+          "uud_instrument_final_citation_evidence::amendment_4_historical::00018::perubahan_keempat_scope"
+        ],
+        "citations": [
+          "Perubahan Keempat Scope"
+        ],
+        "clarification_kind": null
+      }
+    },
+    {
+      "case_id": "unsupported_criminal_request",
+      "family": "hard_negative_out_of_corpus",
+      "query": "apa hukuman pidana korupsi",
+      "outcome": "PASS",
+      "errors": [],
+      "actual": {
+        "status": "insufficient_evidence",
+        "route": "unsupported_scope",
+        "intent": "out_of_corpus",
+        "support_ids": [],
+        "citations": [],
+        "clarification_kind": null
+      }
+    }
+  ],
+  "evaluation_identity": {
+    "base_commit": "0fc2ae9b8c94937beea0e9b57000f59b44bf8201",
+    "case_set_sha256": "b156e41a70ab113d9be5b96b5a793f73683bd879ecba9069a1e3c5f0d2d39dcc",
+    "evaluator_sha256": "266be37830f0675f7367866f092dd96946a71c2fc014a1daec5454641735cbd8",
+    "case_count": 8,
+    "family_counts": {
+      "broad_underspecified_concept": 1,
+      "comparison": 1,
+      "hard_negative_out_of_corpus": 1,
+      "layperson_legal_language": 1,
+      "multi_concept": 1,
+      "multi_hop_procedure": 1,
+      "semantic_paraphrase": 1,
+      "structural_navigation": 1
+    },
+    "behavior_counts": {
+      "retrieve": 4,
+      "abstain": 1,
+      "clarify": 3
+    }
+  }
+}
