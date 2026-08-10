@@ -180,6 +180,7 @@ def sparse_index_for_store(store, *, k1: float = 1.5, b: float = 0.75) -> Sparse
     aliases = tuple(sorted(_lexical_aliases(config).items()))
     cache_key = (
         id(evidence), len(evidence), id(config),
+        str(getattr(config, "manifest_path", "")),
         getattr(config, "manifest_digest", None), getattr(config, "artifact_set_digest", None),
         aliases, k1, b,
     )
