@@ -76,6 +76,52 @@ def lexical_search(
     return SparseIndex.build(evidence, config=config, k1=k1, b=b).search(query, limit)
 
 
+def _freeze(value):
+    """Encode nested row data as immutable tagged tuples."""
+    if isinstance(value, dict):
+        return ("dict", tuple(sorted((str(key), _freeze(item)) for key, item in value.items())))
+    if isinstance(value, list):
+        return ("list", tuple(_freeze(item) for item in value))
+    if isinstance(value, tuple):
+        return ("tuple", tuple(_freeze(item) for item in value))
+    if isinstance(value, (set, frozenset)):
+        return ("set", tuple(sorted(_freeze(item) for item in value)))
+    return ("scalar", value)
+
+
+def _thaw(value):
+    kind, payload = value
+    if kind == "dict":
+        return {key: _thaw(item) for key, item in payload}
+    if kind == "list":
+        return [_thaw(item) for item in payload]
+    if kind == "tuple":
+        return tuple(_thaw(item) for item in payload)
+    if kind == "set":
+        return set(_thaw(item) for item in payload)
+    return payload
+
+
+@dataclass(frozen=True)
+class SparseDocument:
+    """Immutable document state owned by a :class:`SparseIndex`."""
+
+    fields: tuple[tuple[str, tuple], ...]
+    terms: tuple[str, ...]
+    frequencies: tuple[tuple[str, int], ...]
+
+    @classmethod
+    def build(cls, row: dict, terms: tuple[str, ...], frequencies: tuple[tuple[str, int], ...]) -> "SparseDocument":
+        return cls(
+            fields=tuple(sorted((str(key), _freeze(value)) for key, value in row.items())),
+            terms=terms,
+            frequencies=frequencies,
+        )
+
+    def row(self) -> dict:
+        return {key: _thaw(value) for key, value in self.fields}
+
+
 @dataclass(frozen=True)
 class SparseIndex:
     """Immutable BM25 collection statistics for one verified evidence snapshot."""
@@ -85,7 +131,7 @@ class SparseIndex:
     k1: float
     b: float
     record_count: int
-    documents: tuple[tuple[dict, tuple[str, ...], tuple[tuple[str, int], ...]], ...]
+    documents: tuple[SparseDocument, ...]
     document_frequency: tuple[tuple[str, int], ...]
     avgdl: float
 
@@ -93,14 +139,14 @@ class SparseIndex:
     def build(cls, evidence: list[dict], *, config=None, k1: float = 1.5, b: float = 0.75) -> "SparseIndex":
         aliases = _lexical_aliases(config)
         alias_items = tuple(sorted(aliases.items()))
-        documents: list[tuple[dict, tuple[str, ...], tuple[tuple[str, int], ...]]] = []
+        documents: list[SparseDocument] = []
         document_frequency: Counter[str] = Counter()
         total_length = 0
         for row in evidence:
             document_text = _document_text(row)
             doc_terms = tuple(tokens(document_text, aliases=aliases))
             frequencies = Counter(doc_terms)
-            documents.append((dict(row), doc_terms, tuple(sorted(frequencies.items()))))
+            documents.append(SparseDocument.build(row, doc_terms, tuple(sorted(frequencies.items()))))
             document_frequency.update(frequencies.keys())
             total_length += len(doc_terms)
         identity = cls.snapshot_identity(evidence, config=config, k1=k1, b=b, aliases=alias_items)
@@ -144,7 +190,10 @@ class SparseIndex:
         document_frequency = dict(self.document_frequency)
         total_docs = self.record_count
         scored: list[tuple[float, str, dict]] = []
-        for row, doc_terms, frequency_items in self.documents:
+        for document in self.documents:
+            row = document.row()
+            doc_terms = document.terms
+            frequency_items = document.frequencies
             if not doc_terms:
                 continue
             frequencies = dict(frequency_items)
@@ -158,7 +207,7 @@ class SparseIndex:
                 idf = math.log(1 + (total_docs - df + 0.5) / (df + 0.5))
                 score += idf * (tf * (self.k1 + 1)) / (tf + self.k1 * (1 - self.b + self.b * doc_len / self.avgdl))
             if score > 0:
-                scored.append((score, row["evidence_id"], _with_relevance(row, query, aliases)))
+                scored.append((score, row["evidence_id"], _with_coverage(row, query, aliases)))
         results = []
         for rank, (score, _, row) in enumerate(sorted(scored, key=lambda item: (-item[0], item[1]))[:limit], start=1):
             result = dict(row)
@@ -178,12 +227,7 @@ def sparse_index_for_store(store, *, k1: float = 1.5, b: float = 0.75) -> Sparse
     evidence = store.evidence
     config = store.config
     aliases = tuple(sorted(_lexical_aliases(config).items()))
-    cache_key = (
-        id(evidence), len(evidence), id(config),
-        str(getattr(config, "manifest_path", "")),
-        getattr(config, "manifest_digest", None), getattr(config, "artifact_set_digest", None),
-        aliases, k1, b,
-    )
+    cache_key = SparseIndex.snapshot_identity(evidence, config=config, k1=k1, b=b, aliases=aliases)
     if index is None or getattr(store, "_sparse_index_cache_key", None) != cache_key:
         store._sparse_index = SparseIndex.build(evidence, config=config, k1=k1, b=b)
         store._sparse_index_cache_key = cache_key
@@ -191,21 +235,20 @@ def sparse_index_for_store(store, *, k1: float = 1.5, b: float = 0.75) -> Sparse
     return index
 
 
-def _with_relevance(row: dict, query: str, aliases: dict[str, str]) -> dict:
+def _with_coverage(row: dict, query: str, aliases: dict[str, str]) -> dict:
     query_terms = meaningful_tokens(query, aliases=aliases)
     doc_terms = meaningful_tokens(_document_text(row), aliases=aliases)
     supported = query_terms & doc_terms
-    # A lexical hit is answerable only when every meaningful query term is
-    # present in the same evidence row. Partial overlap is a candidate signal,
-    # not proof for the answer.
+    # Coverage is a neutral retrieval signal. Support validation, not BM25,
+    # decides whether a candidate can be published.
     required = len(query_terms)
-    ok = bool(query_terms) and len(supported) >= required
+    complete = bool(query_terms) and len(supported) >= required
     return dict(
         row,
         lexical_query_terms=tuple(sorted(query_terms)),
         lexical_supported_terms=tuple(sorted(supported)),
-        lexical_relevance_ok=ok,
-        lexical_relevance_reason="answer_evidence" if ok else "insufficient_query_support",
+        lexical_term_coverage=(len(supported) / required) if required else 0.0,
+        lexical_complete_coverage=complete,
     )
 
 

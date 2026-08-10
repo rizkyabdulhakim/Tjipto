@@ -127,8 +127,8 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
             return False, "noncanonical_trace_not_answerable"
     if not (DIRECT_ROUTES & set(row.get("route_sources") or ())):
         return False, "graph_only"
-    if "bm25" in set(row.get("route_sources") or ()) and row.get("lexical_relevance_ok") is False:
-        return False, row.get("lexical_relevance_reason") or "weak_lexical_match"
+    if "bm25" in set(row.get("route_sources") or ()) and not lexical_support_is_complete(row):
+        return False, "insufficient_query_support"
     if row.get("status") != "final":
         return False, "not_final"
     if row.get("metadata_grounding"):
@@ -142,6 +142,13 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
         if not row.get(field):
             return False, f"missing_{field}"
     return True, "answer_evidence"
+
+
+def lexical_support_is_complete(row: dict) -> bool:
+    """Decide BM25 support eligibility at the answer-validation boundary."""
+    query_terms = set(row.get("lexical_query_terms") or ())
+    supported_terms = set(row.get("lexical_supported_terms") or ())
+    return not query_terms or query_terms <= supported_terms
 
 
 def _payload(store, row: dict) -> dict:

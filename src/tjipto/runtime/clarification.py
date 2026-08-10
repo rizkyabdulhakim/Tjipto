@@ -144,7 +144,7 @@ def _lexical_options(store, semantics, routed: dict, policy: dict, config: dict)
     options: list[ClarificationOption] = []
     seen: set[str] = set()
     for row in matches:
-        if not row.get("lexical_relevance_ok"):
+        if not row.get("lexical_complete_coverage"):
             continue
         unit = _target_unit(units, str(row.get("legal_unit_id") or ""), target_types)
         label = str(unit.get("unit_label") or "") if unit else ""
