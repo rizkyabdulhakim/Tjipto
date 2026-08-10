@@ -5,13 +5,14 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 from typing import Any
-
-from tjipto.runtime.service import LegalRuntimeService
-
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASES = ROOT / "tests/fixtures/uud/research_retrieval_cases_v0.jsonl"
+sys.path.insert(0, str(ROOT / "src"))
+
+from tjipto.runtime.service import LegalRuntimeService  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
