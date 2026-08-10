@@ -11,6 +11,8 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}/src
     outputs:
       artifact_id: ${{ steps.upload_backend.outputs.artifact-id }}
       artifact_digest: ${{ steps.upload_backend.outputs.artifact-digest }}
