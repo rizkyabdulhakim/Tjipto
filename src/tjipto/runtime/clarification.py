@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
-from tjipto.retrieval.bm25 import lexical_search, meaningful_tokens, tokens
+from tjipto.retrieval.bm25 import meaningful_tokens, tokens
 
 
 @dataclass(frozen=True)
@@ -126,20 +127,18 @@ def _lexical_options(store, semantics, routed: dict, policy: dict, config: dict)
     query = str(routed.get("original_query") or "")
     clauses = _split_ambiguity(query, tuple(policy.get("choice_terms") or ()))
     if len(clauses) > 1:
-        clause_options = tuple(
-            ClarificationOption(clause, {"concept_facet": _concept_query(policy, clause)})
-            for clause in clauses
-            if _clause_has_support(store, _concept_query(policy, clause))
-        )
-        return clause_options if len(clause_options) == len(clauses) else ()
+        clause_options: list[ClarificationOption] = []
+        for clause in clauses:
+            subset = tuple(row for row in routed.get("matches", ()) if _matches_clause(store, row, _concept_query(policy, clause)))
+            if not subset:
+                return ()
+            clause_options.append(ClarificationOption(clause, {"concept_facet": _subset_key(subset)}))
+        return tuple(clause_options)
     if _uses_configured_normalization(query, store.config):
         return ()
-    relation_without_target = contains_intent_phrase(query, config.get("relation_words", ()))
     units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
     target_types = set(policy.get("legal_target_unit_types") or ())
     matches = routed.get("matches", ())
-    if relation_without_target:
-        matches = lexical_search(list(store.evidence), query, 10, config=store.config)
     if _top_quote_contains_query(query, matches, store.config):
         return ()
     options: list[ClarificationOption] = []
@@ -200,13 +199,29 @@ def _split_ambiguity(query: str, terms: tuple[str, ...]) -> tuple[str, ...]:
     return ()
 
 
-def _clause_has_support(store, clause: str) -> bool:
-    return any(row.get("lexical_relevance_ok") for row in lexical_search(list(store.evidence), clause, 1, config=store.config))
-
-
 def _concept_query(policy: dict, clause: str) -> str:
     aliases = {normalize_intent_text(key): str(value) for key, value in (policy.get("concept_aliases") or {}).items()}
     return aliases.get(normalize_intent_text(clause), clause)
+
+
+def _matches_clause(store, row: dict, clause: str) -> bool:
+    aliases = {
+        str(key).casefold(): str(value).casefold()
+        for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
+    }
+    terms = meaningful_tokens(clause, aliases=aliases)
+    return bool(terms and terms <= set(row.get("lexical_supported_terms") or ()))
+
+
+def _subset_key(rows: tuple[dict, ...]) -> str:
+    keys = sorted(
+        {
+            str(row.get("evidence_id") or row.get("legal_unit_id"))
+            for row in rows
+            if row.get("evidence_id") or row.get("legal_unit_id")
+        }
+    )
+    return json.dumps(keys, ensure_ascii=True, separators=(",", ":"))
 
 
 def _target_unit(units: dict[str, dict], unit_id: str, target_types: set[str]) -> dict | None:

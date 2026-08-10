@@ -21,6 +21,7 @@ from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.metadata import filter_evidence, normalize_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.router import route_retrieval
+from tjipto.retrieval.service import RetrievalService
 from tjipto.retrieval.structured import structured_lookup
 from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candidate
 from tjipto.runtime.api import _public_bbox, handle_request
@@ -550,7 +551,11 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertNotEqual(self.service.ask("uud", query)["status"], "clarification_required")
 
     def test_selected_constraints_preserve_original_query(self) -> None:
-        for query, kind in (("Pasal 7 atau Pasal 7A", "legal_target"), ("hak warga negara", "concept_facet")):
+        for query, kind in (
+            ("Pasal 7 atau Pasal 7A", "legal_target"),
+            ("hak warga negara", "concept_facet"),
+            ("Presiden atau DPR", "concept_facet"),
+        ):
             with self.subTest(query=query):
                 result = self.service.ask("uud", query)
                 self.assertEqual(result["status"], "clarification_required")
@@ -564,6 +569,49 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertNotEqual(resumed["status"], "clarification_required")
                 self.assertTrue(route.call_args_list)
                 self.assertTrue(all(call.args[1] == query for call in route.call_args_list))
+
+    def test_concept_facet_resume_never_runs_an_alternate_query(self) -> None:
+        query = "Presiden atau DPR"
+        public = handle_request("uud", "ask", {"query": query}, service=self.service)
+        self.assertEqual(public["clarification_kind"], "concept_facet")
+        target = public["clarification_options"][0]["context_target"]
+        search_queries: list[str] = []
+        original_search = RetrievalService.search
+
+        def observed_search(instance, search_query, limit):
+            search_queries.append(search_query)
+            return original_search(instance, search_query, limit)
+
+        with patch.object(RetrievalService, "search", autospec=True, side_effect=observed_search):
+            resumed = handle_request(
+                "uud", "ask", {"query": query, "clarification_context": target}, service=self.service
+            )
+        self.assertNotEqual(resumed["status"], "clarification_required")
+        self.assertTrue(search_queries)
+        self.assertTrue(all(search_query == query for search_query in search_queries))
+
+    def test_concept_facet_empty_intersection_does_not_widen_candidates(self) -> None:
+        query = "Presiden atau DPR"
+        public = handle_request("uud", "ask", {"query": query}, service=self.service)
+        target = public["clarification_options"][0]["context_target"]
+        context = self.service.public_clarification_context("uud", target)
+        self.assertIsNotNone(context)
+        allowed = set(json.loads(context["resolution"]["concept_facet"]))
+        store = self.service._store("uud")
+        routed = self.service._route_retrieval(
+            "uud", query, store, limit=len(store.evidence), metadata_filters={},
+            allow_navigation=True, allow_relation=True, relation_family=None,
+        )
+        mutated = routed | {
+            "matches": tuple(
+                row for row in routed["matches"]
+                if str(row.get("evidence_id") or row.get("legal_unit_id")) not in allowed
+            )
+        }
+        with patch.object(self.service, "_route_retrieval", return_value=mutated):
+            resumed = self.service.ask("uud", query, clarification=context["resolution"])
+        self.assertIn(resumed["status"], {"no_results", "insufficient_evidence"})
+        self.assertEqual(resumed["matches"], ())
 
     def test_multiword_ambiguity_has_no_length_gate(self) -> None:
         result = self.service.ask("uud", "hak warga negara")

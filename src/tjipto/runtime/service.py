@@ -82,6 +82,13 @@ def _has_resolved_legal_target(corpus_id: str, query: str, *, config=None) -> bo
         return False
 
 
+def _clarification_candidate_limit(store: EvidenceStore, query: str, limit: int) -> int:
+    config = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
+    terms = tuple(config.get("clarification", {}).get("choice_terms") or ())
+    normalized = f" {normalize_intent_text(query)} "
+    return len(store.evidence) if any(f" {normalize_intent_text(term)} " in normalized for term in terms) else limit
+
+
 def _apply_clarification_constraint(store: EvidenceStore, routed: dict, resolution: dict[str, str]) -> None:
     """Filter routed candidates without changing the user's semantic query."""
     legal_target = resolution.get("legal_target")
@@ -99,15 +106,15 @@ def _apply_clarification_constraint(store: EvidenceStore, routed: dict, resoluti
 
         routed["matches"] = tuple(row for row in routed.get("matches", ()) if matches_target(row))
     elif concept_facet:
-        from tjipto.retrieval.service import RetrievalService
-
-        facet_matches = tuple(
-            row for row in RetrievalService(store).search(concept_facet, len(store.evidence))
-            if row.get("lexical_relevance_ok")
+        try:
+            allowed = set(json.loads(concept_facet))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            allowed = set()
+        routed["matches"] = tuple(
+            row
+            for row in routed.get("matches", ())
+            if str(row.get("evidence_id") or row.get("legal_unit_id")) in allowed
         )
-        allowed = {str(row.get("legal_unit_id")) for row in facet_matches}
-        constrained = tuple(row for row in routed.get("matches", ()) if str(row.get("legal_unit_id")) in allowed)
-        routed["matches"] = constrained or facet_matches[:10]
     if resolution and not routed.get("matches"):
         routed["status"] = "no_results"
 
@@ -850,7 +857,7 @@ class LegalRuntimeService:
                 corpus_id,
                 query,
                 store,
-                limit=limit,
+                limit=_clarification_candidate_limit(store, query, limit),
                 metadata_filters=filters,
                 allow_navigation=semantics.requested_function != "temporal_quotation",
                 allow_relation=semantics.requested_function != "temporal_quotation",
@@ -921,7 +928,7 @@ class LegalRuntimeService:
             corpus_id,
             query,
             store,
-            limit=limit,
+            limit=_clarification_candidate_limit(store, query, limit),
             metadata_filters=semantic_filters,
             allow_navigation=semantics.requested_function != "temporal_quotation",
             allow_relation=semantics.requested_function != "temporal_quotation",
