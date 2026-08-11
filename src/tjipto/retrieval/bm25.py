@@ -108,9 +108,10 @@ def _canonical_row(row: dict) -> tuple[tuple[str, tuple], ...]:
 
 
 def _canonical_row_digest(row: dict) -> str:
-    return hashlib.sha256(
-        json.dumps(_canonical_row(row), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    digest = hashlib.sha256()
+    for chunk in json.JSONEncoder(ensure_ascii=False, separators=(",", ":")).iterencode(_canonical_row(row)):
+        digest.update(chunk.encode("utf-8"))
+    return digest.hexdigest()
 
 
 @dataclass(frozen=True)
@@ -147,7 +148,9 @@ class SparseIndex:
     avgdl: float
 
     @classmethod
-    def build(cls, evidence: list[dict], *, config=None, k1: float = 1.5, b: float = 0.75) -> "SparseIndex":
+    def build(
+        cls, evidence: list[dict], *, config=None, k1: float = 1.5, b: float = 0.75, identity: str | None = None,
+    ) -> "SparseIndex":
         aliases = _lexical_aliases(config)
         alias_items = tuple(sorted(aliases.items()))
         documents: list[SparseDocument] = []
@@ -160,7 +163,7 @@ class SparseIndex:
             documents.append(SparseDocument.build(row, doc_terms, tuple(sorted(frequencies.items()))))
             document_frequency.update(frequencies.keys())
             total_length += len(doc_terms)
-        identity = cls.snapshot_identity(evidence, config=config, k1=k1, b=b, aliases=alias_items)
+        identity = identity or cls.snapshot_identity(evidence, config=config, k1=k1, b=b, aliases=alias_items)
         return cls(
             identity=identity,
             aliases=alias_items,
@@ -240,7 +243,7 @@ def sparse_index_for_store(store, *, k1: float = 1.5, b: float = 0.75) -> Sparse
     aliases = tuple(sorted(_lexical_aliases(config).items()))
     cache_key = SparseIndex.snapshot_identity(evidence, config=config, k1=k1, b=b, aliases=aliases)
     if index is None or getattr(store, "_sparse_index_cache_key", None) != cache_key:
-        store._sparse_index = SparseIndex.build(evidence, config=config, k1=k1, b=b)
+        store._sparse_index = SparseIndex.build(evidence, config=config, k1=k1, b=b, identity=cache_key)
         store._sparse_index_cache_key = cache_key
         return store._sparse_index
     return index
