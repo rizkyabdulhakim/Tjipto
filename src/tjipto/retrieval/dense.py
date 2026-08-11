@@ -16,6 +16,11 @@ MODEL_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
 DENSE_DIMENSION = 1024
 DENSE_DTYPE = "float32"
 DENSE_NORMALIZATION = "l2"
+DENSE_POOLING = "cls"
+DENSE_MAX_LENGTH = 256
+DENSE_BATCH_SIZE = 64
+DENSE_TRUNCATION_POLICY = "explicit_max_length"
+EMBEDDING_TEXT_POLICY = "source_document+breadcrumb+label+legal_text"
 INDEX_BUILDER_ID = "tjipto.dense.index"
 
 
@@ -36,8 +41,12 @@ class DenseModelIdentity:
     dimension: int = DENSE_DIMENSION
     dtype: str = DENSE_DTYPE
     normalization: str = DENSE_NORMALIZATION
+    pooling: str = DENSE_POOLING
+    max_length: int = DENSE_MAX_LENGTH
+    truncation_policy: str = DENSE_TRUNCATION_POLICY
     tokenizer_sha256: str | None = None
     model_sha256: str | None = None
+    pooling_config_sha256: str | None = None
     builder_identity: str = INDEX_BUILDER_ID
 
     def as_dict(self) -> dict[str, object]:
@@ -47,8 +56,12 @@ class DenseModelIdentity:
             "dimension": self.dimension,
             "dtype": self.dtype,
             "normalization": self.normalization,
+            "pooling": self.pooling,
+            "max_length": self.max_length,
+            "truncation_policy": self.truncation_policy,
             "tokenizer_sha256": self.tokenizer_sha256,
             "model_sha256": self.model_sha256,
+            "pooling_config_sha256": self.pooling_config_sha256,
             "builder_identity": self.builder_identity,
         }
 
@@ -59,7 +72,16 @@ class DenseModelIdentity:
         if not isinstance(value, dict):
             raise DenseUnavailable("model_identity_missing")
         identity = cls(**{key: value[key] for key in cls.__dataclass_fields__ if key in value})
-        if identity.model_id != MODEL_ID or identity.revision != MODEL_REVISION:
+        if (
+            identity.model_id != MODEL_ID
+            or identity.revision != MODEL_REVISION
+            or identity.dimension != DENSE_DIMENSION
+            or identity.dtype != DENSE_DTYPE
+            or identity.normalization != DENSE_NORMALIZATION
+            or identity.pooling != DENSE_POOLING
+            or identity.max_length != DENSE_MAX_LENGTH
+            or identity.truncation_policy != DENSE_TRUNCATION_POLICY
+        ):
             raise DenseUnavailable("noncanonical_model")
         return identity
 
@@ -68,6 +90,7 @@ class DenseModelIdentity:
 class DenseEmbeddingBatch:
     vectors: tuple[tuple[float, ...], ...]
     identity: DenseModelIdentity
+    truncated_indices: tuple[int, ...] = ()
 
 
 class DenseEmbeddingProvider(Protocol):
@@ -79,19 +102,56 @@ class DenseEmbeddingProvider(Protocol):
 class LocalDenseProvider:
     """Run model inference in a short-lived worker, never in the API process."""
 
-    def __init__(self, *, timeout_seconds: float = 120.0, python_executable: str | None = None):
+    def __init__(
+        self,
+        *,
+        timeout_seconds: float = 120.0,
+        python_executable: str | None = None,
+        batch_size: int = DENSE_BATCH_SIZE,
+        max_length: int = DENSE_MAX_LENGTH,
+    ):
         self.timeout_seconds = timeout_seconds
         self.python_executable = python_executable or sys.executable
+        self.batch_size = batch_size
+        self.max_length = max_length
 
     def identity(self) -> DenseModelIdentity:
         model_dir = os.environ.get("TJIPTO_DENSE_MODEL_DIR")
         return DenseModelIdentity(
             tokenizer_sha256=os.environ.get("TJIPTO_DENSE_TOKENIZER_SHA256") or _directory_digest(model_dir),
             model_sha256=os.environ.get("TJIPTO_DENSE_MODEL_SHA256") or _directory_digest(model_dir),
+            pooling_config_sha256=os.environ.get("TJIPTO_DENSE_POOLING_CONFIG_SHA256") or _directory_digest(model_dir),
+            pooling=DENSE_POOLING,
+            max_length=self.max_length,
+            truncation_policy=DENSE_TRUNCATION_POLICY,
         )
 
     def embed(self, texts: tuple[str, ...]) -> DenseEmbeddingBatch:
-        payload = {"model_id": MODEL_ID, "revision": MODEL_REVISION, "texts": list(texts)}
+        if self.batch_size < 1 or self.max_length != DENSE_MAX_LENGTH:
+            raise DenseUnavailable("dense_configuration_invalid")
+        vectors: list[tuple[float, ...]] = []
+        truncated_indices: list[int] = []
+        identity: DenseModelIdentity | None = None
+        for offset in range(0, len(texts), self.batch_size):
+            batch = self._embed_chunk(texts[offset : offset + self.batch_size])
+            if identity is None:
+                identity = batch.identity
+            elif batch.identity != identity:
+                raise DenseUnavailable("model_identity_changed")
+            vectors.extend(batch.vectors)
+            truncated_indices.extend(offset + index for index in batch.truncated_indices)
+        if identity is None:
+            identity = self.identity()
+        return DenseEmbeddingBatch(tuple(vectors), identity, tuple(truncated_indices))
+
+    def _embed_chunk(self, texts: tuple[str, ...]) -> DenseEmbeddingBatch:
+        payload = {
+            "model_id": MODEL_ID,
+            "revision": MODEL_REVISION,
+            "texts": list(texts),
+            "batch_size": self.batch_size,
+            "max_length": self.max_length,
+        }
         try:
             completed = subprocess.run(  # nosec B603 - fixed executable/module, no shell
                 [self.python_executable, "-m", "tjipto.retrieval.dense_worker"],
@@ -113,7 +173,10 @@ class LocalDenseProvider:
             raise DenseUnavailable(str(response["error"]))
         identity = DenseModelIdentity.from_value(response.get("model_identity"))
         vectors = _parse_vectors(response.get("vectors"), identity.dimension)
-        return DenseEmbeddingBatch(vectors, identity)
+        truncated = response.get("truncated_indices", [])
+        if not isinstance(truncated, list) or any(not isinstance(index, int) for index in truncated):
+            raise DenseUnavailable("worker_truncation_metadata_malformed")
+        return DenseEmbeddingBatch(vectors, identity, tuple(truncated))
 
 
 @dataclass(frozen=True)
@@ -144,11 +207,15 @@ class DenseIndex:
     documents: tuple[DenseDocument, ...]
     vector_bytes: bytes
     vector_mapping_digest: str
+    embedding_text_policy: str
+    batch_size: int
+    truncation_count: int
+    truncated_retrieval_unit_ids: tuple[str, ...]
 
     @classmethod
     def build(cls, store, provider: DenseEmbeddingProvider) -> "DenseIndex":
         records = _dense_records(store)
-        texts = tuple(_embedding_text(row, evidence, legal) for row, evidence, legal in records)
+        texts = tuple(_embedding_text(row, evidence, legal, store=store) for row, evidence, legal in records)
         batch = provider.embed(texts)
         vectors = _validate_batch(batch, len(records))
         source_identity = _source_identity(store, records, provider.identity())
@@ -160,6 +227,9 @@ class DenseIndex:
         retrieval_ids = tuple(str(row["retrieval_unit_id"]) for row, _, _ in records)
         evidence_ids = tuple(str(row["evidence_id"]) for row, _, _ in records)
         mapping_digest = _digest((retrieval_ids, evidence_ids))
+        truncated_indices = tuple(batch.truncated_indices)
+        if any(index < 0 or index >= len(records) for index in truncated_indices):
+            raise DenseError("truncation_metadata_invalid")
         documents = tuple(
             DenseDocument(retrieval_id, evidence_id, _row_bytes(evidence))
             for retrieval_id, evidence_id, (_, evidence, _) in zip(retrieval_ids, evidence_ids, records)
@@ -181,6 +251,10 @@ class DenseIndex:
             documents,
             vector_bytes,
             mapping_digest,
+            EMBEDDING_TEXT_POLICY,
+            getattr(provider, "batch_size", DENSE_BATCH_SIZE),
+            len(truncated_indices),
+            tuple(retrieval_ids[index] for index in truncated_indices),
         )
 
     def identity_record(self) -> dict[str, object]:
@@ -193,6 +267,10 @@ class DenseIndex:
             "model": self.model_identity.as_dict(),
             "record_count": self.record_count,
             "vector_mapping_digest": self.vector_mapping_digest,
+            "embedding_text_policy": self.embedding_text_policy,
+            "batch_size": self.batch_size,
+            "truncation_count": self.truncation_count,
+            "truncated_retrieval_unit_ids": self.truncated_retrieval_unit_ids,
         }
 
     def search(self, query_vector: tuple[float, ...], limit: int = 10) -> list[dict]:
@@ -275,18 +353,72 @@ def _dense_records(store) -> list[tuple[dict, dict, dict]]:
     return records
 
 
-def _embedding_text(retrieval: dict, evidence: dict, legal: dict) -> str:
+def _embedding_text(retrieval: dict, evidence: dict, legal: dict, *, store=None) -> str:
     breadcrumb = " ".join(str(value) for value in (legal.get("hierarchy") or retrieval.get("hierarchy") or ()))
     label = legal.get("canonical_label") or legal.get("unit_label") or evidence.get("citation") or ""
+    legal_text = _legal_embedding_text(store, legal, retrieval, evidence)
     return "\n".join(
         (
             str(retrieval.get("source_document_id") or evidence.get("source_document_id") or ""),
-            str(retrieval.get("evidence_id") or evidence.get("evidence_id") or ""),
             breadcrumb,
             str(label),
-            str(legal.get("text") or retrieval.get("text") or evidence.get("quoted_text") or ""),
+            legal_text,
         )
     )
+
+
+def _legal_embedding_text(store, legal: dict, retrieval: dict, evidence: dict) -> str:
+    """Prefer source-backed raw lineage when it repairs semantic SHY loss."""
+    fallback = str(legal.get("text") or retrieval.get("text") or evidence.get("quoted_text") or "")
+    if store is None or not legal.get("text_span_ids"):
+        return _normalize_embedding_text(fallback, store)
+    spans = {str(row.get("text_span_id")): row for row in getattr(store, "page_text_spans", ())}
+    raw_rows = tuple(getattr(store, "raw_source_spans", ()) or ())
+    repaired: list[str] = []
+    for span_id in legal.get("text_span_ids") or ():
+        span = spans.get(str(span_id))
+        if not span:
+            continue
+        raw = _raw_row_for_span(span, raw_rows)
+        repaired.append(_normalize_embedding_text(str(raw.get("raw_text")), store) if raw else str(span.get("text") or ""))
+    return "\n".join(text for text in repaired if text) or _normalize_embedding_text(fallback, store)
+
+
+def _raw_row_for_span(span: dict, raw_rows: tuple[dict, ...]) -> dict | None:
+    source_id = span.get("source_document_id")
+    page = span.get("page_number")
+    object_id = str(span.get("source_object_id") or "")
+    block = object_id.rsplit("::", 1)[-1] if object_id else ""
+    candidates = [
+        row
+        for row in raw_rows
+        if row.get("source_document_id") == source_id
+        and row.get("page_number") == page
+        and (not block or (block.isdigit() and str(row.get("block_index")) == str(int(block))))
+    ]
+    expected = str(span.get("text") or "")
+    return next((row for row in candidates if str(row.get("semantic_text") or "") == expected), candidates[0] if len(candidates) == 1 else None)
+
+
+def _normalize_embedding_text(value: str, store=None) -> str:
+    normalizer = getattr(getattr(getattr(store, "config", None), "strategy", None), "embedding_text_normalizer", None)
+    if normalizer is not None:
+        return str(normalizer(value))
+    return _source_aware_soft_hyphens(value)
+
+
+def _source_aware_soft_hyphens(value: str) -> str:
+    value = " ".join(str(value or "").replace("\xa0", " ").split())
+    chars: list[str] = []
+    for index, character in enumerate(value):
+        if character != "\u00ad":
+            chars.append(character)
+            continue
+        previous = value[index - 1] if index else ""
+        following = value[index + 1] if index + 1 < len(value) else ""
+        if previous.isalnum() and following.isalnum():
+            chars.append("-")
+    return "".join(chars)
 
 
 def _source_identity(store, records, model: DenseModelIdentity) -> str:
@@ -302,6 +434,7 @@ def _source_identity(store, records, model: DenseModelIdentity) -> str:
             "manifest_digest": getattr(store.config, "manifest_digest", None),
             "retrieval_units_digest": retrieval_digest,
             "embedding_source_digest": embedding_source_digest,
+            "embedding_text_policy": EMBEDDING_TEXT_POLICY,
             "model": model.as_dict(),
             "record_count": len(records),
         }
@@ -312,9 +445,20 @@ def _validate_batch(batch: DenseEmbeddingBatch, expected: int) -> tuple[tuple[fl
     if not isinstance(batch, DenseEmbeddingBatch) or len(batch.vectors) != expected:
         raise DenseError("embedding_count_mismatch")
     identity = DenseModelIdentity.from_value(batch.identity)
-    if identity.dimension != DENSE_DIMENSION or identity.dtype != DENSE_DTYPE or identity.normalization != DENSE_NORMALIZATION:
+    if (
+        identity.dimension != DENSE_DIMENSION
+        or identity.dtype != DENSE_DTYPE
+        or identity.normalization != DENSE_NORMALIZATION
+        or identity.pooling != DENSE_POOLING
+        or identity.max_length != DENSE_MAX_LENGTH
+        or identity.truncation_policy != DENSE_TRUNCATION_POLICY
+    ):
         raise DenseError("embedding_contract_invalid")
-    if not _valid_digest(identity.tokenizer_sha256) or not _valid_digest(identity.model_sha256):
+    if (
+        not _valid_digest(identity.tokenizer_sha256)
+        or not _valid_digest(identity.model_sha256)
+        or not _valid_digest(identity.pooling_config_sha256)
+    ):
         raise DenseError("model_file_digest_missing")
     for vector in batch.vectors:
         _validate_vector(vector, identity.dimension)
@@ -384,7 +528,11 @@ def _unavailable(reason: str) -> dict:
 
 
 __all__ = [
+    "DENSE_BATCH_SIZE",
     "DENSE_DIMENSION",
+    "DENSE_MAX_LENGTH",
+    "DENSE_POOLING",
+    "DENSE_TRUNCATION_POLICY",
     "DenseEmbeddingBatch",
     "DenseIndex",
     "DenseModelIdentity",
@@ -392,6 +540,7 @@ __all__ = [
     "LocalDenseProvider",
     "MODEL_ID",
     "MODEL_REVISION",
+    "EMBEDDING_TEXT_POLICY",
     "dense_index_for_store",
     "dense_search",
 ]

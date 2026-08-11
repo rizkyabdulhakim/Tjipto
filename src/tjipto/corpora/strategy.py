@@ -49,6 +49,7 @@ class CorpusStrategy:
     citation_unit_factory: Callable[[object, dict[str, object]], object] | None = None
     source_text_query: Callable[[object, str], object | None] | None = None
     source_text_health: Callable[[object], dict[str, int]] | None = None
+    embedding_text_normalizer: Callable[[str], str] | None = None
 
 
 @dataclass(frozen=True)

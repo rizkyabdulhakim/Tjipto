@@ -6,6 +6,8 @@ from unittest.mock import patch
 import subprocess
 
 from tjipto.retrieval.dense import (
+    DENSE_MAX_LENGTH,
+    DENSE_POOLING,
     DENSE_DIMENSION,
     MODEL_ID,
     MODEL_REVISION,
@@ -15,11 +17,22 @@ from tjipto.retrieval.dense import (
     LocalDenseProvider,
     dense_index_for_store,
     dense_search,
+    _embedding_text,
 )
+from tjipto.retrieval.dense_worker import _cls_pool
+from tjipto.corpora.uud.source_policy import normalize_retrieval_text
+from pathlib import Path
+from tjipto.runtime.service import LegalRuntimeService
 
 
 def _identity() -> DenseModelIdentity:
-    return DenseModelIdentity(model_id=MODEL_ID, revision=MODEL_REVISION, tokenizer_sha256="a" * 64, model_sha256="b" * 64)
+    return DenseModelIdentity(
+        model_id=MODEL_ID,
+        revision=MODEL_REVISION,
+        tokenizer_sha256="a" * 64,
+        model_sha256="b" * 64,
+        pooling_config_sha256="c" * 64,
+    )
 
 
 def _vector(first: float, second: float = 0.0) -> tuple[float, ...]:
@@ -63,6 +76,48 @@ class FakeProvider:
 
 
 class DenseRetrievalContractTest(unittest.TestCase):
+    def test_pembukaan_current_query_uses_deterministic_current_support(self) -> None:
+        result = LegalRuntimeService(Path(__file__).resolve().parents[1]).ask(
+            "uud", "Apa isi Pembukaan UUD 1945 saat ini?", limit=3
+        )
+        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["route"], "legal_reference")
+        self.assertTrue(result["citations"])
+        self.assertEqual(result["citations"][0]["source_role"], "current_consolidated")
+        self.assertEqual(result["citations"][0]["citation"], "PEMBUKAAN/Preambule")
+
+    def test_model_identity_binds_cls_and_effective_length(self) -> None:
+        identity = _identity().as_dict()
+        self.assertEqual(identity["pooling"], DENSE_POOLING)
+        self.assertEqual(identity["max_length"], DENSE_MAX_LENGTH)
+        self.assertEqual(DenseModelIdentity.from_value(identity).pooling, "cls")
+
+    def test_cls_pooling_is_not_mean_pooling(self) -> None:
+        class Probe:
+            def __getitem__(self, key):
+                self.key = key
+                return "cls"
+
+        hidden = Probe()
+        self.assertEqual(_cls_pool(hidden), "cls")
+        self.assertEqual(hidden.key, (slice(None), 0, slice(None)))
+        self.assertNotEqual((1.0, 0.0), (0.5, 0.5))
+
+    def test_embedding_text_uses_source_fields_not_opaque_ids(self) -> None:
+        text = _embedding_text(
+            {"source_document_id": "doc", "evidence_id": "opaque", "text": "ignored"},
+            {"evidence_id": "opaque", "quoted_text": "legal"},
+            {"unit_label": "Pasal", "hierarchy": ["BAB I"], "text": "legal"},
+        )
+        self.assertNotIn("opaque", text)
+        self.assertIn("doc", text)
+        self.assertIn("legal", text)
+
+    def test_source_aware_soft_hyphen_repairs_only_lexical_occurrences(self) -> None:
+        self.assertEqual(normalize_retrieval_text("peri\u00adkemanusiaan"), "peri-kemanusiaan")
+        self.assertEqual(normalize_retrieval_text("\u00ad\u00ad"), "")
+        self.assertEqual(normalize_retrieval_text("normal orthography"), "normal orthography")
+
     def test_disabled_lane_is_fail_soft(self) -> None:
         result = dense_search(_store(configured=False), "alpha", provider=FakeProvider())
         self.assertEqual(result["status"], "dense_unavailable")
