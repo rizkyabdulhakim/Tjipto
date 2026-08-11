@@ -102,6 +102,11 @@ def _thaw(value):
     return payload
 
 
+def _canonical_row(row: dict) -> tuple[tuple[str, tuple], ...]:
+    """Return the immutable row representation owned by a sparse document."""
+    return tuple(sorted((str(key), _freeze(value)) for key, value in row.items()))
+
+
 @dataclass(frozen=True)
 class SparseDocument:
     """Immutable document state owned by a :class:`SparseIndex`."""
@@ -113,7 +118,7 @@ class SparseDocument:
     @classmethod
     def build(cls, row: dict, terms: tuple[str, ...], frequencies: tuple[tuple[str, int], ...]) -> "SparseDocument":
         return cls(
-            fields=tuple(sorted((str(key), _freeze(value)) for key, value in row.items())),
+            fields=_canonical_row(row),
             terms=terms,
             frequencies=frequencies,
         )
@@ -176,7 +181,7 @@ class SparseIndex:
             "k1": k1,
             "b": b,
             "record_count": len(evidence),
-            "records": tuple(sorted((str(row.get("evidence_id", "")), _document_text(row)) for row in evidence)),
+            "records": tuple(sorted((str(row.get("evidence_id", "")), _canonical_row(row)) for row in evidence)),
         }
         return hashlib.sha256(
             json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")

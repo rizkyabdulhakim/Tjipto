@@ -65,6 +65,50 @@ class SparseIndexContractTest(unittest.TestCase):
         self.assertIsNot(third, fourth)
         self.assertEqual(fourth.identity, SparseIndex.snapshot_identity(store.evidence, config=store.config))
 
+    def test_complete_row_state_invalidates_index(self) -> None:
+        cases = (
+            (
+                "source_role",
+                {"source_role": "current_consolidated"},
+                lambda row: row.__setitem__("source_role", "original_historical"),
+                "source_role",
+                "original_historical",
+            ),
+            (
+                "status",
+                {"status": "final"},
+                lambda row: row.__setitem__("status", "draft"),
+                "status",
+                "draft",
+            ),
+            (
+                "temporal_context",
+                {"temporal_context": "current"},
+                lambda row: row.__setitem__("temporal_context", "historical"),
+                "temporal_context",
+                "historical",
+            ),
+            (
+                "nested_state",
+                {"nested_state": {"page": 1, "labels": ["a"]}},
+                lambda row: (row["nested_state"].update(page=2), row["nested_state"]["labels"].append("b")),
+                "nested_state",
+                {"page": 2, "labels": ["a", "b"]},
+            ),
+            ("added_key", {}, lambda row: row.__setitem__("added_key", "added"), "added_key", "added"),
+            ("removed_key", {"removed_key": "removed"}, lambda row: row.pop("removed_key"), "removed_key", None),
+        )
+        for name, initial, mutate, expected_key, expected in cases:
+            with self.subTest(case=name):
+                row = {"evidence_id": "a", "quoted_text": "alpha", **initial}
+                store = SimpleNamespace(config=_config(), evidence=[row])
+                first = sparse_index_for_store(store)
+                mutate(row)
+                second = sparse_index_for_store(store)
+                self.assertNotEqual(first.identity, second.identity)
+                self.assertIsNot(first, second)
+                self.assertEqual(second.search("alpha")[0].get(expected_key), expected)
+
     def test_nested_document_state_and_search_results_are_isolated(self) -> None:
         rows = [{"evidence_id": "a", "quoted_text": "alpha", "hierarchy": ["I"], "metadata": {"page": 1}}]
         index = SparseIndex.build(rows, config=_config())
