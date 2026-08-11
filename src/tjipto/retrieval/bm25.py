@@ -107,6 +107,12 @@ def _canonical_row(row: dict) -> tuple[tuple[str, tuple], ...]:
     return tuple(sorted((str(key), _freeze(value)) for key, value in row.items()))
 
 
+def _canonical_row_digest(row: dict) -> str:
+    return hashlib.sha256(
+        json.dumps(_canonical_row(row), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 @dataclass(frozen=True)
 class SparseDocument:
     """Immutable document state owned by a :class:`SparseIndex`."""
@@ -181,7 +187,7 @@ class SparseIndex:
             "k1": k1,
             "b": b,
             "record_count": len(evidence),
-            "records": tuple(sorted((str(row.get("evidence_id", "")), _canonical_row(row)) for row in evidence)),
+            "records": tuple(sorted((str(row.get("evidence_id", "")), _canonical_row_digest(row)) for row in evidence)),
         }
         return hashlib.sha256(
             json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
