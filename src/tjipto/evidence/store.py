@@ -59,6 +59,8 @@ class EvidenceStore:
         self._meaningful_support_unit_by_id: dict[str, dict] | None = None
         self._sparse_index = None
         self._sparse_index_cache_key = None
+        self._dense_index = None
+        self._dense_index_cache_key = None
 
     @property
     def evidence(self) -> list[dict]:
