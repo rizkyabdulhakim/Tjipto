@@ -1167,8 +1167,8 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertEqual(bool(result["matches"]), case["has_matches"], case["query"])
             if "max_matches" in case:
                 self.assertLessEqual(len(result["matches"]), case["max_matches"], case["query"])
-            if "lexical_relevance_ok" in case:
-                self.assertTrue(all(row["lexical_relevance_ok"] is case["lexical_relevance_ok"] for row in result["matches"]))
+            if "lexical_complete_coverage" in case:
+                self.assertTrue(all(row["lexical_complete_coverage"] is case["lexical_complete_coverage"] for row in result["matches"]))
 
     def test_metadata_filtering_limits_retrieval_safely(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")

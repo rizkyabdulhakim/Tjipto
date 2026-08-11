@@ -60,7 +60,7 @@ class TelemetryContractTest(unittest.TestCase):
             Telemetry(fail, strict=True).emit("corpus_load", corpus_id="uud", status="loaded")
 
     def test_measured_pytest_gates_are_closed_ci_values(self) -> None:
-        for gate in ("pytest_run_1", "pytest_run_2", "answer_evaluation"):
+        for gate in ("pytest_run_1", "pytest_run_2", "answer_evaluation", "research_retrieval_evaluation"):
             self.assertEqual(event_record("ci_gate", gate=gate, status="passed", duration_ms=1)["attributes"]["gate"], gate)
 
     def test_registered_custom_root_corpus_is_retained(self) -> None:

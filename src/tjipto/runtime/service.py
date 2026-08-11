@@ -1172,7 +1172,7 @@ def _clarification_response(routed: dict, decision) -> dict:
 
 def _scope_has_verified_support(store, routed: dict) -> bool:
     return any(
-        row.get("lexical_relevance_ok") is not False and validate_answer_candidate(store, row)[0]
+        validate_answer_candidate(store, row)[0]
         for row in routed.get("matches", ())
     )
 

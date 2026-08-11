@@ -103,9 +103,12 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
             "Pasal apa berikutnya setelah Pasal 7",
             "Setelah Pasal 7 pasal berapa?",
             "Sesudah Pasal 7 apa?",
+            "apa ketentuan sebelum Pasal 28?",
         ):
             with self.subTest(query=query):
                 self.assertEqual(self.service.ask("uud", query)["route"], "structural_navigation")
+        previous = self.service.ask("uud", "apa ketentuan sebelum Pasal 28?")
+        self.assertEqual(previous["citations"][0]["citation"], "Pasal 27")
         for query in ("Pasal 7 setelah Pasal 6", "Siapa Presiden setelah Pasal 7?"):
             with self.subTest(query=query):
                 self.assertNotEqual(self.service.ask("uud", query)["route"], "structural_navigation")
