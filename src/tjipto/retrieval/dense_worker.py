@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sys
+import ctypes
+from ctypes import wintypes
 from pathlib import Path
 
 from tjipto.retrieval.dense import (
@@ -17,6 +18,8 @@ from tjipto.retrieval.dense import (
     INDEX_BUILDER_ID,
     MODEL_ID,
     MODEL_REVISION,
+    _files_digest,
+    _sha256_file,
 )
 
 
@@ -32,13 +35,14 @@ def main() -> int:
         max_length = request.get("max_length", DENSE_MAX_LENGTH)
         if not isinstance(batch_size, int) or batch_size < 1 or max_length != DENSE_MAX_LENGTH:
             return _error("worker_configuration_invalid")
-        vectors, tokenizer_digest, model_digest, pooling_config_digest, truncated_indices = _embed(
+        vectors, tokenizer_digest, model_digest, pooling_config_digest, truncated_indices, worker_peak_rss = _embed(
             tuple(texts), batch_size=batch_size, max_length=max_length
         )
         json.dump(
             {
                 "vectors": vectors,
                 "truncated_indices": truncated_indices,
+                "worker_peak_rss_bytes": worker_peak_rss,
                 "model_identity": {
                     "model_id": MODEL_ID,
                     "revision": MODEL_REVISION,
@@ -110,12 +114,29 @@ def _embed(texts: tuple[str, ...], *, batch_size: int, max_length: int):
         tokenizer_path = Path(cache_dir)
     tokenizer_files = ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "sentencepiece.bpe.model", "vocab.txt")
     model_files = ("config.json", "pytorch_model.bin", "model.safetensors", "model.safetensors.index.json")
+    pooling_path = model_path / "1_Pooling" / "config.json"
+    if not pooling_path.is_file():
+        raise ValueError("pooling_config_missing")
+    try:
+        pooling_config = json.loads(pooling_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("pooling_config_invalid") from error
+    if (
+        pooling_config.get("word_embedding_dimension") != DENSE_DIMENSION
+        or pooling_config.get("pooling_mode_cls_token") is not True
+        or pooling_config.get("pooling_mode_mean_tokens") is True
+    ):
+        raise ValueError("pooling_config_invalid")
+    pooling_digest = _sha256_file(pooling_path)
+    if pooling_digest is None:
+        raise ValueError("pooling_config_missing")
     return (
         vectors,
         _files_digest(tokenizer_path, tokenizer_files),
         _files_digest(model_path, model_files),
-        _files_digest(model_path, ("config.json",)),
+        pooling_digest,
         truncated_indices,
+        _peak_rss_bytes(),
     )
 
 
@@ -123,21 +144,42 @@ def _cls_pool(last_hidden_state):
     return last_hidden_state[:, 0, :]
 
 
-def _files_digest(path: Path, names: tuple[str, ...]) -> str | None:
-    if not path.exists():
+def _peak_rss_bytes() -> int | None:
+    if os.name == "nt":
+        class _Counters(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        counters = _Counters()
+        counters.cb = ctypes.sizeof(counters)
+        try:
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            psapi = ctypes.WinDLL("psapi", use_last_error=True)
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            get_info = psapi.GetProcessMemoryInfo
+            get_info.argtypes = (wintypes.HANDLE, ctypes.POINTER(_Counters), wintypes.DWORD)
+            get_info.restype = wintypes.BOOL
+            ok = get_info(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb)
+            return int(counters.PeakWorkingSetSize) if ok else None
+        except (AttributeError, OSError):
+            return None
+    try:
+        for line in Path("/proc/self/status").read_text(encoding="ascii").splitlines():
+            if line.startswith("VmHWM:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
         return None
-    digest = hashlib.sha256()
-    if path.is_dir():
-        paths = [path / name for name in names if (path / name).is_file()]
-    else:
-        paths = [path]
-    if not paths:
-        return None
-    paths = sorted(paths)
-    for file_path in paths:
-        digest.update(file_path.relative_to(path if path.is_dir() else path.parent).as_posix().encode())
-        digest.update(file_path.read_bytes())
-    return digest.hexdigest()
+    return None
 
 
 def _error(code: str) -> int:

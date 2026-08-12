@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+from pathlib import Path
 import struct
 import subprocess  # nosec B404 - fixed module worker, no shell
 import sys
@@ -91,6 +92,7 @@ class DenseEmbeddingBatch:
     vectors: tuple[tuple[float, ...], ...]
     identity: DenseModelIdentity
     truncated_indices: tuple[int, ...] = ()
+    worker_peak_rss_bytes: int | None = None
 
 
 class DenseEmbeddingProvider(Protocol):
@@ -116,11 +118,12 @@ class LocalDenseProvider:
         self.max_length = max_length
 
     def identity(self) -> DenseModelIdentity:
-        model_dir = os.environ.get("TJIPTO_DENSE_MODEL_DIR")
+        model_dir = _model_snapshot_path()
+        tokenizer_digest, model_digest, pooling_digest = _model_identity_digests(model_dir)
         return DenseModelIdentity(
-            tokenizer_sha256=os.environ.get("TJIPTO_DENSE_TOKENIZER_SHA256") or _directory_digest(model_dir),
-            model_sha256=os.environ.get("TJIPTO_DENSE_MODEL_SHA256") or _directory_digest(model_dir),
-            pooling_config_sha256=os.environ.get("TJIPTO_DENSE_POOLING_CONFIG_SHA256") or _directory_digest(model_dir),
+            tokenizer_sha256=os.environ.get("TJIPTO_DENSE_TOKENIZER_SHA256") or tokenizer_digest,
+            model_sha256=os.environ.get("TJIPTO_DENSE_MODEL_SHA256") or model_digest,
+            pooling_config_sha256=os.environ.get("TJIPTO_DENSE_POOLING_CONFIG_SHA256") or pooling_digest,
             pooling=DENSE_POOLING,
             max_length=self.max_length,
             truncation_policy=DENSE_TRUNCATION_POLICY,
@@ -129,20 +132,9 @@ class LocalDenseProvider:
     def embed(self, texts: tuple[str, ...]) -> DenseEmbeddingBatch:
         if self.batch_size < 1 or self.max_length != DENSE_MAX_LENGTH:
             raise DenseUnavailable("dense_configuration_invalid")
-        vectors: list[tuple[float, ...]] = []
-        truncated_indices: list[int] = []
-        identity: DenseModelIdentity | None = None
-        for offset in range(0, len(texts), self.batch_size):
-            batch = self._embed_chunk(texts[offset : offset + self.batch_size])
-            if identity is None:
-                identity = batch.identity
-            elif batch.identity != identity:
-                raise DenseUnavailable("model_identity_changed")
-            vectors.extend(batch.vectors)
-            truncated_indices.extend(offset + index for index in batch.truncated_indices)
-        if identity is None:
-            identity = self.identity()
-        return DenseEmbeddingBatch(tuple(vectors), identity, tuple(truncated_indices))
+        if not texts:
+            return DenseEmbeddingBatch((), self.identity())
+        return self._embed_chunk(texts)
 
     def _embed_chunk(self, texts: tuple[str, ...]) -> DenseEmbeddingBatch:
         payload = {
@@ -176,7 +168,10 @@ class LocalDenseProvider:
         truncated = response.get("truncated_indices", [])
         if not isinstance(truncated, list) or any(not isinstance(index, int) for index in truncated):
             raise DenseUnavailable("worker_truncation_metadata_malformed")
-        return DenseEmbeddingBatch(vectors, identity, tuple(truncated))
+        worker_peak_rss = response.get("worker_peak_rss_bytes")
+        if worker_peak_rss is not None and (not isinstance(worker_peak_rss, int) or worker_peak_rss < 0):
+            raise DenseUnavailable("worker_resource_malformed")
+        return DenseEmbeddingBatch(vectors, identity, tuple(truncated), worker_peak_rss)
 
 
 @dataclass(frozen=True)
@@ -211,6 +206,8 @@ class DenseIndex:
     batch_size: int
     truncation_count: int
     truncated_retrieval_unit_ids: tuple[str, ...]
+    embedding_text_digest: str
+    worker_peak_rss_bytes: int | None = None
 
     @classmethod
     def build(cls, store, provider: DenseEmbeddingProvider) -> "DenseIndex":
@@ -218,8 +215,9 @@ class DenseIndex:
         texts = tuple(_embedding_text(row, evidence, legal, store=store) for row, evidence, legal in records)
         batch = provider.embed(texts)
         vectors = _validate_batch(batch, len(records))
-        source_identity = _source_identity(store, records, provider.identity())
         model = batch.identity
+        embedding_text_digest = _digest(texts)
+        source_identity = _source_identity(store, records, model, embedding_text_digest)
         corpus_id = getattr(store.config, "corpus_id", None)
         artifact_set_digest = getattr(store.config, "artifact_set_digest", None)
         manifest_digest = getattr(store.config, "manifest_digest", None)
@@ -255,6 +253,8 @@ class DenseIndex:
             getattr(provider, "batch_size", DENSE_BATCH_SIZE),
             len(truncated_indices),
             tuple(retrieval_ids[index] for index in truncated_indices),
+            embedding_text_digest,
+            batch.worker_peak_rss_bytes,
         )
 
     def identity_record(self) -> dict[str, object]:
@@ -271,6 +271,9 @@ class DenseIndex:
             "batch_size": self.batch_size,
             "truncation_count": self.truncation_count,
             "truncated_retrieval_unit_ids": self.truncated_retrieval_unit_ids,
+            "embedding_text_digest": self.embedding_text_digest,
+            "worker_peak_rss_bytes": self.worker_peak_rss_bytes,
+            "worker_peak_rss_scope": "embedding_worker_peak_working_set",
         }
 
     def search(self, query_vector: tuple[float, ...], limit: int = 10) -> list[dict]:
@@ -320,7 +323,8 @@ def dense_search(store, query: str, limit: int = 10, *, provider: DenseEmbedding
 def dense_index_for_store(store, *, provider: DenseEmbeddingProvider | None = None) -> DenseIndex:
     provider = provider or LocalDenseProvider()
     records = _dense_records(store)
-    source_identity = _source_identity(store, records, provider.identity())
+    texts = _embedding_texts(store, records)
+    source_identity = _source_identity(store, records, provider.identity(), _digest(texts))
     index = getattr(store, "_dense_index", None)
     if isinstance(index, DenseIndex) and index.source_identity == source_identity:
         return index
@@ -374,14 +378,41 @@ def _legal_embedding_text(store, legal: dict, retrieval: dict, evidence: dict) -
         return _normalize_embedding_text(fallback, store)
     spans = {str(row.get("text_span_id")): row for row in getattr(store, "page_text_spans", ())}
     raw_rows = tuple(getattr(store, "raw_source_spans", ()) or ())
-    repaired: list[str] = []
+    repaired: list[tuple[str, dict]] = []
     for span_id in legal.get("text_span_ids") or ():
         span = spans.get(str(span_id))
         if not span:
             continue
         raw = _raw_row_for_span(span, raw_rows)
-        repaired.append(_normalize_embedding_text(str(raw.get("raw_text")), store) if raw else str(span.get("text") or ""))
-    return "\n".join(text for text in repaired if text) or _normalize_embedding_text(fallback, store)
+        repaired.append((str(raw.get("raw_text")), raw) if raw else (str(span.get("text") or ""), {}))
+    if not repaired:
+        return _normalize_embedding_text(fallback, store)
+    stitched = repaired[0][0]
+    previous_text, previous = repaired[0]
+    for text, current in repaired[1:]:
+        if _join_source_boundary(previous_text, previous, text, current):
+            stitched += text
+        else:
+            stitched += "\n" + text
+        previous_text, previous = text, current
+    return _normalize_embedding_text(stitched, store) or _normalize_embedding_text(fallback, store)
+
+
+def _embedding_texts(store, records: list[tuple[dict, dict, dict]]) -> tuple[str, ...]:
+    return tuple(_embedding_text(row, evidence, legal, store=store) for row, evidence, legal in records)
+
+
+def _join_source_boundary(previous_text: str, previous: dict, current_text: str, current: dict) -> bool:
+    """Join a verified line-break soft hyphen before retrieval normalization."""
+    if not previous_text.endswith("\u00ad") or not current_text[:1].isalnum():
+        return False
+    return bool(
+        previous.get("raw_stream_id")
+        and previous.get("raw_stream_id") == current.get("raw_stream_id")
+        and isinstance(previous.get("raw_text_end"), int)
+        and isinstance(current.get("raw_text_start"), int)
+        and 0 <= current["raw_text_start"] - previous["raw_text_end"] <= 1
+    )
 
 
 def _raw_row_for_span(span: dict, raw_rows: tuple[dict, ...]) -> dict | None:
@@ -421,7 +452,7 @@ def _source_aware_soft_hyphens(value: str) -> str:
     return "".join(chars)
 
 
-def _source_identity(store, records, model: DenseModelIdentity) -> str:
+def _source_identity(store, records, model: DenseModelIdentity, embedding_text_digest: str) -> str:
     retrieval_digest = _digest([row for row, _, _ in records])
     embedding_source_digest = _digest(
         [{"retrieval": row, "evidence": evidence, "legal_unit": legal} for row, evidence, legal in records]
@@ -434,6 +465,7 @@ def _source_identity(store, records, model: DenseModelIdentity) -> str:
             "manifest_digest": getattr(store.config, "manifest_digest", None),
             "retrieval_units_digest": retrieval_digest,
             "embedding_source_digest": embedding_source_digest,
+            "embedding_text_digest": embedding_text_digest,
             "embedding_text_policy": EMBEDDING_TEXT_POLICY,
             "model": model.as_dict(),
             "record_count": len(records),
@@ -494,25 +526,54 @@ def _valid_digest(value: str | None) -> bool:
     return True
 
 
-def _directory_digest(path: str | None) -> str | None:
-    if not path:
+def _model_snapshot_path() -> Path | None:
+    configured = os.environ.get("TJIPTO_DENSE_MODEL_DIR")
+    if configured:
+        path = Path(configured)
+        return path if path.is_dir() else None
+    hub_root = os.environ.get("HF_HOME")
+    if hub_root:
+        candidate = Path(hub_root) / "hub" / "models--BAAI--bge-m3" / "snapshots" / MODEL_REVISION
+    else:
+        candidate = Path.home() / ".cache" / "huggingface" / "hub" / "models--BAAI--bge-m3" / "snapshots" / MODEL_REVISION
+    return candidate if candidate.is_dir() else None
+
+
+def _files_digest(path: Path | None, names: tuple[str, ...]) -> str | None:
+    if path is None or not path.exists():
         return None
-    root = os.path.abspath(path)
-    if not os.path.isdir(root):
+    root = path if path.is_dir() else path.parent
+    paths = [path / name for name in names if (path / name).is_file()] if path.is_dir() else [path]
+    if not paths:
         return None
     digest = hashlib.sha256()
-    for current, _, names in os.walk(root):
-        for name in sorted(names):
-            file_path = os.path.join(current, name)
-            try:
-                relative = os.path.relpath(file_path, root).replace(os.sep, "/")
-                digest.update(relative.encode("utf-8"))
-                with open(file_path, "rb") as handle:
-                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                        digest.update(chunk)
-            except OSError:
-                return None
+    for file_path in sorted(paths):
+        try:
+            digest.update(file_path.relative_to(root).as_posix().encode("utf-8"))
+            digest.update(file_path.read_bytes())
+        except OSError:
+            return None
     return digest.hexdigest()
+
+
+def _model_identity_digests(model_dir: Path | None) -> tuple[str | None, str | None, str | None]:
+    if model_dir is None:
+        return None, None, None
+    tokenizer = _files_digest(
+        model_dir,
+        ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "sentencepiece.bpe.model", "vocab.txt"),
+    )
+    model = _files_digest(model_dir, ("config.json", "pytorch_model.bin", "model.safetensors", "model.safetensors.index.json"))
+    pooling_path = model_dir / "1_Pooling" / "config.json"
+    pooling = _sha256_file(pooling_path)
+    return tokenizer, model, pooling
+
+
+def _sha256_file(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+    except OSError:
+        return None
 
 
 def _row_bytes(row: dict) -> bytes:

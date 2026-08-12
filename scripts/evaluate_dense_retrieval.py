@@ -84,6 +84,17 @@ def main(argv: list[str] | None = None) -> int:
                     "build_seconds": round(build_seconds, 3),
                     "query_seconds": round(time.perf_counter() - started, 3),
                     "query_truncation_count": len(query_batch.truncated_indices),
+                    "query_truncated_case_ids": [
+                        cases[index]["id"] for index in query_batch.truncated_indices if index < len(cases)
+                    ],
+                    "worker_peak_rss_bytes": max(
+                        value
+                        for value in (index.worker_peak_rss_bytes, query_batch.worker_peak_rss_bytes)
+                        if value is not None
+                    )
+                    if any(value is not None for value in (index.worker_peak_rss_bytes, query_batch.worker_peak_rss_bytes))
+                    else None,
+                    "worker_peak_rss_scope": "embedding_worker_peak_working_set",
                 },
                 "production_baseline": {
                     "runtime_commit": identity["runtime_commit"],

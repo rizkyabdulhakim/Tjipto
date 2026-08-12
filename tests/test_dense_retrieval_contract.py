@@ -15,6 +15,8 @@ from tjipto.retrieval.dense import (
     DenseModelIdentity,
     DenseUnavailable,
     LocalDenseProvider,
+    _legal_embedding_text,
+    _model_identity_digests,
     dense_index_for_store,
     dense_search,
     _embedding_text,
@@ -22,6 +24,7 @@ from tjipto.retrieval.dense import (
 from tjipto.retrieval.dense_worker import _cls_pool
 from tjipto.corpora.uud.source_policy import normalize_retrieval_text
 from pathlib import Path
+import tempfile
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -117,6 +120,75 @@ class DenseRetrievalContractTest(unittest.TestCase):
         self.assertEqual(normalize_retrieval_text("peri\u00adkemanusiaan"), "peri-kemanusiaan")
         self.assertEqual(normalize_retrieval_text("\u00ad\u00ad"), "")
         self.assertEqual(normalize_retrieval_text("normal orthography"), "normal orthography")
+
+    def test_source_lineage_stitches_boundary_soft_hyphen_before_normalization(self) -> None:
+        store = _store()
+        store.page_text_spans = [
+            {
+                "text_span_id": "span-a",
+                "source_document_id": "doc",
+                "page_number": 1,
+                "source_object_id": "pdf_object::doc::0001",
+                "text": "Undang",
+            },
+            {
+                "text_span_id": "span-b",
+                "source_document_id": "doc",
+                "page_number": 1,
+                "source_object_id": "pdf_object::doc::0002",
+                "text": "Undang Dasar",
+            },
+        ]
+        store.raw_source_spans = [
+            {
+                "source_document_id": "doc",
+                "page_number": 1,
+                "block_index": 1,
+                "raw_stream_id": "stream",
+                "raw_text_start": 0,
+                "raw_text_end": 7,
+                "raw_text": "Undang\u00ad",
+                "semantic_text": "Undang",
+            },
+            {
+                "source_document_id": "doc",
+                "page_number": 1,
+                "block_index": 2,
+                "raw_stream_id": "stream",
+                "raw_text_start": 8,
+                "raw_text_end": 20,
+                "raw_text": "Undang Dasar",
+                "semantic_text": "Undang Dasar",
+            },
+        ]
+        legal = {"text_span_ids": ("span-a", "span-b"), "text": "Undang Undang Dasar"}
+        self.assertEqual(
+            _legal_embedding_text(store, legal, {"text": legal["text"]}, {"quoted_text": legal["text"]}),
+            "Undang-Undang Dasar",
+        )
+
+    def test_corpus_boundary_orthography_is_reconstructed(self) -> None:
+        store = LegalRuntimeService(Path(__file__).resolve().parents[1])._store("uud")
+        legal = next(row for row in store.legal_units if "sebesar \n" in str(row.get("text")))
+        retrieval = next(row for row in store.retrieval_units if row.get("legal_unit_id") == legal.get("legal_unit_id"))
+        evidence = next(row for row in store.evidence if row.get("evidence_id") == retrieval.get("evidence_id"))
+        text = _legal_embedding_text(store, legal, retrieval, evidence)
+        self.assertNotIn("sebesar\nbesar", text)
+        self.assertIn("sebesar-besar", text)
+
+    def test_model_identity_uses_pinned_pooling_config_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text('{"model": "root"}', encoding="utf-8")
+            pooling = root / "1_Pooling"
+            pooling.mkdir()
+            (pooling / "config.json").write_text(
+                '{"word_embedding_dimension": 1024, "pooling_mode_cls_token": true}', encoding="utf-8"
+            )
+            _, _, digest = _model_identity_digests(root)
+            import hashlib
+
+            self.assertEqual(digest, hashlib.sha256((pooling / "config.json").read_bytes()).hexdigest())
 
     def test_disabled_lane_is_fail_soft(self) -> None:
         result = dense_search(_store(configured=False), "alpha", provider=FakeProvider())

@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 from tjipto.retrieval.dense import DENSE_MAX_LENGTH, DENSE_POOLING, MODEL_ID, MODEL_REVISION, LocalDenseProvider
+from tjipto.retrieval.dense_worker import _peak_rss_bytes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,6 +54,17 @@ def main(argv: list[str] | None = None) -> int:
             completed = None
         if comparison.is_file():
             report["comparison"] = json.loads(comparison.read_text(encoding="utf-8"))
+            dense = report.get("comparison", {}).get("dense") or {}
+            report["worker_resource"] = {
+                "worker_peak_rss_bytes": dense.get("worker_peak_rss_bytes"),
+                "worker_peak_rss_scope": dense.get("worker_peak_rss_scope"),
+                "promotion_parent_peak_rss_bytes": report.get("parity_probe", {}).get("promotion_parent_peak_rss_bytes"),
+                "promotion_parent_rss_scope": "promotion_parity_parent_peak_working_set",
+                "core_ci_rss_bytes": None,
+                "core_ci_rss_scope": "normal_model_free_ci_not_measured_by_dense_promotion",
+                "build_seconds": dense.get("build_seconds"),
+                "query_seconds": dense.get("query_seconds"),
+            }
         if not probe["passed"] or (completed is not None and completed.returncode) or report.get("comparison", {}).get("status") != "valid":
             report["reason"] = report.get("comparison", {}).get("reason") or "dense_comparison_failed"
         else:
@@ -71,7 +83,8 @@ def _parity_probe(timeout: float) -> dict[str, object]:
 
     text = "Ketentuan hukum mengenai kewenangan Presiden."
     provider = LocalDenseProvider(timeout_seconds=timeout)
-    observed = provider.embed((text,)).vectors[0]
+    observed_batch = provider.embed((text,))
+    observed = observed_batch.vectors[0]
     cache_dir = os.environ.get("TJIPTO_DENSE_MODEL_DIR")
     local_snapshot = Path(cache_dir) if cache_dir and (Path(cache_dir) / "config.json").exists() else None
     if local_snapshot is not None and local_snapshot.name != MODEL_REVISION:
@@ -90,6 +103,10 @@ def _parity_probe(timeout: float) -> dict[str, object]:
         "max_abs_error": error,
         "passed": error <= 1e-5,
         "vector_sha256": hashlib.sha256(json.dumps(observed, separators=(",", ":")).encode("utf-8")).hexdigest(),
+        "worker_peak_rss_bytes": observed_batch.worker_peak_rss_bytes,
+        "worker_peak_rss_scope": "embedding_worker_peak_working_set",
+        "promotion_parent_peak_rss_bytes": _peak_rss_bytes(),
+        "promotion_parent_rss_scope": "promotion_parity_parent_peak_working_set",
     }
 
 
