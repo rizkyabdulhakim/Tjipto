@@ -316,6 +316,7 @@ def execute_research_rounds(
         if "dense" in plan.retrieval_lanes
         else "auto"
     )
+    plan = replace(plan, retrieval_lanes=(lane,))
     current_variants = tuple(
         replace(variant, retrieval_lane=lane)
         for variant in plan.variants[: max(1, plan.intent.max_variants)]
