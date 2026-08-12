@@ -718,12 +718,13 @@ class RuntimeContractTest(unittest.TestCase):
             "perubahan apa saja yang mengubah UUD 1945",
         ):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "answer_ready", query)
+            self.assertEqual(result["status"], "limited_answer", query)
             self.assertEqual(result["route"], "document_relation", query)
             self.assertEqual(result["intent"], "document_amendment_relation", query)
             self.assertFalse(result["evidence"], query)
             self.assertFalse(result["citations"], query)
             self.assertFalse(result["viewer_refs"], query)
+            self.assertTrue(result["trace_support"], query)
             self.assertEqual(len(result["document_relations"]), 4, query)
             self.assertEqual({row["relation_type"] for row in result["document_relations"]}, {"AMENDED_BY"}, query)
             self.assertTrue(all(row["highlightable"] is False for row in result["document_relations"]), query)
@@ -732,7 +733,7 @@ class RuntimeContractTest(unittest.TestCase):
 
         for query in ("amandemen pertama mengubah apa", "perubahan pertama mengubah apa"):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "answer_ready", query)
+            self.assertEqual(result["status"], "limited_answer", query)
             self.assertEqual(result["route"], "document_relation", query)
             self.assertEqual(result["document_relations"][0]["relation_type"], "AMENDS", query)
             self.assertEqual(result["document_relations"][0]["source_role"], "amendment_1_historical", query)
@@ -1371,7 +1372,7 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_two_artifact_declared_document_scopes_route_to_their_document_relation(self) -> None:
         result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")
-        self.assertEqual(result["status"], "answer_ready")
+        self.assertEqual(result["status"], "limited_answer")
         self.assertEqual(result["route"], "document_relation")
         self.assertEqual(result["intent"], "document_amendment_relation")
         self.assertFalse(result["citations"])

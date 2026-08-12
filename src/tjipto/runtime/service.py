@@ -18,6 +18,7 @@ from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusReposito
 from tjipto.evidence.bbox import viewer_overlay_rectangles
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
+from tjipto.retrieval.bm25 import meaningful_tokens
 from tjipto.retrieval.metadata import (
     metadata_lookup,
     normalize_filters,
@@ -91,6 +92,16 @@ def _clarification_candidate_limit(store: EvidenceStore, query: str, limit: int)
     return len(store.evidence) if any(f" {normalize_intent_text(term)} " in normalized for term in terms) else limit
 
 
+def _research_candidate_limit(store: EvidenceStore, query: str, limit: int) -> int:
+    """Use the corpus-owned bounded research over-fetch budget for sufficiency."""
+    research: dict = getattr(getattr(store, "config", None), "setting", lambda *_: {})("research", {}) or {}
+    try:
+        configured = int(research.get("max_candidates", limit)) if isinstance(research, dict) else limit
+    except (TypeError, ValueError):
+        configured = limit
+    return min(len(store.evidence), max(limit, configured))
+
+
 def _research_intent_for_ask(store: EvidenceStore, semantics, query: str) -> ResearchIntent:
     """Derive complexity from parser/config signals, never evaluation labels."""
     if getattr(semantics, "requested_function", "retrieval") not in {"retrieval", "source_discrepancy"}:
@@ -106,19 +117,22 @@ def _research_intent_for_ask(store: EvidenceStore, semantics, query: str) -> Res
         values = signals.get(name, ()) if isinstance(signals, dict) else ()
         return contains_intent_phrase(normalized_query, tuple(str(value) for value in values if isinstance(value, str)))
 
-    comparison = bool(getattr(semantics, "discrepancy_intent", False)) or configured("comparison")
     generation = research.get("requirement_generation", {}) if isinstance(research, dict) else {}
     delimiters = generation.get("conjunction_delimiters", ()) if isinstance(generation, dict) else ()
     has_conjunction = any(
-        isinstance(delimiter, str)
-        and contains_intent_phrase(normalized_query, (delimiter,))
+        isinstance(delimiter, str) and contains_intent_phrase(normalized_query, (delimiter,))
         for delimiter in delimiters or ()
     )
-    multiple = len(getattr(semantics, "legal_references", ()) or ()) > 1 or (
-        configured("multiple_supports") and has_conjunction
+    requires_conjunction = signals.get("multiple_supports_requires_conjunction", ()) if isinstance(signals, dict) else ()
+    configured_multiple = configured("multiple_supports") and (
+        has_conjunction
+        or not any(contains_intent_phrase(normalized_query, (str(value),)) for value in requires_conjunction or ())
     )
+
+    comparison = bool(getattr(semantics, "discrepancy_intent", False)) or configured("comparison")
+    multiple = len(getattr(semantics, "legal_references", ()) or ()) > 1 or configured_multiple
     relation = configured("relation_traversal")
-    decomposition = comparison or multiple or configured("decomposition")
+    decomposition = comparison or configured("decomposition")
     return ResearchIntent(
         multiple_supports=multiple,
         comparison=comparison,
@@ -151,30 +165,42 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
         minimums = {}
     if len(segments) > 1:
         return tuple(
-            EvidenceRequirement(f"dimension_{index}", retrieval_query=_research_focus_query(research, segment))
+            EvidenceRequirement(f"dimension_{index}", retrieval_query=_research_focus_query(store, research, segment))
             for index, segment in enumerate(segments, 1)
         )
     if getattr(semantics, "decomposition", False) or getattr(semantics, "multiple_supports", False):
         try:
-            minimum = max(1, int(minimums.get("decomposition", 1)))
+            key = "decomposition" if getattr(semantics, "decomposition", False) else "multiple_supports"
+            minimum = max(1, int(minimums.get(key, 1)))
         except (TypeError, ValueError):
             minimum = 1
-        return (EvidenceRequirement("research_scope", retrieval_query=_research_focus_query(research, query), min_supports=minimum),)
+        return (EvidenceRequirement("research_scope", retrieval_query=_research_focus_query(store, research, query), min_supports=minimum),)
     return ()
 
 
-def _research_focus_query(research: dict, query: str) -> str:
+def _research_focus_query(store: EvidenceStore, research: dict, query: str) -> str:
     """Remove only corpus-configured task framing from a requirement query."""
     signals = research.get("complexity_signals", {}) if isinstance(research, dict) else {}
     excluded: set[str] = set()
     if isinstance(signals, dict):
-        for values in signals.values():
+        for name, values in signals.items():
+            if name not in {"comparison", "decomposition"}:
+                continue
             if isinstance(values, (tuple, list)):
                 for value in values:
                     if isinstance(value, str):
                         excluded.update(normalize_intent_text(value).split())
-    words = [word for word in normalize_intent_text(query).split() if word not in excluded]
-    return " ".join(words) or query
+    summary = store.config.setting("document_summary", {}) or {}
+    if isinstance(summary, dict):
+        for value in summary.get("document_terms", ()) or ():
+            if isinstance(value, str):
+                excluded.update(normalize_intent_text(value).split())
+    aliases = {
+        normalize_intent_text(key): normalize_intent_text(value)
+        for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
+    }
+    words = [word for word in meaningful_tokens(query, aliases=aliases) if word not in excluded]
+    return " ".join(sorted(words)) or query
 
 
 def _apply_clarification_constraint(store: EvidenceStore, routed: dict, resolution: dict[str, str]) -> None:
@@ -1002,7 +1028,7 @@ class LegalRuntimeService:
                 intent=research_intent,
                 requirements=active_requirements,
                 planning_provider=self._planning_provider,
-                limit=max(limit, _clarification_candidate_limit(store, query, limit)),
+                limit=_research_candidate_limit(store, query, _clarification_candidate_limit(store, query, limit)),
             )
             if research_result.get("routes"):
                 research_routed = dict(research_result["routes"][0])
@@ -2022,17 +2048,21 @@ def _relation_response(store, routed: dict) -> dict:
             ),
         )
     relations = tuple(_public_document_relation(row) for row in support)
+    # Document-level graph edges are provenance traces, not publishable legal
+    # support. Keep the relation available for audit/UI context but never
+    # promote a trace-only result to an answer-ready publication.
     return project_response(
         routed | {"matches": support},
         AnswerDecision(
-            "answer_ready",
+            "limited_answer",
             "document_relation",
             "document_relation",
             _document_relation_answer(store, relations),
             empty_context_pack("document_relation_source_role_trace"),
             document_relations=relations,
+            trace_support=relations,
             answer_scope="source_role_document_relation",
-            warnings=("document_relation_not_exact_highlightable",),
+            warnings=("document_relation_not_exact_highlightable", "document_relation_trace_only"),
         ),
     )
 

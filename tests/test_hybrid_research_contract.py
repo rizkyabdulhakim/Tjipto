@@ -205,6 +205,48 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(response["sufficiency"]["status"], "complete")
         self.assertGreaterEqual(len(response["citations"]), 2)
 
+    def test_broad_presidential_authority_uses_verified_multi_support(self) -> None:
+        response = LegalRuntimeService().ask("uud", "apa kewenangan presiden menurut UUD")
+        self.assertEqual(response["status"], "answer_ready")
+        self.assertEqual(response["sufficiency"]["status"], "complete")
+        self.assertGreaterEqual(len(response["sufficiency"]["fulfilled_requirement_ids"]), 1)
+        self.assertTrue(response["citations"])
+
+    def test_impeachment_relation_query_collects_both_typed_dimensions(self) -> None:
+        response = LegalRuntimeService().ask("uud", "hubungan DPR dan MK dalam pemakzulan")
+        self.assertEqual(response["status"], "answer_ready")
+        self.assertEqual(response["sufficiency"]["status"], "complete")
+        self.assertEqual(
+            set(response["sufficiency"]["fulfilled_requirement_ids"]),
+            {"dimension_1", "dimension_2"},
+        )
+        self.assertGreaterEqual(len(response["citations"]), 2)
+
+    def test_impeachment_requirement_query_collects_multiple_supports(self) -> None:
+        response = LegalRuntimeService().ask("uud", "apa syarat pemakzulan Presiden")
+        self.assertEqual(response["status"], "answer_ready")
+        self.assertEqual(response["sufficiency"]["status"], "complete")
+        self.assertTrue(response["citations"])
+
+    def test_education_paraphrase_retains_article_support_in_candidate_set(self) -> None:
+        service = LegalRuntimeService()
+        store = service._store("uud")
+        routed = service._route_retrieval("uud", "hak atas pendidikan diatur dimana", store, limit=10)
+        self.assertTrue(any(row.get("citation") == "Pasal 31" for row in routed["matches"]))
+
+    def test_trace_only_document_relation_is_not_answer_ready(self) -> None:
+        response = LegalRuntimeService().ask("uud", "amandemen keempat mengubah apa")
+        self.assertEqual(response["route"], "document_relation")
+        self.assertEqual(response["status"], "limited_answer")
+        self.assertTrue(response["trace_support"])
+        self.assertFalse(response["citations"])
+
+    def test_external_tax_scope_remains_fail_closed_without_clarification(self) -> None:
+        response = LegalRuntimeService().ask("uud", "undang undang tentang pajak")
+        self.assertEqual(response["status"], "insufficient_evidence")
+        self.assertEqual(response["route"], "unsupported_scope")
+        self.assertNotEqual(response.get("clarification_kind"), "concept_facet")
+
     def test_simple_lexical_query_does_not_gain_research_answerability(self) -> None:
         response = LegalRuntimeService().ask("uud", "pekerjaan dan penghidupan yang layak")
         self.assertEqual(response["status"], "limited_answer")

@@ -35,6 +35,7 @@ STOPWORDS = {
     "pada",
     "pasal",
     "tentang",
+    "menurut",
     "undang",
     "undang-undang",
     "untuk",

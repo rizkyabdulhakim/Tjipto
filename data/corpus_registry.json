@@ -32,7 +32,8 @@
         "memperoleh": "mendapat",
         "pengajaran": "pendidikan",
         "pekerjaan": "kerja",
-        "periode": "jabatan"
+        "periode": "jabatan",
+        "pemakzulan": "pemberhentian"
       }
     },
     "normalization_aliases": [
@@ -76,23 +77,30 @@
         ],
         "multiple_supports": [
           "lingkungan hidup",
-          "pendidikan",
           "kewenangan"
+        ],
+        "multiple_supports_requires_conjunction": [
+          "lingkungan hidup"
         ],
         "decomposition": [
           "prosedur",
           "tahapan",
           "syarat"
+        ],
+        "relation_traversal": [
+          "hubungan"
         ]
       },
       "max_variants": 4,
       "max_rounds": 2,
+      "max_candidates": 30,
       "requirement_generation": {
         "conjunction_delimiters": [
           "dan"
         ],
         "minimum_supports": {
-          "decomposition": 3
+          "decomposition": 3,
+          "multiple_supports": 2
         }
       }
     },
@@ -180,6 +188,20 @@
       ],
       "legal_intent_policy": {
         "unsupported_functions": [
+          {
+            "requested_function": "external_tax_law_research",
+            "legal_domain": "tax_law",
+            "rejection_reason": "unsupported_legal_domain",
+            "topic_terms": [
+              "pajak",
+              "perpajakan"
+            ],
+            "unsupported_function_terms": [
+              "undang undang",
+              "peraturan",
+              "ketentuan"
+            ]
+          },
           {
             "requested_function": "criminal_punishment",
             "legal_domain": "criminal_law",
