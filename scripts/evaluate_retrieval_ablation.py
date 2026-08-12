@@ -13,7 +13,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASES = ROOT / "tests/fixtures/uud/research_retrieval_cases.jsonl"
-LANES = ("sparse", "dense", "hybrid", "planning")
+LANES = ("sparse", "dense", "hybrid_rrf", "hybrid_degraded_sparse", "planning")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -63,14 +63,20 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                     status = response.get("status")
                 else:
                     store = service._store(case["corpus_id"])
+                    route_name = "hybrid" if lane in {"hybrid_rrf", "hybrid_degraded_sparse"} else lane
                     response = service._route_retrieval(
-                        case["corpus_id"], case["query"], store, route=lane, limit=args.cutoff
+                        case["corpus_id"], case["query"], store, route=route_name, limit=args.cutoff
                     )
                     rows = tuple(response.get("matches") or ())
                     status = response.get("status")
                 elapsed = time.perf_counter() - started
-                if status in {"dense_unavailable", "unsupported_corpus", "no_results"} and lane == "dense":
-                    execution = "unavailable" if status == "dense_unavailable" else "valid"
+                observed_route = response.get("route")
+                if lane == "dense" and status == "dense_unavailable":
+                    execution = "unavailable"
+                elif lane == "hybrid_rrf" and observed_route != "hybrid":
+                    execution = "unavailable"
+                elif lane == "hybrid_degraded_sparse" and observed_route != "hybrid_degraded_sparse":
+                    execution = "unavailable"
                 else:
                     execution = "valid"
                 results.append(
@@ -78,6 +84,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                         "case_id": case.get("case_id"),
                         "execution_status": execution,
                         "status": status,
+                        "route": observed_route,
+                        "retrieval_degraded_reason": response.get("retrieval_degraded_reason"),
+                        "dense_executed": observed_route == "hybrid" or lane == "dense" and status == "found",
                         "candidate_count": len(rows),
                         "latency_seconds": round(elapsed, 6),
                         "support_ids": [str(row.get("evidence_id")) for row in rows if row.get("evidence_id")],

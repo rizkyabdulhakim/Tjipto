@@ -85,6 +85,14 @@ class HybridResearchContractTest(unittest.TestCase):
             accepted, reason = validate_answer_candidate(SimpleNamespace(lineage_error=lambda row: None, bboxes_for=lambda _id: ()), row)
         self.assertNotEqual(reason, "insufficient_query_support")
 
+    def test_authoritative_requirement_discovery_is_not_vetoed_by_bm25_coverage(self) -> None:
+        from tjipto.retrieval.answer import validate_answer_candidate
+
+        row = {"evidence_id": "exact", "route_sources": ("bm25", "structured"), "lexical_complete_coverage": False}
+        with patch("tjipto.retrieval.answer.lexical_support_is_complete", return_value=False):
+            accepted, reason = validate_answer_candidate(SimpleNamespace(lineage_error=lambda row: None, bboxes_for=lambda _id: ()), row)
+        self.assertNotEqual(reason, "insufficient_query_support")
+
     def test_requirement_assignment_is_verified_and_non_overlapping(self) -> None:
         rows = (
             {"evidence_id": "current", "source_role": "current", "temporal_context": "current"},
@@ -138,6 +146,49 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(calls, [("original", None), ("missing query", "missing")])
         self.assertEqual(result["stop_reason"], "complete")
 
+    def test_requirement_marker_survives_carry_forward_deduplication(self) -> None:
+        from tjipto.retrieval.research import execute_research_rounds
+
+        requirement = EvidenceRequirement("target", retrieval_query="target query", evidence_ids=("same",))
+
+        def retrieve(query, variant):
+            return {"status": "found", "matches": ({"evidence_id": "same", "status": "final"},)}
+
+        with patch("tjipto.retrieval.research.collect_evidence_set", return_value=EvidenceSet(({"evidence_id": "same"},), (("target", ("same",)),), ())):
+            with patch(
+                "tjipto.retrieval.research.assess_sufficiency",
+                side_effect=(
+                    SufficiencyAssessment("insufficient", (), ("target",), (), True),
+                    SufficiencyAssessment("complete", ("target",), (), (), False),
+                ),
+                ):
+                result = execute_research_rounds("original", retrieve, requirements=(requirement,), max_rounds=2)
+        self.assertEqual(result["matches"][0]["_requirement_ids"], ("target",))
+
+    def test_requirement_rediscovery_refreshes_neutral_coverage(self) -> None:
+        from tjipto.retrieval.research import execute_research_rounds
+
+        requirement = EvidenceRequirement("target", retrieval_query="target query", evidence_ids=("same",))
+
+        def retrieve(query, variant):
+            coverage = query == "target query"
+            return {"status": "found", "matches": ({
+                "evidence_id": "same",
+                "lexical_complete_coverage": coverage,
+                "route_sources": ("bm25",),
+            },)}
+
+        with patch("tjipto.retrieval.research.collect_evidence_set", return_value=EvidenceSet(({"evidence_id": "same"},), (("target", ("same",)),), ())):
+            with patch(
+                "tjipto.retrieval.research.assess_sufficiency",
+                side_effect=(
+                    SufficiencyAssessment("insufficient", (), ("target",), (), True),
+                    SufficiencyAssessment("complete", ("target",), (), (), False),
+                ),
+            ):
+                result = execute_research_rounds("original", retrieve, requirements=(requirement,), max_rounds=2)
+        self.assertTrue(result["matches"][0]["lexical_complete_coverage"])
+
     def test_ask_missing_requirement_is_fail_closed_without_attribute_error(self) -> None:
         response = LegalRuntimeService().ask(
             "uud",
@@ -146,6 +197,18 @@ class HybridResearchContractTest(unittest.TestCase):
         )
         self.assertEqual(response["status"], "insufficient_evidence")
         self.assertEqual(response["insufficient_reasons"], ("missing",))
+
+    def test_ask_complex_query_publishes_only_when_requirements_are_complete(self) -> None:
+        service = LegalRuntimeService()
+        response = service.ask("uud", "lingkungan hidup dan pendidikan")
+        self.assertEqual(response["status"], "answer_ready")
+        self.assertEqual(response["sufficiency"]["status"], "complete")
+        self.assertGreaterEqual(len(response["citations"]), 2)
+
+    def test_simple_lexical_query_does_not_gain_research_answerability(self) -> None:
+        response = LegalRuntimeService().ask("uud", "pekerjaan dan penghidupan yang layak")
+        self.assertEqual(response["status"], "limited_answer")
+        self.assertIsNone(response.get("sufficiency"))
 
     def test_planner_retains_original_and_rejects_scope_changes(self) -> None:
         class Provider:

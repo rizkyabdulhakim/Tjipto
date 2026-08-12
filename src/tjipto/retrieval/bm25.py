@@ -12,7 +12,9 @@ TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
 # Shared Indonesian lexical baseline; keep corpus config for legal structure/policy.
 STOPWORDS = {
     "adalah",
+    "atas",
     "apa",
+    "bagaimana",
     "atau",
     "aturan",
     "berapa",
@@ -23,8 +25,10 @@ STOPWORDS = {
     "dengan",
     "di",
     "diatur",
+    "dimana",
     "isi",
     "ke",
+    "kapan",
     "ketentuan",
     "lembaga",
     "lama",
@@ -35,6 +39,7 @@ STOPWORDS = {
     "undang-undang",
     "untuk",
     "yang",
+    "siapa",
 }
 
 

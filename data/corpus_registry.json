@@ -75,7 +75,9 @@
           "bandingkan"
         ],
         "multiple_supports": [
-          "dan"
+          "lingkungan hidup",
+          "pendidikan",
+          "kewenangan"
         ],
         "decomposition": [
           "prosedur",
@@ -84,7 +86,15 @@
         ]
       },
       "max_variants": 4,
-      "max_rounds": 2
+      "max_rounds": 2,
+      "requirement_generation": {
+        "conjunction_delimiters": [
+          "dan"
+        ],
+        "minimum_supports": {
+          "decomposition": 3
+        }
+      }
     },
     "document_summary": {
       "query_terms": [
@@ -843,6 +853,11 @@
           "dpr": "Dewan Perwakilan Rakyat"
         },
         "maximum_options": 3,
+        "direct_retrieval_terms": [
+          "di mana",
+          "dimana",
+          "diatur"
+        ],
         "legal_target_unit_types": [
           "pasal_record"
         ],

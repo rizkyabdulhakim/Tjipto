@@ -336,7 +336,21 @@ def execute_research_rounds(
                 row = dict(source_row)
                 if variant.requirement_id:
                     row["_requirement_ids"] = (*tuple(row.get("_requirement_ids") or ()), variant.requirement_id)
-                rows.setdefault(evidence_id, row)
+                current = rows.get(evidence_id)
+                if current is None:
+                    rows[evidence_id] = row
+                elif variant.requirement_id:
+                    # Requirement-scoped rediscovery may carry fresher
+                    # lexical coverage and route provenance for the same
+                    # verified support.  Keep the canonical row state while
+                    # merging the requirement marker and lane trace.
+                    markers = tuple(current.get("_requirement_ids") or ())
+                    current_routes = tuple(current.get("route_sources") or ())
+                    discovered_routes = tuple(row.get("route_sources") or ())
+                    current.update(row)
+                    current["_requirement_ids"] = tuple(dict.fromkeys((*markers, variant.requirement_id)))
+                    if discovered_routes:
+                        current["route_sources"] = tuple(dict.fromkeys((*current_routes, *discovered_routes)))
         matches = tuple(rows.values())
         if requirements:
             evidence_set = collect_evidence_set(store, matches, requirements)

@@ -104,10 +104,19 @@ def _research_intent_for_ask(store: EvidenceStore, semantics, query: str) -> Res
 
     def configured(name: str) -> bool:
         values = signals.get(name, ()) if isinstance(signals, dict) else ()
-        return any(normalize_intent_text(value) in normalized_query for value in values)
+        return contains_intent_phrase(normalized_query, tuple(str(value) for value in values if isinstance(value, str)))
 
     comparison = bool(getattr(semantics, "discrepancy_intent", False)) or configured("comparison")
-    multiple = len(getattr(semantics, "legal_references", ()) or ()) > 1 or configured("multiple_supports")
+    generation = research.get("requirement_generation", {}) if isinstance(research, dict) else {}
+    delimiters = generation.get("conjunction_delimiters", ()) if isinstance(generation, dict) else ()
+    has_conjunction = any(
+        isinstance(delimiter, str)
+        and contains_intent_phrase(normalized_query, (delimiter,))
+        for delimiter in delimiters or ()
+    )
+    multiple = len(getattr(semantics, "legal_references", ()) or ()) > 1 or (
+        configured("multiple_supports") and has_conjunction
+    )
     relation = configured("relation_traversal")
     decomposition = comparison or multiple or configured("decomposition")
     return ResearchIntent(
@@ -118,6 +127,54 @@ def _research_intent_for_ask(store: EvidenceStore, semantics, query: str) -> Res
         max_variants=max(1, int(research.get("max_variants", 4))) if isinstance(research, dict) else 4,
         max_rounds=max(1, int(research.get("max_rounds", 2))) if isinstance(research, dict) else 2,
     )
+
+
+def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) -> tuple[EvidenceRequirement, ...]:
+    """Derive bounded requirements from corpus-configured query dimensions."""
+    config = getattr(store, "config", None)
+    research: dict = getattr(config, "setting", lambda *_: {})("research", {}) or {}
+    normalized = normalize_intent_text(query)
+    generation = research.get("requirement_generation", {}) if isinstance(research, dict) else {}
+    if not isinstance(generation, dict):
+        return ()
+    delimiters = generation.get("conjunction_delimiters") or ()
+    if not isinstance(delimiters, (tuple, list)):
+        delimiters = ()
+    segments = []
+    for delimiter in delimiters:
+        if isinstance(delimiter, str):
+            segments = [part.strip() for part in normalized.split(f" {normalize_intent_text(delimiter)} ") if part.strip()]
+            if len(segments) > 1:
+                break
+    minimums = generation.get("minimum_supports") or {}
+    if not isinstance(minimums, dict):
+        minimums = {}
+    if len(segments) > 1:
+        return tuple(
+            EvidenceRequirement(f"dimension_{index}", retrieval_query=_research_focus_query(research, segment))
+            for index, segment in enumerate(segments, 1)
+        )
+    if getattr(semantics, "decomposition", False) or getattr(semantics, "multiple_supports", False):
+        try:
+            minimum = max(1, int(minimums.get("decomposition", 1)))
+        except (TypeError, ValueError):
+            minimum = 1
+        return (EvidenceRequirement("research_scope", retrieval_query=_research_focus_query(research, query), min_supports=minimum),)
+    return ()
+
+
+def _research_focus_query(research: dict, query: str) -> str:
+    """Remove only corpus-configured task framing from a requirement query."""
+    signals = research.get("complexity_signals", {}) if isinstance(research, dict) else {}
+    excluded: set[str] = set()
+    if isinstance(signals, dict):
+        for values in signals.values():
+            if isinstance(values, (tuple, list)):
+                for value in values:
+                    if isinstance(value, str):
+                        excluded.update(normalize_intent_text(value).split())
+    words = [word for word in normalize_intent_text(query).split() if word not in excluded]
+    return " ".join(words) or query
 
 
 def _apply_clarification_constraint(store: EvidenceStore, routed: dict, resolution: dict[str, str]) -> None:
@@ -934,13 +991,16 @@ class LegalRuntimeService:
                 "insufficient_reasons": (),
             }
         research_intent = _research_intent_for_ask(store, semantics, query)
+        active_requirements = tuple(evidence_requirements)
+        if research_intent.complex and not active_requirements:
+            active_requirements = _research_requirements_for_ask(store, research_intent, query)
         research_routed = None
-        if research_intent.complex or evidence_requirements:
+        if research_intent.complex or active_requirements:
             research_result = self.research(
                 corpus_id,
                 query,
                 intent=research_intent,
-                requirements=evidence_requirements,
+                requirements=active_requirements,
                 planning_provider=self._planning_provider,
                 limit=max(limit, _clarification_candidate_limit(store, query, limit)),
             )
@@ -1047,8 +1107,8 @@ class LegalRuntimeService:
             )
         if not routed.get("matches") and resolution:
             routed["status"] = "no_results"
-        evidence_set = collect_evidence_set(store, routed.get("matches", ()), evidence_requirements) if evidence_requirements else None
-        assessment = assess_sufficiency(evidence_set, evidence_requirements) if evidence_set is not None else None
+        evidence_set = collect_evidence_set(store, routed.get("matches", ()), active_requirements) if active_requirements else None
+        assessment = assess_sufficiency(evidence_set, active_requirements) if evidence_set is not None else None
         if evidence_set is not None and assessment is not None:
             routed["evidence_set"] = {
                 "support_ids": tuple(str(row.get("evidence_id")) for row in evidence_set.supports),
@@ -1149,7 +1209,9 @@ class LegalRuntimeService:
                 ),
             )
         status = (
-            "limited_answer"
+            "answer_ready"
+            if assessment is not None and assessment.status == "complete"
+            else "limited_answer"
             if ask_route == "lexical_fallback" or (context_pack["trace_support"] and not context_pack["citation_payloads"])
             else "answer_ready"
         )

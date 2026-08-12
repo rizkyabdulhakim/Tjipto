@@ -125,6 +125,8 @@ def _lexical_options(store, semantics, routed: dict, policy: dict, config: dict)
     if routed.get("route") != "bm25" or semantics.legal_references or semantics.source_role:
         return ()
     query = str(routed.get("original_query") or "")
+    if contains_intent_phrase(query, tuple(policy.get("direct_retrieval_terms") or ())):
+        return ()
     clauses = _split_ambiguity(query, tuple(policy.get("choice_terms") or ()))
     if len(clauses) > 1:
         clause_options: list[ClarificationOption] = []

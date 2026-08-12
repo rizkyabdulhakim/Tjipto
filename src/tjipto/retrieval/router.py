@@ -109,6 +109,10 @@ def route_retrieval(
         dense_limit = len(store.evidence) if filters or scope.role else limit
         dense = dense_search(store, normalized["normalized_query"], dense_limit)
         dense_matches = filter_evidence(dense.get("matches", ()), filters)
+        dense_matches = tuple(
+            row | {"route_sources": tuple(dict.fromkeys(("dense", *(row.get("route_sources") or ()) )))}
+            for row in dense_matches
+        )
         if "source_role" not in filters:
             preferred = tuple(row for row in dense_matches if row.get("source_role") == scope.role)
             if preferred:
