@@ -106,7 +106,18 @@ def route_retrieval(
             "reason": "unresolved_source_scope",
         }
     if route == "dense":
-        return envelope | dense_search(store, normalized["normalized_query"], limit)
+        dense_limit = len(store.evidence) if filters or scope.role else limit
+        dense = dense_search(store, normalized["normalized_query"], dense_limit)
+        dense_matches = filter_evidence(dense.get("matches", ()), filters)
+        if "source_role" not in filters:
+            preferred = tuple(row for row in dense_matches if row.get("source_role") == scope.role)
+            if preferred:
+                dense_matches = preferred
+        return envelope | dense | {
+            "status": dense.get("status") if dense.get("status") != "found" else "found" if dense_matches else "no_results",
+            "matches": tuple(dense_matches[:limit]),
+            "reason": None if dense_matches else dense.get("reason", "no_results"),
+        }
 
     service = RetrievalService(store)
     amendment_target, amendment_edges = amendment_relation_lookup(
@@ -324,6 +335,8 @@ def route_retrieval(
             limit,
             candidate_limit=retrieval_settings.get("hybrid_candidate_limit"),
             rrf_k=int(retrieval_settings.get("rrf_k", 60)),
+            filters=filters,
+            preferred_source_role=scope.role,
         )
         filtered = filter_evidence(fused.get("matches", ()), filters)
         if "source_role" not in filters:

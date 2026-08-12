@@ -68,6 +68,24 @@
       "citation": "Dukungan sitasi berbasis bukti tersedia untuk {citation}; sistem tidak menghasilkan kesimpulan hukum.",
       "limited": "Dukungan bukti terbatas tersedia; sistem tidak menghasilkan kesimpulan hukum."
     },
+    "research": {
+      "complexity_signals": {
+        "comparison": [
+          "perbedaan",
+          "bandingkan"
+        ],
+        "multiple_supports": [
+          "dan"
+        ],
+        "decomposition": [
+          "prosedur",
+          "tahapan",
+          "syarat"
+        ]
+      },
+      "max_variants": 4,
+      "max_rounds": 2
+    },
     "document_summary": {
       "query_terms": [
         "ringkasan"

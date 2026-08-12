@@ -6,7 +6,8 @@ from unittest.mock import patch
 
 from tjipto.retrieval.hybrid import RetrievalHit, hybrid_search, reciprocal_rank_fusion
 from tjipto.retrieval.research import ResearchIntent, execute_research, plan_research
-from tjipto.retrieval.sufficiency import EvidenceRequirement, assess_sufficiency, collect_evidence_set
+from tjipto.retrieval.sufficiency import EvidenceRequirement, EvidenceSet, SufficiencyAssessment, assess_sufficiency, collect_evidence_set
+from tjipto.runtime.service import LegalRuntimeService
 
 
 def _hit(evidence_id: str, lane: str, rank: int, score: float) -> RetrievalHit:
@@ -42,6 +43,48 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(result["matches"][0]["evidence_id"], "sparse")
         self.assertNotIn("raw_score", repr(result))
 
+    def test_hybrid_filters_scope_before_final_cutoff(self) -> None:
+        class Index:
+            def search(self, query, limit):
+                return [
+                    {"evidence_id": "wrong", "source_role": "historical", "status": "final", "_bm25_provenance": {"rank": 1}},
+                    {"evidence_id": "right", "source_role": "current", "status": "final", "_bm25_provenance": {"rank": 2}},
+                ][:limit]
+
+        with patch("tjipto.retrieval.hybrid.sparse_index_for_store", return_value=Index()), patch(
+            "tjipto.retrieval.hybrid.dense_search",
+            return_value={"status": "dense_unavailable", "reason": "not_configured", "matches": ()},
+        ):
+            result = hybrid_search(SimpleNamespace(evidence=({}, {})), "query", 1, filters={"status": "final", "source_role": "current"})
+        self.assertEqual([row["evidence_id"] for row in result["matches"]], ["right"])
+
+    def test_hybrid_filters_status_before_final_cutoff(self) -> None:
+        class Index:
+            def search(self, query, limit):
+                return [
+                    {"evidence_id": "draft", "status": "draft", "_bm25_provenance": {"rank": 1}},
+                    {"evidence_id": "final", "status": "final", "_bm25_provenance": {"rank": 2}},
+                ][:limit]
+
+        with patch("tjipto.retrieval.hybrid.sparse_index_for_store", return_value=Index()), patch(
+            "tjipto.retrieval.hybrid.dense_search",
+            return_value={"status": "dense_unavailable", "reason": "not_configured", "matches": ()},
+        ):
+            result = hybrid_search(SimpleNamespace(evidence=({}, {})), "query", 1, filters={"status": "final"})
+        self.assertEqual([row["evidence_id"] for row in result["matches"]], ["final"])
+
+    def test_hybrid_evidence_is_not_vetoed_by_incomplete_bm25_coverage(self) -> None:
+        from tjipto.retrieval.answer import validate_answer_candidate
+
+        row = {"evidence_id": "dense", "route_sources": ("hybrid", "dense"), "lexical_complete_coverage": False}
+        with patch("tjipto.retrieval.answer._optional_rows", return_value=()), patch(
+            "tjipto.retrieval.answer.lexical_support_is_complete", return_value=False
+        ):
+            # Route provenance must not be the reason for rejection; the
+            # remaining grounding checks may still fail on this synthetic row.
+            accepted, reason = validate_answer_candidate(SimpleNamespace(lineage_error=lambda row: None, bboxes_for=lambda _id: ()), row)
+        self.assertNotEqual(reason, "insufficient_query_support")
+
     def test_requirement_assignment_is_verified_and_non_overlapping(self) -> None:
         rows = (
             {"evidence_id": "current", "source_role": "current", "temporal_context": "current"},
@@ -70,6 +113,40 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(assessment.missing_requirement_ids, ("missing",))
         self.assertTrue(assessment.retry_allowed)
 
+    def test_description_alone_cannot_assign_arbitrary_verified_row(self) -> None:
+        row = {"evidence_id": "unrelated", "source_role": "current"}
+        with patch("tjipto.retrieval.sufficiency.validate_answer_candidate", return_value=(True, "answer_evidence")):
+            evidence = collect_evidence_set(SimpleNamespace(), (row,), (EvidenceRequirement("requirement", description="anything"),))
+        self.assertEqual(evidence.missing_requirement_ids, ("requirement",))
+
+    def test_requirement_retry_is_scoped_and_carries_forward_support(self) -> None:
+        from tjipto.retrieval.research import execute_research_rounds
+
+        calls = []
+        requirement = EvidenceRequirement("missing", retrieval_query="missing query", evidence_ids=("target",))
+
+        def retrieve(query, variant):
+            calls.append((query, variant.requirement_id))
+            row = {"evidence_id": "target", "status": "final"} if variant.requirement_id == "missing" else {}
+            return {"status": "found" if row else "no_results", "matches": (row,) if row else ()}
+
+        store = SimpleNamespace()
+        with patch("tjipto.retrieval.research.collect_evidence_set", side_effect=lambda _store, rows, reqs: EvidenceSet((rows[0],) if rows else (), (("missing", ("target",)),) if rows else (), () if rows else ("missing",))), patch(
+            "tjipto.retrieval.research.assess_sufficiency", side_effect=lambda evidence, reqs, **kwargs: SufficiencyAssessment("complete" if evidence.complete else "insufficient", ("missing",) if evidence.complete else (), () if evidence.complete else ("missing",), (), False),
+        ):
+            result = execute_research_rounds("original", retrieve, store=store, requirements=(requirement,), max_rounds=2)
+        self.assertEqual(calls, [("original", None), ("missing query", "missing")])
+        self.assertEqual(result["stop_reason"], "complete")
+
+    def test_ask_missing_requirement_is_fail_closed_without_attribute_error(self) -> None:
+        response = LegalRuntimeService().ask(
+            "uud",
+            "apa isi negara hukum",
+            evidence_requirements=(EvidenceRequirement("missing", retrieval_query="query-not-in-corpus"),),
+        )
+        self.assertEqual(response["status"], "insufficient_evidence")
+        self.assertEqual(response["insufficient_reasons"], ("missing",))
+
     def test_planner_retains_original_and_rejects_scope_changes(self) -> None:
         class Provider:
             def propose(self, request):
@@ -83,6 +160,37 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(plan.variants[0].query, "original")
         self.assertEqual(plan.provider_status, "degraded")
         self.assertIn("scope_invariant_violation", plan.rejection_reasons)
+
+    def test_planner_rejects_requirement_scope_drift(self) -> None:
+        class Provider:
+            def propose(self, request):
+                return {"requirements": [{"requirement_id": "r", "source_role": "historical"}]}
+
+        plan = plan_research(
+            "original",
+            ResearchIntent(comparison=True),
+            provider=Provider(),
+            source_role="current",
+        )
+        self.assertFalse(plan.requirements)
+        self.assertIn("requirement_scope_invariant_violation", plan.rejection_reasons)
+
+    def test_planner_rejects_malformed_requirement_values_without_authority(self) -> None:
+        class Provider:
+            def propose(self, request):
+                return {
+                    "task_kind": [],
+                    "requirements": [
+                        {"requirement_id": "bad", "retrieval_query": ["not", "text"]},
+                        {"requirement_id": "also-bad", "required_entities": "not-a-sequence"},
+                    ],
+                }
+
+        plan = plan_research("original", ResearchIntent(comparison=True), provider=Provider())
+        self.assertFalse(plan.requirements)
+        self.assertIn("task_kind_invalid", plan.rejection_reasons)
+        self.assertIn("requirement_text_field_invalid", plan.rejection_reasons)
+        self.assertIn("requirement_field_type_invalid", plan.rejection_reasons)
 
     def test_simple_queries_do_not_invoke_provider_or_decompose(self) -> None:
         class Provider:

@@ -54,7 +54,8 @@ def graph_expand(store, seeds: tuple[dict, ...], filters: dict, per_seed: int = 
     out = []
     seen = {row["evidence_id"] for row in seeds}
     for seed in seeds[:5]:
-        if "bm25" in set(seed.get("route_sources") or ()) and not seed.get("lexical_complete_coverage", True):
+        seed_routes = set(seed.get("route_sources") or ())
+        if seed_routes == {"bm25"} and not seed.get("lexical_complete_coverage", True):
             continue
         seed_node = f"legal_unit::{seed.get('legal_unit_id')}"
         if seed.get("legal_unit_id") is None:

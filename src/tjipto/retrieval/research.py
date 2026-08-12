@@ -1,9 +1,17 @@
-"""Small, provider-neutral planning values for bounded legal research."""
+"""Provider-neutral planning and bounded requirement-scoped research."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Mapping, Protocol, Sequence
+
+from tjipto.retrieval.sufficiency import (
+    EvidenceRequirement,
+    EvidenceSet,
+    SufficiencyAssessment,
+    assess_sufficiency,
+    collect_evidence_set,
+)
 
 
 @dataclass(frozen=True)
@@ -29,6 +37,8 @@ class QueryVariant:
     explicit_references: tuple[str, ...] = ()
     source_role: str | None = None
     temporal_scope: str | None = None
+    requirement_id: str | None = None
+    retrieval_lane: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -39,6 +49,8 @@ class ResearchPlan:
     provider_status: str = "deterministic"
     rejection_reasons: tuple[str, ...] = ()
     retrieval_lanes: tuple[str, ...] = ("sparse",)
+    requirements: tuple[EvidenceRequirement, ...] = ()
+    task_kind: str = "retrieval"
 
 
 class ResearchPlanningProvider(Protocol):
@@ -54,8 +66,9 @@ def plan_research(
     explicit_references: Sequence[str] = (),
     source_role: str | None = None,
     temporal_scope: str | None = None,
+    requirements: Sequence[EvidenceRequirement] = (),
 ) -> ResearchPlan:
-    """Create a validated plan.  The original query is always variant zero."""
+    """Create a validated plan. The original query is always variant zero."""
     intent = intent or ResearchIntent()
     original = QueryVariant(
         query=query,
@@ -64,8 +77,9 @@ def plan_research(
         source_role=source_role,
         temporal_scope=temporal_scope,
     )
+    base_requirements = tuple(requirements)
     if provider is None or not intent.complex:
-        return ResearchPlan(query, intent, (original,), "deterministic")
+        return ResearchPlan(query, intent, (original,), "deterministic", requirements=base_requirements)
     try:
         proposal = provider.propose(
             {
@@ -78,16 +92,24 @@ def plan_research(
             }
         )
     except Exception:  # provider is optional and untrusted
-        return ResearchPlan(query, intent, (original,), "unavailable", ("provider_failure",))
-    variants, rejected = _validated_variants(
-        proposal,
-        original,
-        intent,
-    )
+        return ResearchPlan(query, intent, (original,), "unavailable", ("provider_failure",), requirements=base_requirements)
+    variants, rejected = _validated_variants(proposal, original, intent)
     lanes = _validated_lanes(proposal)
     if lanes is None:
         rejected = (*rejected, "retrieval_lane_invalid")
         lanes = ("sparse",)
+    proposed_requirements, requirement_rejections = _validated_requirements(
+        proposal,
+        required_entities=required_entities,
+        explicit_references=explicit_references,
+        source_role=source_role,
+        temporal_scope=temporal_scope,
+    )
+    rejected = (*rejected, *requirement_rejections)
+    task_kind = _validated_task_kind(proposal)
+    if task_kind is None:
+        rejected = (*rejected, "task_kind_invalid")
+        task_kind = "retrieval"
     return ResearchPlan(
         query,
         intent,
@@ -95,6 +117,8 @@ def plan_research(
         "accepted" if not rejected else "degraded",
         rejected,
         lanes,
+        tuple(base_requirements) or proposed_requirements,
+        task_kind,
     )
 
 
@@ -158,6 +182,208 @@ def _validated_lanes(proposal: object) -> tuple[str, ...] | None:
     return lanes if lanes and set(lanes) <= allowed else None
 
 
+def _validated_task_kind(proposal: object) -> str | None:
+    if not isinstance(proposal, Mapping) or "task_kind" not in proposal:
+        return "retrieval"
+    value = proposal.get("task_kind")
+    allowed = {"retrieval", "multiple_supports", "comparison", "decomposition", "relation_traversal"}
+    return value if isinstance(value, str) and value in allowed else None
+
+
+def _validated_requirements(
+    proposal: object,
+    *,
+    required_entities: Sequence[str] = (),
+    explicit_references: Sequence[str] = (),
+    source_role: str | None = None,
+    temporal_scope: str | None = None,
+) -> tuple[tuple[EvidenceRequirement, ...], tuple[str, ...]]:
+    if not isinstance(proposal, Mapping):
+        return (), ()
+    raw = proposal.get("requirements", ())
+    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+        return (), ("requirements_malformed",) if raw else ()
+    allowed = {
+        "requirement_id", "description", "retrieval_query", "required_entities", "explicit_references",
+        "legal_target", "relation_family", "concept_facet", "source_role", "temporal_context",
+        "evidence_ids", "legal_unit_ids", "min_supports", "allow_partial", "allow_shared", "shareable_with",
+    }
+    result: list[EvidenceRequirement] = []
+    rejected: list[str] = []
+    seen: set[str] = set()
+    known_ids = {
+        item.get("requirement_id")
+        for item in raw
+        if isinstance(item, Mapping) and isinstance(item.get("requirement_id"), str)
+    }
+    text_fields = {"description", "retrieval_query", "legal_target", "relation_family", "concept_facet", "source_role", "temporal_context"}
+    sequence_fields = {"required_entities", "explicit_references", "evidence_ids", "legal_unit_ids", "shareable_with"}
+    bool_fields = {"allow_partial", "allow_shared"}
+    for item in raw:
+        if not isinstance(item, Mapping) or not isinstance(item.get("requirement_id"), str):
+            rejected.append("requirement_malformed")
+            continue
+        if set(item) - allowed:
+            rejected.append("requirement_unknown_field")
+            continue
+        identifier = str(item["requirement_id"])
+        if not identifier or identifier in seen:
+            rejected.append("requirement_duplicate_or_empty")
+            continue
+        if any(item.get(field) is not None and not isinstance(item.get(field), str) for field in text_fields):
+            rejected.append("requirement_text_field_invalid")
+            continue
+        invalid_sequences = any(field in item and not _valid_string_sequence(item.get(field)) for field in sequence_fields)
+        if invalid_sequences or any(field in item and not isinstance(item.get(field), bool) for field in bool_fields):
+            rejected.append("requirement_field_type_invalid")
+            continue
+        try:
+            minimum = int(item.get("min_supports", 1))
+        except (TypeError, ValueError):
+            rejected.append("requirement_min_supports_invalid")
+            continue
+        if isinstance(item.get("min_supports", 1), bool) or minimum < 1:
+            rejected.append("requirement_min_supports_invalid")
+            continue
+        entities = tuple(str(value) for value in item.get("required_entities") or ())
+        references = tuple(str(value) for value in item.get("explicit_references") or ())
+        if (
+            set(entities) != set(required_entities)
+            or set(references) != set(explicit_references)
+            or item.get("source_role", source_role) != source_role
+            or item.get("temporal_context", temporal_scope) != temporal_scope
+        ):
+            rejected.append("requirement_scope_invariant_violation")
+            continue
+        requirement = EvidenceRequirement(
+            requirement_id=identifier,
+            description=str(item.get("description") or ""),
+            retrieval_query=item.get("retrieval_query"),
+            required_entities=entities,
+            explicit_references=references,
+            legal_target=item.get("legal_target"),
+            relation_family=item.get("relation_family"),
+            concept_facet=item.get("concept_facet"),
+            source_role=item.get("source_role"),
+            temporal_context=item.get("temporal_context"),
+            evidence_ids=tuple(str(value) for value in item.get("evidence_ids") or ()),
+            legal_unit_ids=tuple(str(value) for value in item.get("legal_unit_ids") or ()),
+            min_supports=minimum,
+            allow_partial=bool(item.get("allow_partial", False)),
+            allow_shared=bool(item.get("allow_shared", False)),
+            shareable_with=tuple(str(value) for value in item.get("shareable_with") or ()),
+        )
+        if not requirement.typed:
+            rejected.append("requirement_unbound")
+            continue
+        if any(value not in known_ids or value == identifier for value in requirement.shareable_with):
+            rejected.append("requirement_share_target_invalid")
+            continue
+        result.append(requirement)
+        seen.add(identifier)
+    return tuple(result), tuple(rejected)
+
+
+def _valid_string_sequence(value: object) -> bool:
+    if value is None:
+        return True
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and all(isinstance(item, str) for item in value)
+
+
+def execute_research_rounds(
+    query: str,
+    retrieve,
+    *,
+    store=None,
+    intent: ResearchIntent | None = None,
+    provider: ResearchPlanningProvider | None = None,
+    requirements: Sequence[EvidenceRequirement] = (),
+    max_rounds: int | None = None,
+) -> dict:
+    """Run retrieval rounds, retrying only requirements still missing."""
+    plan = plan_research(query, intent, provider=provider, requirements=requirements)
+    requirements = tuple(plan.requirements)
+    rounds_limit = min(
+        max(1, int(max_rounds if max_rounds is not None else plan.intent.max_rounds)),
+        max(1, plan.intent.max_rounds),
+    )
+    rows: dict[str, dict] = {}
+    routes: list[dict] = []
+    lane = (
+        "hybrid"
+        if "hybrid" in plan.retrieval_lanes or (plan.intent.complex and plan.provider_status == "deterministic")
+        else "dense"
+        if "dense" in plan.retrieval_lanes
+        else "auto"
+    )
+    current_variants = tuple(
+        replace(variant, retrieval_lane=lane)
+        for variant in plan.variants[: max(1, plan.intent.max_variants)]
+    )
+    evidence_set: EvidenceSet | None = None
+    assessment: SufficiencyAssessment | None = None
+    stop_reason = "max_rounds"
+    for round_number in range(rounds_limit):
+        before = len(rows)
+        for variant in current_variants:
+            result = retrieve(variant.query, variant)
+            route = result if isinstance(result, Mapping) and "matches" in result else {"matches": tuple(result or ())}
+            routes.append(dict(route) | {"research_round": round_number + 1, "query_variant": variant.origin})
+            for source_row in route.get("matches", ()):
+                evidence_id = str(source_row.get("evidence_id") or "")
+                if not evidence_id:
+                    continue
+                row = dict(source_row)
+                if variant.requirement_id:
+                    row["_requirement_ids"] = (*tuple(row.get("_requirement_ids") or ()), variant.requirement_id)
+                rows.setdefault(evidence_id, row)
+        matches = tuple(rows.values())
+        if requirements:
+            evidence_set = collect_evidence_set(store, matches, requirements)
+            assessment = assess_sufficiency(evidence_set, requirements, retry_budget=rounds_limit - round_number - 1)
+            if assessment.status == "complete":
+                stop_reason = "complete"
+                break
+            unresolved = tuple(
+                requirement
+                for requirement in requirements
+                if requirement.requirement_id in assessment.missing_requirement_ids
+            )
+            if round_number + 1 >= rounds_limit:
+                stop_reason = "max_rounds"
+                break
+            current_variants = tuple(
+                QueryVariant(
+                    query=requirement.retrieval_query or query,
+                    origin=f"requirement:{requirement.requirement_id}",
+                    source_role=requirement.source_role,
+                    temporal_scope=requirement.temporal_context,
+                    requirement_id=requirement.requirement_id,
+                    retrieval_lane=lane,
+                )
+                for requirement in unresolved
+            )
+            if not current_variants:
+                stop_reason = "no_progress"
+                break
+        else:
+            stop_reason = "complete" if len(rows) > before else "no_progress"
+            break
+        if len(rows) == before and round_number > 0 and current_variants:
+            stop_reason = "no_progress"
+            break
+    matches = tuple(rows.values())
+    return {
+        "plan": plan,
+        "routes": tuple(routes),
+        "matches": matches,
+        "evidence_set": evidence_set,
+        "sufficiency": assessment,
+        "stop_reason": stop_reason,
+        "rounds": len({route.get("research_round") for route in routes}),
+    }
+
+
 def execute_research(
     query: str,
     retrieve,
@@ -166,16 +392,9 @@ def execute_research(
     provider: ResearchPlanningProvider | None = None,
     max_rounds: int | None = None,
 ) -> tuple[ResearchPlan, tuple[dict, ...]]:
-    """Run bounded variants, retaining the original query and deduplicating IDs."""
-    plan = plan_research(query, intent, provider=provider)
-    rounds = min(max_rounds if max_rounds is not None else plan.intent.max_rounds, plan.intent.max_rounds)
-    rows: dict[str, dict] = {}
-    for variant in plan.variants[: max(1, rounds)]:
-        for row in retrieve(variant.query, variant):
-            evidence_id = str(row.get("evidence_id") or "")
-            if evidence_id and evidence_id not in rows:
-                rows[evidence_id] = dict(row)
-    return plan, tuple(rows.values())
+    """Compatibility projection for callers that only need plan and rows."""
+    result = execute_research_rounds(query, retrieve, intent=intent, provider=provider, max_rounds=max_rounds)
+    return result["plan"], result["matches"]
 
 
 __all__ = [
@@ -184,5 +403,6 @@ __all__ = [
     "ResearchPlan",
     "ResearchPlanningProvider",
     "execute_research",
+    "execute_research_rounds",
     "plan_research",
 ]

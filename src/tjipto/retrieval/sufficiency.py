@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from dataclasses import dataclass
+from collections.abc import Sequence
+from typing import Iterable
 
 from tjipto.retrieval.answer import validate_answer_candidate
 
@@ -12,6 +13,12 @@ from tjipto.retrieval.answer import validate_answer_candidate
 class EvidenceRequirement:
     requirement_id: str
     description: str = ""
+    retrieval_query: str | None = None
+    required_entities: tuple[str, ...] = ()
+    explicit_references: tuple[str, ...] = ()
+    legal_target: str | None = None
+    relation_family: str | None = None
+    concept_facet: str | None = None
     source_role: str | None = None
     temporal_context: str | None = None
     evidence_ids: tuple[str, ...] = ()
@@ -19,9 +26,26 @@ class EvidenceRequirement:
     min_supports: int = 1
     allow_partial: bool = False
     allow_shared: bool = False
-    predicate: Callable[[dict], bool] | None = field(default=None, compare=False, repr=False)
+    shareable_with: tuple[str, ...] = ()
+
+    @property
+    def typed(self) -> bool:
+        return bool(
+            self.retrieval_query
+            or self.required_entities
+            or self.explicit_references
+            or self.legal_target
+            or self.relation_family
+            or self.concept_facet
+            or self.source_role
+            or self.temporal_context
+            or self.evidence_ids
+            or self.legal_unit_ids
+        )
 
     def accepts(self, row: dict) -> bool:
+        if not self.typed:
+            return False
         if self.source_role is not None and row.get("source_role") != self.source_role:
             return False
         if self.temporal_context is not None and row.get("temporal_context") != self.temporal_context:
@@ -30,7 +54,44 @@ class EvidenceRequirement:
             return False
         if self.legal_unit_ids and str(row.get("legal_unit_id")) not in set(self.legal_unit_ids):
             return False
-        return self.predicate(row) if self.predicate is not None else True
+        if self.required_entities:
+            entities = {
+                str(row.get(key) or "").casefold()
+                for key in ("entity_identity", "printed_name", "institution")
+            }
+            if not {str(item).casefold() for item in self.required_entities} <= entities:
+                return False
+        if self.explicit_references:
+            haystack = " ".join(
+                str(row.get(key) or "")
+                for key in ("citation", "label", "legal_unit_id", "hierarchy", "quoted_text")
+            ).casefold()
+            if not all(str(item).casefold() in haystack for item in self.explicit_references):
+                return False
+        if self.legal_target:
+            haystack = " ".join(
+                str(row.get(key) or "") for key in ("citation", "label", "legal_unit_id", "hierarchy")
+            ).casefold()
+            if str(self.legal_target).casefold() not in haystack:
+                return False
+        if self.relation_family and row.get("relation_family", row.get("relation_type")) != self.relation_family:
+            return False
+        if self.concept_facet and row.get("concept_facet") != self.concept_facet:
+            return False
+        return True
+
+    def discovered_for(self, row: dict) -> bool:
+        """Require requirement-scoped discovery for query-bound requirements."""
+        if not self.typed:
+            return False
+        scoped: set[str] = set()
+        for key in ("_requirement_ids", "research_requirement_ids", "requirement_ids"):
+            values = row.get(key) or ()
+            values = (values,) if isinstance(values, str) else values if isinstance(values, Sequence) else ()
+            scoped.update(str(value) for value in values)
+        if self.retrieval_query or self.required_entities or self.explicit_references or self.relation_family:
+            return self.requirement_id in scoped or bool(set(scoped) & set(self.shareable_with))
+        return True
 
 
 @dataclass(frozen=True)
@@ -76,6 +137,7 @@ def collect_evidence_set(store, matches: Iterable[dict], requirements: Iterable[
     used: set[str] = set()
     assignments: list[tuple[str, tuple[str, ...]]] = []
     supports: list[dict] = []
+    support_ids: set[str] = set()
     missing: list[str] = []
     reasons: list[tuple[str, str]] = []
     for requirement in requirements:
@@ -83,7 +145,7 @@ def collect_evidence_set(store, matches: Iterable[dict], requirements: Iterable[
         for evidence_id, row in available.items():
             if evidence_id in used and not requirement.allow_shared:
                 continue
-            if requirement.accepts(row):
+            if requirement.discovered_for(row) and requirement.accepts(row):
                 selected.append(row)
                 if len(selected) >= max(1, requirement.min_supports):
                     break
@@ -93,7 +155,10 @@ def collect_evidence_set(store, matches: Iterable[dict], requirements: Iterable[
             continue
         selected_ids = tuple(str(row["evidence_id"]) for row in selected)
         assignments.append((requirement.requirement_id, selected_ids))
-        supports.extend(selected)
+        for row in selected:
+            if str(row["evidence_id"]) not in support_ids:
+                supports.append(row)
+                support_ids.add(str(row["evidence_id"]))
         if not requirement.allow_shared:
             used.update(selected_ids)
     return EvidenceSet(tuple(supports), tuple(assignments), tuple(missing), tuple(reasons))

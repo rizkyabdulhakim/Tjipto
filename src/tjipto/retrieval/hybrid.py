@@ -111,25 +111,45 @@ def hybrid_search(
     provider: DenseEmbeddingProvider | None = None,
     candidate_limit: int | None = None,
     rrf_k: int = DEFAULT_RRF_K,
+    filters: Mapping[str, object] | None = None,
+    preferred_source_role: str | None = None,
 ) -> dict:
     """Run bounded sparse+dense recall and return publication-safe rows."""
-    budget = candidate_limit if candidate_limit is not None else limit
+    filters = dict(filters or {})
+    # Scope is authoritative.  Fetch the complete verified snapshot when a
+    # scope or preferred-role constraint is active so filtering happens before
+    # the final cutoff rather than after a lane has discarded valid rows.
+    scoped = bool(preferred_source_role or filters)
+    snapshot_size = len(getattr(store, "evidence", ()))
+    budget = snapshot_size if scoped and snapshot_size else candidate_limit if candidate_limit is not None else limit
     if budget < 1:
         return {"status": "no_results", "route": "hybrid", "matches": (), "reason": "invalid_candidate_budget"}
-    sparse_rows = sparse_index_for_store(store).search(query, budget)
+    sparse_rows = _filter_rows(sparse_index_for_store(store).search(query, budget), filters)
     dense_result = dense_search(store, query, budget, provider=provider, include_provenance=True)
-    dense_rows = tuple(dense_result.get("matches") or ()) if dense_result.get("status") == "found" else ()
+    dense_rows = (
+        _filter_rows(tuple(dense_result.get("matches") or ()), filters)
+        if dense_result.get("status") == "found"
+        else ()
+    )
     degraded = dense_result.get("reason") if dense_result.get("status") == "dense_unavailable" else None
     hits = reciprocal_rank_fusion(
         {"bm25": normalize_hits(sparse_rows, "bm25"), "dense": normalize_hits(dense_rows, "dense")},
         k=rrf_k,
-        limit=limit,
+        limit=None,
     )
+    if preferred_source_role:
+        preferred = tuple(hit for hit in hits if hit.source_role == preferred_source_role)
+        if preferred:
+            hits = preferred
+    hits = hits[:limit]
+    dense_executed = dense_result.get("status") == "found"
+    lane_route = "hybrid" if dense_executed else "bm25"
+    result_route = "hybrid" if dense_executed else "hybrid_degraded_sparse"
     matches = []
     for hit in hits:
         row = dict(hit.row)
         lanes = tuple(sorted({lane for lane, *_ in hit.lane_provenance}))
-        row["route_sources"] = ("hybrid", *lanes) if lanes else ("hybrid",)
+        row["route_sources"] = tuple(dict.fromkeys((lane_route, *lanes))) if lanes else (lane_route,)
         row["candidate_type"] = row.get("candidate_type") or "lexical_candidate"
         row.pop("_bm25_provenance", None)
         row.pop("_dense_provenance", None)
@@ -137,12 +157,22 @@ def hybrid_search(
         matches.append(row)
     return {
         "status": "found" if matches else "no_results",
-        "route": "hybrid",
+        "route": result_route,
         "matches": tuple(matches),
         "reason": None if matches else (degraded or "no_results"),
         "retrieval_degraded_reason": degraded,
         "candidate_count": len(hits),
     }
+
+
+def _filter_rows(rows: Iterable[dict], filters: Mapping[str, object]) -> tuple[dict, ...]:
+    return tuple(
+        row
+        for row in rows
+        if ("status" not in filters or row.get("status") == filters["status"])
+        and ("source_role" not in filters or row.get("source_role") == filters["source_role"])
+        and ("temporal_context" not in filters or row.get("temporal_context") == filters["temporal_context"])
+    )
 
 
 rrf_fuse = reciprocal_rank_fusion

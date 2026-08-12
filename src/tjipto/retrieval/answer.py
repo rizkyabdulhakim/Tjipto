@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-DIRECT_ROUTES = {"exact", "metadata", "relation", "structured", "bm25", "hybrid"}
+DIRECT_ROUTES = {"exact", "metadata", "relation", "structured", "bm25", "hybrid", "hybrid_degraded_sparse"}
 REQUIRED_FIELDS = (
     "citation",
     "quoted_text",
@@ -127,7 +127,11 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
             return False, "noncanonical_trace_not_answerable"
     if not (DIRECT_ROUTES & set(row.get("route_sources") or ())):
         return False, "graph_only"
-    if "bm25" in set(row.get("route_sources") or ()) and not lexical_support_is_complete(row):
+    routes = set(row.get("route_sources") or ())
+    # Lexical coverage is a discovery signal.  It may veto a sparse-only
+    # candidate, but never a candidate independently found by dense or hybrid
+    # retrieval; final support remains owned by the checks above.
+    if "bm25" in routes and not ({"dense", "hybrid"} & routes) and not lexical_support_is_complete(row):
         return False, "insufficient_query_support"
     if row.get("status") != "final":
         return False, "not_final"

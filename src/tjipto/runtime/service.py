@@ -26,7 +26,7 @@ from tjipto.retrieval.metadata import (
 from tjipto.corpora.source_arbitration import resolve_source_scope
 from tjipto.retrieval.relations import amendment_relation_target
 from tjipto.retrieval.router import route_retrieval
-from tjipto.retrieval.research import ResearchIntent, ResearchPlanningProvider, plan_research
+from tjipto.retrieval.research import ResearchIntent, ResearchPlanningProvider, execute_research_rounds
 from tjipto.retrieval.sufficiency import EvidenceRequirement, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.claim_support import all_supported, verify_claims
 from tjipto.runtime.clarification import clarification_decision
@@ -91,6 +91,35 @@ def _clarification_candidate_limit(store: EvidenceStore, query: str, limit: int)
     return len(store.evidence) if any(f" {normalize_intent_text(term)} " in normalized for term in terms) else limit
 
 
+def _research_intent_for_ask(store: EvidenceStore, semantics, query: str) -> ResearchIntent:
+    """Derive complexity from parser/config signals, never evaluation labels."""
+    if getattr(semantics, "requested_function", "retrieval") not in {"retrieval", "source_discrepancy"}:
+        return ResearchIntent()
+    config = getattr(store, "config", None)
+    research: dict = getattr(config, "setting", lambda *_: {})("research", {}) or {}
+    signals = research.get("complexity_signals", {}) if isinstance(research, dict) else {}
+    # The trace carries only parser-owned facts.  Config phrases are corpus
+    # policy; generic runtime does not maintain a legal vocabulary table.
+    normalized_query = normalize_intent_text(query)
+
+    def configured(name: str) -> bool:
+        values = signals.get(name, ()) if isinstance(signals, dict) else ()
+        return any(normalize_intent_text(value) in normalized_query for value in values)
+
+    comparison = bool(getattr(semantics, "discrepancy_intent", False)) or configured("comparison")
+    multiple = len(getattr(semantics, "legal_references", ()) or ()) > 1 or configured("multiple_supports")
+    relation = configured("relation_traversal")
+    decomposition = comparison or multiple or configured("decomposition")
+    return ResearchIntent(
+        multiple_supports=multiple,
+        comparison=comparison,
+        decomposition=decomposition,
+        relation_traversal=relation,
+        max_variants=max(1, int(research.get("max_variants", 4))) if isinstance(research, dict) else 4,
+        max_rounds=max(1, int(research.get("max_rounds", 2))) if isinstance(research, dict) else 2,
+    )
+
+
 def _apply_clarification_constraint(store: EvidenceStore, routed: dict, resolution: dict[str, str]) -> None:
     """Filter routed candidates without changing the user's semantic query."""
     legal_target = resolution.get("legal_target")
@@ -130,6 +159,7 @@ class LegalRuntimeService:
         *,
         answer_provider=None,
         external_wording: bool | None = None,
+        planning_provider: ResearchPlanningProvider | None = None,
     ):
         self.registry = CorpusRegistry(repo_root, strategies=strategy_registry)
         self.repository = VerifiedCorpusRepository(self.registry)
@@ -145,6 +175,7 @@ class LegalRuntimeService:
         self._bookmarks = BookmarkRepository()
         self._external_wording = wording_enabled_from_environment() if external_wording is None else external_wording
         self._answer_provider = answer_provider
+        self._planning_provider = planning_provider
         if self._external_wording and self._answer_provider is None:
             self._answer_provider = wording_provider_from_environment()
 
@@ -188,29 +219,28 @@ class LegalRuntimeService:
         store = self._store(corpus_id)
         if store is None:
             return {"status": "insufficient", "reason": self._integrity_error or "corpus_unavailable", "matches": (), "plan": None}
-        plan = plan_research(query, intent, provider=planning_provider)
-        rounds = min(max_rounds if max_rounds is not None else plan.intent.max_rounds, plan.intent.max_rounds)
-        rows: dict[str, dict] = {}
-        routes: list[dict] = []
-        retrieval_route = "hybrid" if "hybrid" in plan.retrieval_lanes else "dense" if "dense" in plan.retrieval_lanes else "auto"
-        for variant in plan.variants[: max(1, rounds)]:
-            route = self._route_retrieval(corpus_id, variant.query, store, limit=limit, route=retrieval_route)
-            routes.append(route)
-            for row in route.get("matches", ()):
-                evidence_id = str(row.get("evidence_id") or "")
-                if evidence_id and evidence_id not in rows:
-                    rows[evidence_id] = dict(row)
-        matches = tuple(rows.values())
-        evidence_set = collect_evidence_set(store, matches, requirements) if requirements else None
-        assessment = assess_sufficiency(evidence_set, requirements) if evidence_set is not None else None
+        def retrieve(variant_query, variant):
+            route = variant.retrieval_lane
+            result = self._route_retrieval(corpus_id, variant_query, store, limit=limit, route=route)
+            if route == "dense" and result.get("status") == "dense_unavailable":
+                fallback = self._route_retrieval(corpus_id, variant_query, store, limit=limit, route="auto")
+                return dict(fallback) | {"retrieval_degraded_reason": result.get("reason", "dense_unavailable")}
+            return result
+
+        result = execute_research_rounds(
+            query,
+            retrieve,
+            store=store,
+            intent=intent,
+            provider=planning_provider,
+            requirements=requirements,
+            max_rounds=max_rounds,
+        )
+        assessment = result["sufficiency"]
         return {
-            "status": assessment.status if assessment is not None else ("found" if matches else "insufficient"),
+            "status": assessment.status if assessment is not None else ("found" if result["matches"] else "insufficient"),
             "original_query": query,
-            "plan": plan,
-            "routes": tuple(routes),
-            "matches": matches,
-            "evidence_set": evidence_set,
-            "sufficiency": assessment,
+            **result,
         }
 
     def _telemetry_corpus_id(self, corpus_id: str) -> str:
@@ -903,6 +933,23 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": (),
             }
+        research_intent = _research_intent_for_ask(store, semantics, query)
+        research_routed = None
+        if research_intent.complex or evidence_requirements:
+            research_result = self.research(
+                corpus_id,
+                query,
+                intent=research_intent,
+                requirements=evidence_requirements,
+                planning_provider=self._planning_provider,
+                limit=max(limit, _clarification_candidate_limit(store, query, limit)),
+            )
+            if research_result.get("routes"):
+                research_routed = dict(research_result["routes"][0])
+                research_routed["matches"] = research_result.get("matches", ())
+                research_routed["status"] = "found" if research_routed["matches"] else "no_results"
+                research_routed["research_plan"] = research_result.get("plan")
+                research_routed["research_stop_reason"] = research_result.get("stop_reason")
         scope = scope_guard_context(store, query, capability=semantics.capability_decision)
         scoped_routed = None
         if scope:
@@ -979,7 +1026,7 @@ class LegalRuntimeService:
             semantic_filters["source_role"] = resolution["source_role"]
         if semantics.source_role and "source_role" not in semantic_filters:
             semantic_filters["source_role"] = semantics.source_role
-        routed = scoped_routed or self._route_retrieval(
+        routed = scoped_routed or research_routed or self._route_retrieval(
             corpus_id,
             query,
             store,
@@ -1016,6 +1063,10 @@ class LegalRuntimeService:
                 "missing_reasons": assessment.missing_reasons,
                 "retry_allowed": assessment.retry_allowed,
             }
+        routed["matches"] = tuple(
+            {key: value for key, value in row.items() if not str(key).startswith("_")}
+            for row in routed.get("matches", ())
+        )
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
         routed["original_query"] = query
@@ -1053,7 +1104,7 @@ class LegalRuntimeService:
                     "none",
                     templates["insufficient"],
                     context_pack,
-                    insufficient_reasons=tuple(routed["sufficiency"].missing_requirement_ids),
+                    insufficient_reasons=tuple(assessment.missing_requirement_ids),
                 ),
             )
         answer_matches = evidence_set.supports if evidence_set is not None else routed["matches"]
@@ -1786,6 +1837,7 @@ def _ask_route(route: str) -> str:
         "scope_unresolved": "legal_reference",
         "bm25": "lexical_fallback",
         "hybrid": "lexical_fallback",
+        "hybrid_degraded_sparse": "lexical_fallback",
     }.get(route, route)
 
 
