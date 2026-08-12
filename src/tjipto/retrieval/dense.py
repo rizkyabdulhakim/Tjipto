@@ -297,7 +297,14 @@ class DenseIndex:
         return results
 
 
-def dense_search(store, query: str, limit: int = 10, *, provider: DenseEmbeddingProvider | None = None) -> dict:
+def dense_search(
+    store,
+    query: str,
+    limit: int = 10,
+    *,
+    provider: DenseEmbeddingProvider | None = None,
+    include_provenance: bool = False,
+) -> dict:
     configured = bool(
         getattr(store.config, "manifest", {}).get("dense_retrieval")
         or getattr(store.config, "setting", lambda *_: False)("dense_retrieval", False)
@@ -311,8 +318,9 @@ def dense_search(store, query: str, limit: int = 10, *, provider: DenseEmbedding
         if query_batch.identity != index.model_identity:
             raise DenseUnavailable("model_identity_mismatch")
         matches = index.search(query_batch.vectors[0], limit)
-        for row in matches:
-            row.pop("_dense_provenance", None)
+        if not include_provenance:
+            for row in matches:
+                row.pop("_dense_provenance", None)
         return {"status": "found" if matches else "no_results", "route": "dense", "matches": tuple(matches), "reason": None}
     except DenseError as error:
         return _unavailable(error.code)

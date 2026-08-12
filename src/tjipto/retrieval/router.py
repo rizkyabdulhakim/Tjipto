@@ -14,6 +14,7 @@ from tjipto.corpora.source_arbitration import resolve_source_scope
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.relations import amendment_relation_lookup, has_relation_target, relation_lookup
 from tjipto.retrieval.service import RetrievalService
+from tjipto.retrieval.hybrid import hybrid_search
 from tjipto.retrieval.structured import has_instrument_target, has_structured_target, structured_failure_reason, structured_lookup
 
 
@@ -308,6 +309,32 @@ def route_retrieval(
             "intent": "structured_lookup",
             "reason": structured_failure_reason(store, normalized["normalized_query"], strategy=structured_strategy)
             or "structured_not_found",
+        }
+
+    retrieval_settings: dict = getattr(config, "setting", lambda *_: {})("retrieval", {}) or {}
+    dense_enabled = bool(
+        getattr(config, "manifest", {}).get("dense_retrieval")
+        or getattr(config, "setting", lambda *_: False)("dense_retrieval", False)
+    )
+    hybrid_enabled = route == "hybrid" or retrieval_settings.get("mode") == "hybrid" or (route == "auto" and dense_enabled)
+    if hybrid_enabled:
+        fused = hybrid_search(
+            store,
+            normalized["normalized_query"],
+            limit,
+            candidate_limit=retrieval_settings.get("hybrid_candidate_limit"),
+            rrf_k=int(retrieval_settings.get("rrf_k", 60)),
+        )
+        filtered = filter_evidence(fused.get("matches", ()), filters)
+        if "source_role" not in filters:
+            preferred = tuple(row for row in filtered if row.get("source_role") == scope.role)
+            if preferred:
+                filtered = preferred
+        return envelope | fused | {
+            "status": "found" if filtered else "no_results",
+            "matches": tuple(filtered[:limit]),
+            "reason": None if filtered else ("filters_removed_all" if fused.get("matches") else fused.get("reason", "no_results")),
+            "intent": "natural_language",
         }
 
     matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))

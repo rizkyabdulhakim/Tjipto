@@ -26,6 +26,8 @@ from tjipto.retrieval.metadata import (
 from tjipto.corpora.source_arbitration import resolve_source_scope
 from tjipto.retrieval.relations import amendment_relation_target
 from tjipto.retrieval.router import route_retrieval
+from tjipto.retrieval.research import ResearchIntent, ResearchPlanningProvider, plan_research
+from tjipto.retrieval.sufficiency import EvidenceRequirement, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.claim_support import all_supported, verify_claims
 from tjipto.runtime.clarification import clarification_decision
 from tjipto.runtime.answer_arbitration import document_summary_query, source_document_response
@@ -170,6 +172,46 @@ class LegalRuntimeService:
         result = route_retrieval(corpus_id, query, store, **kwargs)
         self.telemetry.emit("retrieval_route", corpus_id=self._telemetry_corpus_id(corpus_id), route=result["route"], status=result["status"])
         return result
+
+    def research(
+        self,
+        corpus_id: str,
+        query: str,
+        *,
+        intent: ResearchIntent | None = None,
+        requirements: tuple[EvidenceRequirement, ...] = (),
+        planning_provider: ResearchPlanningProvider | None = None,
+        limit: int = 10,
+        max_rounds: int | None = None,
+    ) -> dict:
+        """Run bounded retrieval variants and assess verified requirements."""
+        store = self._store(corpus_id)
+        if store is None:
+            return {"status": "insufficient", "reason": self._integrity_error or "corpus_unavailable", "matches": (), "plan": None}
+        plan = plan_research(query, intent, provider=planning_provider)
+        rounds = min(max_rounds if max_rounds is not None else plan.intent.max_rounds, plan.intent.max_rounds)
+        rows: dict[str, dict] = {}
+        routes: list[dict] = []
+        retrieval_route = "hybrid" if "hybrid" in plan.retrieval_lanes else "dense" if "dense" in plan.retrieval_lanes else "auto"
+        for variant in plan.variants[: max(1, rounds)]:
+            route = self._route_retrieval(corpus_id, variant.query, store, limit=limit, route=retrieval_route)
+            routes.append(route)
+            for row in route.get("matches", ()):
+                evidence_id = str(row.get("evidence_id") or "")
+                if evidence_id and evidence_id not in rows:
+                    rows[evidence_id] = dict(row)
+        matches = tuple(rows.values())
+        evidence_set = collect_evidence_set(store, matches, requirements) if requirements else None
+        assessment = assess_sufficiency(evidence_set, requirements) if evidence_set is not None else None
+        return {
+            "status": assessment.status if assessment is not None else ("found" if matches else "insufficient"),
+            "original_query": query,
+            "plan": plan,
+            "routes": tuple(routes),
+            "matches": matches,
+            "evidence_set": evidence_set,
+            "sufficiency": assessment,
+        }
 
     def _telemetry_corpus_id(self, corpus_id: str) -> str:
         config = self.registry.resolve(corpus_id)
@@ -721,7 +763,13 @@ class LegalRuntimeService:
         return bookmark | {"status": status}
 
     def ask(
-        self, corpus_id: str, query: str, limit: int = 3, filters: dict | None = None, clarification: dict[str, str] | None = None
+        self,
+        corpus_id: str,
+        query: str,
+        limit: int = 3,
+        filters: dict | None = None,
+        clarification: dict[str, str] | None = None,
+        evidence_requirements: tuple[EvidenceRequirement, ...] = (),
     ) -> dict:
         store = self._store(corpus_id)
         if store is None:
@@ -735,7 +783,14 @@ class LegalRuntimeService:
             config=store.config,
         )
         if normalized_summary and normalized_summary != query:
-            result = self.ask(corpus_id, normalized_summary, limit, filters)
+            result = self.ask(
+                corpus_id,
+                normalized_summary,
+                limit,
+                filters,
+                clarification,
+                evidence_requirements,
+            )
             return result | {"original_query": query, "normalized_query": normalized_summary}
         semantics = interpret_query(store, corpus_id, query, available_corpora=self.registry.corpus_ids())
         anomaly = _source_anomaly_response(store, corpus_id, query)
@@ -945,6 +1000,22 @@ class LegalRuntimeService:
             )
         if not routed.get("matches") and resolution:
             routed["status"] = "no_results"
+        evidence_set = collect_evidence_set(store, routed.get("matches", ()), evidence_requirements) if evidence_requirements else None
+        assessment = assess_sufficiency(evidence_set, evidence_requirements) if evidence_set is not None else None
+        if evidence_set is not None and assessment is not None:
+            routed["evidence_set"] = {
+                "support_ids": tuple(str(row.get("evidence_id")) for row in evidence_set.supports),
+                "assignments": evidence_set.assignments,
+                "missing_requirement_ids": evidence_set.missing_requirement_ids,
+                "missing_reasons": evidence_set.missing_reasons,
+            }
+            routed["sufficiency"] = {
+                "status": assessment.status,
+                "fulfilled_requirement_ids": assessment.fulfilled_requirement_ids,
+                "missing_requirement_ids": assessment.missing_requirement_ids,
+                "missing_reasons": assessment.missing_reasons,
+                "retry_allowed": assessment.retry_allowed,
+            }
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
         routed["original_query"] = query
@@ -969,11 +1040,24 @@ class LegalRuntimeService:
                     "none",
                     templates["insufficient"],
                     context_pack,
-                    insufficient_reasons=(routed.get("reason") or routed["status"],),
+                    insufficient_reasons=(assessment.missing_requirement_ids if assessment is not None and assessment.missing_requirement_ids else (routed.get("reason") or routed["status"],)),
                 ),
             )
-        answer_matches = routed["matches"]
-        if ask_route == "lexical_fallback":
+        if evidence_set is not None and assessment is not None and assessment.status == "insufficient":
+            context_pack = empty_context_pack("required_evidence_missing")
+            return project_response(
+                routed,
+                AnswerDecision(
+                    "insufficient_evidence",
+                    ask_route,
+                    "none",
+                    templates["insufficient"],
+                    context_pack,
+                    insufficient_reasons=tuple(routed["sufficiency"].missing_requirement_ids),
+                ),
+            )
+        answer_matches = evidence_set.supports if evidence_set is not None else routed["matches"]
+        if ask_route == "lexical_fallback" and evidence_set is None:
             # BM25 may rank several independently relevant rows, but one
             # answer may claim only one complete source-backed proposition.
             answer_matches = next(
@@ -1701,6 +1785,7 @@ def _ask_route(route: str) -> str:
         "structured_not_found": "legal_reference",
         "scope_unresolved": "legal_reference",
         "bm25": "lexical_fallback",
+        "hybrid": "lexical_fallback",
     }.get(route, route)
 
 

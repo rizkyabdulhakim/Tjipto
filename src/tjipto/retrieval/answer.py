@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-DIRECT_ROUTES = {"exact", "metadata", "relation", "structured", "bm25"}
+DIRECT_ROUTES = {"exact", "metadata", "relation", "structured", "bm25", "hybrid"}
 REQUIRED_FIELDS = (
     "citation",
     "quoted_text",
