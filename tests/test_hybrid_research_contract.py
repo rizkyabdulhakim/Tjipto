@@ -228,6 +228,17 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(response["sufficiency"]["status"], "complete")
         self.assertTrue(response["citations"])
 
+    def test_decomposition_retrieves_structural_procedure_neighbors(self) -> None:
+        response = LegalRuntimeService().ask("uud", "bagaimana prosedur pemberhentian Presiden?")
+        retrieved = {row.get("evidence_id") for row in response.get("matches", ())}
+        self.assertTrue(
+            {
+                "uud_current_consolidated_final_citation_evidence_00269",
+                "uud_current_consolidated_final_citation_evidence_00271",
+            } <= retrieved
+        )
+        self.assertEqual(response["sufficiency"]["status"], "complete")
+
     def test_education_paraphrase_retains_article_support_in_candidate_set(self) -> None:
         service = LegalRuntimeService()
         store = service._store("uud")

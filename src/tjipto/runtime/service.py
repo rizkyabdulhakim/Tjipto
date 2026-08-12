@@ -19,6 +19,7 @@ from tjipto.evidence.bbox import viewer_overlay_rectangles
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.bm25 import meaningful_tokens
+from tjipto.retrieval.candidates import graph_expand
 from tjipto.retrieval.metadata import (
     metadata_lookup,
     normalize_filters,
@@ -307,7 +308,24 @@ class LegalRuntimeService:
             result = self._route_retrieval(corpus_id, variant_query, store, limit=limit, route=route)
             if route == "dense" and result.get("status") == "dense_unavailable":
                 fallback = self._route_retrieval(corpus_id, variant_query, store, limit=limit, route="auto")
-                return dict(fallback) | {"retrieval_degraded_reason": result.get("reason", "dense_unavailable")}
+                result = dict(fallback) | {"retrieval_degraded_reason": result.get("reason", "dense_unavailable")}
+            if getattr(intent, "decomposition", False) and result.get("matches"):
+                # A decomposition round may follow validated structural
+                # relations from the lexical seed.  The seed remains a
+                # candidate only; graph-expanded rows still pass the normal
+                # support validator before assignment/publication.
+                seeds = tuple(
+                    dict(row) | {"route_sources": tuple(dict.fromkeys(("structured", *(row.get("route_sources") or ()))))}
+                    for row in result.get("matches", ())
+                )
+                trace = graph_expand(store, seeds, {}, per_seed=max(1, limit), semantic=True)
+                expanded = []
+                for item in trace:
+                    row = store.get(str(item.get("evidence_id") or ""))
+                    if row is not None:
+                        expanded.append(dict(row) | {"route_sources": ("graph",)})
+                if expanded:
+                    result = dict(result) | {"matches": tuple(result.get("matches", ())) + tuple(expanded)}
             return result
 
         result = execute_research_rounds(
