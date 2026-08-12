@@ -41,7 +41,8 @@ class ResearchRetrievalEvaluationTest(unittest.TestCase):
         self.assertEqual(data["counts"]["cases"], len(_read_cases()))
         self.assertEqual(data["execution_status"], "valid")
         self.assertEqual(data["blocking_failures"], 0)
-        self.assertGreater(data["gap"], 0)
+        self.assertEqual(data["gap"], 0)
+        self.assertEqual(data["met"], data["counts"]["cases"])
 
 
 def _read_cases() -> list[dict]:
