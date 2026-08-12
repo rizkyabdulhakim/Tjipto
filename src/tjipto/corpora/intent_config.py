@@ -130,7 +130,15 @@ def resolve_instrument_intent(query: str, intent: dict, *, corpus: str = "") -> 
         (key for key, aliases in intent.get("instrument_role_queries", {}).items() if contains_intent_phrase(query, aliases)),
         None,
     )
-    amendment = next((source_role for source_role, pattern in intent.get("metadata_roles", ()) if pattern.search(query or "")), None)
+    instrument_roles = set(intent.get("source_role_labels", {}) or {})
+    amendment = next(
+        (
+            source_role
+            for source_role, pattern in intent.get("metadata_roles", ())
+            if source_role in instrument_roles and pattern.search(query or "")
+        ),
+        None,
+    )
     valid_amendment_context = amendment is not None
     source_signal = valid_amendment_context
     analysis_signal = contains_intent_phrase(query, intent.get("instrument_analysis_signals", ()))

@@ -119,3 +119,14 @@ class ClosureProvenanceContractTests(unittest.TestCase):
             self._write(web / "run-identity.json", duplicate)
             with self.assertRaisesRegex(closure.ClosureError, "duplicate backend/web"):
                 closure.assemble(backend, web, artifact_uploads=self.uploads)
+
+    def test_mixed_run_attempts_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            backend, web = self._evidence(Path(temporary))
+            mixed = self._identity("web", "102")
+            mixed["run_attempt"] = "2"
+            mixed["run_identity_id"] = "f" * 64
+            mixed["job_identity_id"] = closure._job_identity(mixed)
+            self._write(web / "run-identity.json", mixed)
+            with self.assertRaisesRegex(closure.ClosureError, "backend and web run identities differ"):
+                closure.assemble(backend, web, artifact_uploads=self.uploads)

@@ -10,6 +10,7 @@ from tjipto.corpora.uud import provenance as uud_provenance
 from tjipto.corpora.uud.citation import citation_unit
 from tjipto.corpora.uud.contract import CONTRACT_FINGERPRINT, CONTRACT_ID, CONTRACT_VERSION
 from tjipto.corpora.uud.source_annotations import annotation_health, query_source_annotations
+from tjipto.corpora.uud.source_policy import normalize_retrieval_text
 from tjipto.corpora.uud.validation import validate_uud_artifacts
 
 
@@ -27,5 +28,6 @@ BUILTIN_STRATEGIES = {
         citation_unit_factory=citation_unit,
         source_text_query=query_source_annotations,
         source_text_health=annotation_health,
+        embedding_text_normalizer=normalize_retrieval_text,
     ),
 }
