@@ -163,8 +163,11 @@ def _peak_rss_bytes() -> int | None:
         counters = _Counters()
         counters.cb = ctypes.sizeof(counters)
         try:
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-            psapi = ctypes.WinDLL("psapi", use_last_error=True)
+            loader = getattr(ctypes, "WinDLL", None)
+            if loader is None:
+                return None
+            kernel32 = loader("kernel32", use_last_error=True)
+            psapi = loader("psapi", use_last_error=True)
             kernel32.GetCurrentProcess.restype = wintypes.HANDLE
             get_info = psapi.GetProcessMemoryInfo
             get_info.argtypes = (wintypes.HANDLE, ctypes.POINTER(_Counters), wintypes.DWORD)
