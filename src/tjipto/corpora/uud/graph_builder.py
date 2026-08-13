@@ -263,7 +263,7 @@ def build_graph_artifacts(
     delete_clause = next((row for row in evidence if is_deletion_provision(row)), None)
     if delete_clause:
         source_node = unit_node_ids[delete_clause["legal_unit_id"]]
-        for label in ("BAB IV", "Pasal 16"):
+        for label in _deletion_target_labels(delete_clause.get("quoted_text")):
             target = resolve_relation_unit(legal_units, label, source_document_id=delete_clause["source_document_id"])
             if target and str(target.get("unit_label") or "").startswith(("Pasal ", "Ayat ")):
                 target_citation = legal_unit_reference(target, legal_units_by_id)
@@ -434,18 +434,46 @@ def _numeric_suffix(value: str) -> int:
 
 
 def _scope_target_labels(text: str | None) -> list[str]:
-    # A scope clause may cite a constitutional basis before naming the actual
-    # amendment targets.  Only the source segment governed by the amendment
-    # operation is materialized as MODIFIES targets.
+    # Scope records may contain several independently typed operations.  Only
+    # references in the modification/addition segment may become MODIFIES
+    # edges; renumbering and deletion segments are materialized by their own
+    # owners below.  Lettered segments are source structure, not a query hint.
     source = str(text or "")
-    operations = tuple(re.finditer(r"\bmengubah\b", source, re.IGNORECASE))
-    if operations:
-        source = source[operations[-1].end() :]
+    segments = {
+        marker: segment
+        for marker, segment in re.findall(
+            r"\(([a-z])\)\s*(.*?)(?=\s*\([a-z]\)\s|$)", source, re.IGNORECASE | re.DOTALL
+        )
+    }
+    if segments:
+        source = segments.get("e") or segments.get("a") or source
+        deleted = {
+            str(row.get("reference"))
+            for row in parse_legal_references("uud", segments.get("d", ""))
+            if row.get("reference")
+        }
+    else:
+        deleted = set()
+        operations = tuple(re.finditer(r"\bmengubah\b", source, re.IGNORECASE))
+        if operations:
+            source = source[operations[-1].end() :]
     labels: list[str] = []
     seen: set[str] = set()
     for row in parse_legal_references("uud", source):
         label = str(row["reference"])
-        if label not in seen:
+        if label not in deleted and label not in seen:
+            seen.add(label)
+            labels.append(label)
+    return labels
+
+
+def _deletion_target_labels(text: str | None) -> list[str]:
+    """Return only source-referenced legal units from a deletion clause."""
+    labels: list[str] = []
+    seen: set[str] = set()
+    for row in parse_legal_references("uud", str(text or "")):
+        label = str(row.get("reference") or "")
+        if label and label not in seen:
             seen.add(label)
             labels.append(label)
     return labels

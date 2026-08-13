@@ -693,6 +693,18 @@ def _validate_schema6_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
                 or row["new_reference_range"][1] - row["new_reference_range"][0] < max(2, len(_schema6_normalize(row.get("new_reference"))) // 2)
             ):
                 errors.append(f"article_relation_old_range_text_mismatch:{row_id}")
+    operation_types_by_target: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for row in by_artifact.get("article_amendment_relations", []):
+        relation_type = str(row.get("relation_type") or "")
+        if relation_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
+            key = (str(row.get("source_legal_unit_id") or ""), str(row.get("target_legal_unit_id") or ""))
+            operation_types_by_target[key].add(relation_type)
+    for (source_unit_id, target_unit_id), relation_types in operation_types_by_target.items():
+        if len(relation_types) > 1:
+            errors.append(
+                "article_relation_conflicting_operation_types:"
+                f"{source_unit_id}:{target_unit_id}:{','.join(sorted(relation_types))}"
+            )
     source_document_ids = set(source_docs)
     for row in by_artifact.get("document_relations", []):
         row_id = str(row.get("relation_id"))

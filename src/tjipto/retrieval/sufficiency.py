@@ -23,6 +23,7 @@ class EvidenceRequirement:
     entity_must_lead: bool = False
     legal_target: str | None = None
     relation_family: str | None = None
+    required_operation_terms: tuple[str, ...] = ()
     concept_facet: str | None = None
     source_role: str | None = None
     temporal_context: str | None = None
@@ -44,6 +45,7 @@ class EvidenceRequirement:
             or self.support_terms
             or self.legal_target
             or self.relation_family
+            or self.required_operation_terms
             or self.concept_facet
             or self.source_role
             or self.temporal_context
@@ -99,18 +101,21 @@ class EvidenceRequirement:
         if self.concept_facet and row.get("concept_facet") != self.concept_facet:
             return False
         tokens = set(_tokens(text))
+        if self.required_operation_terms and not set(self.required_operation_terms) <= tokens:
+            return False
         if self.semantic_terms and not set(self.semantic_terms) <= tokens:
             return False
         if self.support_terms and not set(self.support_terms) & tokens:
             return False
         return True
 
-    def match_score(self, row: dict) -> tuple[int, int, int, str]:
+    def match_score(self, row: dict) -> tuple[int, int, int, int, str]:
         """Prefer rows carrying the strongest requirement-specific semantics."""
         text = _semantic_text(row)
         tokens = set(_tokens(text))
         return (
             len(tokens & set(self.support_terms)),
+            len(tokens & set(self.required_operation_terms)),
             len(tokens & set(self.semantic_terms)),
             -len(text),
             str(row.get("evidence_id") or ""),

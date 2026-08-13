@@ -51,9 +51,21 @@ def valid_proposal(value: object) -> dict[str, object] | None:
         return None
     presentation = value.get("presentation")
     references = value.get("referenced_fact_ids")
-    if presentation not in {"direct", "grounded"} or not isinstance(references, list) or not all(isinstance(item, str) for item in references):
+    if presentation in {"direct", "grounded"} and isinstance(references, list) and all(isinstance(item, str) for item in references):
+        return {"presentation": presentation, "referenced_fact_ids": tuple(references)}
+    sentences = value.get("sentences")
+    if set(value) != {"sentences"} or not isinstance(sentences, list) or not sentences:
         return None
-    return {"presentation": presentation, "referenced_fact_ids": tuple(references)}
+    normalized = []
+    for sentence in sentences:
+        if not isinstance(sentence, dict) or set(sentence) != {"text", "referenced_fact_ids"}:
+            return None
+        text = sentence.get("text")
+        refs = sentence.get("referenced_fact_ids")
+        if not isinstance(text, str) or not text.strip() or not isinstance(refs, list) or not refs or not all(isinstance(item, str) for item in refs):
+            return None
+        normalized.append({"text": text, "referenced_fact_ids": tuple(refs)})
+    return {"sentences": tuple(normalized)}
 
 
 def _https(value: str) -> bool:

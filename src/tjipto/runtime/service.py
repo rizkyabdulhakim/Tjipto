@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 import re
 from threading import RLock
-from collections import OrderedDict
+from collections import Counter, OrderedDict
+import unicodedata
 from typing import Any
 from uuid import uuid4
 
@@ -196,7 +197,16 @@ def _semantic_scope_covered(
         return False
 
     complex_signal = hinted("comparison") or hinted("procedure") or hinted("relation")
-    if len(entity_labels) > 1 and (complex_signal or len(requirements) > 1) and len(requirements) < 2:
+    entity_scope_requirement = any(
+        entity_labels <= set(requirement.required_entities)
+        for requirement in requirements
+    )
+    if (
+        len(entity_labels) > 1
+        and (complex_signal or len(requirements) > 1)
+        and len(requirements) < 2
+        and not entity_scope_requirement
+    ):
         return False
     if complex_signal and not requirements and not _single_support_covers_query(store, query):
         return False
@@ -285,21 +295,19 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
         )
     if len(entities) > 1 and hinted("relation"):
         relation_terms = _research_relation_terms(store, research, query, entities)
-        return tuple(
+        return (
             EvidenceRequirement(
-                f"relation_{index}",
-                description=entity,
-                retrieval_query=f"{entity} {_research_focus_query(store, research, query)}",
-                required_entities=(entity,),
-                contrast_entities=tuple(value for value in all_entities if value != entity),
-                # The relation must retain an operation-bearing token from the
-                # original request.  Entity co-occurrence alone cannot turn an
-                # impeachment clause into a lawmaking relation.
-                support_terms=relation_terms,
+                "relation",
+                description="; ".join(entities),
+                retrieval_query=f"{' '.join(entities)} {_research_focus_query(store, research, query)}",
+                required_entities=entities,
+                # Entity co-occurrence is not a relationship.  The source row
+                # must also carry every typed operation term selected by the
+                # corpus policy for this relation family.
+                required_operation_terms=relation_terms,
                 authority_kinds=("normative_legal_text",),
                 hierarchy_depth=3,
-            )
-            for index, entity in enumerate(entities, 1)
+            ),
         )
     if len(segments) > 1 and not _single_support_covers_query(store, query):
         return tuple(
@@ -312,7 +320,15 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
             for index, segment in enumerate(segments, 1)
         )
     if hinted("procedure") and _procedure_applicable(research, normalized, entities):
-        stages = research.get("procedure_requirements", ()) if isinstance(research, dict) else ()
+        family = _procedure_family(research, normalized, entities)
+        family_requirements = research.get("procedure_requirements_by_family", {}) if isinstance(research, dict) else {}
+        stages = (
+            family_requirements.get(family, ())
+            if family and isinstance(family_requirements, dict)
+            else research.get("procedure_requirements", ())
+            if isinstance(research, dict)
+            else ()
+        )
         if isinstance(stages, (tuple, list)) and stages:
             return tuple(
                 EvidenceRequirement(
@@ -382,10 +398,15 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
 
 def _procedure_applicable(research: dict, query: str, entities: tuple[str, ...]) -> bool:
     """Apply a configured procedure family only within its typed scope."""
+    return _procedure_family(research, query, entities) is not None
+
+
+def _procedure_family(research: dict, query: str, entities: tuple[str, ...]) -> str | None:
+    """Return the corpus-owned procedure family matching the request."""
     families = research.get("procedure_applicability", {}) if isinstance(research, dict) else {}
     if not isinstance(families, dict):
-        return False
-    for family in families.values():
+        return None
+    for name, family in families.items():
         if not isinstance(family, dict):
             continue
         required_entities = tuple(str(value) for value in family.get("required_entities") or ())
@@ -394,8 +415,8 @@ def _procedure_applicable(research: dict, query: str, entities: tuple[str, ...])
             continue
         if signals and not contains_intent_phrase(query, signals):
             continue
-        return True
-    return False
+        return str(name)
+    return None
 
 
 def _instrument_scope_roles(store: EvidenceStore, query: str) -> tuple[str, ...]:
@@ -504,6 +525,19 @@ def _research_relation_terms(
         for token in tokens(value, aliases=aliases)
     }
     ignored.update(token for entity in entities for token in tokens(entity, aliases=aliases))
+    operation_terms = research.get("relation_operation_terms", {})
+    if isinstance(operation_terms, dict):
+        for phrase, values in operation_terms.items():
+            if not isinstance(phrase, str) or not isinstance(values, (tuple, list)):
+                continue
+            if contains_intent_phrase(query, (phrase,)):
+                return tuple(
+                    token
+                    for value in values
+                    if isinstance(value, str)
+                    for token in tokens(value, aliases=aliases)
+                    if token
+                )
     return tuple(sorted({token for token in tokens(query, aliases=aliases) if len(token) > 2 and token not in ignored}))
 
 
@@ -1847,7 +1881,28 @@ def _verified_answer_facts(evidence: tuple[dict, ...], fallback: str) -> dict[st
 
 
 def _render_wording(proposal: object, fallback: str, facts: dict[str, str] | None = None) -> str:
-    """Render server-owned facts; an external model never publishes prose."""
+    """Render only fact-bound wording; an external model never adds atoms."""
+    if isinstance(proposal, dict) and set(proposal) == {"sentences"}:
+        sentences = proposal.get("sentences")
+        approved = facts or {"deterministic_answer": fallback}
+        if not isinstance(sentences, tuple) or not sentences:
+            return fallback
+        rendered: list[str] = []
+        for sentence in sentences:
+            if not isinstance(sentence, dict):
+                return fallback
+            refs = sentence.get("referenced_fact_ids")
+            text = sentence.get("text")
+            if not isinstance(text, str) or not isinstance(refs, tuple) or not refs or not set(refs) <= set(approved):
+                return fallback
+            if any(unicodedata.category(char) in {"Cf", "Cc"} for char in text):
+                return fallback
+            source_tokens = Counter(re.findall(r"\w+", " ".join(approved[item] for item in refs).casefold(), flags=re.UNICODE))
+            proposal_tokens = Counter(re.findall(r"\w+", text.casefold(), flags=re.UNICODE))
+            if proposal_tokens != source_tokens:
+                return fallback
+            rendered.append(text.strip())
+        return " ".join(rendered)
     if not isinstance(proposal, dict) or set(proposal) != {"presentation", "referenced_fact_ids"}:
         return fallback
     references = proposal.get("referenced_fact_ids")
@@ -2577,6 +2632,21 @@ def _project_article_relation(store, routed: dict, target: dict, templates: dict
     exact_support = tuple(row for row in support if _is_exact_article_relation(row))
     exact_targets = {row.get("target_legal_unit_id") for row in exact_support}
     trace_support = tuple(row for row in support if not _is_exact_article_relation(row) and row.get("target_legal_unit_id") not in exact_targets)
+    requested_targets = {
+        _normalize_relation_citation(value)
+        for value in target.get("target_citations") or ()
+        if value
+    }
+    exact_citations = {
+        _normalize_relation_citation(row.get("target_citation") or row.get("target_reference"))
+        for row in exact_support
+    }
+    if requested_targets - exact_citations:
+        trace_support = tuple(
+            row
+            for row in support
+            if _normalize_relation_citation(row.get("target_citation") or row.get("target_reference")) in requested_targets - exact_citations
+        )
     # Exact source relations are the publishable article targets. Trace rows
     # remain available for the trace-only path, but must not be projected as
     # neighboring article answers when an exact target already satisfies the
@@ -2607,7 +2677,7 @@ def _project_article_relation(store, routed: dict, target: dict, templates: dict
     final_citations = tuple(row for row in citations if row.get("citation_final") is True)
     historical_citations = tuple(row for row in citations if row.get("citation_final") is False)
     viewer_refs = tuple(row["viewer_ref"] for row in answer_evidence if row.get("citation_final") is True)
-    public_trace_support = () if exact_support else trace_support
+    public_trace_support = trace_support
     partial = bool(public_trace_support)
     public_evidence = answer_evidence
     context_pack = {
@@ -2622,7 +2692,7 @@ def _project_article_relation(store, routed: dict, target: dict, templates: dict
     return project_response(
         routed | {"matches": support},
         AnswerDecision(
-            "answer_ready",
+            "limited_answer" if partial else "answer_ready",
             "document_relation",
             "article_amendment_relation",
             _article_relation_answer(store, exact_support, public_trace_support),
@@ -2634,15 +2704,15 @@ def _project_article_relation(store, routed: dict, target: dict, templates: dict
             viewer_refs=viewer_refs,
             article_amendment_relations=public_relations,
             relation_support=answer_evidence,
-            trace_support=(
-                ()
-                if exact_support
-                else tuple(_public_article_relation(row) for row in trace_support)
-            ),
+            trace_support=tuple(_public_article_relation(row) for row in public_trace_support),
             answer_scope="partial_exact_article_relation" if partial else "exact_article_relation",
             warnings=("article_relation_exact_support_partial_trace_omitted",) if public_trace_support else (),
         ),
     )
+
+
+def _normalize_relation_citation(value: object) -> str:
+    return " ".join(str(value or "").casefold().replace("(", "").replace(")", "").split())
 
 
 def _relation_not_promoted(routed: dict, templates: dict[str, str], *, reason: str = "relation_not_promoted") -> dict:

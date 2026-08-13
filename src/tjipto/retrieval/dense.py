@@ -19,6 +19,7 @@ DENSE_DTYPE = "float32"
 DENSE_NORMALIZATION = "l2"
 DENSE_POOLING = "cls"
 DENSE_MAX_LENGTH = 256
+DENSE_ALLOWED_MAX_LENGTHS = (256, 512, 1024)
 DENSE_BATCH_SIZE = 64
 DENSE_TRUNCATION_POLICY = "explicit_max_length"
 EMBEDDING_TEXT_POLICY = "source_document+breadcrumb+label+legal_text"
@@ -80,7 +81,7 @@ class DenseModelIdentity:
             or identity.dtype != DENSE_DTYPE
             or identity.normalization != DENSE_NORMALIZATION
             or identity.pooling != DENSE_POOLING
-            or identity.max_length != DENSE_MAX_LENGTH
+            or identity.max_length not in DENSE_ALLOWED_MAX_LENGTHS
             or identity.truncation_policy != DENSE_TRUNCATION_POLICY
         ):
             raise DenseUnavailable("noncanonical_model")
@@ -130,7 +131,7 @@ class LocalDenseProvider:
         )
 
     def embed(self, texts: tuple[str, ...]) -> DenseEmbeddingBatch:
-        if self.batch_size < 1 or self.max_length != DENSE_MAX_LENGTH:
+        if self.batch_size < 1 or self.max_length not in DENSE_ALLOWED_MAX_LENGTHS:
             raise DenseUnavailable("dense_configuration_invalid")
         if not texts:
             return DenseEmbeddingBatch((), self.identity())

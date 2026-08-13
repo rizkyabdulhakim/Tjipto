@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from tjipto.evidence.store import EvidenceStore
-from tjipto.retrieval.dense import DenseUnavailable, LocalDenseProvider, dense_index_for_store
+from tjipto.retrieval.dense import DENSE_ALLOWED_MAX_LENGTHS, DenseUnavailable, LocalDenseProvider, dense_index_for_store
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -25,6 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Compare production retrieval and the pinned BGE-M3 lane.")
     parser.add_argument("--report", type=Path)
     parser.add_argument("--timeout", type=float, default=120.0)
+    parser.add_argument("--max-length", type=int, choices=DENSE_ALLOWED_MAX_LENGTHS, default=256)
     parser.add_argument("--runtime-commit")
     parser.add_argument("--runtime-tree")
     parser.add_argument("--identity-sidecar", type=Path)
@@ -76,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         report["metrics"]["production"] = _metrics(cases, production_rankings)
         config = _copy_dense_config(store)
         dense_store = EvidenceStore(config)
-        provider = LocalDenseProvider(timeout_seconds=args.timeout)
+        provider = LocalDenseProvider(timeout_seconds=args.timeout, max_length=args.max_length)
         started = time.perf_counter()
         index = dense_index_for_store(dense_store, provider=provider)
         build_seconds = time.perf_counter() - started

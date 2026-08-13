@@ -44,10 +44,10 @@
     "evidence_records": 650,
     "bbox_records": 1827,
     "retrieval_units": 647,
-    "promotion_decisions": 138,
+    "promotion_decisions": 134,
     "propositions": 877,
     "graph_nodes": 3209,
-    "graph_edges": 8130,
+    "graph_edges": 8122,
     "page_text_spans": 2070,
     "word_bboxes": 11766,
     "source_objects": 705
@@ -512,18 +512,18 @@
     "status": "complete"
   },
   "promotion_decision_audit_health": {
-    "promotion_decision_count": 138,
-    "expected_promotion_decision_count": 138,
+    "promotion_decision_count": 134,
+    "expected_promotion_decision_count": 134,
     "blocked_decision_count": 60,
     "promotion_blocked_count": 60,
-    "promotion_attempted_count": 138,
+    "promotion_attempted_count": 134,
     "promotion_attempt_missing_count": 0,
-    "exact_quote_match_count": 78,
-    "span_sequence_candidate_count": 138,
-    "subspan_match_candidate_count": 6,
+    "exact_quote_match_count": 74,
+    "span_sequence_candidate_count": 134,
+    "subspan_match_candidate_count": 3,
     "bbox_union_candidate_count": 0,
     "bbox_union_not_supported_count": 60,
-    "new_exact_promotion_count": 73,
+    "new_exact_promotion_count": 69,
     "kept_non_exact_after_attempt_count": 60,
     "generic_blocker_reason_count": 0,
     "false_highlightable_claim_count": 0,
@@ -553,15 +553,15 @@
     "status": "complete"
   },
   "article_relation_runtime_policy_health": {
-    "article_relation_total_count": 133,
-    "article_relation_exact_support_count": 73,
+    "article_relation_total_count": 129,
+    "article_relation_exact_support_count": 69,
     "article_relation_trace_only_count": 60,
     "article_relation_trace_missing_reason_count": 0,
     "article_relation_trace_reason_counts": {
       "shared_source_line_target_not_isolatable": 2,
       "unresolved_target_mention": 58
     },
-    "article_relation_promoted_from_scope_count": 69,
+    "article_relation_promoted_from_scope_count": 65,
     "article_relation_unpromoted_trace_count": 60,
     "article_relation_invalid_bbox_refs": 0,
     "article_relation_invalid_coordinates": 0,
@@ -596,8 +596,8 @@
       "HAS_SIGNATORY": 4,
       "HAS_SOURCE_ANOMALY": 4,
       "INSERTED_AFTER": 7,
-      "MODIFIED_BY": 129,
-      "MODIFIES": 129,
+      "MODIFIED_BY": 125,
+      "MODIFIES": 125,
       "PAGE_GROUNDED_AT": 706,
       "PART_OF": 530,
       "PRECEDES": 7,
@@ -619,8 +619,8 @@
       "HAS_SIGNATORY": 4,
       "HAS_SOURCE_ANOMALY": 4,
       "INSERTED_AFTER": 7,
-      "MODIFIED_BY": 129,
-      "MODIFIES": 129,
+      "MODIFIED_BY": 125,
+      "MODIFIES": 125,
       "PART_OF": 530,
       "PRECEDES": 7,
       "RENAMED_FROM": 2,
@@ -636,8 +636,8 @@
       "DELETES": 1,
       "HAS_DECISION_SESSION": 3,
       "HAS_SIGNATORY": 4,
-      "MODIFIED_BY": 129,
-      "MODIFIES": 129,
+      "MODIFIED_BY": 125,
+      "MODIFIES": 125,
       "PART_OF": 530,
       "RENAMED_FROM": 2,
       "RENAMES": 2,
@@ -673,16 +673,16 @@
       "INSERTED_BY",
       "SUPPLEMENTS"
     ],
-    "runtime_loadable_legal_edges": 1341
+    "runtime_loadable_legal_edges": 1333
   },
   "legal_graph_authority_health": {
     "status": "complete",
-    "graph_edge_count": 8130,
-    "article_relation_count": 133,
-    "article_relation_graph_ref_count": 133,
-    "evidence_backed_relation_edge_count": 73,
+    "graph_edge_count": 8122,
+    "article_relation_count": 129,
+    "article_relation_graph_ref_count": 129,
+    "evidence_backed_relation_edge_count": 69,
     "trace_only_relation_edge_count": 60,
-    "non_citable_edge_count": 284,
+    "non_citable_edge_count": 276,
     "authority_without_evidence_count": 0,
     "authority_without_bbox_count": 0,
     "trace_promoted_count": 0,
@@ -693,16 +693,16 @@
     "inverse_relation_projection_endpoint_mismatch_count": 0,
     "relation_direction_mismatch_count": 0,
     "authority_kind_counts": {
-      "relation_reference": 8130
+      "relation_reference": 8122
     },
     "support_kind_counts": {
       "deterministic_structure": 1081,
       "endpoint_provenance": 6779,
-      "exact_source_relation": 266,
+      "exact_source_relation": 258,
       "source_anomaly_trace": 4
     }
   },
-  "validated_artifact_set_digest": "0b527c09d969bd33946640e2f900e3f5eab3d980f947a84243231f171c3c13ef",
+  "validated_artifact_set_digest": "0658cd3c342a1e81c69f09c992e70fa0dfb924a6920451acfa934d5d3d988fc0",
   "required_health": {
     "status": "complete",
     "required_section_count": 15,

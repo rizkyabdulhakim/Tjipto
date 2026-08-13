@@ -19,8 +19,9 @@ class GeminiAnswerProvider:
         if not deterministic_answer:
             return None
         prompt = (
-            "Kembalikan JSON saja. Anda tidak boleh menulis fakta atau prosa. Pilih presentation 'direct' atau "
-            "'grounded' dan referenced_fact_ids ['deterministic_answer'].\n\n"
+            "Kembalikan JSON saja. Susun ulang hanya fakta yang diberikan menjadi kalimat alami. "
+            "Jangan menambah atau mengubah fakta, angka, rujukan, modalitas, atau negasi. "
+            "Setiap kalimat wajib memiliki text dan referenced_fact_ids.\n\n"
             + json.dumps({"deterministic_answer": deterministic_answer}, ensure_ascii=False)
         )
         payload = {
@@ -32,10 +33,19 @@ class GeminiAnswerProvider:
                 "responseSchema": {
                     "type": "OBJECT",
                     "properties": {
-                        "presentation": {"type": "STRING", "enum": ["direct", "grounded"]},
-                        "referenced_fact_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "sentences": {
+                            "type": "ARRAY",
+                            "items": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "text": {"type": "STRING"},
+                                    "referenced_fact_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
+                                },
+                                "required": ["text", "referenced_fact_ids"],
+                            },
+                        },
                     },
-                    "required": ["presentation", "referenced_fact_ids"],
+                    "required": ["sentences"],
                 },
             },
         }

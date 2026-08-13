@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from tjipto.retrieval.dense import DENSE_MAX_LENGTH, DENSE_POOLING, MODEL_ID, MODEL_REVISION, LocalDenseProvider
+from tjipto.retrieval.dense import DENSE_ALLOWED_MAX_LENGTHS, DENSE_MAX_LENGTH, DENSE_POOLING, MODEL_ID, MODEL_REVISION, LocalDenseProvider
 from tjipto.retrieval.dense_worker import _peak_rss_bytes
 
 
@@ -20,6 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the pinned BGE-M3 promotion probe and dense comparison.")
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=600.0)
+    parser.add_argument("--max-length", type=int, choices=DENSE_ALLOWED_MAX_LENGTHS, default=DENSE_MAX_LENGTH)
     parser.add_argument("--comparison-report", type=Path)
     parser.add_argument("--runtime-commit")
     parser.add_argument("--runtime-tree")
@@ -27,10 +28,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     report = {
         "status": "unavailable",
-        "model": {"id": MODEL_ID, "revision": MODEL_REVISION, "pooling": DENSE_POOLING, "max_length": DENSE_MAX_LENGTH},
+        "model": {"id": MODEL_ID, "revision": MODEL_REVISION, "pooling": DENSE_POOLING, "max_length": args.max_length},
     }
     try:
-        probe = _parity_probe(args.timeout)
+        probe = _parity_probe(args.timeout, args.max_length)
         report["parity_probe"] = probe
         gc.collect()
         comparison = args.comparison_report or args.report.with_name(args.report.stem + ".comparison.json")
@@ -42,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
                 str(comparison),
                 "--timeout",
                 str(args.timeout),
+                "--max-length",
+                str(args.max_length),
             ]
             if args.runtime_commit:
                 command.extend(("--runtime-commit", args.runtime_commit))
@@ -77,12 +80,12 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if report["status"] == "valid" else 2
 
 
-def _parity_probe(timeout: float) -> dict[str, object]:
+def _parity_probe(timeout: float, max_length: int) -> dict[str, object]:
     import torch
     from transformers import AutoModel, AutoTokenizer
 
     text = "Ketentuan hukum mengenai kewenangan Presiden."
-    provider = LocalDenseProvider(timeout_seconds=timeout)
+    provider = LocalDenseProvider(timeout_seconds=timeout, max_length=max_length)
     observed_batch = provider.embed((text,))
     observed = observed_batch.vectors[0]
     cache_dir = os.environ.get("TJIPTO_DENSE_MODEL_DIR")
@@ -94,13 +97,14 @@ def _parity_probe(timeout: float) -> dict[str, object]:
     tokenizer = AutoTokenizer.from_pretrained(source, revision=MODEL_REVISION, **kwargs)  # nosec B615 - pinned local probe
     model = AutoModel.from_pretrained(source, revision=MODEL_REVISION, **kwargs)  # nosec B615 - pinned local probe
     model.eval()
-    inputs = tokenizer([text], padding=True, truncation=True, max_length=DENSE_MAX_LENGTH, return_tensors="pt")
+    inputs = tokenizer([text], padding=True, truncation=True, max_length=max_length, return_tensors="pt")
     with torch.no_grad():
         expected = torch.nn.functional.normalize(model(**inputs).last_hidden_state[:, 0, :], p=2, dim=1)[0]
     error = max(abs(float(left) - float(right)) for left, right in zip(observed, expected.tolist()))
     return {
         "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "max_abs_error": error,
+        "max_length": max_length,
         "passed": error <= 1e-5,
         "vector_sha256": hashlib.sha256(json.dumps(observed, separators=(",", ":")).encode("utf-8")).hexdigest(),
         "worker_peak_rss_bytes": observed_batch.worker_peak_rss_bytes,

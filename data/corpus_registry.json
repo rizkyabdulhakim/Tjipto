@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "06e9621c334e6da5d0e21cf02a7fc54298595460472b4805277f250a3b6b9f1e",
+    "manifest_sha256": "479fc97225bbfe6af84b43531cbd8bed87d6f24a1dba718342b937c7003695b2",
     "runtime_required_artifacts": [
       "runtime_projection",
       "validation_report",
@@ -114,6 +114,7 @@
           "fungsi"
         ],
         "procedure": [
+          "bagaimana",
           "prosedur",
           "tahapan",
           "syarat",
@@ -184,6 +185,13 @@
           "usul"
         ]
       },
+      "relation_operation_terms": {
+        "pembentukan": [
+          "rancangan",
+          "dibahas",
+          "persetujuan bersama"
+        ]
+      },
       "procedure_requirements": [
         {
           "requirement_id": "grounds",
@@ -252,7 +260,67 @@
             "pemakzulan",
             "impeachment"
           ]
+        },
+        "constitutional_amendment": {
+          "signals": [
+            "perubahan uud",
+            "perubahan undang undang dasar",
+            "amandemen uud",
+            "amandemen undang undang dasar"
+          ]
         }
+      },
+      "procedure_requirements_by_family": {
+        "constitutional_amendment": [
+          {
+            "requirement_id": "amendment_proposal",
+            "description": "Usul perubahan dan pengajuan",
+            "required_entities": [
+              "Majelis Permusyawaratan Rakyat"
+            ],
+            "support_terms": [
+              "usul",
+              "diajukan",
+              "sidang"
+            ],
+            "hierarchy_depth": 3
+          },
+          {
+            "requirement_id": "amendment_written_scope",
+            "description": "Usul tertulis dan bagian yang diubah",
+            "support_terms": [
+              "tertulis",
+              "ditunjukkan",
+              "diubah"
+            ],
+            "hierarchy_depth": 3
+          },
+          {
+            "requirement_id": "amendment_quorum",
+            "description": "Kuorum sidang perubahan",
+            "required_entities": [
+              "Majelis Permusyawaratan Rakyat"
+            ],
+            "support_terms": [
+              "sidang",
+              "dihadiri",
+              "2/3"
+            ],
+            "hierarchy_depth": 3
+          },
+          {
+            "requirement_id": "amendment_decision",
+            "description": "Persetujuan putusan perubahan",
+            "required_entities": [
+              "Majelis Permusyawaratan Rakyat"
+            ],
+            "support_terms": [
+              "putusan",
+              "persetujuan"
+            ],
+            "hierarchy_depth": 3
+          }
+        ]
       },
       "instrument_scope_terms": [
         "mengubah",

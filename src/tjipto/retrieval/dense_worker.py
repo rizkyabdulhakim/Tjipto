@@ -9,6 +9,7 @@ from pathlib import Path
 
 from tjipto.retrieval.dense import (
     DENSE_BATCH_SIZE,
+    DENSE_ALLOWED_MAX_LENGTHS,
     DENSE_DIMENSION,
     DENSE_DTYPE,
     DENSE_MAX_LENGTH,
@@ -33,7 +34,11 @@ def main() -> int:
             return _error("worker_request_invalid")
         batch_size = request.get("batch_size", DENSE_BATCH_SIZE)
         max_length = request.get("max_length", DENSE_MAX_LENGTH)
-        if not isinstance(batch_size, int) or batch_size < 1 or max_length != DENSE_MAX_LENGTH:
+        if (
+            not isinstance(batch_size, int)
+            or batch_size < 1
+            or max_length not in DENSE_ALLOWED_MAX_LENGTHS
+        ):
             return _error("worker_configuration_invalid")
         vectors, tokenizer_digest, model_digest, pooling_config_digest, truncated_indices, worker_peak_rss = _embed(
             tuple(texts), batch_size=batch_size, max_length=max_length
@@ -50,7 +55,7 @@ def main() -> int:
                     "dtype": DENSE_DTYPE,
                     "normalization": DENSE_NORMALIZATION,
                     "pooling": DENSE_POOLING,
-                    "max_length": DENSE_MAX_LENGTH,
+                    "max_length": max_length,
                     "truncation_policy": DENSE_TRUNCATION_POLICY,
                     "tokenizer_sha256": tokenizer_digest,
                     "model_sha256": model_digest,

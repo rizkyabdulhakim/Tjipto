@@ -17,7 +17,7 @@
     "unicode_normalization": "NFKC;NBSP=SPACE;SOFT_HYPHEN=REMOVE;LINE_SEPARATOR=LF"
   },
   "counts": {
-    "article_amendment_relations": 133,
+    "article_amendment_relations": 129,
     "article_versions": 218,
     "bbox_records": 1827,
     "chunks": 653,
@@ -25,7 +25,7 @@
     "document_relations": 13,
     "evidence_records": 650,
     "excluded_records": 0,
-    "graph_edges": 8130,
+    "graph_edges": 8122,
     "graph_nodes": 3209,
     "legal_units": 653,
     "metadata_assertions": 1877,
@@ -35,7 +35,7 @@
     "meaningful_support_units": 665,
     "not_promoted_amends_edges": 8,
     "pages": 63,
-    "promotion_decisions": 138,
+    "promotion_decisions": 134,
     "propositions": 877,
     "retrieval_units": 647,
     "source_conflicts": 4,
@@ -84,8 +84,8 @@
         "source_support_exact",
         "viewer_highlightable"
       ],
-      "bytes": 708854,
-      "sha256": "a139aeaa5f560ffc36151af1b8cb806b8c138e861a3bbd1bc2ada41570a4481c"
+      "bytes": 678047,
+      "sha256": "d61ca0493e74177c1229013cc9f64ad202865e775dc098f215c1f70cf656af78"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -259,8 +259,8 @@
         "support_exception_ids",
         "support_kind"
       ],
-      "bytes": 7888030,
-      "sha256": "9826e290341c098d77b772a616e4a46772870a9f92934d95ab3c74e5683761ec"
+      "bytes": 7816359,
+      "sha256": "d0c9286379d7a42c15450e7fc7d080f71bf9a58326b0c33fcec6c49ddf7324c9"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -441,8 +441,8 @@
         "promotion_outcome",
         "failure_reason"
       ],
-      "bytes": 262213,
-      "sha256": "4baf794746e1b60049e097c9cb7c222684118c7e0f1803409fd0fcdefb251ac7"
+      "bytes": 252709,
+      "sha256": "7d14e2eda8fac22e14239665cbb0c836a58f169f2e61ec04849c1e85c65a3707"
     },
     "propositions.jsonl": {
       "origin": "generated",
@@ -503,8 +503,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 26290951,
-      "sha256": "b1766989129c4546a3ca780005a5848346b917d0a4572f7698bf3e9564b7c7c7"
+      "bytes": 26202504,
+      "sha256": "49119352550089d6bfaa2a6bf49f6aff72c3c7eb7f72640f075444e1d5dca3e8"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -652,7 +652,7 @@
       "format": "json",
       "artifact_schema": 7,
       "bytes": 25424,
-      "sha256": "ce34117a0e94e5175b16fdf0617a7359cd10dbe6ee9b6830d639cd899fe38517"
+      "sha256": "f386a3da29e3f30b76df5520da6ce0516981b3aad6cfb9a28f4de3ecd6848400"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

@@ -95,7 +95,12 @@ def amendment_relation_lookup(store, query: str, *, relation_family: str | None 
             continue
         if role and relation.get("support_source_role", relation.get("source_role")) != role:
             continue
-        if not _article_relation_matches_target(store, relation, target.get("target_citation")):
+        if not _article_relation_matches_target(
+            store,
+            relation,
+            target.get("target_citation"),
+            target.get("target_citations"),
+        ):
             continue
         rows.append(edge | {"route_sources": ("article_amendment_relation_graph",)})
     return target, tuple(rows)
@@ -117,6 +122,7 @@ def amendment_relation_target(store, query: str, *, relation_family: str | None 
     relation_types = tuple(relation_spec.get("relation_types") or ())
     source_scope = resolve_source_scope(query, strategy=strategy, config=config)
     references = parse_legal_references(getattr(config, "corpus_id", ""), query, config=config)
+    parsed_citations = tuple(str(row.get("reference") or "") for row in references if row.get("reference"))
     relation_signal = bool(relation_spec) or contains_intent_phrase(query, relation_config.get("change_terms", ()))
     add_signal = contains_intent_phrase(query, relation_config.get("add_terms", ()))
     if source_scope.explicit and len(references) == 1 and not relation_signal and not add_signal:
@@ -140,6 +146,7 @@ def amendment_relation_target(store, query: str, *, relation_family: str | None 
     target_citation = _article_relation_target_citation(
         getattr(config, "corpus_id", None), query, prefer_last=relation_type == "RENAME_PROVISION", config=config
     )
+    target_citations = (target_citation,) if relation_type == "RENAME_PROVISION" and target_citation else parsed_citations
     if add_signal:
         return {
             "mode": "article",
@@ -148,15 +155,28 @@ def amendment_relation_target(store, query: str, *, relation_family: str | None 
                 value for value in relation_config.get("schema_only_relation_types", ()) if value not in {"RENAMES", "RENUMBERED_TO"}
             ),
             "target_citation": target_citation,
+            "target_citations": target_citations,
         }
     if relation_type == "RENAME_PROVISION":
-        return {"mode": "article", "role": amendment_role, "relation_types": ("RENAMES", "RENUMBERED_TO"), "target_citation": target_citation}
+        return {
+            "mode": "article",
+            "role": amendment_role,
+            "relation_types": ("RENAMES", "RENUMBERED_TO"),
+            "target_citation": target_citation,
+            "target_citations": target_citations,
+        }
     if contains_intent_phrase(query, relation_config.get("unsupported_detail_terms", ())):
         return {"mode": "unsupported"}
     if article_detail:
         if relation_type == "MODIFY_PROVISION":
             relation_types = ("MODIFIES",)
-        return {"mode": "article", "role": amendment_role, "relation_types": relation_types or ("MODIFIES", "DELETES"), "target_citation": target_citation}
+        return {
+            "mode": "article",
+            "role": amendment_role,
+            "relation_types": relation_types or ("MODIFIES", "DELETES"),
+            "target_citation": target_citation,
+            "target_citations": target_citations,
+        }
     if amendment_role and amendment_role.startswith("amendment_"):
         return {"mode": "document", "role": amendment_role}
     if target_original:
@@ -185,7 +205,17 @@ def _article_relation_target_citation(corpus_id: str | None, query: str, *, pref
     return str(references[-1 if prefer_last else 0].get("reference") or "") or None
 
 
-def _article_relation_matches_target(store, row: dict, target_citation: str | None) -> bool:
+def _article_relation_matches_target(
+    store,
+    row: dict,
+    target_citation: str | None,
+    target_citations: tuple[str, ...] | None = None,
+) -> bool:
+    requested = tuple(target_citations or ())
+    if requested:
+        target = _normalize_article_target(row.get("target_reference") or row.get("new_reference") or row.get("target_citation"))
+        if target in {_normalize_article_target(value) for value in requested}:
+            return True
     if not target_citation:
         return True
     target = _normalize_article_target(target_citation)

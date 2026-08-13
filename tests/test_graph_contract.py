@@ -506,6 +506,28 @@ class GraphContractTest(unittest.TestCase):
             targets,
         )
 
+    def test_article_relations_have_one_source_operation_per_target(self) -> None:
+        rows = read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")
+        operations: dict[tuple[str, str], set[str]] = {}
+        for row in rows:
+            if row["relation_type"] not in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
+                continue
+            key = (row["source_legal_unit_id"], row["target_legal_unit_id"])
+            operations.setdefault(key, set()).add(row["relation_type"])
+        self.assertTrue(all(len(values) == 1 for values in operations.values()))
+        amendment_fourth_modifies = {
+            row["target_citation"]
+            for row in rows
+            if row["source_role"] == "amendment_4_historical" and row["relation_type"] == "MODIFIES"
+        }
+        amendment_fourth_deletes = {
+            row["target_citation"]
+            for row in rows
+            if row["source_role"] == "amendment_4_historical" and row["relation_type"] == "DELETES"
+        }
+        self.assertNotIn("Pasal 16", amendment_fourth_modifies)
+        self.assertIn("Pasal 16", amendment_fourth_deletes)
+
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
         report_all = json.loads((ROOT / "data/final/uud/validation_report.json").read_text(encoding="utf-8"))
