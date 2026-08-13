@@ -25,7 +25,6 @@
         "sembilan": "9",
         "sepuluh": "10",
         "berhak": "hak",
-        "kebebasan": "hak",
         "dpr": "dewan perwakilan rakyat",
         "bekerja": "kerja",
         "menjabat": "jabatan",
@@ -34,16 +33,40 @@
         "pekerjaan": "kerja",
         "periode": "jabatan",
         "pemakzulan": "pemberhentian"
+      },
+      "related_terms": {
+        "kebebasan": [
+          "hak"
+        ],
+        "kewenangan": [
+          "kekuasaan",
+          "wewenang",
+          "tugas",
+          "fungsi",
+          "hak"
+        ],
+        "lama": [
+          "tahun",
+          "masa jabatan"
+        ]
       }
     },
     "normalization_aliases": [
       {
         "pattern": "\\bu\\s*u\\s*d\\s+45\\b",
         "replacement": "UUD 1945"
-      },
+      }
+    ],
+    "source_reference_mappings": [
       {
-        "pattern": "\\bPasal III(?=\\s+Aturan Tambahan)\\b",
-        "replacement": "Pasal II"
+        "raw_reference": "Pasal III",
+        "canonical_target": "Pasal II",
+        "source_role": "amendment_4_historical",
+        "mapping_kind": "historical_to_canonical_mapping",
+        "provenance": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict",
+        "context_terms": [
+          "Aturan Tambahan"
+        ]
       }
     ],
     "source_roles": [
@@ -70,37 +93,165 @@
       "limited": "Dukungan bukti terbatas tersedia; sistem tidak menghasilkan kesimpulan hukum."
     },
     "research": {
-      "complexity_signals": {
+      "semantic_hints": {
         "comparison": [
+          "perbandingan",
           "perbedaan",
-          "bandingkan"
+          "bandingkan",
+          "beda",
+          "bedakan",
+          "komparasikan",
+          "versus"
         ],
-        "multiple_supports": [
-          "lingkungan hidup",
-          "kewenangan"
+        "authority": [
+          "kewenangan",
+          "wewenang",
+          "tugas",
+          "fungsi"
         ],
-        "multiple_supports_requires_conjunction": [
-          "lingkungan hidup"
-        ],
-        "decomposition": [
+        "procedure": [
           "prosedur",
           "tahapan",
-          "syarat"
+          "syarat",
+          "alur",
+          "mekanisme",
+          "langkah",
+          "proses"
         ],
-        "relation_traversal": [
-          "hubungan"
+        "relation": [
+          "hubungan",
+          "kaitan",
+          "relasi",
+          "peran"
         ]
       },
+      "entity_aliases": {
+        "Presiden": [
+          "presiden"
+        ],
+        "Dewan Perwakilan Rakyat": [
+          "dpr",
+          "dewan perwakilan rakyat"
+        ],
+        "Dewan Perwakilan Daerah": [
+          "dpd",
+          "dewan perwakilan daerah"
+        ],
+        "Mahkamah Konstitusi": [
+          "mk",
+          "mahkamah konstitusi"
+        ],
+        "Majelis Permusyawaratan Rakyat": [
+          "mpr",
+          "majelis permusyawaratan rakyat"
+        ]
+      },
+      "support_terms": {
+        "authority": [
+          "kekuasaan",
+          "wewenang",
+          "kewenangan",
+          "tugas",
+          "fungsi",
+          "hak",
+          "mengajukan",
+          "membahas",
+          "pertimbangan"
+        ],
+        "procedure": [
+          "usul",
+          "permintaan",
+          "memeriksa",
+          "mengadili",
+          "memutus",
+          "wajib",
+          "sidang",
+          "rapat",
+          "paling",
+          "lama",
+          "lambat"
+        ],
+        "relation": [
+          "pendapat",
+          "mengajukan",
+          "memeriksa",
+          "mengadili",
+          "memutus",
+          "usul"
+        ]
+      },
+      "procedure_requirements": [
+        {
+          "requirement_id": "grounds",
+          "description": "Alasan pemberhentian",
+          "required_entities": [
+            "Presiden"
+          ],
+          "support_terms": [
+            "pengkhianatan",
+            "korupsi",
+            "penyuapan",
+            "tercela",
+            "syarat"
+          ],
+          "hierarchy_depth": 2
+        },
+        {
+          "requirement_id": "procedure_basis",
+          "description": "Dasar prosedur pemberhentian",
+          "required_entities": [
+            "Presiden",
+            "Dewan Perwakilan Rakyat"
+          ],
+          "support_terms": [
+            "usul",
+            "mengajukan",
+            "pendapat"
+          ],
+          "hierarchy_depth": 2
+        },
+        {
+          "requirement_id": "constitutional_review",
+          "description": "Pemeriksaan oleh Mahkamah Konstitusi",
+          "required_entities": [
+            "Mahkamah Konstitusi"
+          ],
+          "support_terms": [
+            "memeriksa",
+            "mengadili",
+            "memutus"
+          ],
+          "hierarchy_depth": 3
+        },
+        {
+          "requirement_id": "assembly_decision",
+          "description": "Keputusan oleh MPR",
+          "required_entities": [
+            "Majelis Permusyawaratan Rakyat"
+          ],
+          "support_terms": [
+            "sidang",
+            "keputusan",
+            "memutus",
+            "memutuskan"
+          ],
+          "hierarchy_depth": 3
+        }
+      ],
       "max_variants": 4,
       "max_rounds": 2,
       "max_candidates": 30,
       "requirement_generation": {
         "conjunction_delimiters": [
-          "dan"
+          "dan",
+          "serta",
+          "maupun",
+          "sekaligus",
+          "bersama dengan"
         ],
         "minimum_supports": {
-          "decomposition": 3,
-          "multiple_supports": 2
+          "procedure": 3,
+          "authority": 2
         }
       }
     },
@@ -541,6 +692,12 @@
           "child_unit_type": "ayat_record",
           "required_terms": [
             "ayat"
+          ],
+          "relation": [
+            "pendapat",
+            "mengajukan",
+            "memutus",
+            "usul"
           ]
         },
         "bab_pasal_children": {
@@ -768,11 +925,6 @@
           "{analysis} {amendment}",
           "apa {analysis} {amendment}",
           "{analysis} dari {amendment}"
-        ],
-        "heldout_analysis_probes": [
-          "rasional amandemen keempat",
-          "pertimbangan perubahan ketiga",
-          "motif amandemen pertama"
         ]
       },
       "instrument_source_signals": [

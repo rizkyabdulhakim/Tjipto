@@ -849,7 +849,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(len(exact["historical_citations"]), 1)
         self.assertFalse(exact["citations"])
         self.assertFalse(exact["viewer_refs"])
-        self.assertIn("dukungan sumber exact", exact["answer"].casefold())
+        self.assertIn("secara terverifikasi", exact["answer"].casefold())
 
         paragraph = self.service.ask("uud", "Pasal 3 ayat (3) menjadi Pasal 3 ayat (2)")
         self.assertEqual(paragraph["route"], "document_relation")
@@ -862,7 +862,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(paragraph["article_amendment_relations"][0]["target_legal_unit_id"], "uud_legal_unit_00014")
         self.assertEqual(paragraph["article_amendment_relations"][0]["source_reference_range_kind"], "literal")
         self.assertTrue(all(row["viewer_highlightable"] for row in paragraph["article_amendment_relations"]))
-        self.assertIn("dukungan sumber exact", paragraph["answer"].casefold())
+        self.assertIn("secara terverifikasi", paragraph["answer"].casefold())
 
         paraphrase = self.service.ask("uud", "perubahan keempat mengubah penomoran pasal apa")
         self.assertEqual(paraphrase["route"], "document_relation")
@@ -1022,12 +1022,21 @@ class RuntimeContractTest(unittest.TestCase):
         ]
         result = viewer_payload(store, "uud", evidence, synthetic_boxes)
         self.assertEqual(result["status"], "non_highlightable_trace")
-        self.assertFalse(result["rendering_available"])
+        self.assertTrue(result["pdf_access_available"])
+        self.assertTrue(result["rendering_available"])
+        self.assertFalse(result["viewer_highlightable"])
         self.assertFalse(result["bbox_rectangles"])
 
-        page_grounded = evidence | {"bbox_precision": "page_grounded_only", "viewer_highlightable": True}
-        result = viewer_payload(store, "uud", page_grounded, store.bboxes_for(evidence["evidence_id"]))
+        page_grounded = evidence | {
+            "bbox_refs": (),
+            "bbox_precision": "page_grounded_only",
+            "viewer_highlightable": False,
+        }
+        result = viewer_payload(store, "uud", page_grounded, [])
         self.assertEqual(result["status"], "source_page_trace_only")
+        self.assertTrue(result["pdf_access_available"])
+        self.assertTrue(result["rendering_available"])
+        self.assertFalse(result["viewer_highlightable"])
         self.assertFalse(result["bbox_rectangles"])
 
     def test_public_bbox_defaults_fail_closed(self) -> None:
@@ -1075,9 +1084,8 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertFalse(result["context_pack"]["answer_evidence"], case["query"])
             self.assertFalse(result["context_pack"]["citation_payloads"], case["query"])
             self.assertFalse(result["context_pack"]["viewer_refs"], case["query"])
-            reasons = set(result["context_pack"]["validation_reasons"].values())
             if result["route"] == "lexical_fallback":
-                self.assertIn("insufficient_query_support", reasons, case["query"])
+                self.assertIn("semantic_support_missing", result["insufficient_reasons"], case["query"])
 
     def test_criminal_punishment_queries_are_out_of_scope(self) -> None:
         for query in (
@@ -1959,7 +1967,7 @@ class RuntimeContractTest(unittest.TestCase):
         education = self.service.ask("uud", "pasal apa yang mengatur pendidikan", limit=10)
         self.assertNotIn(education["route"], {"instrument_unresolved", "instrument_resolved_fail_closed"})
         self.assertEqual(education["status"], "insufficient_evidence")
-        self.assertIn("insufficient_query_support", education["insufficient_reasons"])
+        self.assertIn("claim_support_insufficient", education["insufficient_reasons"])
 
         pasal = self.service.ask("uud", "apa isi Pasal 31", limit=10)
         self.assertEqual(pasal["route"], "legal_reference")

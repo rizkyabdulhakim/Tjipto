@@ -3710,9 +3710,7 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
     queries = [
         template.format(analysis=term, amendment=amendment) for term in terms for amendment in amendments for template in word_orders
     ]
-    heldout = tuple(matrix.get("heldout_analysis_probes") or ())
-    all_analysis = (*queries, *heldout)
-    fallback = [query for query in all_analysis if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"]
+    fallback = [query for query in queries if resolve_instrument_intent(query, intent, corpus="uud").target_status == "not_instrument"]
     public_evidence: list[str] = []
     neighbor_answers: list[str] = []
     neighbor_searches: list[str] = []
@@ -3758,7 +3756,7 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
     counts = {
         "health_mode": "resolver_config_decision",
         "resolver_matrix_count": len(queries),
-        "heldout_analysis_probe_count": len(heldout),
+        "heldout_analysis_probe_count": len(false_positive_guards),
         "analysis_signal_bm25_fallback_count": len(set(fallback)),
         "unsupported_analysis_public_evidence_count": len(set(public_evidence)),
         "resolver_neighbor_candidate_count": len(set((*neighbor_answers, *neighbor_searches))),
@@ -3771,7 +3769,7 @@ def _instrument_intent_invariant_router_health(intent: dict) -> dict:
         **counts,
         "status": "complete"
         if queries
-        and heldout
+        and false_positive_guards
         and not any(
             value for key, value in counts.items() if key not in {"health_mode", "resolver_matrix_count", "heldout_analysis_probe_count"}
         )

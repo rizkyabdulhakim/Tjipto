@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
 # Shared Indonesian lexical baseline; keep corpus config for legal structure/policy.
-STOPWORDS = {
+RANKING_STOPWORDS = {
     "adalah",
     "atas",
     "apa",
@@ -18,7 +18,6 @@ STOPWORDS = {
     "atau",
     "aturan",
     "berapa",
-    "boleh",
     "dalam",
     "dan",
     "dari",
@@ -31,7 +30,6 @@ STOPWORDS = {
     "kapan",
     "ketentuan",
     "lembaga",
-    "lama",
     "pada",
     "pasal",
     "tentang",
@@ -43,6 +41,10 @@ STOPWORDS = {
     "siapa",
 }
 
+# These tokens affect legal/query semantics even when a ranker assigns them
+# little statistical weight.  They are deliberately not ranking stopwords.
+SEMANTIC_CONTROL_TOKENS = frozenset({"boleh", "tidak", "wajib", "dilarang", "lama"})
+
 
 def tokens(text: str, *, aliases: dict[str, str] | None = None) -> list[str]:
     expanded: list[str] = []
@@ -53,7 +55,11 @@ def tokens(text: str, *, aliases: dict[str, str] | None = None) -> list[str]:
 
 
 def meaningful_tokens(text: str, *, aliases: dict[str, str] | None = None) -> set[str]:
-    return {_normalize_token(token, aliases or {}) for token in tokens(text, aliases=aliases) if token not in STOPWORDS and len(token) > 2}
+    return {
+        _normalize_token(token, aliases or {})
+        for token in tokens(text, aliases=aliases)
+        if token not in RANKING_STOPWORDS and len(token) > 2
+    }
 
 
 def _normalize_token(token: str, aliases: dict[str, str]) -> str:
@@ -146,6 +152,7 @@ class SparseIndex:
 
     identity: str
     aliases: tuple[tuple[str, str], ...]
+    related_terms: tuple[tuple[str, tuple[str, ...]], ...]
     k1: float
     b: float
     record_count: int
@@ -159,6 +166,7 @@ class SparseIndex:
     ) -> "SparseIndex":
         aliases = _lexical_aliases(config)
         alias_items = tuple(sorted(aliases.items()))
+        related_items = tuple(sorted(_lexical_related_terms(config).items()))
         documents: list[SparseDocument] = []
         document_frequency: Counter[str] = Counter()
         total_length = 0
@@ -169,10 +177,18 @@ class SparseIndex:
             documents.append(SparseDocument.build(row, doc_terms, tuple(sorted(frequencies.items()))))
             document_frequency.update(frequencies.keys())
             total_length += len(doc_terms)
-        identity = identity or cls.snapshot_identity(evidence, config=config, k1=k1, b=b, aliases=alias_items)
+        identity = identity or cls.snapshot_identity(
+            evidence,
+            config=config,
+            k1=k1,
+            b=b,
+            aliases=alias_items,
+            related_terms=related_items,
+        )
         return cls(
             identity=identity,
             aliases=alias_items,
+            related_terms=related_items,
             k1=k1,
             b=b,
             record_count=len(documents),
@@ -185,14 +201,17 @@ class SparseIndex:
     def snapshot_identity(
         evidence: list[dict], *, config=None, k1: float = 1.5, b: float = 0.75,
         aliases: tuple[tuple[str, str], ...] | None = None,
+        related_terms: tuple[tuple[str, tuple[str, ...]], ...] | None = None,
     ) -> str:
         alias_items = aliases if aliases is not None else tuple(sorted(_lexical_aliases(config).items()))
+        related_items = related_terms if related_terms is not None else tuple(sorted(_lexical_related_terms(config).items()))
         snapshot = {
             "corpus_id": getattr(config, "corpus_id", None),
             "manifest_digest": getattr(config, "manifest_digest", None),
             "artifact_set_digest": getattr(config, "artifact_set_digest", None),
             "manifest_path": str(getattr(config, "manifest_path", "")),
             "aliases": alias_items,
+            "related_terms": related_items,
             "k1": k1,
             "b": b,
             "record_count": len(evidence),
@@ -204,7 +223,7 @@ class SparseIndex:
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
         aliases = dict(self.aliases)
-        query_terms = tokens(query, aliases=aliases)
+        query_terms = _expanded_query_terms(query, aliases, dict(self.related_terms))
         if not query_terms or not self.documents:
             return []
         document_frequency = dict(self.document_frequency)
@@ -247,7 +266,15 @@ def sparse_index_for_store(store, *, k1: float = 1.5, b: float = 0.75) -> Sparse
     evidence = store.evidence
     config = store.config
     aliases = tuple(sorted(_lexical_aliases(config).items()))
-    cache_key = SparseIndex.snapshot_identity(evidence, config=config, k1=k1, b=b, aliases=aliases)
+    related_terms = tuple(sorted(_lexical_related_terms(config).items()))
+    cache_key = SparseIndex.snapshot_identity(
+        evidence,
+        config=config,
+        k1=k1,
+        b=b,
+        aliases=aliases,
+        related_terms=related_terms,
+    )
     if index is None or getattr(store, "_sparse_index_cache_key", None) != cache_key:
         store._sparse_index = SparseIndex.build(evidence, config=config, k1=k1, b=b, identity=cache_key)
         store._sparse_index_cache_key = cache_key
@@ -275,3 +302,25 @@ def _with_coverage(row: dict, query: str, aliases: dict[str, str]) -> dict:
 def _lexical_aliases(config) -> dict[str, str]:
     settings: dict = getattr(config, "setting", lambda *_: {})("lexical_normalization", {}) or {}
     return {str(key).casefold(): str(value).casefold() for key, value in dict(settings.get("aliases") or {}).items()}
+
+
+def _lexical_related_terms(config) -> dict[str, tuple[str, ...]]:
+    settings: dict = getattr(config, "setting", lambda *_: {})("lexical_normalization", {}) or {}
+    return {
+        str(key).casefold(): tuple(str(value).casefold() for value in values if isinstance(value, str))
+        for key, values in dict(settings.get("related_terms") or {}).items()
+        if isinstance(values, (tuple, list))
+    }
+
+
+def _expanded_query_terms(
+    query: str,
+    aliases: dict[str, str],
+    related_terms: dict[str, tuple[str, ...]],
+) -> list[str]:
+    original = tokens(query, aliases=aliases)
+    expanded = list(original)
+    for term in original:
+        for related in related_terms.get(term, ()):
+            expanded.extend(tokens(related, aliases=aliases))
+    return expanded

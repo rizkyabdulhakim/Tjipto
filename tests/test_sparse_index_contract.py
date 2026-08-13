@@ -55,6 +55,11 @@ class SparseIndexContractTest(unittest.TestCase):
         self.assertEqual(second.record_count, 2)
         store.config = _config(settings={"lexical_normalization": {"aliases": {"a": "alpha"}}})
         self.assertIsNot(second, sparse_index_for_store(store))
+        alias_index = sparse_index_for_store(store)
+        store.config = _config(settings={
+            "lexical_normalization": {"aliases": {"a": "alpha"}, "related_terms": {"alpha": ["beta"]}}
+        })
+        self.assertIsNot(alias_index, sparse_index_for_store(store))
 
         store.config = _config()
         store.evidence[0]["quoted_text"] = "gamma"

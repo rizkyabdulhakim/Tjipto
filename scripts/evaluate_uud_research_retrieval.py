@@ -118,11 +118,17 @@ def _evaluate(case: dict[str, Any], service: Any) -> dict[str, Any]:
             for row in response.get("matches", ())
             if row.get("evidence_id")
         ]
+        assignment_map = dict((response.get("evidence_set") or {}).get("assignments") or ())
+        assigned_ids = [
+            str(evidence_id)
+            for support_ids in assignment_map.values()
+            for evidence_id in support_ids
+        ]
         actual_citations = [str(row.get("citation")) for row in citations if row.get("citation")]
-        errors = _compare(case, response, published_ids, retrieved_ids, actual_citations)
+        errors = _compare(case, response, published_ids, assigned_ids, actual_citations)
         execution_status = "valid"
     except Exception as error:  # the report distinguishes evaluator/runtime failure from capability gaps
-        response, published_ids, retrieved_ids, actual_citations = {}, [], [], []
+        response, published_ids, retrieved_ids, assigned_ids, actual_citations = {}, [], [], [], []
         errors = [f"execution:{type(error).__name__}:{error}"]
         execution_status = "invalid"
     capability_status = "met" if not errors else "gap"
@@ -139,12 +145,14 @@ def _evaluate(case: dict[str, Any], service: Any) -> dict[str, Any]:
         "invalid": execution_status == "invalid",
         "errors": errors,
         "gold": {key: case.get(key) for key in ("expected_behavior", "expected_status", "expected_route", "expected_clarification_kind", "gold_support_groups", "alternative_support_groups")},
-            "observed": {
+        "observed": {
             "status": response.get("status"),
             "route": response.get("route"),
             "intent": response.get("intent"),
             "support_ids": published_ids,
             "retrieved_support_ids": retrieved_ids,
+            "assigned_support_ids": assigned_ids,
+            "requirement_assignments": (response.get("evidence_set") or {}).get("assignments"),
             "citations": actual_citations,
             "clarification_kind": response.get("clarification_kind"),
         },
@@ -155,7 +163,7 @@ def _compare(
     case: dict[str, Any],
     response: dict,
     published_ids: list[str],
-    retrieved_ids: list[str],
+    assigned_ids: list[str],
     actual_citations: list[str],
 ) -> list[str]:
     errors: list[str] = []
@@ -171,11 +179,10 @@ def _compare(
     groups = [set(group) for group in (case.get("gold_support_groups") or ())]
     alternatives = [set(group) for group in (case.get("alternative_support_groups") or ())]
     if groups or alternatives:
-        # Research support-group recall measures the verified candidate set,
-        # while published_ids records the smaller server-selected citation
-        # set.  Candidate presence is the retrieval contract; publication
-        # remains guarded by the runtime's support validators.
-        if not any(group <= set(retrieved_ids) for group in (*groups, *alternatives)):
+        accepted = set(published_ids)
+        if response.get("evidence_set") is not None:
+            accepted &= set(assigned_ids)
+        if not any(group <= accepted for group in (*groups, *alternatives)):
             errors.append("support_group_missing")
     return errors
 

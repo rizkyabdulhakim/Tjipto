@@ -264,7 +264,10 @@ export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Cit
 
 export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): SupportGroup[] {
   const grouped = (response.support_groups ?? []).flatMap((group) => {
-    const kind: SupportGroup["kind"] = "metadata";
+    const first = group.members[0];
+    if (!first) return [];
+    const kind = supportGroupKind(first.authority_kind);
+    if (!kind) return [];
     return [{
       id: group.public_group_id,
       title: group.label,

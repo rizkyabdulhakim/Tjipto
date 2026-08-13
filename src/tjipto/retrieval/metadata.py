@@ -158,7 +158,7 @@ def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
     if _asks_effective_rule(folded, intent):
         return "effective_rule"
     if _asks_decision_date(folded, intent):
-        return "decision_date"
+        return "decision_date" if _asks_any(folded, intent, "decision_context") else "date"
     if _asks_decision_session(folded, intent):
         return "decision_session"
     if _asks_enactment_place(folded, intent):
@@ -260,7 +260,10 @@ def _asks_effective_rule(folded: str, intent: dict) -> bool:
 
 
 def _asks_decision_date(folded: str, intent: dict) -> bool:
-    return _asks_any(folded, intent, "decision_context") and _asks_any(folded, intent, "date_question")
+    return _asks_any(folded, intent, "date_question") and (
+        _asks_any(folded, intent, "decision_context")
+        or _asks_any(folded, intent, "session_question")
+    )
 
 
 def _asks_decision_session(folded: str, intent: dict) -> bool:

@@ -53,6 +53,22 @@ test("keeps grouped members independently targetable", () => {
   assert.deepEqual(groups[0].members.map((member) => member.publicTargetId), ["target_1", "target_3"]);
 });
 
+test("keeps grouped amendment relations typed as provenance", () => {
+  const relation = {
+    ...legalSupport,
+    public_support_id: "relation_1",
+    authority_kind: "instrument_provenance",
+    citation_final: false,
+    support_kind: "article_relation",
+    fact_kind: "article_relation",
+  };
+  const groups = mapAskResponseToSupportGroups({
+    kind: "answer", status: "answer_ready",
+    support_groups: [{ public_group_id: "relations", group_kind: "article_relation_members", label: "Perubahan Pertama", summary: "8 ketentuan", member_count: 1, members: [relation] }],
+  });
+  assert.equal(groups[0].kind, "trace");
+});
+
 test("maps support categories only from typed authority", () => {
   const supports = [
     { ...legalSupport, public_support_id: "meta", authority_kind: "metadata_source", citation_final: false },

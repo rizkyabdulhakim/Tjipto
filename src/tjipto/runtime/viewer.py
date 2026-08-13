@@ -124,7 +124,13 @@ def resolve_pdf_access(
     page_bboxes = tuple(row for row in bboxes if row.get("page_number") == page)
     if bbox_id:
         page_bboxes = tuple(row for row in page_bboxes if row.get("bbox_id") == bbox_id)
-    if not page_bboxes:
+    requires_exact_geometry = (
+        bbox_id is not None
+        or evidence.get("bbox_precision") == "exact"
+        and evidence.get("viewer_highlightable") is True
+        and bool(evidence.get("bbox_refs"))
+    )
+    if requires_exact_geometry and not page_bboxes:
         return _pdf_unavailable("invalid_bbox")
     if source_sha256 is not None and source_sha256 != evidence.get("source_sha256"):
         return _pdf_unavailable("source_hash_mismatch")
@@ -142,7 +148,7 @@ def resolve_pdf_access(
     except (OSError, ValueError):
         return _pdf_unavailable("render_failed")
 
-    first_box = page_bboxes[0]
+    first_box = page_bboxes[0] if page_bboxes else {}
     return {
         "status": "pdf_access_ready",
         "path": pdf_path,
@@ -291,8 +297,9 @@ def _trace_only(pdf: dict, status: str, reason: str) -> dict:
     return {
         "status": status,
         "pdf_access_available": True,
-        "rendering_available": False,
-        "render_status": status,
+        "rendering_available": True,
+        "render_status": "pdf_access_available",
+        "viewer_highlightable": False,
         "reason": reason,
         "page_number": pdf["page_number"],
         "bbox_rectangles": (),

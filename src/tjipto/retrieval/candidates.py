@@ -139,7 +139,7 @@ def _add(rows_by_id: dict[str, dict], store, row: dict, route: str, order: int, 
         existing["candidate_type"] = row.get("candidate_type") or CANDIDATE_TYPE.get(
             route, existing.get("candidate_type", "legal_unit_candidate")
         )
-    score = 0.0 if route == "bm25" and not row.get("lexical_complete_coverage", True) else ROUTE_WEIGHT[route] - order
+    score = ROUTE_WEIGHT[route] - order
     existing["route_scores"][route] = max(existing["route_scores"].get(route, 0.0), score)
     if trace:
         existing["expansion_trace"] = (*existing["expansion_trace"], trace)

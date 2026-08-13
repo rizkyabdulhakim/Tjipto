@@ -1,14 +1,14 @@
 {
   "execution_status": "valid",
   "capability_status": "gap",
-  "met": 4,
-  "gap": 4,
+  "met": 5,
+  "gap": 3,
   "invalid": 0,
-  "blocking_failures": 1,
+  "blocking_failures": 0,
   "counts": {
     "cases": 8,
-    "met": 4,
-    "gap": 4,
+    "met": 5,
+    "gap": 3,
     "invalid": 0
   },
   "results": [
@@ -19,15 +19,11 @@
       "expected_behavior": "retrieve",
       "blocking": true,
       "execution_status": "valid",
-      "capability_status": "gap",
-      "met": false,
-      "gap": true,
+      "capability_status": "met",
+      "met": true,
+      "gap": false,
       "invalid": false,
-      "errors": [
-        "route:legal_reference!=structural_navigation",
-        "citations_missing",
-        "support_group_missing"
-      ],
+      "errors": [],
       "gold": {
         "expected_behavior": "retrieve",
         "expected_status": "answer_ready",
@@ -42,13 +38,20 @@
       },
       "observed": {
         "status": "answer_ready",
-        "route": "legal_reference",
-        "intent": "exact_citation",
+        "route": "structural_navigation",
+        "intent": "structural_navigation",
         "support_ids": [
-          "uud_current_consolidated_final_citation_evidence_00411"
+          "uud_current_consolidated_final_citation_evidence_00407"
         ],
+        "retrieved_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00407",
+          "uud_current_consolidated_final_citation_evidence_00402",
+          "uud_current_consolidated_final_citation_evidence_00408"
+        ],
+        "assigned_support_ids": [],
+        "requirement_assignments": null,
         "citations": [
-          "Pasal 28"
+          "Pasal 27"
         ],
         "clarification_kind": null
       }
@@ -84,6 +87,13 @@
         "support_ids": [
           "uud_current_consolidated_final_citation_evidence_00263"
         ],
+        "retrieved_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00263",
+          "uud_current_consolidated_final_citation_evidence_00247",
+          "uud_current_consolidated_final_citation_evidence_00238"
+        ],
+        "assigned_support_ids": [],
+        "requirement_assignments": null,
         "citations": [
           "Pasal 7"
         ],
@@ -121,6 +131,13 @@
         "support_ids": [
           "uud_current_consolidated_final_citation_evidence_00459"
         ],
+        "retrieved_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00459",
+          "uud_current_consolidated_final_citation_evidence_00417",
+          "uud_current_consolidated_final_citation_evidence_00416"
+        ],
+        "assigned_support_ids": [],
+        "requirement_assignments": null,
         "citations": [
           "(1)"
         ],
@@ -152,6 +169,13 @@
         "route": "lexical_fallback",
         "intent": "natural_language",
         "support_ids": [],
+        "retrieved_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00407",
+          "uud_current_consolidated_final_citation_evidence_00402",
+          "uud_current_consolidated_final_citation_evidence_00459"
+        ],
+        "assigned_support_ids": [],
+        "requirement_assignments": null,
         "citations": [],
         "clarification_kind": "concept_facet"
       }
@@ -168,7 +192,6 @@
       "gap": true,
       "invalid": false,
       "errors": [
-        "status:insufficient_evidence!=answer_ready",
         "support_group_missing"
       ],
       "gold": {
@@ -190,11 +213,84 @@
         ]
       },
       "observed": {
-        "status": "insufficient_evidence",
+        "status": "answer_ready",
         "route": "lexical_fallback",
         "intent": "natural_language",
-        "support_ids": [],
-        "citations": [],
+        "support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00353",
+          "uud_current_consolidated_final_citation_evidence_00369"
+        ],
+        "retrieved_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00353",
+          "uud_current_consolidated_final_citation_evidence_00369",
+          "uud_current_consolidated_final_citation_evidence_00341",
+          "uud_current_consolidated_final_citation_evidence_00610",
+          "uud_current_consolidated_final_citation_evidence_00343",
+          "uud_current_consolidated_final_citation_evidence_00351",
+          "uud_current_consolidated_final_citation_evidence_00611",
+          "uud_current_consolidated_final_citation_evidence_00354",
+          "uud_current_consolidated_final_citation_evidence_00346",
+          "uud_current_consolidated_final_citation_evidence_00367",
+          "uud_current_consolidated_final_citation_evidence_00372",
+          "uud_current_consolidated_final_citation_evidence_00240",
+          "uud_current_consolidated_final_citation_evidence_00347",
+          "uud_current_consolidated_final_citation_evidence_00361",
+          "uud_current_consolidated_final_citation_evidence_00612",
+          "uud_current_consolidated_final_citation_evidence_00307",
+          "uud_current_consolidated_final_citation_evidence_00349",
+          "uud_current_consolidated_final_citation_evidence_00371",
+          "uud_current_consolidated_final_citation_evidence_00348",
+          "uud_current_consolidated_final_citation_evidence_00319",
+          "uud_current_consolidated_final_citation_evidence_00333",
+          "uud_current_consolidated_final_citation_evidence_00345",
+          "uud_current_consolidated_final_citation_evidence_00239",
+          "uud_current_consolidated_final_citation_evidence_00329",
+          "uud_current_consolidated_final_citation_evidence_00318",
+          "uud_current_consolidated_final_citation_evidence_00359",
+          "uud_current_consolidated_final_citation_evidence_00358",
+          "uud_current_consolidated_final_citation_evidence_00344",
+          "uud_current_consolidated_final_citation_evidence_00268",
+          "uud_current_consolidated_final_citation_evidence_00342",
+          "uud_current_consolidated_final_citation_evidence_00269",
+          "uud_current_consolidated_final_citation_evidence_00287",
+          "uud_current_consolidated_final_citation_evidence_00265",
+          "uud_current_consolidated_final_citation_evidence_00267",
+          "uud_current_consolidated_final_citation_evidence_00321",
+          "uud_current_consolidated_final_citation_evidence_00320",
+          "uud_current_consolidated_final_citation_evidence_00322",
+          "uud_current_consolidated_final_citation_evidence_00324",
+          "uud_current_consolidated_final_citation_evidence_00366",
+          "uud_current_consolidated_final_citation_evidence_00252",
+          "uud_current_consolidated_final_citation_evidence_00363",
+          "uud_current_consolidated_final_citation_evidence_00364",
+          "uud_current_consolidated_final_citation_evidence_00365",
+          "uud_current_consolidated_final_citation_evidence_00355",
+          "uud_current_consolidated_final_citation_evidence_00350",
+          "uud_current_consolidated_final_citation_evidence_00304",
+          "uud_current_consolidated_final_citation_evidence_00303"
+        ],
+        "assigned_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00353",
+          "uud_current_consolidated_final_citation_evidence_00369"
+        ],
+        "requirement_assignments": [
+          [
+            "dimension_1",
+            [
+              "uud_current_consolidated_final_citation_evidence_00353"
+            ]
+          ],
+          [
+            "dimension_2",
+            [
+              "uud_current_consolidated_final_citation_evidence_00369"
+            ]
+          ]
+        ],
+        "citations": [
+          "(2)",
+          "(2)"
+        ],
         "clarification_kind": null
       }
     },
@@ -210,7 +306,6 @@
       "gap": true,
       "invalid": false,
       "errors": [
-        "status:limited_answer!=answer_ready",
         "support_group_missing"
       ],
       "gold": {
@@ -228,15 +323,78 @@
           [
             "uud_current_consolidated_final_citation_evidence_00433",
             "uud_current_consolidated_final_citation_evidence_00417"
+          ],
+          [
+            "uud_current_consolidated_final_citation_evidence_00433",
+            "uud_current_consolidated_final_citation_evidence_00459"
           ]
         ]
       },
       "observed": {
-        "status": "limited_answer",
+        "status": "answer_ready",
         "route": "lexical_fallback",
         "intent": "natural_language",
-        "support_ids": [],
-        "citations": [],
+        "support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00433",
+          "uud_current_consolidated_final_citation_evidence_00458"
+        ],
+        "retrieved_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00433",
+          "uud_current_consolidated_final_citation_evidence_00380",
+          "uud_current_consolidated_final_citation_evidence_00432",
+          "uud_current_consolidated_final_citation_evidence_00378",
+          "uud_current_consolidated_final_citation_evidence_00412",
+          "uud_current_consolidated_final_citation_evidence_00458",
+          "uud_current_consolidated_final_citation_evidence_00425",
+          "uud_current_consolidated_final_citation_evidence_00468",
+          "uud_current_consolidated_final_citation_evidence_00614",
+          "uud_current_consolidated_final_citation_evidence_00462",
+          "uud_current_consolidated_final_citation_evidence_00457",
+          "uud_current_consolidated_final_citation_evidence_00415",
+          "uud_current_consolidated_final_citation_evidence_00470",
+          "uud_current_consolidated_final_citation_evidence_00460",
+          "uud_current_consolidated_final_citation_evidence_00472",
+          "uud_current_consolidated_final_citation_evidence_00459",
+          "uud_current_consolidated_final_citation_evidence_00424",
+          "uud_current_consolidated_final_citation_evidence_00428",
+          "uud_current_consolidated_final_citation_evidence_00317",
+          "uud_current_consolidated_final_citation_evidence_00413",
+          "uud_current_consolidated_final_citation_evidence_00461",
+          "uud_current_consolidated_final_citation_evidence_00467",
+          "uud_current_consolidated_final_citation_evidence_00417",
+          "uud_current_consolidated_final_citation_evidence_00315",
+          "uud_current_consolidated_final_citation_evidence_00438",
+          "uud_current_consolidated_final_citation_evidence_00416",
+          "uud_current_consolidated_final_citation_evidence_00349",
+          "uud_current_consolidated_final_citation_evidence_00348",
+          "uud_current_consolidated_final_citation_evidence_00377",
+          "uud_current_consolidated_final_citation_evidence_00346",
+          "uud_current_consolidated_final_citation_evidence_00437",
+          "uud_current_consolidated_final_citation_evidence_00303",
+          "uud_current_consolidated_final_citation_evidence_00610"
+        ],
+        "assigned_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00433",
+          "uud_current_consolidated_final_citation_evidence_00458"
+        ],
+        "requirement_assignments": [
+          [
+            "dimension_1",
+            [
+              "uud_current_consolidated_final_citation_evidence_00433"
+            ]
+          ],
+          [
+            "dimension_2",
+            [
+              "uud_current_consolidated_final_citation_evidence_00458"
+            ]
+          ]
+        ],
+        "citations": [
+          "(1)",
+          "Pasal 31"
+        ],
         "clarification_kind": null
       }
     },
@@ -252,7 +410,6 @@
       "gap": true,
       "invalid": false,
       "errors": [
-        "status:insufficient_evidence!=answer_ready",
         "support_group_missing"
       ],
       "gold": {
@@ -270,11 +427,69 @@
         "alternative_support_groups": null
       },
       "observed": {
-        "status": "insufficient_evidence",
+        "status": "answer_ready",
         "route": "lexical_fallback",
         "intent": "natural_language",
-        "support_ids": [],
-        "citations": [],
+        "support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00270",
+          "uud_current_consolidated_final_citation_evidence_00272",
+          "uud_current_consolidated_final_citation_evidence_00266"
+        ],
+        "retrieved_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00270",
+          "uud_current_consolidated_final_citation_evidence_00272",
+          "uud_current_consolidated_final_citation_evidence_00266",
+          "uud_current_consolidated_final_citation_evidence_00399",
+          "uud_current_consolidated_final_citation_evidence_00265",
+          "uud_current_consolidated_final_citation_evidence_00393",
+          "uud_current_consolidated_final_citation_evidence_00247",
+          "uud_current_consolidated_final_citation_evidence_00257",
+          "uud_current_consolidated_final_citation_evidence_00279",
+          "uud_current_consolidated_final_citation_evidence_00254",
+          "uud_current_consolidated_final_citation_evidence_00274",
+          "uud_current_consolidated_final_citation_evidence_00278",
+          "uud_current_consolidated_final_citation_evidence_00267",
+          "uud_current_consolidated_final_citation_evidence_00248",
+          "uud_current_consolidated_final_citation_evidence_00277",
+          "uud_current_consolidated_final_citation_evidence_00243",
+          "uud_current_consolidated_final_citation_evidence_00245",
+          "uud_current_consolidated_final_citation_evidence_00255",
+          "uud_current_consolidated_final_citation_evidence_00261",
+          "uud_current_consolidated_final_citation_evidence_00250",
+          "uud_current_consolidated_final_citation_evidence_00276",
+          "uud_current_consolidated_final_citation_evidence_00260",
+          "uud_current_consolidated_final_citation_evidence_00256",
+          "uud_current_consolidated_final_citation_evidence_00258",
+          "uud_current_consolidated_final_citation_evidence_00262",
+          "uud_current_consolidated_final_citation_evidence_00287",
+          "uud_current_consolidated_final_citation_evidence_00264",
+          "uud_current_consolidated_final_citation_evidence_00246",
+          "uud_current_consolidated_final_citation_evidence_00295",
+          "uud_current_consolidated_final_citation_evidence_00259",
+          "uud_current_consolidated_final_citation_evidence_00268",
+          "uud_current_consolidated_final_citation_evidence_00269",
+          "uud_current_consolidated_final_citation_evidence_00271"
+        ],
+        "assigned_support_ids": [
+          "uud_current_consolidated_final_citation_evidence_00270",
+          "uud_current_consolidated_final_citation_evidence_00272",
+          "uud_current_consolidated_final_citation_evidence_00266"
+        ],
+        "requirement_assignments": [
+          [
+            "research_scope",
+            [
+              "uud_current_consolidated_final_citation_evidence_00270",
+              "uud_current_consolidated_final_citation_evidence_00272",
+              "uud_current_consolidated_final_citation_evidence_00266"
+            ]
+          ]
+        ],
+        "citations": [
+          "(5)",
+          "(7)",
+          "(1)"
+        ],
         "clarification_kind": null
       }
     },
@@ -303,19 +518,22 @@
         "route": "unsupported_scope",
         "intent": "out_of_corpus",
         "support_ids": [],
+        "retrieved_support_ids": [],
+        "assigned_support_ids": [],
+        "requirement_assignments": null,
         "citations": [],
         "clarification_kind": null
       }
     }
   ],
   "evaluation_identity": {
-    "base_commit": "0fc2ae9b8c94937beea0e9b57000f59b44bf8201",
-    "case_set_sha256": "7c87adb29ea5887de0c66f36fd9328b9b5b7676dcb71ff17e4685ccf8c7e9280",
-    "evaluator_sha256": "98ea9b27fe855d6c774d9a922378036a552cfcc2e9cf5a999dd7c86dad335b70",
+    "base_commit": "b721045b98efa26e06e07d77de593e164ebbf604",
+    "case_set_sha256": "51df78f276fffcec89fe205a999d23b18d9f40b93dfa4bcab9bc790a88102341",
+    "evaluator_sha256": "90dc520dc61f19474cb785f0156adb5138e236020c62110b1c8cd0b4f2cbdd79",
     "case_count": 8,
-    "runtime_commit": "0fc2ae9b8c94937beea0e9b57000f59b44bf8201",
-    "runtime_tree_sha": "bcf81c22ff7e855cad6b7c3601cc8237c275800e",
-    "runtime_snapshot_sha256": "8ebf4da6769b52c72f4029885268b58d14d446a4c2f420da2b5d1cb8292d1978",
+    "runtime_commit": "b721045b98efa26e06e07d77de593e164ebbf604",
+    "runtime_tree_sha": "06eaf08abc863c23ab0777c9f5822b47130a377d",
+    "runtime_snapshot_sha256": "337c9fd5f9988b92a84de9f084d330b2e9cf237da44e5e139b82d98f0536ba14",
     "family_counts": {
       "broad_underspecified_concept": 1,
       "comparison": 1,

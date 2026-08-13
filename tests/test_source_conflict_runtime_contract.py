@@ -132,6 +132,14 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
                 self.assertFalse(result[field], case["query"])
 
     def test_pasali_and_pasal_ii_source_routing_preserves_historical_provenance(self) -> None:
+        config = self.service._store("uud").config
+        self.assertFalse(any("Pasal III" in str(row) for row in config.setting("normalization_aliases", ())))
+        mappings = config.setting("source_reference_mappings", ())
+        self.assertEqual(len(mappings), 1)
+        self.assertEqual(
+            set(mappings[0]),
+            {"raw_reference", "canonical_target", "source_role", "mapping_kind", "provenance", "context_terms"},
+        )
         pasal_i = self.service.ask("uud", "Aturan Tambahan Pasal I Perubahan Keempat")
         self.assertEqual(pasal_i["status"], "answer_ready")
         self.assertTrue(pasal_i["citations"])

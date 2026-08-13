@@ -250,11 +250,13 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str, foo
     }.get(authority_kind, "source_trace")
     role_label = row.get("printed_role") if fact_kind == "person_role" else None
     target_source = dict(row.get("viewer_target") or row.get("viewer_ref") or {})
-    linkable = row.get("viewer_highlightable") is True and target_source.get("can_resolve") is True
+    linkable = target_source.get("can_resolve") is True and bool(
+        row.get("source_document_id") and row.get("page_numbers")
+    )
     target = service.register_public_target(corpus_id, {
         "evidence_id": row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
         "proposition_id": row.get("proposition_id"),
-        "relation_id": row.get("relation_id"),
+        "relation_id": row.get("relation_id") or target_source.get("relation_id"),
         "source_document_id": row.get("source_document_id"),
         "bbox_refs": tuple(row.get("bbox_refs") or ()),
         "quoted_text": row.get("display_text") or row.get("quoted_text") or "",
@@ -362,7 +364,8 @@ def _support_group_key(
         name = row.get("entity_identity")
         if name and entity_counts.get(name, 0) > 1:
             return (name, str(support.get("role_label") or "")), "entity_occurrences"
-        return (), ""
+    if support.get("support_kind") == "article_relation":
+        return (str(row.get("evidence_id") or ""), source_role), "article_relation_members"
     if authority_kind == "metadata_source":
         return (source, source_role), "document_metadata"
     return (), ""
@@ -373,6 +376,8 @@ def _support_group_label(group_kind: str, members: list[dict]) -> str:
         return f"{members[0]['role_label']} · {len(members)} orang"
     if group_kind == "entity_occurrences":
         return str(members[0].get("label") or "Sumber dokumen")
+    if group_kind == "article_relation_members":
+        return f"{members[0].get('source_label') or 'Sumber perubahan'} · {len(members)} ketentuan"
     return str(members[0].get("source_label") or members[0].get("label") or "Sumber dokumen")
 
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import json
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -8,6 +10,11 @@ from tjipto.retrieval.hybrid import RetrievalHit, hybrid_search, reciprocal_rank
 from tjipto.retrieval.research import ResearchIntent, execute_research, plan_research
 from tjipto.retrieval.sufficiency import EvidenceRequirement, EvidenceSet, SufficiencyAssessment, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.service import LegalRuntimeService
+from tjipto.runtime.query_semantics import interpret_query
+from tjipto.runtime.service import _research_requirements_for_ask
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _hit(evidence_id: str, lane: str, rank: int, score: float) -> RetrievalHit:
@@ -15,6 +22,25 @@ def _hit(evidence_id: str, lane: str, rank: int, score: float) -> RetrievalHit:
 
 
 class HybridResearchContractTest(unittest.TestCase):
+    def test_heldout_semantics_derive_typed_requirements_without_runtime_fixture_data(self) -> None:
+        service = LegalRuntimeService()
+        store = service._store("uud")
+        fixture = ROOT / "tests/fixtures/uud/research_semantic_cases.jsonl"
+        for line in fixture.read_text(encoding="utf-8").splitlines():
+            case = json.loads(line)
+            semantics = interpret_query(store, "uud", case["query"])
+            requirements = _research_requirements_for_ask(store, semantics, case["query"])
+            self.assertEqual([row.requirement_id for row in requirements], case["required_ids"], case["case_id"])
+            response = service.ask("uud", case["query"])
+            self.assertIn(response["status"], {"answer_ready", "limited_answer"}, case["case_id"])
+            self.assertEqual(response["sufficiency"]["status"], "complete", case["case_id"])
+            self.assertEqual(
+                set(response["sufficiency"]["fulfilled_requirement_ids"]),
+                set(case["required_ids"]),
+                case["case_id"],
+            )
+        runtime_config = json.dumps(store.config.setting("research", {}), ensure_ascii=False)
+        self.assertNotIn("heldout_analysis_probes", runtime_config)
     def test_rrf_deduplicates_and_never_adds_raw_scores(self) -> None:
         sparse = (_hit("b", "bm25", 1, 100.0), _hit("a", "bm25", 2, 1.0))
         dense = (_hit("a", "dense", 1, 0.99), _hit("b", "dense", 2, 0.1))
@@ -77,9 +103,7 @@ class HybridResearchContractTest(unittest.TestCase):
         from tjipto.retrieval.answer import validate_answer_candidate
 
         row = {"evidence_id": "dense", "route_sources": ("hybrid", "dense"), "lexical_complete_coverage": False}
-        with patch("tjipto.retrieval.answer._optional_rows", return_value=()), patch(
-            "tjipto.retrieval.answer.lexical_support_is_complete", return_value=False
-        ):
+        with patch("tjipto.retrieval.answer._optional_rows", return_value=()):
             # Route provenance must not be the reason for rejection; the
             # remaining grounding checks may still fail on this synthetic row.
             accepted, reason = validate_answer_candidate(SimpleNamespace(lineage_error=lambda row: None, bboxes_for=lambda _id: ()), row)
@@ -89,8 +113,7 @@ class HybridResearchContractTest(unittest.TestCase):
         from tjipto.retrieval.answer import validate_answer_candidate
 
         row = {"evidence_id": "exact", "route_sources": ("bm25", "structured"), "lexical_complete_coverage": False}
-        with patch("tjipto.retrieval.answer.lexical_support_is_complete", return_value=False):
-            accepted, reason = validate_answer_candidate(SimpleNamespace(lineage_error=lambda row: None, bboxes_for=lambda _id: ()), row)
+        accepted, reason = validate_answer_candidate(SimpleNamespace(lineage_error=lambda row: None, bboxes_for=lambda _id: ()), row)
         self.assertNotEqual(reason, "insufficient_query_support")
 
     def test_requirement_assignment_is_verified_and_non_overlapping(self) -> None:
@@ -126,6 +149,28 @@ class HybridResearchContractTest(unittest.TestCase):
         with patch("tjipto.retrieval.sufficiency.validate_answer_candidate", return_value=(True, "answer_evidence")):
             evidence = collect_evidence_set(SimpleNamespace(), (row,), (EvidenceRequirement("requirement", description="anything"),))
         self.assertEqual(evidence.missing_requirement_ids, ("requirement",))
+
+    def test_retrieval_query_alone_cannot_assign_arbitrary_verified_row(self) -> None:
+        row = {"evidence_id": "unrelated", "quoted_text": "Mahkamah Konstitusi berwenang mengadili."}
+        requirement = EvidenceRequirement("authority", retrieval_query="kewenangan presiden")
+        with patch("tjipto.retrieval.sufficiency.validate_answer_candidate", return_value=(True, "answer_evidence")):
+            evidence = collect_evidence_set(SimpleNamespace(), (row,), (requirement,))
+        self.assertEqual(evidence.missing_requirement_ids, ("authority",))
+
+    def test_requirement_semantics_reject_unrelated_verified_authority(self) -> None:
+        rows = (
+            {"evidence_id": "mk", "quoted_text": "Mahkamah Konstitusi berwenang mengadili.", "_requirement_ids": ("authority",)},
+            {"evidence_id": "president", "quoted_text": "Presiden memegang kekuasaan pemerintahan.", "_requirement_ids": ("authority",)},
+        )
+        requirement = EvidenceRequirement(
+            "authority",
+            retrieval_query="kewenangan presiden",
+            required_entities=("Presiden",),
+            support_terms=("kekuasaan", "wewenang"),
+        )
+        with patch("tjipto.retrieval.sufficiency.validate_answer_candidate", return_value=(True, "answer_evidence")):
+            evidence = collect_evidence_set(SimpleNamespace(), rows, (requirement,))
+        self.assertEqual(evidence.assignment_map(), {"authority": ("president",)})
 
     def test_requirement_retry_is_scoped_and_carries_forward_support(self) -> None:
         from tjipto.retrieval.research import execute_research_rounds
@@ -207,10 +252,11 @@ class HybridResearchContractTest(unittest.TestCase):
 
     def test_broad_presidential_authority_uses_verified_multi_support(self) -> None:
         response = LegalRuntimeService().ask("uud", "apa kewenangan presiden menurut UUD")
-        self.assertEqual(response["status"], "answer_ready")
+        self.assertEqual(response["status"], "limited_answer")
         self.assertEqual(response["sufficiency"]["status"], "complete")
         self.assertGreaterEqual(len(response["sufficiency"]["fulfilled_requirement_ids"]), 1)
         self.assertTrue(response["citations"])
+        self.assertNotIn("Mahkamah Konstitusi", response["answer"])
 
     def test_impeachment_relation_query_collects_both_typed_dimensions(self) -> None:
         response = LegalRuntimeService().ask("uud", "hubungan DPR dan MK dalam pemakzulan")
@@ -218,7 +264,7 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(response["sufficiency"]["status"], "complete")
         self.assertEqual(
             set(response["sufficiency"]["fulfilled_requirement_ids"]),
-            {"dimension_1", "dimension_2"},
+            {"relation_1", "relation_2"},
         )
         self.assertGreaterEqual(len(response["citations"]), 2)
 

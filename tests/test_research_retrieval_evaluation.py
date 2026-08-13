@@ -19,6 +19,15 @@ SPEC.loader.exec_module(runner)
 
 
 class ResearchRetrievalEvaluationTest(unittest.TestCase):
+    def test_candidate_pool_presence_cannot_replace_assigned_published_support(self) -> None:
+        case = {
+            "expected_status": "answer_ready",
+            "gold_support_groups": [["gold-a", "gold-b"]],
+        }
+        response = {"status": "answer_ready", "evidence_set": {"assignments": (("r", ("unrelated",)),)}}
+        errors = runner._compare(case, response, ["unrelated"], ["unrelated"], [])
+        self.assertIn("support_group_missing", errors)
+
     def test_frozen_families_and_identity(self) -> None:
         rows = [json.loads(line) for line in CASES.read_text(encoding="utf-8").splitlines() if line.strip()]
         self.assertEqual(len(rows), len({row["case_id"] for row in rows}))

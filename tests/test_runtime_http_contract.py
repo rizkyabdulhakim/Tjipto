@@ -230,6 +230,25 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertTrue(viewer["bbox_rectangles"])
         self._assert_public(viewer)
 
+    def test_every_first_amendment_relation_support_has_its_own_pdf_target(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "pasal apa saja yang diubah perubahan pertama"})
+        relation_supports = [row for row in result["supports"] if row["support_kind"] == "article_relation"]
+        self.assertGreater(len(relation_supports), 1)
+        targets = []
+        for support in relation_supports:
+            target = support["viewer_target"]["public_target_id"]
+            self.assertTrue(support["viewer_target"]["can_resolve"], support["label"])
+            self.assertIsNotNone(target, support["label"])
+            viewer = self._post("/legal/uud/viewer", {"target": target})
+            self.assertTrue(viewer["pdf_access_available"], support["label"])
+            self.assertTrue(viewer["rendering_available"], support["label"])
+            self.assertEqual(viewer["page_numbers"], support["page_numbers"], support["label"])
+            self.assertTrue(viewer["bbox_rectangles"], support["label"])
+            targets.append(target)
+        self.assertEqual(len(targets), len(set(targets)))
+        groups = [row for row in result["support_groups"] if row["group_kind"] == "article_relation_members"]
+        self.assertEqual(sum(row["member_count"] for row in groups), len(relation_supports))
+
     def test_groups_preserve_members_and_keep_nonlegal_sections_out_of_quotes(self) -> None:
         result = self._post("/legal/uud/ask", {"query": "siapa wakil ketua yang tercantum dalam Perubahan Pertama?"})
         self.assertTrue(result["support_groups"])

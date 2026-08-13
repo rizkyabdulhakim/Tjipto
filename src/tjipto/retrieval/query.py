@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 from tjipto.corpora.parser_dispatch import normalize_query_reference
 from tjipto.evidence.citation import parse_citation
@@ -15,6 +16,7 @@ def normalize_query(query: str, *, strategy: str = "generic", config=None) -> di
             "normalized_query": re.sub(r"\s+", " ", normalized).strip(),
         }
     normalized = _apply_alias_rules(normalized, config)
+    normalized = _apply_source_reference_mappings(normalized, config)
     corpus_id = str(getattr(config, "corpus_id", "") or "")
     if corpus_id:
         normalized = normalize_query_reference(corpus_id, normalized, config=config)
@@ -26,6 +28,44 @@ def _apply_alias_rules(text: str, config=None) -> str:
         return text
     for rule in config.setting("normalization_aliases", ()):
         text = re.sub(rule["pattern"], rule["replacement"], text, flags=re.IGNORECASE)
+    return text
+
+
+@dataclass(frozen=True)
+class LegalReferenceMapping:
+    raw_reference: str
+    canonical_target: str
+    source_role: str
+    mapping_kind: str
+    provenance: str
+    context_terms: tuple[str, ...]
+
+
+def _apply_source_reference_mappings(text: str, config=None) -> str:
+    """Apply only corpus-declared source-reference discrepancies."""
+    for raw in config.setting("source_reference_mappings", ()) if config is not None else ():
+        try:
+            mapping = LegalReferenceMapping(
+                raw_reference=str(raw["raw_reference"]),
+                canonical_target=str(raw["canonical_target"]),
+                source_role=str(raw["source_role"]),
+                mapping_kind=str(raw["mapping_kind"]),
+                provenance=str(raw["provenance"]),
+                context_terms=tuple(str(value) for value in raw["context_terms"]),
+            )
+        except (KeyError, TypeError):
+            continue
+        if not mapping.context_terms or not all(
+            re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text, re.IGNORECASE)
+            for term in mapping.context_terms
+        ):
+            continue
+        text = re.sub(
+            rf"(?<!\w){re.escape(mapping.raw_reference)}(?!\w)",
+            mapping.canonical_target,
+            text,
+            flags=re.IGNORECASE,
+        )
     return text
 
 
