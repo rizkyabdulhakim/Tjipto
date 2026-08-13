@@ -324,6 +324,30 @@ class HybridResearchContractTest(unittest.TestCase):
         routed = service._route_retrieval("uud", "hak atas pendidikan diatur dimana", store, limit=10)
         self.assertTrue(any(row.get("citation") == "Pasal 31" for row in routed["matches"]))
 
+    def test_verified_single_support_is_not_vetoed_by_question_surface_tokens(self) -> None:
+        for query, citation in (
+            ("Hak atas pendidikan diatur di mana?", "Pasal 31"),
+            ("Bagaimana perubahan UUD dilakukan?", "Pasal 37"),
+        ):
+            service = LegalRuntimeService()
+            response = service.ask("uud", query)
+            self.assertNotEqual(response["status"], "insufficient_evidence", query)
+            self.assertTrue(any(citation in tuple(row.get("hierarchy") or ()) or row.get("citation") == citation for row in response["matches"]), query)
+
+    def test_navigation_returns_the_adjacent_unit_not_the_referenced_unit(self) -> None:
+        for query, expected in (
+            ("Apa ketentuan setelah Pasal 28?", "Pasal 28A"),
+            ("Sebelum Pasal 27 apa?", "Pasal 26"),
+            ("Setelah Pasal 31 ayat (3) apa?", "(4)"),
+        ):
+            response = LegalRuntimeService().ask("uud", query)
+            self.assertEqual(response["route"], "structural_navigation", query)
+            self.assertEqual(response["citations"][0]["citation"], expected, query)
+
+    def test_lawmaking_relation_does_not_admit_impeachment_support(self) -> None:
+        response = LegalRuntimeService().ask("uud", "Apa hubungan Presiden dan DPR dalam pembentukan undang-undang?")
+        self.assertNotIn("Pasal 7B", {row.get("citation") for row in response["citations"]})
+
     def test_trace_only_document_relation_is_not_answer_ready(self) -> None:
         response = LegalRuntimeService().ask("uud", "amandemen keempat mengubah apa")
         self.assertEqual(response["route"], "document_relation")

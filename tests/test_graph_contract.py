@@ -491,6 +491,13 @@ class GraphContractTest(unittest.TestCase):
             ),
             targets,
         )
+        self.assertNotIn(
+            (
+                "uud_instrument_final_citation_evidence::amendment_1_historical::00002::perubahan_pertama_scope",
+                "Pasal 37",
+            ),
+            targets,
+        )
         self.assertIn(
             (
                 "uud_instrument_final_citation_evidence::amendment_1_historical::00002::perubahan_pertama_scope",

@@ -51,7 +51,7 @@ def valid_proposal(value: object) -> dict[str, object] | None:
         return None
     presentation = value.get("presentation")
     references = value.get("referenced_fact_ids")
-    if not isinstance(presentation, str) or not isinstance(references, list) or not all(isinstance(item, str) for item in references):
+    if presentation not in {"direct", "grounded"} or not isinstance(references, list) or not all(isinstance(item, str) for item in references):
         return None
     return {"presentation": presentation, "referenced_fact_ids": tuple(references)}
 

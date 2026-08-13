@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "77c45e99338299a6d3753dfd2f6cad84856005c5a56d184346857765c89805f7",
+    "manifest_sha256": "06e9621c334e6da5d0e21cf02a7fc54298595460472b4805277f250a3b6b9f1e",
     "runtime_required_artifacts": [
       "runtime_projection",
       "validation_report",
@@ -30,10 +30,14 @@
         "menjabat": "jabatan",
         "memperoleh": "mendapat",
         "pengajaran": "pendidikan",
+        "undangundang": "undang undang",
         "pekerjaan": "kerja",
         "periode": "jabatan",
         "pemakzulan": "pemberhentian"
       },
+      "semantic_support_excluded_terms": [
+        "uud"
+      ],
       "related_terms": {
         "kebebasan": [
           "hak"

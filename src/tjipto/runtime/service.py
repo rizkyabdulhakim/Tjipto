@@ -18,7 +18,7 @@ from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusReposito
 from tjipto.evidence.bbox import viewer_overlay_rectangles
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
-from tjipto.retrieval.bm25 import meaningful_tokens, sparse_index_for_store
+from tjipto.retrieval.bm25 import meaningful_tokens, sparse_index_for_store, tokens
 from tjipto.retrieval.candidates import graph_expand
 from tjipto.retrieval.metadata import (
     metadata_lookup,
@@ -284,6 +284,7 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
             for index, entity in enumerate(entities, 1)
         )
     if len(entities) > 1 and hinted("relation"):
+        relation_terms = _research_relation_terms(store, research, query, entities)
         return tuple(
             EvidenceRequirement(
                 f"relation_{index}",
@@ -291,6 +292,9 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
                 retrieval_query=f"{entity} {_research_focus_query(store, research, query)}",
                 required_entities=(entity,),
                 contrast_entities=tuple(value for value in all_entities if value != entity),
+                # The relation must retain an operation-bearing token from the
+                # original request.  Entity co-occurrence alone cannot turn an
+                # impeachment clause into a lawmaking relation.
                 support_terms=relation_terms,
                 authority_kinds=("normative_legal_text",),
                 hierarchy_depth=3,
@@ -474,11 +478,59 @@ def _research_semantic_terms(
     return tuple(sorted(meaningful_tokens(query, aliases=aliases) - excluded))
 
 
+def _research_relation_terms(
+    store: EvidenceStore,
+    research: dict,
+    query: str,
+    entities: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Keep operation vocabulary separate from ranking stopwords.
+
+    A relation requirement needs one source-backed operation cue, while the
+    ranker may still ignore common terms such as ``undang``.  Entity and
+    relation framing are deliberately removed; the residual input is an
+    immutable constraint rather than a second query or a synonym table.
+    """
+    aliases = {
+        normalize_intent_text(key): normalize_intent_text(value)
+        for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
+    }
+    ignored = {
+        token
+        for values in (research.get("semantic_hints", {}) or {}).values()
+        if isinstance(values, (tuple, list))
+        for value in values
+        if isinstance(value, str)
+        for token in tokens(value, aliases=aliases)
+    }
+    ignored.update(token for entity in entities for token in tokens(entity, aliases=aliases))
+    return tuple(sorted({token for token in tokens(query, aliases=aliases) if len(token) > 2 and token not in ignored}))
+
+
+def _semantic_support_excluded_terms(store: EvidenceStore, aliases: dict[str, str]) -> set[str]:
+    policy = store.config.setting("lexical_normalization", {}) or {}
+    return {
+        token
+        for phrase in policy.get("semantic_support_excluded_terms", ())
+        if isinstance(phrase, str)
+        for token in tokens(phrase, aliases=aliases)
+    }
+
+
 def _single_support_covers_query(store: EvidenceStore, query: str) -> bool:
     """Do not decompose a coordinated phrase already proved by one row."""
+    aliases = {
+        str(key).casefold(): str(value).casefold()
+        for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
+    }
+    requested = meaningful_tokens(query, aliases=aliases)
+    requested.difference_update(_semantic_support_excluded_terms(store, aliases))
     return any(
         validate_answer_candidate(store, row | {"route_sources": ("bm25",)})[0]
-        and _semantic_supports_query(store, query, row)
+        and requested <= meaningful_tokens(
+            " ".join(str(row.get(key) or "") for key in ("citation", "hierarchy", "quoted_text")),
+            aliases=aliases,
+        )
         for row in sparse_index_for_store(store).search(query, limit=10)
     )
 
@@ -1643,11 +1695,12 @@ class LegalRuntimeService:
     def _agent_answer(self, evidence: tuple[dict, ...], fallback: str) -> str:
         if not self._external_wording or self._answer_provider is None:
             return fallback
+        facts = _verified_answer_facts(evidence, fallback)
         try:
-            proposal = self._answer_provider.propose(fallback)
+            proposal = self._answer_provider.propose(json.dumps({"facts": facts}, ensure_ascii=False, sort_keys=True))
         except Exception:
             return fallback
-        return _render_wording(proposal, fallback)
+        return _render_wording(proposal, fallback, facts)
 
     def _answer_text(
         self,
@@ -1680,12 +1733,13 @@ def _compact_text(value: object) -> str:
 
 
 def _semantic_supports_query(store: EvidenceStore, query: str, row: dict) -> bool:
-    """Reconstruct support relevance without trusting retriever provenance."""
+    """Guard the single-row lexical fallback after safe lexical normalization."""
     aliases = {
         str(key).casefold(): str(value).casefold()
         for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
     }
     requested = meaningful_tokens(query, aliases=aliases)
+    requested.difference_update(_semantic_support_excluded_terms(store, aliases))
     source = " ".join(
         str(value or "")
         for value in (row.get("citation"), " ".join(row.get("hierarchy") or ()), row.get("quoted_text"))
@@ -1703,6 +1757,10 @@ def _semantic_supports_query(store: EvidenceStore, query: str, row: dict) -> boo
         }
         if alternatives & supported:
             requested.discard(term)
+    # Typed EvidenceRequirement assignment owns complex-answer completeness.
+    # This guard is only for a one-row lexical fallback, where every retained
+    # content token must be grounded after safe aliases and question auxiliaries
+    # have been removed by the lexical policy.
     return bool(requested and requested <= supported)
 
 
@@ -1776,14 +1834,32 @@ def _claim_answer(claims) -> str:
     return f"Klaim “{claim.claim_text}” tidak didukung oleh segmen terverifikasi dalam korpus ini."
 
 
-def _render_wording(proposal: object, fallback: str) -> str:
-    """Render only server-owned presentation primitives, never model prose."""
+def _verified_answer_facts(evidence: tuple[dict, ...], fallback: str) -> dict[str, str]:
+    """Expose only complete, verified fact sentences to the wording boundary."""
+    facts = {"deterministic_answer": fallback}
+    for row in evidence:
+        evidence_id = str(row.get("evidence_id") or "")
+        quote = _compact_text(row.get("quoted_text") or row.get("display_text"))
+        citation = str(row.get("label") or row.get("citation") or "Bukti")
+        if evidence_id and quote:
+            facts[f"support:{evidence_id}"] = f"{citation}: {quote}"
+    return facts
+
+
+def _render_wording(proposal: object, fallback: str, facts: dict[str, str] | None = None) -> str:
+    """Render server-owned facts; an external model never publishes prose."""
     if not isinstance(proposal, dict) or set(proposal) != {"presentation", "referenced_fact_ids"}:
         return fallback
-    if proposal.get("referenced_fact_ids") != ("deterministic_answer",):
+    references = proposal.get("referenced_fact_ids")
+    if not isinstance(references, tuple):
+        return fallback
+    approved = facts or {"deterministic_answer": fallback}
+    if not references or len(references) != len(set(references)) or not set(references) <= set(approved):
         return fallback
     if proposal.get("presentation") == "grounded":
-        return f"Berdasarkan bukti terverifikasi, {fallback}"
+        return f"Berdasarkan bukti terverifikasi, {' '.join(approved[item] for item in references)}"
+    if proposal.get("presentation") == "direct":
+        return " ".join(approved[item] for item in references)
     return fallback
 
 

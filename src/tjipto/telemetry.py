@@ -51,11 +51,15 @@ _HTTP_ROUTES = frozenset(
 _RETRIEVAL_ROUTES = frozenset(
     {
         "bm25",
+        "hybrid",
+        "hybrid_degraded_sparse",
+        "dense_unavailable",
         "citation_not_found",
         "exact",
         "metadata",
         "metadata_not_found",
         "metadata_scope_unresolved",
+        "document_relation",
         "no_results",
         "relation",
         "relation_not_found",
@@ -67,7 +71,7 @@ _RETRIEVAL_ROUTES = frozenset(
         "unsupported_corpus",
     }
 )
-_RETRIEVAL_STATUS = frozenset({"citation_not_found", "found", "invalid_filter", "no_results", "unsupported_corpus"})
+_RETRIEVAL_STATUS = frozenset({"citation_not_found", "dense_unavailable", "found", "invalid_filter", "no_results", "unsupported_corpus"})
 _INTEGRITY_REASONS = frozenset(
     {
         "artifact_contract_malformed", "artifact_contract_weakened", "artifact_malformed", "artifact_missing", "artifact_path_invalid",

@@ -63,6 +63,15 @@ class TelemetryContractTest(unittest.TestCase):
         for gate in ("pytest_run_1", "pytest_run_2", "answer_evaluation", "research_retrieval_evaluation"):
             self.assertEqual(event_record("ci_gate", gate=gate, status="passed", duration_ms=1)["attributes"]["gate"], gate)
 
+    def test_all_runtime_hybrid_and_relation_routes_are_telemetry_safe(self) -> None:
+        for route, status in (
+            ("hybrid", "found"),
+            ("hybrid_degraded_sparse", "found"),
+            ("dense_unavailable", "dense_unavailable"),
+            ("document_relation", "found"),
+        ):
+            self.assertEqual(event_record("retrieval_route", corpus_id="uud", route=route, status=status)["attributes"]["route"], route)
+
     def test_registered_custom_root_corpus_is_retained(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

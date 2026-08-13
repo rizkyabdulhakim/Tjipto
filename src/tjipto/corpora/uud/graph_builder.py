@@ -434,9 +434,16 @@ def _numeric_suffix(value: str) -> int:
 
 
 def _scope_target_labels(text: str | None) -> list[str]:
+    # A scope clause may cite a constitutional basis before naming the actual
+    # amendment targets.  Only the source segment governed by the amendment
+    # operation is materialized as MODIFIES targets.
+    source = str(text or "")
+    operations = tuple(re.finditer(r"\bmengubah\b", source, re.IGNORECASE))
+    if operations:
+        source = source[operations[-1].end() :]
     labels: list[str] = []
     seen: set[str] = set()
-    for row in parse_legal_references("uud", text or ""):
+    for row in parse_legal_references("uud", source):
         label = str(row["reference"])
         if label not in seen:
             seen.add(label)

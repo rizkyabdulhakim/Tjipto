@@ -109,7 +109,10 @@ def parse_uud_legal_references(text: str) -> list[dict[str, object]]:
         next_article = matches[index + 1].start() if index + 1 < len(matches) else len(text or "")
         article = f"Pasal {match.group(1)}{(match.group(2) or '').upper()}"
         context = text[match.end() : next_article]
-        for followup in re.finditer(r"\b(?:dan|atau|serta|maupun)\s+(?:ayat\s*)?\(\s*(\d+)\s*\)", context, re.IGNORECASE):
+        # Paragraph lists routinely abbreviate the repeated article after a
+        # comma as well as after a conjunction.  Preserve that inherited
+        # parent article and the original source range.
+        for followup in re.finditer(r"(?:^|[,;]|\b(?:dan|atau|serta|maupun)\b)\s*(?:ayat\s*)?\(\s*(\d+)\s*\)", context, re.IGNORECASE):
             start = match.start()
             end = match.end() + followup.end()
             contextual = f"{article} ayat ({followup.group(1)})"
@@ -123,7 +126,7 @@ def parse_uud_legal_references(text: str) -> list[dict[str, object]]:
                 "end": end,
             })
             seen.add(key)
-    return sorted(rows, key=lambda row: (int(row["start"]), int(row["end"])))
+    return sorted(rows, key=lambda row: (int(str(row["start"])), int(str(row["end"]))))
 
 
 def matches_uud_contextual_reference(text: str, reference: object) -> bool:
@@ -171,16 +174,18 @@ def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
     target = parse_uud_pasal_reference(text, allow_roman=True)
     if not target:
         return None
-    normalized = normalize_uud_query_reference(text).casefold()
+    normalized = normalize_uud_query_reference(text).casefold().rstrip("?!. ")
+    article = r"pasal\s+\d+(?:[a-z])?\b(?:\s+ayat\s+\(?\d+\)?)?"
     if re.search(
-        r"\bpasal\s+(?:apa\s+)?berikutnya\s+(?:setelah|sesudah)\b|"
-        r"\b(?:setelah|sesudah)\s+pasal\s+\d+[a-z]?\s+(?:pasal\s+berapa|apa)\b",
+        rf"^(?:setelah|sesudah)\s+{article}(?:\s+(?:pasal\s+berapa|apa))?$|"
+        rf"\bpasal\s+(?:apa\s+)?berikutnya\s+(?:setelah|sesudah)\s+{article}\b|"
+        rf"\b(?:apa\s+)?(?:ketentuan|pasal)\s+(?:setelah|sesudah)\s+{article}\b",
         normalized,
     ):
         return target, "next"
     if re.search(
-        r"\b(?:pasal\s+)?sebelumnya\s+sebelum\b|"
-        r"\b(?:ketentuan|bagian|pasal)\s+sebelum\s+pasal\s+\d+[a-z]?\b",
+        rf"^(?:sebelum|sebelumnya)\s+{article}(?:\s+(?:pasal\s+berapa|apa))?$|"
+        rf"\b(?:apa\s+)?(?:ketentuan|pasal)\s+(?:sebelum|sebelumnya)\s+{article}\b",
         normalized,
     ):
         return target, "previous"

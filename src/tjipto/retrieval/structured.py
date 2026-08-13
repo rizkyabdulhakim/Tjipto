@@ -445,32 +445,57 @@ def _navigation_rows(
             row
             for row in store.legal_units
             if row.get("unit_label", "").casefold() == label.casefold()
-            and row.get("structural_role") == "provision"
+            and row.get("structural_role") in {"provision", "subprovision"}
             and (preferred_role is None or row.get("source_role") == preferred_role)
         ),
         None,
     )
+    references = parse_legal_references(corpus_id, query)
+    referenced = str(references[0].get("reference") or "") if references else ""
+    _, separator, ayat_label = referenced.partition(" ayat ")
+    if source is not None and separator:
+        source = next(
+            (
+                row
+                for row in store.legal_units
+                if row.get("unit_label") == ayat_label
+                and source.get("legal_unit_id") in (row.get("parent_legal_unit_ids") or ())
+                and row.get("structural_role") == "subprovision"
+            ),
+            None,
+        )
     if source is None:
         return ()
-    offset = 1 if direction == "next" else -1
-    target_order = source.get("sibling_order", -2) + offset
-    target = next(
-        (
+    # Article sequence may cross a chapter boundary, while paragraph sequence
+    # remains inside its article.  Artifact order is the source-derived order
+    # for this document; sibling_order alone resets at each parent.
+    if source.get("structural_role") == "subprovision":
+        ordered = [
             row
             for row in store.legal_units
             if row.get("source_document_id") == source.get("source_document_id")
             and row.get("parent_legal_unit_id") == source.get("parent_legal_unit_id")
-            and row.get("sibling_order") == target_order
+            and row.get("structural_role") == "subprovision"
+        ]
+    else:
+        ordered = [
+            row
+            for row in store.legal_units
+            if row.get("source_document_id") == source.get("source_document_id")
             and row.get("structural_role") == "provision"
-        ),
-        None,
-    )
+        ]
+    try:
+        source_index = next(index for index, row in enumerate(ordered) if row.get("legal_unit_id") == source.get("legal_unit_id"))
+    except StopIteration:
+        return ()
+    target_index = source_index + (1 if direction == "next" else -1)
+    target = ordered[target_index] if 0 <= target_index < len(ordered) else None
     if target is None:
         return ()
     rows = [
         row | {"candidate_type": "structural_navigation_candidate", "navigation_direction": direction}
         for row in store.evidence
-        if row.get("legal_unit_id") == target.get("legal_unit_id") and row.get("status") == "final" and store.bboxes_for(row["evidence_id"])
+        if target is not None and row.get("legal_unit_id") == target.get("legal_unit_id") and row.get("status") == "final" and store.bboxes_for(row["evidence_id"])
     ]
     return tuple(rows[:limit])
 

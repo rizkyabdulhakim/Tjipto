@@ -171,6 +171,10 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         self.assertEqual([row["reference"] for row in rows], ["Pasal 3 ayat (3)", "Pasal 3 ayat (2)"])
         self.assertEqual([text[int(row["start"]) : int(row["end"])] for row in rows], ["Pasal 3 ayat (3)", "Pasal 3 ayat (2)"])
 
+    def test_parser_dispatch_preserves_comma_separated_inherited_paragraphs(self) -> None:
+        rows = parser_dispatch.parse_legal_references("uud", "Pasal 3 Ayat (1), (3) dan (4)")
+        self.assertEqual([row["reference"] for row in rows], ["Pasal 3 ayat (1)", "Pasal 3 ayat (3)", "Pasal 3 ayat (4)"])
+
     def test_renumbering_parser_preserves_paragraph_level_pairs(self) -> None:
         text = (
             "Pengubahan penomoran Pasal 3 ayat (3) dan ayat (4) Perubahan Ketiga "
