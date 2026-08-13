@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.candidates import merge_ranked
-from tjipto.retrieval.dense import dense_search
+from tjipto.retrieval.dense import dense_configured, dense_search
 from tjipto.retrieval.metadata import (
     filter_evidence,
     has_metadata_target,
@@ -30,6 +30,7 @@ def route_retrieval(
     route: str = "auto",
     metadata_filters: dict | None = None,
     relation_family: str | None = None,
+    allow_structured_fallback: bool = False,
 ) -> dict:
     config = getattr(store, "config", None)
     query_strategy = getattr(config, "query_strategy", "generic")
@@ -317,7 +318,7 @@ def route_retrieval(
             "intent": "no_results",
             "reason": "filters_removed_all",
         }
-    if has_structured_target(normalized["normalized_query"], strategy=structured_strategy, config=config):
+    if has_structured_target(normalized["normalized_query"], strategy=structured_strategy, config=config) and not allow_structured_fallback:
         return envelope | {
             "status": "no_results",
             "route": "structured_not_found",
@@ -327,10 +328,7 @@ def route_retrieval(
         }
 
     retrieval_settings: dict = getattr(config, "setting", lambda *_: {})("retrieval", {}) or {}
-    dense_enabled = bool(
-        getattr(config, "manifest", {}).get("dense_retrieval")
-        or getattr(config, "setting", lambda *_: False)("dense_retrieval", False)
-    )
+    dense_enabled = dense_configured(store)
     hybrid_enabled = route == "hybrid" or retrieval_settings.get("mode") == "hybrid" or (route == "auto" and dense_enabled)
     if hybrid_enabled:
         fused = hybrid_search(

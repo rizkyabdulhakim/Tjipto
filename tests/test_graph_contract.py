@@ -460,6 +460,7 @@ class GraphContractTest(unittest.TestCase):
             self.assertTrue(row["bbox_refs"])
             for bbox_id in row["bbox_refs"]:
                 self.assertIn(bbox_id, bbox_ids)
+
             if row["support_class"] == "exact_article_relation":
                 self.assertEqual(row["grounding_level"], "exact_source_text")
                 self.assertEqual(row["bbox_precision"], "exact")
@@ -470,6 +471,33 @@ class GraphContractTest(unittest.TestCase):
             else:
                 self.assertTrue(row["viewer_highlightable"])
                 self.assertFalse(row["citation_available"])
+
+    def test_source_scope_references_are_materialized_without_parent_loss(self) -> None:
+        rows = read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")
+        scope_rows = [
+            row
+            for row in rows
+            if row["evidence_id"]
+            in {
+                "uud_instrument_final_citation_evidence::amendment_1_historical::00002::perubahan_pertama_scope",
+                "uud_instrument_final_citation_evidence::amendment_2_historical::00008::perubahan_kedua_scope",
+            }
+        ]
+        targets = {(row["evidence_id"], row["target_citation"]) for row in scope_rows}
+        self.assertIn(
+            (
+                "uud_instrument_final_citation_evidence::amendment_1_historical::00002::perubahan_pertama_scope",
+                "Pasal 13 ayat (2)",
+            ),
+            targets,
+        )
+        self.assertIn(
+            (
+                "uud_instrument_final_citation_evidence::amendment_1_historical::00002::perubahan_pertama_scope",
+                "Pasal 17 ayat (3)",
+            ),
+            targets,
+        )
 
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")

@@ -258,6 +258,26 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertTrue(response["citations"])
         self.assertNotIn("Mahkamah Konstitusi", response["answer"])
 
+    def test_unseen_comparison_wording_keeps_both_entities_as_requirements(self) -> None:
+        service = LegalRuntimeService()
+        store = service._store("uud")
+        for query in ("kontraskan kewenangan DPR dengan DPD", "DPR dibandingkan dengan DPD dalam kewenangan"):
+            requirements = _research_requirements_for_ask(store, interpret_query(store, "uud", query), query)
+            self.assertEqual({item.required_entities[0] for item in requirements}, {
+                "Dewan Perwakilan Rakyat",
+                "Dewan Perwakilan Daerah",
+            })
+            response = service.ask("uud", query)
+            self.assertEqual(response["sufficiency"]["status"], "complete")
+            self.assertEqual(set(response["sufficiency"]["fulfilled_requirement_ids"]), {"entity_1", "entity_2"})
+
+    def test_generic_procedure_wording_does_not_activate_impeachment_template(self) -> None:
+        service = LegalRuntimeService()
+        for query in ("mekanisme perubahan UUD", "proses pembentukan undang-undang menurut UUD"):
+            response = service.ask("uud", query)
+            self.assertNotEqual(response.get("sufficiency", {}).get("status"), "complete")
+            self.assertNotIn("grounds", response.get("sufficiency", {}).get("fulfilled_requirement_ids", ()))
+
     def test_impeachment_relation_query_collects_both_typed_dimensions(self) -> None:
         response = LegalRuntimeService().ask("uud", "hubungan DPR dan MK dalam pemakzulan")
         self.assertEqual(response["status"], "answer_ready")
@@ -273,6 +293,19 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(response["status"], "answer_ready")
         self.assertEqual(response["sufficiency"]["status"], "complete")
         self.assertTrue(response["citations"])
+
+    def test_cross_instrument_comparison_preserves_each_historical_source_role(self) -> None:
+        for query in (
+            "apa perbedaan Perubahan Pertama dan Perubahan Kedua UUD 1945?",
+            "perbedaan uud amandemen pertama dan amandemen kedua",
+        ):
+            response = LegalRuntimeService().ask("uud", query)
+            self.assertEqual(response["sufficiency"]["status"], "complete")
+            self.assertEqual(
+                {row["source_role"] for row in response["evidence"]},
+                {"amendment_1_historical", "amendment_2_historical"},
+            )
+            self.assertTrue(all("Scope" in str(row.get("citation")) for row in response["evidence"]))
 
     def test_decomposition_retrieves_structural_procedure_neighbors(self) -> None:
         response = LegalRuntimeService().ask("uud", "bagaimana prosedur pemberhentian Presiden?")

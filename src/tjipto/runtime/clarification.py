@@ -105,6 +105,16 @@ def _operation_options(store, semantics, routed: dict, config: dict) -> tuple[Cl
         name for name, family in families.items()
         if contains_intent_phrase(routed["original_query"], tuple(family.get("terms") or ()))
     }
+    # The relation router has already classified an explicit operation (for
+    # example a rename). Use that typed classification instead of offering
+    # every family that happens to match the target citation.
+    relation_target = routed.get("relation_target") or {}
+    selected_types = set(relation_target.get("relation_types") or ())
+    if selected_types and not explicit_families:
+        explicit_families = {
+            name for name, family in families.items()
+            if selected_types.intersection(set(family.get("relation_types") or ()))
+        }
     options = []
     for name, family in families.items():
         types = set(family.get("relation_types") or ())

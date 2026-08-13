@@ -1,7 +1,7 @@
 {
   "uud": {
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "8c4f8617e7767072d09869f9413d5e63687f0b6196a539157e752062bd2e3409",
+    "manifest_sha256": "77c45e99338299a6d3753dfd2f6cad84856005c5a56d184346857765c89805f7",
     "runtime_required_artifacts": [
       "runtime_projection",
       "validation_report",
@@ -237,6 +237,22 @@
           ],
           "hierarchy_depth": 3
         }
+      ],
+      "procedure_applicability": {
+        "impeachment": {
+          "required_entities": [
+            "Presiden"
+          ],
+          "signals": [
+            "pemberhentian",
+            "pemakzulan",
+            "impeachment"
+          ]
+        }
+      },
+      "instrument_scope_terms": [
+        "mengubah",
+        "pasal"
       ],
       "max_variants": 4,
       "max_rounds": 2,

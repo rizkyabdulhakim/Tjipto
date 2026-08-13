@@ -192,6 +192,23 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         self.assertEqual(rows[1]["old_range_kind"], "contextual")
         self.assertEqual(rows[2]["new_range_kind"], "literal")
 
+    def test_coordinated_article_scope_inherits_parent_for_bare_paragraphs(self) -> None:
+        text = (
+            "Perubahan Pertama mengubah Pasal 13 ayat (2) dan (3), "
+            "Pasal 17 ayat (2) dan (3) menjadi Pasal 13 ayat (2) dan (3), "
+            "Pasal 17 ayat (2) dan (3);"
+        )
+        rows = parse_renumbering_mappings(text)
+        self.assertEqual(
+            [(row["old_reference"], row["new_reference"]) for row in rows],
+            [
+                ("Pasal 13 ayat (2)", "Pasal 13 ayat (2)"),
+                ("Pasal 13 ayat (3)", "Pasal 13 ayat (3)"),
+                ("Pasal 17 ayat (2)", "Pasal 17 ayat (2)"),
+                ("Pasal 17 ayat (3)", "Pasal 17 ayat (3)"),
+            ],
+        )
+
     def test_generic_layers_use_parser_dispatch_not_uud_parser(self) -> None:
         for rel_path in (
             "src/tjipto/retrieval/query.py",

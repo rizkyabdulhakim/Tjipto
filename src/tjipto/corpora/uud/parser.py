@@ -90,19 +90,40 @@ def parse_uud_pasal_reference(text: str, *, allow_roman: bool = False) -> str | 
 def parse_uud_legal_references(text: str) -> list[dict[str, object]]:
     """Parse all Pasal references and retain their source character ranges."""
     rows: list[dict[str, object]] = []
-    for match in UUD_PASAL_WITH_AYAT_RE.finditer(text or ""):
+    matches = list(UUD_PASAL_WITH_AYAT_RE.finditer(text or ""))
+    seen: set[tuple[str, int, int]] = set()
+    for index, match in enumerate(matches):
         reference = f"Pasal {match.group(1)}{(match.group(2) or '').upper()}"
         if match.group(3):
             reference = f"{reference} ayat ({match.group(3)})"
-        rows.append(
-            {
-                "reference": reference,
-                "raw": match.group(0),
-                "start": match.start(),
-                "end": match.end(),
-            }
-        )
-    return rows
+        row = {
+            "reference": reference,
+            "raw": match.group(0),
+            "start": match.start(),
+            "end": match.end(),
+        }
+        rows.append(row)
+        seen.add((reference, match.start(), match.end()))
+        if not match.group(3):
+            continue
+        next_article = matches[index + 1].start() if index + 1 < len(matches) else len(text or "")
+        article = f"Pasal {match.group(1)}{(match.group(2) or '').upper()}"
+        context = text[match.end() : next_article]
+        for followup in re.finditer(r"\b(?:dan|atau|serta|maupun)\s+(?:ayat\s*)?\(\s*(\d+)\s*\)", context, re.IGNORECASE):
+            start = match.start()
+            end = match.end() + followup.end()
+            contextual = f"{article} ayat ({followup.group(1)})"
+            key = (contextual, start, end)
+            if key in seen:
+                continue
+            rows.append({
+                "reference": contextual,
+                "raw": text[start:end],
+                "start": start,
+                "end": end,
+            })
+            seen.add(key)
+    return sorted(rows, key=lambda row: (int(row["start"]), int(row["end"])))
 
 
 def matches_uud_contextual_reference(text: str, reference: object) -> bool:

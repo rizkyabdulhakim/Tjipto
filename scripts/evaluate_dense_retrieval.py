@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -60,10 +61,18 @@ def main(argv: list[str] | None = None) -> int:
         store = service._store("uud")
         if store is None:
             raise DenseUnavailable("corpus_not_ready")
-        production_rankings = [
-            list(service._route_retrieval("uud", case["query"], store, limit=CUTOFF).get("matches", ()))
-            for case in cases
-        ]
+        # The baseline lane is the current model-free production route.  An
+        # explicitly configured dense model is measured below as a separate
+        # lane, never accidentally folded into the baseline by environment.
+        configured_model_dir = os.environ.pop("TJIPTO_DENSE_MODEL_DIR", None)
+        try:
+            production_rankings = [
+                list(service._route_retrieval("uud", case["query"], store, limit=CUTOFF).get("matches", ()))
+                for case in cases
+            ]
+        finally:
+            if configured_model_dir is not None:
+                os.environ["TJIPTO_DENSE_MODEL_DIR"] = configured_model_dir
         report["metrics"]["production"] = _metrics(cases, production_rankings)
         config = _copy_dense_config(store)
         dense_store = EvidenceStore(config)

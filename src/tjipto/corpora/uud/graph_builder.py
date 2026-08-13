@@ -230,6 +230,17 @@ def build_graph_artifacts(
                     label,
                     source_document_id=row["source_document_id"],
                 )
+                # A scope clause can name a paragraph introduced by the
+                # amendment while the historical instrument stores only the
+                # replacement text.  Resolve that explicit target against
+                # the verified consolidated unit when the historical source
+                # has no matching unit; never drop the source-derived edge.
+                if target is None:
+                    target = resolve_relation_unit(
+                        legal_units,
+                        label,
+                        source_role="current_consolidated",
+                    )
                 if source_node and target:
                     target_citation = legal_unit_reference(target, legal_units_by_id)
                     add_edge(

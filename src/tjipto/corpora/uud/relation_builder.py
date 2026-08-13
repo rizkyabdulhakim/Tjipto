@@ -47,30 +47,22 @@ def _reference_units(text: str, start: int, end: int) -> list[dict]:
     segment = text[start:end]
     references = parse_legal_references("uud", segment)
     rows: list[dict] = []
-    for index, reference in enumerate(references):
-        local_start = int(reference["start"])
-        local_end = int(references[index + 1]["start"]) if index + 1 < len(references) else len(segment)
-        ayats = list(_AYAT_RE.finditer(segment[local_start:local_end]))
-        if not ayats:
-            rows.append(
-                {
-                    "reference": str(reference["reference"]),
-                    "start": start + local_start,
-                    "end": start + int(reference["end"]),
-                    "range_kind": "literal",
-                }
-            )
-            continue
-        for ayat_index, ayat in enumerate(ayats):
-            prefix = str(reference["reference"]).partition(" ayat ")[0]
-            rows.append(
-                {
-                    "reference": f"{prefix} ayat ({ayat.group(1)})",
-                    "start": start + local_start,
-                    "end": start + local_start + ayat.end(),
-                    "range_kind": "literal" if ayat_index == 0 else "contextual",
-                }
-            )
+    seen_articles: set[str] = set()
+    for reference in references:
+        value = str(reference["reference"])
+        article = value.partition(" ayat ")[0]
+        has_ayat = " ayat " in value
+        range_kind = "contextual" if has_ayat and article in seen_articles else "literal"
+        if has_ayat:
+            seen_articles.add(article)
+        rows.append(
+            {
+                "reference": value,
+                "start": start + int(reference["start"]),
+                "end": start + int(reference["end"]),
+                "range_kind": range_kind,
+            }
+        )
     return rows
 
 

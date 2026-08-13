@@ -17,7 +17,7 @@
     "unicode_normalization": "NFKC;NBSP=SPACE;SOFT_HYPHEN=REMOVE;LINE_SEPARATOR=LF"
   },
   "counts": {
-    "article_amendment_relations": 70,
+    "article_amendment_relations": 100,
     "article_versions": 218,
     "bbox_records": 1827,
     "chunks": 653,
@@ -25,7 +25,7 @@
     "document_relations": 13,
     "evidence_records": 650,
     "excluded_records": 0,
-    "graph_edges": 8004,
+    "graph_edges": 8064,
     "graph_nodes": 3209,
     "legal_units": 653,
     "metadata_assertions": 1877,
@@ -35,7 +35,7 @@
     "meaningful_support_units": 665,
     "not_promoted_amends_edges": 8,
     "pages": 63,
-    "promotion_decisions": 75,
+    "promotion_decisions": 105,
     "propositions": 877,
     "retrieval_units": 647,
     "source_conflicts": 4,
@@ -84,8 +84,8 @@
         "source_support_exact",
         "viewer_highlightable"
       ],
-      "bytes": 369429,
-      "sha256": "c4d7a203c8864643919b6d4e27aea9a6fecd9eb3a42e017e3226695dc91f0304"
+      "bytes": 526705,
+      "sha256": "99913e00f14b3987238848008a47da1739acd0724862deb1d7850bf0dd562fe5"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -259,8 +259,8 @@
         "support_exception_ids",
         "support_kind"
       ],
-      "bytes": 7051352,
-      "sha256": "0cabe66259dd117dd797ad346638274e4d5c92f28f2a88c87f4b4a2283af775a"
+      "bytes": 7441075,
+      "sha256": "40e550bfd1fc4f1e6c2d755dbabc4b074a6faf324dfd0d867e6682f97e975e6a"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -441,8 +441,8 @@
         "promotion_outcome",
         "failure_reason"
       ],
-      "bytes": 146940,
-      "sha256": "604aca85801d010493205d2d9183e6b0551634031edb6e854084ea5f11c46759"
+      "bytes": 204131,
+      "sha256": "2016275be91bf7938ef93fa6b79b0be629463e5adf61d05bcf1d062b4486d4a5"
     },
     "propositions.jsonl": {
       "origin": "generated",
@@ -503,8 +503,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 25314570,
-      "sha256": "4dc5a34153a7888baffe966457cb7a416c263814e7b6eb97d12a7e81e32aaf60"
+      "bytes": 25792384,
+      "sha256": "25a13abeb2bf969c7700883073e045fb0086f0c8b6f5325892ed35cdb500809f"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -651,8 +651,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 25363,
-      "sha256": "b46260580e2568e6904a111b46638195385983a50dac9b4b91fc1b6f3d5942b3"
+      "bytes": 25418,
+      "sha256": "327c903a4a4329af3b347a2d0f92b41b087384d32e9ba9cb37e5ccb3888c78fa"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

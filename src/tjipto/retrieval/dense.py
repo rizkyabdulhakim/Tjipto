@@ -305,11 +305,7 @@ def dense_search(
     provider: DenseEmbeddingProvider | None = None,
     include_provenance: bool = False,
 ) -> dict:
-    configured = bool(
-        getattr(store.config, "manifest", {}).get("dense_retrieval")
-        or getattr(store.config, "setting", lambda *_: False)("dense_retrieval", False)
-    )
-    if not configured:
+    if not dense_configured(store):
         return _unavailable("not_configured")
     provider = provider or LocalDenseProvider()
     try:
@@ -326,6 +322,15 @@ def dense_search(
         return _unavailable(error.code)
     except (TypeError, ValueError, KeyError, OverflowError):
         return _unavailable("dense_invalid")
+
+
+def dense_configured(store) -> bool:
+    """Enable dense retrieval only for an explicit verified/configured lane."""
+    return bool(
+        getattr(store.config, "manifest", {}).get("dense_retrieval")
+        or getattr(store.config, "setting", lambda *_: False)("dense_retrieval", False)
+        or os.environ.get("TJIPTO_DENSE_MODEL_DIR")
+    )
 
 
 def dense_index_for_store(store, *, provider: DenseEmbeddingProvider | None = None) -> DenseIndex:
