@@ -754,9 +754,13 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertTrue(pasal["context_pack"]["historical_citations"])
 
         complete = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
-        self.assertEqual(complete["status"], "insufficient_evidence")
-        self.assertFalse(complete["evidence"])
-        self.assertFalse(complete["historical_citations"])
+        self.assertEqual(complete["status"], "answer_ready")
+        self.assertEqual(
+            {row["relation_type"] for row in complete["article_amendment_relations"]},
+            {"MODIFIES"},
+        )
+        self.assertTrue(complete["evidence"])
+        self.assertTrue(complete["historical_citations"])
         self.assertFalse(complete["citations"])
         self.assertFalse(complete["viewer_refs"])
         self.assertFalse(complete["trace_support"])
@@ -875,8 +879,11 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(unsupported["trace_support"])
 
         exact = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
-        self.assertEqual(exact["status"], "insufficient_evidence")
-        self.assertFalse(exact["article_amendment_relations"])
+        self.assertEqual(exact["status"], "answer_ready")
+        self.assertEqual(
+            {row["relation_type"] for row in exact["article_amendment_relations"]},
+            {"MODIFIES"},
+        )
         self.assertFalse(exact["trace_support"])
 
         partial = self.service.ask("uud", "pasal yang diubah perubahan keempat")

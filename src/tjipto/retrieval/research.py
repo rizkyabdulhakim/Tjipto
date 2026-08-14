@@ -41,6 +41,8 @@ class QueryVariant:
     explicit_references: tuple[str, ...] = ()
     source_role: str | None = None
     temporal_scope: str | None = None
+    polarity: str | None = None
+    modality: str | None = None
     requirement_id: str | None = None
     retrieval_lane: str = "auto"
 
@@ -79,7 +81,7 @@ class OpenAICompatibleResearchPlanningProvider:
                 "content": (
                     "Return JSON only. Propose retrieval planning data, never legal truth, authority, "
                     "source role, temporal status, citations, or evidence validity.\n"
-                    + json.dumps(dict(request), ensure_ascii=False, default=str)
+                    + json.dumps(dict(request), ensure_ascii=False, sort_keys=True)
                 ),
             }],
             "response_format": {"type": "json_object"},
@@ -130,30 +132,57 @@ def plan_research(
     explicit_references: Sequence[str] = (),
     source_role: str | None = None,
     temporal_scope: str | None = None,
+    polarity: str | None = None,
+    modality: str | None = None,
     requirements: Sequence[EvidenceRequirement] = (),
 ) -> ResearchPlan:
     """Create a validated plan. The original query is always variant zero."""
     intent = intent or ResearchIntent()
+    requirement_rows = tuple(requirements)
+    if not required_entities:
+        required_entities = tuple(
+            dict.fromkeys(
+                value
+                for requirement in requirement_rows
+                for value in (*requirement.required_entities, *requirement.relation_endpoints)
+            )
+        )
+    if not explicit_references:
+        explicit_references = tuple(
+            dict.fromkeys(value for requirement in requirement_rows for value in requirement.explicit_references)
+        )
+    requirement_roles = tuple(dict.fromkeys(requirement.source_role for requirement in requirement_rows if requirement.source_role))
+    requirement_temporal = tuple(
+        dict.fromkeys(requirement.temporal_context for requirement in requirement_rows if requirement.temporal_context)
+    )
+    if source_role is None and len(requirement_roles) == 1:
+        source_role = requirement_roles[0]
+    if temporal_scope is None and len(requirement_temporal) == 1:
+        temporal_scope = requirement_temporal[0]
     original = QueryVariant(
         query=query,
         required_entities=tuple(required_entities),
         explicit_references=tuple(explicit_references),
         source_role=source_role,
         temporal_scope=temporal_scope,
+        polarity=polarity,
+        modality=modality,
     )
-    base_requirements = tuple(requirements)
+    base_requirements = requirement_rows
     if provider is None or not intent.complex:
         return ResearchPlan(query, intent, (original,), "deterministic", requirements=base_requirements)
     try:
         proposal = provider.propose(
-            {
-                "query": query,
-                "intent": intent,
-                "required_entities": tuple(required_entities),
-                "explicit_references": tuple(explicit_references),
-                "source_role": source_role,
-                "temporal_scope": temporal_scope,
-            }
+            _planner_request(
+                query,
+                intent,
+                required_entities=required_entities,
+                explicit_references=explicit_references,
+                source_role=source_role,
+                temporal_scope=temporal_scope,
+                polarity=polarity,
+                modality=modality,
+            )
         )
     except Exception:  # provider is optional and untrusted
         return ResearchPlan(query, intent, (original,), "unavailable", ("provider_failure",), requirements=base_requirements)
@@ -162,7 +191,7 @@ def plan_research(
     if lanes is None:
         rejected = (*rejected, "retrieval_lane_invalid")
         lanes = ("sparse",)
-    proposed_requirements, requirement_rejections = _validated_requirements(
+    _proposed_requirements, requirement_rejections = _validated_requirements(
         proposal,
         required_entities=required_entities,
         explicit_references=explicit_references,
@@ -170,6 +199,8 @@ def plan_research(
         temporal_scope=temporal_scope,
     )
     rejected = (*rejected, *requirement_rejections)
+    if isinstance(proposal, Mapping) and proposal.get("requirements"):
+        rejected = (*rejected, "provider_requirements_forbidden")
     task_kind = _validated_task_kind(proposal)
     if task_kind is None:
         rejected = (*rejected, "task_kind_invalid")
@@ -181,9 +212,44 @@ def plan_research(
         "accepted" if not rejected else "degraded",
         rejected,
         lanes,
-        tuple(base_requirements) or proposed_requirements,
+        tuple(base_requirements),
         task_kind,
     )
+
+
+def _planner_request(
+    query: str,
+    intent: ResearchIntent,
+    *,
+    required_entities: Sequence[str],
+    explicit_references: Sequence[str],
+    source_role: str | None,
+    temporal_scope: str | None,
+    polarity: str | None,
+    modality: str | None,
+) -> dict[str, object]:
+    """Return the JSON contract sent to an untrusted planning provider."""
+    return {
+        "query": query,
+        "intent": {
+            "semantic_retrieval": intent.semantic_retrieval,
+            "multiple_supports": intent.multiple_supports,
+            "comparison": intent.comparison,
+            "decomposition": intent.decomposition,
+            "relation_traversal": intent.relation_traversal,
+            "max_variants": intent.max_variants,
+            "max_rounds": intent.max_rounds,
+        },
+        "constraints": {
+            "required_entities": tuple(str(value) for value in required_entities),
+            "explicit_references": tuple(str(value) for value in explicit_references),
+            "source_role": source_role,
+            "temporal_scope": temporal_scope,
+            "polarity": polarity,
+            "modality": modality,
+        },
+        "allowed_proposals": ("variants", "task_kind", "retrieval_lanes"),
+    }
 
 
 def _validated_variants(
@@ -214,7 +280,21 @@ def _validated_variants(
             explicit_references=tuple(str(value) for value in item.get("explicit_references", original.explicit_references) or ()),
             source_role=item.get("source_role", original.source_role),
             temporal_scope=item.get("temporal_scope", original.temporal_scope),
+            polarity=item.get("polarity", original.polarity),
+            modality=item.get("modality", original.modality),
         )
+        if value.source_role is not None and not isinstance(value.source_role, str):
+            rejected.append("variant_scope_type_invalid")
+            continue
+        if value.temporal_scope is not None and not isinstance(value.temporal_scope, str):
+            rejected.append("variant_scope_type_invalid")
+            continue
+        if value.polarity is not None and not isinstance(value.polarity, str):
+            rejected.append("variant_scope_type_invalid")
+            continue
+        if value.modality is not None and not isinstance(value.modality, str):
+            rejected.append("variant_scope_type_invalid")
+            continue
         if not value.query.strip() or value.query.strip() in seen:
             rejected.append("duplicate_or_empty_variant")
             continue
@@ -232,6 +312,8 @@ def _preserves_scope(value: QueryVariant, original: QueryVariant) -> bool:
         and set(value.explicit_references) == set(original.explicit_references)
         and value.source_role == original.source_role
         and value.temporal_scope == original.temporal_scope
+        and value.polarity == original.polarity
+        and value.modality == original.modality
     )
 
 
@@ -366,9 +448,26 @@ def execute_research_rounds(
     provider: ResearchPlanningProvider | None = None,
     requirements: Sequence[EvidenceRequirement] = (),
     max_rounds: int | None = None,
+    required_entities: Sequence[str] = (),
+    explicit_references: Sequence[str] = (),
+    source_role: str | None = None,
+    temporal_scope: str | None = None,
+    polarity: str | None = None,
+    modality: str | None = None,
 ) -> dict:
     """Run retrieval rounds, retrying only requirements still missing."""
-    plan = plan_research(query, intent, provider=provider, requirements=requirements)
+    plan = plan_research(
+        query,
+        intent,
+        provider=provider,
+        requirements=requirements,
+        required_entities=required_entities,
+        explicit_references=explicit_references,
+        source_role=source_role,
+        temporal_scope=temporal_scope,
+        polarity=polarity,
+        modality=modality,
+    )
     requirements = tuple(plan.requirements)
     rounds_limit = min(
         max(1, int(max_rounds if max_rounds is not None else plan.intent.max_rounds)),
@@ -438,6 +537,8 @@ def execute_research_rounds(
                 QueryVariant(
                     query=requirement.retrieval_query or query,
                     origin=f"requirement:{requirement.requirement_id}",
+                    required_entities=tuple(dict.fromkeys((*requirement.required_entities, *requirement.relation_endpoints))),
+                    explicit_references=requirement.explicit_references,
                     source_role=requirement.source_role,
                     temporal_scope=requirement.temporal_context,
                     requirement_id=requirement.requirement_id,

@@ -446,14 +446,13 @@ def _scope_target_labels(text: str | None) -> list[str]:
         )
     }
     if segments:
+        # Clause (d) and clause (e) describe different lifecycle operations.
+        # A target named in both must retain both source-backed operations:
+        # deletion of the old substance and a separate change/addition of the
+        # replacement provision.  The source legal-unit owner distinguishes
+        # those edges; label de-duplication here would erase clause (e).
         source = segments.get("e") or segments.get("a") or source
-        deleted = {
-            str(row.get("reference"))
-            for row in parse_legal_references("uud", segments.get("d", ""))
-            if row.get("reference")
-        }
     else:
-        deleted = set()
         operations = tuple(re.finditer(r"\bmengubah\b", source, re.IGNORECASE))
         if operations:
             source = source[operations[-1].end() :]
@@ -461,7 +460,7 @@ def _scope_target_labels(text: str | None) -> list[str]:
     seen: set[str] = set()
     for row in parse_legal_references("uud", source):
         label = str(row["reference"])
-        if label not in deleted and label not in seen:
+        if label not in seen:
             seen.add(label)
             labels.append(label)
     return labels

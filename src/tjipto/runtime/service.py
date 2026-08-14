@@ -25,7 +25,7 @@ from tjipto.retrieval.metadata import (
     normalize_filters,
     public_filters,
 )
-from tjipto.corpora.source_arbitration import resolve_source_scope
+from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
 from tjipto.retrieval.relations import amendment_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.retrieval.research import ResearchIntent, ResearchPlanningProvider, execute_research_rounds
@@ -36,7 +36,11 @@ from tjipto.runtime.answer_arbitration import document_summary_query, source_doc
 from tjipto.runtime.bookmarks import BookmarkRepository
 from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.response import AnswerDecision, project_response
-from tjipto.runtime.wording import wording_enabled_from_environment, wording_provider_from_environment
+from tjipto.runtime.wording import (
+    build_answer_fact_plan,
+    wording_enabled_from_environment,
+    wording_provider_from_environment,
+)
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.source_text import source_text_response
 from tjipto.telemetry import Telemetry
@@ -427,14 +431,15 @@ def _procedure_family(research: dict, query: str, entities: tuple[str, ...]) -> 
 
 def _instrument_scope_roles(store: EvidenceStore, query: str) -> tuple[str, ...]:
     """Return every corpus-configured historical instrument named by a query."""
-    intent = intent_config_for(getattr(store.config, "structured_strategy", "generic"), store.config)
-    roles = []
-    for role, pattern in intent.get("metadata_roles", ()):
-        if str(role) in {"current_consolidated", "original_historical"}:
-            continue
-        if pattern.search(query or ""):
-            roles.append(str(role))
-    return tuple(dict.fromkeys(roles))
+    return tuple(
+        role
+        for role in source_roles_for_query(
+            query,
+            strategy=getattr(store.config, "structured_strategy", "generic"),
+            config=store.config,
+        )
+        if str(role) not in {"current_consolidated", "original_historical"}
+    )
 
 
 def _research_focus_query(store: EvidenceStore, research: dict, query: str) -> str:
@@ -675,6 +680,12 @@ class LegalRuntimeService:
         planning_provider: ResearchPlanningProvider | None = None,
         limit: int = 10,
         max_rounds: int | None = None,
+        required_entities: tuple[str, ...] = (),
+        explicit_references: tuple[str, ...] = (),
+        source_role: str | None = None,
+        temporal_scope: str | None = None,
+        polarity: str | None = None,
+        modality: str | None = None,
     ) -> dict:
         """Run bounded retrieval variants and assess verified requirements."""
         store = self._store(corpus_id)
@@ -727,6 +738,12 @@ class LegalRuntimeService:
             provider=planning_provider,
             requirements=requirements,
             max_rounds=max_rounds,
+            required_entities=required_entities,
+            explicit_references=explicit_references,
+            source_role=source_role,
+            temporal_scope=temporal_scope,
+            polarity=polarity,
+            modality=modality,
         )
         assessment = result["sufficiency"]
         return {
@@ -1444,6 +1461,18 @@ class LegalRuntimeService:
                 requirements=active_requirements,
                 planning_provider=self._planning_provider,
                 limit=_research_candidate_limit(store, query, _clarification_candidate_limit(store, query, limit)),
+                required_entities=tuple(
+                    dict.fromkeys(
+                        value
+                        for requirement in active_requirements
+                        for value in (*requirement.required_entities, *requirement.relation_endpoints)
+                    )
+                ),
+                explicit_references=tuple(getattr(semantics, "legal_references", ()) or ()),
+                source_role=semantics.source_role,
+                temporal_scope=semantics.temporal_context,
+                polarity=(semantics.requested_proposition.polarity if semantics.requested_proposition else None),
+                modality=(semantics.requested_proposition.modality if semantics.requested_proposition else None),
             )
             if research_result.get("routes"):
                 research_routed = dict(research_result["routes"][0])
@@ -1742,8 +1771,15 @@ class LegalRuntimeService:
         if not self._external_wording or self._answer_provider is None:
             return fallback
         facts = _verified_answer_facts(evidence, fallback)
+        fact_plan = build_answer_fact_plan(evidence, fallback)
         try:
-            proposal = self._answer_provider.propose(json.dumps({"facts": facts}, ensure_ascii=False, sort_keys=True))
+            proposal = self._answer_provider.propose(
+                json.dumps(
+                    {"facts": facts, "fact_plan": fact_plan.public()},
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+            )
         except Exception:
             return fallback
         return _render_wording(proposal, fallback, facts)

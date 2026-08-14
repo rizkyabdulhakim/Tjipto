@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
 
@@ -26,7 +27,43 @@ class SourceScopeDecision:
 
 
 def source_roles_for_query(query: str, *, strategy: str = "generic", config=None) -> tuple[str, ...]:
-    return tuple(role for role, pattern in intent_config_for(strategy, config)["metadata_roles"] if pattern.search(query or ""))
+    intent = intent_config_for(strategy, config)
+    roles = [role for role, pattern in intent["metadata_roles"] if pattern.search(query or "")]
+    if len(roles) < 2:
+        labels = intent.get("source_role_labels", {})
+        explicit_instrument = re.search(
+            r"\b(?:perubahan|amandemen)\s*(?:ke[-\s]*)?(?:pertama|kedua|ketiga|keempat|\d+|i{1,3}|iv)\b",
+            query or "",
+            re.IGNORECASE,
+        )
+        if explicit_instrument:
+            for role, label in labels.items():
+                if role in roles:
+                    continue
+                ordinal = str(label or "")
+                if not ordinal:
+                    continue
+                forms = _ordinal_forms(ordinal)
+                if re.search(
+                    rf"\b(?:dan|atau|serta|maupun|,|/)\s*(?:perubahan|amandemen)?\s*(?:ke[-\s]*)?(?:{'|'.join(forms)})\b",
+                    query or "",
+                    re.IGNORECASE,
+                ):
+                    roles.append(role)
+    return tuple(dict.fromkeys(roles))
+
+
+def _ordinal_forms(label: str) -> tuple[str, ...]:
+    """Return generic ordinal spellings used by configured source labels."""
+    forms = {label.casefold()}
+    values = {
+        "pertama": ("1", "i"),
+        "kedua": ("2", "ii", "dua"),
+        "ketiga": ("3", "iii", "tiga"),
+        "keempat": ("4", "iv", "empat"),
+    }
+    forms.update(values.get(label.casefold(), ()))
+    return tuple(sorted(forms, key=len, reverse=True))
 
 
 def resolve_source_scope(query: str, *, strategy: str = "generic", config=None) -> SourceScopeDecision:

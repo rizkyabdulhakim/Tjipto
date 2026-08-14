@@ -3,12 +3,94 @@
 from __future__ import annotations
 
 import os
+from dataclasses import asdict, dataclass
 from typing import Protocol
 from urllib.parse import urlparse
 
 
 class WordingProvider(Protocol):
     def propose(self, deterministic_answer: str) -> dict[str, object] | None: ...
+
+
+@dataclass(frozen=True)
+class AnswerProposition:
+    """Server-owned factual slots exposed to the optional wording adapter.
+
+    The adapter can choose and order these facts, but it never receives an
+    authority to edit their slots.  Empty optional fields mean that the
+    evidence row did not prove that dimension; they are not inferred here.
+    """
+
+    fact_id: str
+    support_ids: tuple[str, ...]
+    subject: str | None
+    predicate: str | None
+    object: str | None
+    legal_references: tuple[str, ...] = ()
+    modality: str | None = None
+    polarity: str | None = None
+    numbers: tuple[str, ...] = ()
+    dates: tuple[str, ...] = ()
+    source_role: str | None = None
+    temporal_scope: str | None = None
+
+
+@dataclass(frozen=True)
+class AnswerFactPlan:
+    """Immutable, request-local facts that may be selected for wording."""
+
+    facts: tuple[AnswerProposition, ...]
+
+    def public(self) -> tuple[dict[str, object], ...]:
+        return tuple(asdict(fact) for fact in self.facts)
+
+
+def build_answer_fact_plan(evidence: tuple[dict, ...], fallback: str) -> AnswerFactPlan:
+    """Project only source-backed fields into the wording boundary."""
+    facts = [
+        AnswerProposition(
+            fact_id="deterministic_answer",
+            support_ids=(),
+            subject=None,
+            predicate=None,
+            object=fallback,
+        )
+    ]
+    for row in evidence:
+        evidence_id = str(row.get("evidence_id") or "")
+        quote = str(row.get("quoted_text") or row.get("display_text") or "").strip()
+        if not evidence_id or not quote:
+            continue
+        references = tuple(
+            str(value)
+            for value in (row.get("citation"), row.get("target_citation"))
+            if isinstance(value, str) and value.strip()
+        )
+        facts.append(
+            AnswerProposition(
+                fact_id=f"support:{evidence_id}",
+                support_ids=(evidence_id,),
+                subject=row.get("subject") if isinstance(row.get("subject"), str) else None,
+                predicate=row.get("predicate") if isinstance(row.get("predicate"), str) else None,
+                object=quote,
+                legal_references=tuple(dict.fromkeys(references)),
+                modality=row.get("modality") if isinstance(row.get("modality"), str) else None,
+                polarity=row.get("polarity") if isinstance(row.get("polarity"), str) else None,
+                numbers=_string_values(row.get("numbers")),
+                dates=_string_values(row.get("dates")),
+                source_role=row.get("source_role") if isinstance(row.get("source_role"), str) else None,
+                temporal_scope=row.get("temporal_context") if isinstance(row.get("temporal_context"), str) else None,
+            )
+        )
+    return AnswerFactPlan(tuple(facts))
+
+
+def _string_values(value: object) -> tuple[str, ...]:
+    if isinstance(value, (str, int, float)):
+        return (str(value),)
+    if isinstance(value, (tuple, list)):
+        return tuple(str(item) for item in value if isinstance(item, (str, int, float)))
+    return ()
 
 
 def wording_enabled_from_environment() -> bool:

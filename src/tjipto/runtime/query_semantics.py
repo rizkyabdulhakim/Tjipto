@@ -8,7 +8,7 @@ import re
 from tjipto.corpora.capabilities import CapabilityDecision, resolve_capability
 from tjipto.corpora.intent_config import contains_intent_phrase
 from tjipto.corpora.parser_dispatch import parse_legal_references, proposition_operator, resolve_navigation
-from tjipto.corpora.source_arbitration import resolve_source_scope
+from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
 from tjipto.runtime.intent import classify_relation_intent
 
 
@@ -56,7 +56,14 @@ def interpret_query(
     references = _references(corpus_id, query, config=config)
     scope = resolve_source_scope(query, strategy=getattr(config, "query_strategy", "generic"), config=config)
     temporal = scope.temporal
-    source_role = scope.role if scope.temporal or scope.explicit else None
+    named_roles = source_roles_for_query(
+        query,
+        strategy=getattr(config, "query_strategy", "generic"),
+        config=config,
+    )
+    # Multiple explicitly named instruments are a comparison scope, not a
+    # single-source filter.  Requirement generation owns the per-role split.
+    source_role = scope.role if len(named_roles) <= 1 and (scope.temporal or scope.explicit) else None
     temporal_context = source_role if temporal else None
     navigation = resolve_navigation(corpus_id, query, config=config) if references and not temporal else None
     proposition = _proposition(corpus_id, query, references, source_role, temporal_context, config=config)
