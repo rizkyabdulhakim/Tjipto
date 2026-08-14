@@ -838,6 +838,22 @@ class RuntimeContractTest(unittest.TestCase):
             ),
             "fallback",
         )
+        for mutated in (
+            "DPR mengatur Presiden.",
+            "Pasal 31 tidak menjamin pendidikan.",
+            "Pasal 32 wajib dibaca.",
+            "Pasal 31 berlaku pada 2020.",
+            "Pasal 31 berasal dari naskah historis.",
+        ):
+            with self.subTest(mutated=mutated):
+                self.assertEqual(
+                    _render_wording(
+                        {"sentences": ({"text": mutated, "referenced_fact_ids": ("fact",)},)},
+                        "fallback",
+                        facts,
+                    ),
+                    "fallback",
+                )
         self.assertEqual(
             _render_wording(
                 {"sentences": ({"style": "unknown", "referenced_fact_ids": ("fact",)},)},
