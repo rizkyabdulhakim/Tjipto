@@ -428,6 +428,20 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertFalse(plan.requirements)
         self.assertIn("provider_requirements_forbidden", plan.rejection_reasons)
 
+    def test_coordinated_ordinals_preserve_reordered_instrument_scope(self) -> None:
+        from tjipto.corpora.source_arbitration import source_roles_for_query
+
+        for query in (
+            "Perbedaan Perubahan Pertama dan Kedua UUD 1945",
+            "Perbedaan Perubahan I dan II UUD 1945",
+            "Kedua dan Perubahan Pertama UUD 1945",
+        ):
+            self.assertEqual(
+                source_roles_for_query(query, strategy="uud", config=LegalRuntimeService()._store("uud").config),
+                ("amendment_1_historical", "amendment_2_historical"),
+                query,
+            )
+
     def test_planner_rejects_malformed_requirement_values_without_authority(self) -> None:
         class Provider:
             def propose(self, request):

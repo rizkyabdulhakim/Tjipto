@@ -44,8 +44,13 @@ def source_roles_for_query(query: str, *, strategy: str = "generic", config=None
                 if not ordinal:
                     continue
                 forms = _ordinal_forms(ordinal)
+                forms_pattern = "|".join(forms)
                 if re.search(
-                    rf"\b(?:dan|atau|serta|maupun|,|/)\s*(?:perubahan|amandemen)?\s*(?:ke[-\s]*)?(?:{'|'.join(forms)})\b",
+                    rf"\b(?:dan|atau|serta|maupun|,|/)\s*(?:perubahan|amandemen)?\s*(?:ke[-\s]*)?(?:{forms_pattern})\b",
+                    query or "",
+                    re.IGNORECASE,
+                ) or re.search(
+                    rf"(?:^|[,\s])(?:{forms_pattern})\s*(?:dan|atau|serta|maupun|,|/)\b",
                     query or "",
                     re.IGNORECASE,
                 ):
