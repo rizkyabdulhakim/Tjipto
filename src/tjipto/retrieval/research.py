@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import json
+import os
 from typing import Mapping, Protocol, Sequence
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from tjipto.retrieval.sufficiency import (
     EvidenceRequirement,
@@ -55,6 +59,66 @@ class ResearchPlan:
 
 class ResearchPlanningProvider(Protocol):
     def propose(self, request: Mapping[str, object]) -> object: ...
+
+
+class OpenAICompatibleResearchPlanningProvider:
+    """Optional, untrusted structured planner adapter."""
+
+    def __init__(self, api_key: str, *, model: str, endpoint: str, timeout: float = 12.0):
+        self._api_key = api_key
+        self._model = model
+        self._endpoint = endpoint
+        self._timeout = timeout
+
+    def propose(self, request: Mapping[str, object]) -> object:
+        payload = {
+            "model": self._model,
+            "temperature": 0,
+            "messages": [{
+                "role": "user",
+                "content": (
+                    "Return JSON only. Propose retrieval planning data, never legal truth, authority, "
+                    "source role, temporal status, citations, or evidence validity.\n"
+                    + json.dumps(dict(request), ensure_ascii=False, default=str)
+                ),
+            }],
+            "response_format": {"type": "json_object"},
+        }
+        req = Request(
+            self._endpoint,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self._api_key}"},
+            method="POST",
+        )
+        with urlopen(req, timeout=self._timeout) as response:  # nosec B310 - factory restricts HTTPS.
+            body = json.load(response)
+        return json.loads(str(body["choices"][0]["message"]["content"]))
+
+
+def research_planning_provider_from_environment() -> ResearchPlanningProvider | None:
+    """Create the optional planner only after explicit opt-in and valid config."""
+    if os.environ.get("TJIPTO_EXTERNAL_RESEARCH_PLANNING", "").strip().casefold() != "enabled":
+        return None
+    if os.environ.get("TJIPTO_RESEARCH_PLANNING_PROVIDER", "").strip().casefold() != "openai_compatible":
+        return None
+    api_key = os.environ.get("TJIPTO_RESEARCH_PLANNING_API_KEY", "").strip()
+    model = os.environ.get("TJIPTO_RESEARCH_PLANNING_MODEL", "").strip()
+    base_url = os.environ.get("TJIPTO_RESEARCH_PLANNING_BASE_URL", "").strip().rstrip("/")
+    if not api_key or not model or not base_url:
+        return None
+    try:
+        timeout = max(1.0, float(os.environ.get("TJIPTO_RESEARCH_PLANNING_TIMEOUT_SECONDS", "12")))
+    except ValueError:
+        return None
+    parsed = urlparse(base_url + "/chat/completions")
+    if parsed.scheme != "https" or not parsed.netloc:
+        return None
+    return OpenAICompatibleResearchPlanningProvider(
+        api_key,
+        model=model,
+        endpoint=base_url + "/chat/completions",
+        timeout=timeout,
+    )
 
 
 def plan_research(
@@ -417,6 +481,8 @@ __all__ = [
     "ResearchIntent",
     "ResearchPlan",
     "ResearchPlanningProvider",
+    "OpenAICompatibleResearchPlanningProvider",
+    "research_planning_provider_from_environment",
     "execute_research",
     "execute_research_rounds",
     "plan_research",

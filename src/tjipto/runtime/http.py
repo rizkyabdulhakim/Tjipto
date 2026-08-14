@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from tjipto.runtime.api import BadRequest, handle_catalog_pdf_request, handle_catalog_request, handle_pdf_request, handle_request
 from tjipto.runtime.service import LegalRuntimeService
+from tjipto.retrieval.research import research_planning_provider_from_environment
 from tjipto.telemetry import DEFAULT_TELEMETRY, Telemetry
 
 
@@ -30,7 +31,7 @@ def make_server(
     port: int = 8000,
     repo_root: Path | None = None,
 ) -> ThreadingHTTPServer:
-    service = LegalRuntimeService(repo_root)
+    service = LegalRuntimeService(repo_root, planning_provider=research_planning_provider_from_environment())
 
     class Handler(TjiptoHttpHandler):
         root = repo_root

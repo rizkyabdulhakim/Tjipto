@@ -649,7 +649,7 @@ class RuntimeContractTest(unittest.TestCase):
                 return False
 
             def read(self):
-                return b'{"candidates":[{"content":{"parts":[{"text":"{\\"presentation\\":\\"grounded\\",\\"referenced_fact_ids\\":[\\"deterministic_answer\\"]}"}]}}]}'
+                return b'{"candidates":[{"content":{"parts":[{"text":"{\\"sentences\\":[{\\"style\\":\\"grounded\\",\\"referenced_fact_ids\\":[\\"deterministic_answer\\"]}]}"}]}}]}'
 
         with patch("tjipto.runtime.gemini.urlopen", return_value=Response()) as request:
             provider = GeminiAnswerProvider(
@@ -660,10 +660,7 @@ class RuntimeContractTest(unittest.TestCase):
             answer = provider.propose("Jawaban deterministik.")
         self.assertEqual(
             answer,
-            {
-                "presentation": "grounded",
-                "referenced_fact_ids": ("deterministic_answer",),
-            },
+            {"sentences": ({"style": "grounded", "referenced_fact_ids": ("deterministic_answer",)},)},
         )
         payload = request.call_args.args[0].data.decode("utf-8")
         self.assertIn("Jawaban deterministik.", payload)
@@ -680,11 +677,11 @@ class RuntimeContractTest(unittest.TestCase):
                 return False
 
             def read(self):
-                return b'{"choices":[{"message":{"content":"{\\"presentation\\":\\"direct\\",\\"referenced_fact_ids\\":[\\"deterministic_answer\\"]}"}}]}'
+                return b'{"choices":[{"message":{"content":"{\\"sentences\\":[{\\"style\\":\\"direct\\",\\"referenced_fact_ids\\":[\\"deterministic_answer\\"]}]}"}}]}'
 
         with patch("tjipto.runtime.openai_compatible.urlopen", return_value=Response()) as request:
             provider = OpenAICompatibleWordingProvider("test-secret", model="test-model", endpoint="https://example.invalid/v1/chat/completions")
-            self.assertEqual(provider.propose("Jawaban deterministik."), {"presentation": "direct", "referenced_fact_ids": ("deterministic_answer",)})
+            self.assertEqual(provider.propose("Jawaban deterministik."), {"sentences": ({"style": "direct", "referenced_fact_ids": ("deterministic_answer",)},)})
         http_request = request.call_args.args[0]
         self.assertEqual(http_request.get_header("Authorization"), "Bearer test-secret")
         self.assertNotIn("test-secret", http_request.data.decode("utf-8"))
@@ -797,7 +794,10 @@ class RuntimeContractTest(unittest.TestCase):
         lawmaking = self.service.ask("uud", "Apa hubungan Presiden dan DPR dalam pembentukan undang-undang?")
         self.assertEqual(lawmaking["status"], "answer_ready")
         self.assertEqual(lawmaking["sufficiency"]["status"], "complete")
-        self.assertEqual(lawmaking["sufficiency"]["fulfilled_requirement_ids"], ("relation",))
+        self.assertEqual(
+            set(lawmaking["sufficiency"]["fulfilled_requirement_ids"]),
+            {"relation_1", "relation_2"},
+        )
         self.assertTrue(any("dibahas" in str(row.get("quoted_text") or "").casefold() for row in lawmaking["evidence"]))
         self.assertFalse(any("7b" in str(row.get("citation") or "").casefold() for row in lawmaking["evidence"]))
 
@@ -825,14 +825,14 @@ class RuntimeContractTest(unittest.TestCase):
 
         facts = {"fact": "Pasal 31: Hak atas pendidikan."}
         accepted = _render_wording(
-            {"sentences": ({"text": "Hak atas pendidikan: Pasal 31.", "referenced_fact_ids": ("fact",)},)},
+            {"sentences": ({"style": "direct", "referenced_fact_ids": ("fact",)},)},
             "fallback",
             facts,
         )
-        self.assertEqual(accepted, "Hak atas pendidikan: Pasal 31.")
+        self.assertEqual(accepted, facts["fact"])
         self.assertEqual(
             _render_wording(
-                {"sentences": ({"text": "Pasal 31 menjamin pendidikan dan pajak.", "referenced_fact_ids": ("fact",)},)},
+                {"sentences": ({"style": "direct", "referenced_fact_ids": ("fact", "unknown")},)},
                 "fallback",
                 facts,
             ),
@@ -840,7 +840,7 @@ class RuntimeContractTest(unittest.TestCase):
         )
         self.assertEqual(
             _render_wording(
-                {"sentences": ({"text": "Pasal 31\u200b: Hak atas pendidikan.", "referenced_fact_ids": ("fact",)},)},
+                {"sentences": ({"style": "unknown", "referenced_fact_ids": ("fact",)},)},
                 "fallback",
                 facts,
             ),

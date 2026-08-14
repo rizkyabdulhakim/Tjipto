@@ -58,13 +58,13 @@ def valid_proposal(value: object) -> dict[str, object] | None:
         return None
     normalized = []
     for sentence in sentences:
-        if not isinstance(sentence, dict) or set(sentence) != {"text", "referenced_fact_ids"}:
+        if not isinstance(sentence, dict) or set(sentence) != {"style", "referenced_fact_ids"}:
             return None
-        text = sentence.get("text")
+        style = sentence.get("style")
         refs = sentence.get("referenced_fact_ids")
-        if not isinstance(text, str) or not text.strip() or not isinstance(refs, list) or not refs or not all(isinstance(item, str) for item in refs):
+        if style not in {"direct", "grounded"} or not isinstance(refs, list) or not refs or not all(isinstance(item, str) for item in refs):
             return None
-        normalized.append({"text": text, "referenced_fact_ids": tuple(refs)})
+        normalized.append({"style": style, "referenced_fact_ids": tuple(refs)})
     return {"sentences": tuple(normalized)}
 
 

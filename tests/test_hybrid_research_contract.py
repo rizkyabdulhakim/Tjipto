@@ -275,8 +275,11 @@ class HybridResearchContractTest(unittest.TestCase):
         service = LegalRuntimeService()
         for query in ("mekanisme perubahan UUD", "proses pembentukan undang-undang menurut UUD"):
             response = service.ask("uud", query)
-            self.assertNotEqual(response.get("sufficiency", {}).get("status"), "complete")
-            self.assertNotIn("grounds", response.get("sufficiency", {}).get("fulfilled_requirement_ids", ()))
+            fulfilled = response.get("sufficiency", {}).get("fulfilled_requirement_ids", ())
+            self.assertNotIn("grounds", fulfilled)
+            self.assertNotIn("procedure_basis", fulfilled)
+            self.assertNotIn("constitutional_review", fulfilled)
+            self.assertNotIn("assembly_decision", fulfilled)
 
     def test_impeachment_relation_query_collects_both_typed_dimensions(self) -> None:
         response = LegalRuntimeService().ask("uud", "hubungan DPR dan MK dalam pemakzulan")

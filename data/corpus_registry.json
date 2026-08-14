@@ -190,8 +190,21 @@
           "rancangan",
           "dibahas",
           "persetujuan bersama"
+        ],
+        "pemakzulan": [
+          "pemberhentian"
         ]
       },
+      "relation_frame_terms": [
+        "dan",
+        "dalam",
+        "atau",
+        "yang",
+        "di",
+        "ke",
+        "pada",
+        "untuk"
+      ],
       "procedure_requirements": [
         {
           "requirement_id": "grounds",

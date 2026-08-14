@@ -42,7 +42,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     runtime_root = args.runtime_root.resolve()
     sys.path.insert(0, str(runtime_root / "src"))
     from tjipto.runtime.service import LegalRuntimeService
-    from tjipto.retrieval.research import ResearchIntent
+    from tjipto.runtime.query_semantics import interpret_query
+    from tjipto.runtime.service import _research_intent_for_ask, _research_requirements_for_ask
 
     service = LegalRuntimeService(runtime_root)
     lanes: dict[str, dict[str, Any]] = {}
@@ -52,13 +53,17 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             started = time.perf_counter()
             try:
                 if lane == "planning":
-                    intent = ResearchIntent(
-                        multiple_supports=case["family"] in {"comparison", "multi_support", "multi_hop_procedure"},
-                        comparison=case["family"] == "comparison",
-                        decomposition=case["family"] in {"comparison", "multi_support", "multi_hop_procedure"},
-                        relation_traversal=case["family"] == "multi_hop_procedure",
+                    store = service._store(case["corpus_id"])
+                    semantics = interpret_query(store, case["corpus_id"], case["query"])
+                    requirements = _research_requirements_for_ask(store, semantics, case["query"])
+                    intent = _research_intent_for_ask(store, semantics, case["query"], requirements)
+                    response = service.research(
+                        case["corpus_id"],
+                        case["query"],
+                        intent=intent,
+                        requirements=requirements,
+                        limit=args.cutoff,
                     )
-                    response = service.research(case["corpus_id"], case["query"], intent=intent, limit=args.cutoff)
                     rows = tuple(response.get("matches") or ())
                     status = response.get("status")
                 else:

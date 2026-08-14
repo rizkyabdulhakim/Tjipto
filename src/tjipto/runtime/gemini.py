@@ -21,7 +21,7 @@ class GeminiAnswerProvider:
         prompt = (
             "Kembalikan JSON saja. Susun ulang hanya fakta yang diberikan menjadi kalimat alami. "
             "Jangan menambah atau mengubah fakta, angka, rujukan, modalitas, atau negasi. "
-            "Setiap kalimat wajib memiliki text dan referenced_fact_ids.\n\n"
+            "Setiap kalimat hanya boleh memilih style direct/grounded dan referenced_fact_ids; server akan merender teks.\n\n"
             + json.dumps({"deterministic_answer": deterministic_answer}, ensure_ascii=False)
         )
         payload = {
@@ -38,10 +38,10 @@ class GeminiAnswerProvider:
                             "items": {
                                 "type": "OBJECT",
                                 "properties": {
-                                    "text": {"type": "STRING"},
+                                    "style": {"type": "STRING", "enum": ["direct", "grounded"]},
                                     "referenced_fact_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
                                 },
-                                "required": ["text", "referenced_fact_ids"],
+                                "required": ["style", "referenced_fact_ids"],
                             },
                         },
                     },

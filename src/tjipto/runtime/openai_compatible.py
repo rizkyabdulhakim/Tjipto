@@ -35,8 +35,7 @@ class OpenAICompatibleWordingProvider:
 
 def _prompt(answer: str) -> str:
     return (
-        "Return JSON only. Rewrite only the provided verified facts into natural sentences. "
-        "Do not add or change facts, numbers, references, modality, or negation. "
-        "Return {sentences:[{text:string,referenced_fact_ids:string[]}]}; every sentence must reference provided facts.\n"
+        "Return JSON only. Select server-owned verified fact slots; do not write prose or change facts, numbers, references, modality, or negation. "
+        "Return {sentences:[{style:direct|grounded,referenced_fact_ids:string[]}]}; every sentence must reference provided facts.\n"
         + json.dumps({"deterministic_answer": answer}, ensure_ascii=False)
     )

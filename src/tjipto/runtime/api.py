@@ -7,6 +7,7 @@ from tjipto.catalog import CATALOG_FILTERS
 from tjipto.evidence.legal_citation import FootnoteBook, IndonesianLegalCitationProfile
 from tjipto.runtime.public_document import project_legal_document
 from tjipto.runtime.service import LegalRuntimeService
+from tjipto.retrieval.research import research_planning_provider_from_environment
 
 
 class BadRequest(ValueError):
@@ -500,7 +501,7 @@ def handle_pdf_request(corpus_id: str, payload: dict, repo_root: Path | None = N
 
 @lru_cache(maxsize=1)
 def _service_for(repo_root: Path | None) -> LegalRuntimeService:
-    return LegalRuntimeService(repo_root)
+    return LegalRuntimeService(repo_root, planning_provider=research_planning_provider_from_environment())
 
 
 def _validate_payload(action: str, payload: object) -> None:

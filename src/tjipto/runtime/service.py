@@ -6,8 +6,7 @@ import json
 from pathlib import Path
 import re
 from threading import RLock
-from collections import Counter, OrderedDict
-import unicodedata
+from collections import OrderedDict
 from typing import Any
 from uuid import uuid4
 
@@ -295,19 +294,20 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
         )
     if len(entities) > 1 and hinted("relation"):
         relation_terms = _research_relation_terms(store, research, query, entities)
-        return (
+        return tuple(
             EvidenceRequirement(
-                "relation",
-                description="; ".join(entities),
-                retrieval_query=f"{' '.join(entities)} {_research_focus_query(store, research, query)}",
-                required_entities=entities,
-                # Entity co-occurrence is not a relationship.  The source row
-                # must also carry every typed operation term selected by the
-                # corpus policy for this relation family.
-                required_operation_terms=relation_terms,
+                f"relation_{index}",
+                description=entity,
+                retrieval_query=f"{entity} {_research_focus_query(store, research, query)}",
+                required_entities=(entity,),
+                # Entity co-occurrence is not a relationship. Each endpoint
+                # is independently discovered and checked against at least one
+                # corpus-owned operation cue; framing words are not cues.
+                support_terms=relation_terms,
                 authority_kinds=("normative_legal_text",),
                 hierarchy_depth=3,
-            ),
+            )
+            for index, entity in enumerate(entities, 1)
         )
     if len(segments) > 1 and not _single_support_covers_query(store, query):
         return tuple(
@@ -322,12 +322,16 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
     if hinted("procedure") and _procedure_applicable(research, normalized, entities):
         family = _procedure_family(research, normalized, entities)
         family_requirements = research.get("procedure_requirements_by_family", {}) if isinstance(research, dict) else {}
-        stages = (
+        configured_stages = (
             family_requirements.get(family, ())
             if family and isinstance(family_requirements, dict)
-            else research.get("procedure_requirements", ())
-            if isinstance(research, dict)
             else ()
+        )
+        # The historical top-level procedure contract is the corpus-owned
+        # impeachment template. Dispatch it by family without duplicating the
+        # requirement rows in configuration.
+        stages = configured_stages or (
+            research.get("procedure_requirements", ()) if isinstance(research, dict) else ()
         )
         if isinstance(stages, (tuple, list)) and stages:
             return tuple(
@@ -525,6 +529,12 @@ def _research_relation_terms(
         for token in tokens(value, aliases=aliases)
     }
     ignored.update(token for entity in entities for token in tokens(entity, aliases=aliases))
+    ignored.update(
+        token
+        for value in (research.get("relation_frame_terms", ()) if isinstance(research, dict) else ())
+        if isinstance(value, str)
+        for token in tokens(value, aliases=aliases)
+    )
     operation_terms = research.get("relation_operation_terms", {})
     if isinstance(operation_terms, dict):
         for phrase, values in operation_terms.items():
@@ -1881,7 +1891,7 @@ def _verified_answer_facts(evidence: tuple[dict, ...], fallback: str) -> dict[st
 
 
 def _render_wording(proposal: object, fallback: str, facts: dict[str, str] | None = None) -> str:
-    """Render only fact-bound wording; an external model never adds atoms."""
+    """Render server-owned fact slots; an external model never publishes prose."""
     if isinstance(proposal, dict) and set(proposal) == {"sentences"}:
         sentences = proposal.get("sentences")
         approved = facts or {"deterministic_answer": fallback}
@@ -1889,19 +1899,22 @@ def _render_wording(proposal: object, fallback: str, facts: dict[str, str] | Non
             return fallback
         rendered: list[str] = []
         for sentence in sentences:
-            if not isinstance(sentence, dict):
+            if not isinstance(sentence, dict) or set(sentence) != {"style", "referenced_fact_ids"}:
                 return fallback
             refs = sentence.get("referenced_fact_ids")
-            text = sentence.get("text")
-            if not isinstance(text, str) or not isinstance(refs, tuple) or not refs or not set(refs) <= set(approved):
+            style = sentence.get("style")
+            if style not in {"direct", "grounded"} or not isinstance(refs, tuple) or not refs:
                 return fallback
-            if any(unicodedata.category(char) in {"Cf", "Cc"} for char in text):
+            if len(refs) != len(set(refs)) or not set(refs) <= set(approved):
                 return fallback
-            source_tokens = Counter(re.findall(r"\w+", " ".join(approved[item] for item in refs).casefold(), flags=re.UNICODE))
-            proposal_tokens = Counter(re.findall(r"\w+", text.casefold(), flags=re.UNICODE))
-            if proposal_tokens != source_tokens:
+            body = " ".join(approved[item] for item in refs).strip()
+            if not body:
                 return fallback
-            rendered.append(text.strip())
+            rendered.append(
+                f"Berdasarkan bukti terverifikasi, {body}"
+                if style == "grounded"
+                else body
+            )
         return " ".join(rendered)
     if not isinstance(proposal, dict) or set(proposal) != {"presentation", "referenced_fact_ids"}:
         return fallback
