@@ -396,6 +396,37 @@ class HybridResearchContractTest(unittest.TestCase):
         )
         self.assertFalse(plan.requirements)
         self.assertIn("requirement_scope_invariant_violation", plan.rejection_reasons)
+        self.assertIn("provider_requirements_forbidden", plan.rejection_reasons)
+
+    def test_planner_request_is_json_and_provider_cannot_author_support_policy(self) -> None:
+        seen = {}
+
+        class Provider:
+            def propose(self, request):
+                seen.update(request)
+                return {
+                    "requirements": [{
+                        "requirement_id": "forged",
+                        "evidence_ids": ["unknown"],
+                        "min_supports": 99,
+                    }],
+                }
+
+        plan = plan_research(
+            "DPR dan DPD",
+            ResearchIntent(comparison=True),
+            provider=Provider(),
+            required_entities=("DPR", "DPD"),
+            explicit_references=("Pasal 20",),
+            source_role="current_consolidated",
+            temporal_scope="current_consolidated",
+        )
+        json.dumps(seen, ensure_ascii=False, sort_keys=True)
+        self.assertIsInstance(seen["intent"], dict)
+        self.assertEqual(seen["constraints"]["required_entities"], ("DPR", "DPD"))
+        self.assertNotIn("evidence_ids", seen["constraints"])
+        self.assertFalse(plan.requirements)
+        self.assertIn("provider_requirements_forbidden", plan.rejection_reasons)
 
     def test_planner_rejects_malformed_requirement_values_without_authority(self) -> None:
         class Provider:

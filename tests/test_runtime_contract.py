@@ -826,6 +826,7 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_natural_sentence_proposals_remain_fact_bound(self) -> None:
         from tjipto.runtime.service import _render_wording
+        from tjipto.runtime.wording import build_answer_fact_plan
 
         facts = {"fact": "Pasal 31: Hak atas pendidikan."}
         accepted = _render_wording(
@@ -866,6 +867,21 @@ class RuntimeContractTest(unittest.TestCase):
             ),
             "fallback",
         )
+        plan = build_answer_fact_plan(
+            ({
+                "evidence_id": "support-id",
+                "quoted_text": "Pasal 31 mengatur pendidikan.",
+                "citation": "Pasal 31",
+                "source_role": "current_consolidated",
+                "temporal_context": "current_consolidated",
+            },),
+            "fallback",
+        )
+        self.assertEqual(plan.facts[1].support_ids, ("support-id",))
+        self.assertEqual(plan.facts[1].legal_references, ("Pasal 31",))
+        self.assertEqual(plan.facts[1].source_role, "current_consolidated")
+        self.assertEqual(plan.facts[1].temporal_scope, "current_consolidated")
+        self.assertEqual(plan.public()[1]["object"], "Pasal 31 mengatur pendidikan.")
 
     def test_target_specific_article_amendment_relations_do_not_substitute_neighbors(self) -> None:
         unsupported = self.service.ask("uud", "amandemen keempat mengubah pasal 31?")
