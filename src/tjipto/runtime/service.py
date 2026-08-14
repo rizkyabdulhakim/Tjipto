@@ -299,13 +299,15 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
                 f"relation_{index}",
                 description=entity,
                 retrieval_query=f"{entity} {_research_focus_query(store, research, query)}",
-                required_entities=entities,
+                required_entities=(entity,),
+                relation_endpoints=entities,
                 # Every assigned support must carry both typed endpoints and
                 # at least one corpus-owned operation cue; independent entity
                 # mentions cannot complete the relation.
                 support_terms=relation_terms,
                 authority_kinds=("normative_legal_text",),
                 hierarchy_depth=3,
+                allow_shared=len(entities) > 2,
             )
             for index, entity in enumerate(entities, 1)
         )

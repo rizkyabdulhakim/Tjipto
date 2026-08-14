@@ -16,6 +16,7 @@ class EvidenceRequirement:
     description: str = ""
     retrieval_query: str | None = None
     required_entities: tuple[str, ...] = ()
+    relation_endpoints: tuple[str, ...] = ()
     contrast_entities: tuple[str, ...] = ()
     explicit_references: tuple[str, ...] = ()
     semantic_terms: tuple[str, ...] = ()
@@ -40,6 +41,7 @@ class EvidenceRequirement:
     def typed(self) -> bool:
         return bool(
             self.required_entities
+            or self.relation_endpoints
             or self.explicit_references
             or self.semantic_terms
             or self.support_terms
@@ -83,6 +85,9 @@ class EvidenceRequirement:
                 )
                 if competing and positions[0] > min(competing):
                     return False
+        if self.relation_endpoints:
+            if any(_phrase_position(text, endpoint) < 0 for endpoint in self.relation_endpoints):
+                return False
         if self.explicit_references:
             haystack = " ".join(
                 str(row.get(key) or "")

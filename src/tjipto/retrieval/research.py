@@ -268,7 +268,7 @@ def _validated_requirements(
     if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
         return (), ("requirements_malformed",) if raw else ()
     allowed = {
-        "requirement_id", "description", "retrieval_query", "required_entities", "explicit_references",
+        "requirement_id", "description", "retrieval_query", "required_entities", "relation_endpoints", "explicit_references",
         "legal_target", "relation_family", "concept_facet", "source_role", "temporal_context",
         "evidence_ids", "legal_unit_ids", "min_supports", "allow_partial", "allow_shared", "shareable_with",
     }
@@ -281,7 +281,7 @@ def _validated_requirements(
         if isinstance(item, Mapping) and isinstance(item.get("requirement_id"), str)
     }
     text_fields = {"description", "retrieval_query", "legal_target", "relation_family", "concept_facet", "source_role", "temporal_context"}
-    sequence_fields = {"required_entities", "explicit_references", "evidence_ids", "legal_unit_ids", "shareable_with"}
+    sequence_fields = {"required_entities", "relation_endpoints", "explicit_references", "evidence_ids", "legal_unit_ids", "shareable_with"}
     bool_fields = {"allow_partial", "allow_shared"}
     for item in raw:
         if not isinstance(item, Mapping) or not isinstance(item.get("requirement_id"), str):
@@ -310,9 +310,11 @@ def _validated_requirements(
             rejected.append("requirement_min_supports_invalid")
             continue
         entities = tuple(str(value) for value in item.get("required_entities") or ())
+        relation_endpoints = tuple(str(value) for value in item.get("relation_endpoints") or ())
         references = tuple(str(value) for value in item.get("explicit_references") or ())
         if (
             set(entities) != set(required_entities)
+            or not set(relation_endpoints) <= set(required_entities)
             or set(references) != set(explicit_references)
             or item.get("source_role", source_role) != source_role
             or item.get("temporal_context", temporal_scope) != temporal_scope
@@ -324,6 +326,7 @@ def _validated_requirements(
             description=str(item.get("description") or ""),
             retrieval_query=item.get("retrieval_query"),
             required_entities=entities,
+            relation_endpoints=relation_endpoints,
             explicit_references=references,
             legal_target=item.get("legal_target"),
             relation_family=item.get("relation_family"),
