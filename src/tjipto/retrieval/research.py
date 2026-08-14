@@ -191,7 +191,7 @@ def plan_research(
     if lanes is None:
         rejected = (*rejected, "retrieval_lane_invalid")
         lanes = ("sparse",)
-    _proposed_requirements, requirement_rejections = _validated_requirements(
+    _, requirement_rejections = _validated_requirements(
         proposal,
         required_entities=required_entities,
         explicit_references=explicit_references,
