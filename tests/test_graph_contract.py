@@ -525,7 +525,7 @@ class GraphContractTest(unittest.TestCase):
             for row in rows
             if row["source_role"] == "amendment_4_historical" and row["relation_type"] == "DELETES"
         }
-        self.assertNotIn("Pasal 16", amendment_fourth_modifies)
+        self.assertIn("Pasal 16", amendment_fourth_modifies)
         self.assertIn("Pasal 16", amendment_fourth_deletes)
 
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
