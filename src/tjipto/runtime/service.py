@@ -20,6 +20,7 @@ from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
 from tjipto.retrieval.bm25 import meaningful_tokens, sparse_index_for_store, tokens
 from tjipto.retrieval.candidates import graph_expand
+from tjipto.retrieval.dense import dense_configured
 from tjipto.retrieval.metadata import (
     metadata_lookup,
     normalize_filters,
@@ -667,7 +668,17 @@ class LegalRuntimeService:
 
     def _route_retrieval(self, corpus_id: str, query: str, store: EvidenceStore, **kwargs: Any) -> dict:
         result = route_retrieval(corpus_id, query, store, **kwargs)
-        self.telemetry.emit("retrieval_route", corpus_id=self._telemetry_corpus_id(corpus_id), route=result["route"], status=result["status"])
+        configured = result.get("dense_configured")
+        if configured is None:
+            configured = dense_configured(store) if store is not None else False
+        self.telemetry.emit(
+            "retrieval_route",
+            corpus_id=self._telemetry_corpus_id(corpus_id),
+            route=result["route"],
+            status=result["status"],
+            dense_configured=bool(configured),
+            hybrid_active=bool(result.get("hybrid_active", False)),
+        )
         return result
 
     def research(

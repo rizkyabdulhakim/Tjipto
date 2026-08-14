@@ -22,6 +22,9 @@ EVENT_ATTRIBUTES = {
     "ci_gate": frozenset({"gate", "status", "duration_ms"}),
     "release_validation": frozenset({"status", "forbidden_entry_count", "archive_sha256"}),
 }
+OPTIONAL_ATTRIBUTES = {
+    "retrieval_route": frozenset({"dense_configured", "hybrid_active"}),
+}
 SENSITIVE_ATTRIBUTES = frozenset({"query", "query_text", "text", "quote", "quoted_text", "token", "tokens", "credential", "password", "secret", "path", "file_path", "email", "user_id"})
 MAX_ATTRIBUTE_LENGTH = 96
 _REQUEST_ID = re.compile(r"[0-9a-f]{32}")
@@ -96,10 +99,11 @@ _CI_GATES = frozenset(
 
 def event_record(event: str, *, registry: CorpusRegistry | None = None, **attributes: Any) -> dict[str, Any]:
     """Return a bounded record containing only the event's approved fields."""
-    allowed = EVENT_ATTRIBUTES[event]
+    allowed = EVENT_ATTRIBUTES[event] | OPTIONAL_ATTRIBUTES.get(event, frozenset())
+    required = EVENT_ATTRIBUTES[event]
     values = {key: value for key, value in attributes.items() if key in allowed and key not in SENSITIVE_ATTRIBUTES and _safe_value(value)}
-    if set(values) != allowed:
-        missing = sorted(allowed - set(values))
+    if not required.issubset(values):
+        missing = sorted(required - set(values))
         raise ValueError(f"telemetry attributes missing or unsafe: {', '.join(missing)}")
     if not all(_valid_attribute(event, key, value, registry) for key, value in values.items()):
         raise ValueError("telemetry attributes are outside their approved values")
@@ -115,6 +119,8 @@ def _safe_value(value: Any) -> bool:
 
 
 def _valid_attribute(event: str, key: str, value: Any, registry: CorpusRegistry | None = None) -> bool:
+    if key in OPTIONAL_ATTRIBUTES.get(event, frozenset()):
+        return type(value) is bool
     if key == "corpus_id":
         from tjipto.corpora.registry import CorpusRegistry
 

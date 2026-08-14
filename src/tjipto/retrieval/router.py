@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.candidates import merge_ranked
-from tjipto.retrieval.dense import dense_configured, dense_search
+from tjipto.retrieval.dense import dense_configured, dense_runtime_available, dense_search
 from tjipto.retrieval.metadata import (
     filter_evidence,
     has_metadata_target,
@@ -80,6 +80,7 @@ def route_retrieval(
             "route": "unsupported_corpus",
             "reason": "unsupported_corpus",
         }
+    dense_enabled = dense_configured(store)
     if filters.get("_error"):
         return envelope | {
             "status": "invalid_filter",
@@ -328,8 +329,12 @@ def route_retrieval(
         }
 
     retrieval_settings: dict = getattr(config, "setting", lambda *_: {})("retrieval", {}) or {}
-    dense_enabled = dense_configured(store)
-    hybrid_enabled = route == "hybrid" or retrieval_settings.get("mode") == "hybrid" or (route == "auto" and dense_enabled)
+    dense_ready = dense_runtime_available(store)
+    hybrid_enabled = (
+        route == "hybrid"
+        or (retrieval_settings.get("mode") == "hybrid" and dense_ready)
+        or (route == "auto" and dense_ready)
+    )
     if hybrid_enabled:
         fused = hybrid_search(
             store,
@@ -350,6 +355,8 @@ def route_retrieval(
             "matches": tuple(filtered[:limit]),
             "reason": None if filtered else ("filters_removed_all" if fused.get("matches") else fused.get("reason", "no_results")),
             "intent": "natural_language",
+            "dense_configured": dense_enabled,
+            "hybrid_active": fused.get("route") == "hybrid",
         }
 
     matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))
@@ -368,6 +375,8 @@ def route_retrieval(
             "intent": "natural_language",
             "matches": ranked[:limit],
             "expansion_trace": trace,
+            "dense_configured": dense_enabled,
+            "hybrid_active": False,
         }
     if matches:
         return envelope | {
@@ -376,4 +385,11 @@ def route_retrieval(
             "intent": "no_results",
             "reason": "filters_removed_all",
         }
-    return envelope | {"status": "no_results", "route": "no_results", "intent": "no_results", "reason": "no_results"}
+    return envelope | {
+        "status": "no_results",
+        "route": "no_results",
+        "intent": "no_results",
+        "reason": "no_results",
+        "dense_configured": dense_enabled,
+        "hybrid_active": False,
+    }

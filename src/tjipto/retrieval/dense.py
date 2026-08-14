@@ -22,7 +22,9 @@ DENSE_NORMALIZATION = "l2"
 DENSE_POOLING = "cls"
 DENSE_MAX_LENGTH = 256
 DENSE_ALLOWED_MAX_LENGTHS = (256, 512, 1024)
-DENSE_BATCH_SIZE = 64
+# BGE-M3 is large enough that a modest CPU batch is the stable promotion
+# default; callers may raise it only with measured worker RSS evidence.
+DENSE_BATCH_SIZE = 8
 DENSE_TRUNCATION_POLICY = "explicit_max_length"
 EMBEDDING_TEXT_POLICY = "source_document+breadcrumb+label+legal_text"
 INDEX_BUILDER_ID = "tjipto.dense.index"
@@ -116,14 +118,16 @@ class LocalDenseProvider:
         python_executable: str | None = None,
         batch_size: int = DENSE_BATCH_SIZE,
         max_length: int = DENSE_MAX_LENGTH,
+        model_dir: str | Path | None = None,
     ):
         self.timeout_seconds = timeout_seconds
         self.python_executable = python_executable or sys.executable
         self.batch_size = batch_size
         self.max_length = max_length
+        self.model_dir = Path(model_dir).resolve() if model_dir else None
 
     def identity(self) -> DenseModelIdentity:
-        model_dir = _model_snapshot_path()
+        model_dir = _model_snapshot_path(self.model_dir)
         tokenizer_digest, model_digest, pooling_digest = _model_identity_digests(model_dir)
         return DenseModelIdentity(
             tokenizer_sha256=os.environ.get("TJIPTO_DENSE_TOKENIZER_SHA256") or tokenizer_digest,
@@ -157,6 +161,7 @@ class LocalDenseProvider:
                 text=True,
                 timeout=self.timeout_seconds,
                 check=False,
+                env=os.environ | ({"TJIPTO_DENSE_MODEL_DIR": str(self.model_dir)} if self.model_dir else {}),
             )
         except (OSError, subprocess.TimeoutExpired) as error:
             raise DenseUnavailable("dense_timeout" if isinstance(error, subprocess.TimeoutExpired) else "worker_unavailable") from error
@@ -300,14 +305,16 @@ class DenseIndex:
             ],
             "vectors": base64.b64encode(self.vector_bytes).decode("ascii"),
         }
+        data = DENSE_ARTIFACT_MAGIC + (json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(
-            DENSE_ARTIFACT_MAGIC
-            + (json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
-        )
+        if target.exists():
+            if target.read_bytes() != data:
+                raise DenseUnavailable("dense_artifact_immutable_conflict")
+            return
+        target.write_bytes(data)
 
     @classmethod
-    def load(cls, path: str | Path, store, *, provider: DenseEmbeddingProvider | None = None) -> "DenseIndex":
+    def load(cls, path: str | Path, store, *, provider: DenseEmbeddingProvider | None = None, promotion_path: str | Path | None = None) -> "DenseIndex":
         """Load an identity-bound artifact and reject stale or malformed state."""
         try:
             raw = Path(path).read_bytes()
@@ -320,7 +327,7 @@ class DenseIndex:
             if not isinstance(identity_record, dict):
                 raise DenseUnavailable("dense_artifact_identity_missing")
             model = DenseModelIdentity.from_value(identity_record.get("model"))
-            current_model = (provider or LocalDenseProvider()).identity()
+            current_model = (provider or LocalDenseProvider(model_dir=_dense_model_path(store))).identity()
             if current_model != model:
                 raise DenseUnavailable("model_identity_mismatch")
             records = _dense_records(store)
@@ -340,6 +347,9 @@ class DenseIndex:
                 or identity_record.get("vector_mapping_digest") != expected_mapping
                 or identity_record.get("retrieval_units_digest") != _digest([row for row, _, _ in records])
                 or identity_record.get("embedding_text_digest") != _digest(texts)
+                or identity_record.get("corpus_id") != getattr(store.config, "corpus_id", None)
+                or identity_record.get("artifact_set_digest") != getattr(store.config, "artifact_set_digest", None)
+                or identity_record.get("manifest_digest") != getattr(store.config, "manifest_digest", None)
             ):
                 raise DenseUnavailable("dense_identity_mismatch")
             documents_value = payload.get("documents")
@@ -364,7 +374,7 @@ class DenseIndex:
                 norm = math.sqrt(math.fsum(value * value for value in vector))
                 if abs(norm - 1.0) > 1e-3:
                     raise DenseUnavailable("dense_artifact_not_normalized")
-            return cls(
+            loaded = cls(
                 identity_record["identity"],
                 expected_source,
                 identity_record.get("corpus_id"),
@@ -386,6 +396,8 @@ class DenseIndex:
                 identity_record["embedding_text_digest"],
                 identity_record.get("worker_peak_rss_bytes"),
             )
+            _validate_promotion_record(Path(path), loaded, store, promotion_path)
+            return loaded
         except DenseError:
             raise
         except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError, UnicodeDecodeError, binascii.Error) as error:
@@ -422,7 +434,9 @@ def dense_search(
 ) -> dict:
     if not dense_configured(store):
         return _unavailable("not_configured")
-    provider = provider or LocalDenseProvider()
+    if provider is None and not dense_runtime_available(store):
+        return _unavailable("not_configured")
+    provider = provider or LocalDenseProvider(model_dir=_dense_model_path(store))
     try:
         index = dense_index_for_store(store, provider=provider)
         query_batch = provider.embed((query,))
@@ -441,26 +455,42 @@ def dense_search(
 
 def dense_configured(store) -> bool:
     """Enable dense retrieval only for an explicit verified/configured lane."""
-    return bool(
+    configured = bool(
         getattr(store.config, "manifest", {}).get("dense_retrieval")
         or getattr(store.config, "setting", lambda *_: False)("dense_retrieval", False)
         or os.environ.get("TJIPTO_DENSE_MODEL_DIR")
         or os.environ.get("TJIPTO_DENSE_INDEX_PATH")
     )
+    return configured
+
+
+def dense_runtime_available(store) -> bool:
+    """Cheap readiness check; full identity validation remains in ``DenseIndex.load``."""
+    try:
+        if not dense_configured(store):
+            return False
+        configured_index = os.environ.get("TJIPTO_DENSE_INDEX_PATH") or getattr(store.config, "setting", lambda *_: None)("dense_index_path", None)
+        if not configured_index or not _config_path(store, configured_index).is_file():
+            return False
+        promotion = _dense_promotion_path(store)
+        model = _model_snapshot_path(_dense_model_path(store))
+        return promotion is not None and promotion.is_file() and model is not None
+    except (OSError, ValueError, TypeError):
+        return False
 
 
 def dense_index_for_store(store, *, provider: DenseEmbeddingProvider | None = None) -> DenseIndex:
-    provider = provider or LocalDenseProvider()
+    provider = provider or LocalDenseProvider(max_length=int(getattr(store.config, "setting", lambda *_: DENSE_MAX_LENGTH)("dense_max_length", DENSE_MAX_LENGTH)), model_dir=_dense_model_path(store))
     configured_path = os.environ.get("TJIPTO_DENSE_INDEX_PATH") or getattr(store.config, "setting", lambda *_: None)("dense_index_path", None)
     if configured_path:
-        path = Path(configured_path)
+        path = _config_path(store, configured_path)
         records = _dense_records(store)
         current_model = provider.identity()
         current_source = _source_identity(store, records, current_model, _digest(_embedding_texts(store, records)))
         cached = getattr(store, "_dense_index", None)
         if isinstance(cached, DenseIndex) and cached.source_identity == current_source:
             return cached
-        index = DenseIndex.load(path, store, provider=provider)
+        index = DenseIndex.load(path, store, provider=provider, promotion_path=_dense_promotion_path(store))
         store._dense_index = index
         store._dense_index_artifact_identity = index.identity
         return index
@@ -668,17 +698,55 @@ def _valid_digest(value: str | None) -> bool:
     return True
 
 
-def _model_snapshot_path() -> Path | None:
-    configured = os.environ.get("TJIPTO_DENSE_MODEL_DIR")
+def _model_snapshot_path(configured: str | Path | None = None) -> Path | None:
+    configured = configured or os.environ.get("TJIPTO_DENSE_MODEL_DIR")
     if configured:
         path = Path(configured)
-        return path if path.is_dir() else None
-    hub_root = os.environ.get("HF_HOME")
-    if hub_root:
-        candidate = Path(hub_root) / "hub" / "models--BAAI--bge-m3" / "snapshots" / MODEL_REVISION
-    else:
-        candidate = Path.home() / ".cache" / "huggingface" / "hub" / "models--BAAI--bge-m3" / "snapshots" / MODEL_REVISION
-    return candidate if candidate.is_dir() else None
+        return path if path.is_dir() and path.name == MODEL_REVISION else None
+    return None
+
+
+def _dense_model_path(store) -> Path | None:
+    configured = os.environ.get("TJIPTO_DENSE_MODEL_DIR") or getattr(store.config, "setting", lambda *_: None)("dense_model_path", None)
+    if not configured:
+        return None
+    return Path(configured).resolve() if os.environ.get("TJIPTO_DENSE_MODEL_DIR") else _config_path(store, configured)
+
+
+def _dense_promotion_path(store) -> Path | None:
+    configured = getattr(store.config, "setting", lambda *_: None)("dense_promotion_path", None)
+    return _config_path(store, configured) if configured else None
+
+
+def _config_path(store, value: str | Path) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    source_path = getattr(store.config, "source_path", None)
+    return source_path(str(path)) if source_path else path
+
+
+def _validate_promotion_record(path: Path, index: DenseIndex, store, promotion_path: str | Path | None) -> None:
+    configured = promotion_path or _dense_promotion_path(store)
+    if not configured:
+        return
+    record_path = Path(configured)
+    try:
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        index_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except (OSError, json.JSONDecodeError) as error:
+        raise DenseUnavailable("dense_promotion_record_invalid") from error
+    if (
+        not isinstance(record, dict)
+        or record.get("status") != "promoted"
+        or record.get("index_sha256") != index_digest
+        or record.get("index_identity") != index.identity
+        or record.get("corpus_id") != getattr(store.config, "corpus_id", None)
+        or record.get("artifact_set_digest") != getattr(store.config, "artifact_set_digest", None)
+        or record.get("manifest_digest") != getattr(store.config, "manifest_digest", None)
+        or record.get("model") != index.model_identity.as_dict()
+    ):
+        raise DenseUnavailable("dense_promotion_identity_mismatch")
 
 
 def _files_digest(path: Path | None, names: tuple[str, ...]) -> str | None:
@@ -745,5 +813,7 @@ __all__ = [
     "MODEL_REVISION",
     "EMBEDDING_TEXT_POLICY",
     "dense_index_for_store",
+    "dense_configured",
+    "dense_runtime_available",
     "dense_search",
 ]

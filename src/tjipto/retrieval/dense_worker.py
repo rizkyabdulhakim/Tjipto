@@ -79,13 +79,12 @@ def _embed(texts: tuple[str, ...], *, batch_size: int, max_length: int):
         raise ValueError("worker_dependencies_missing") from error
     cache_dir = os.environ.get("TJIPTO_DENSE_MODEL_DIR")
     local_snapshot = Path(cache_dir) if cache_dir and (Path(cache_dir) / "config.json").exists() else None
-    if local_snapshot is not None and local_snapshot.name != MODEL_REVISION:
-        raise ValueError("noncanonical_model_snapshot")
-    model_source = str(local_snapshot) if local_snapshot else MODEL_ID
-    kwargs: dict[str, object] = {"trust_remote_code": False, "local_files_only": True}
     if local_snapshot is None:
-        if cache_dir:
-            kwargs["cache_dir"] = cache_dir
+        raise ValueError("model_snapshot_unavailable")
+    if local_snapshot.name != MODEL_REVISION:
+        raise ValueError("noncanonical_model_snapshot")
+    model_source = str(local_snapshot)
+    kwargs: dict[str, object] = {"trust_remote_code": False, "local_files_only": True}
     tokenizer = AutoTokenizer.from_pretrained(model_source, revision=MODEL_REVISION, **kwargs)  # nosec B615 - pinned revision and local-only
     model = AutoModel.from_pretrained(model_source, revision=MODEL_REVISION, **kwargs)  # nosec B615 - pinned revision and local-only
     model.eval()

@@ -162,6 +162,7 @@ def hybrid_search(
         "reason": None if matches else (degraded or "no_results"),
         "retrieval_degraded_reason": degraded,
         "candidate_count": len(hits),
+        "hybrid_active": dense_executed,
     }
 
 

@@ -193,6 +193,7 @@ def _release_sidecar(repo_root: Path, archive_path: Path, result: dict, corpus_i
     with zipfile.ZipFile(archive_path) as archive:
         files = {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist() if not name.endswith("/")}
         corpora = _archive_corpora(archive, corpus_ids)
+        dense_promotions = _archive_dense_promotions(archive, result["commit_sha"], result["tree_sha"])
     sys.path.insert(0, str(repo_root / "src"))
     return {
         "archive_byte_representation": "git archive ZIP entry bytes",
@@ -201,11 +202,53 @@ def _release_sidecar(repo_root: Path, archive_path: Path, result: dict, corpus_i
         "candidate_checks": result["candidate_checks"],
         "commit_sha": result["commit_sha"],
         "corpora": corpora,
+        "dense_promotions": dense_promotions,
         "source_file_digests": files,
         "tree_sha": result["tree_sha"],
         "worktree_status": _git(repo_root, "status", "--porcelain").splitlines(),
         "python_version": sys.version,
     }
+
+
+def _archive_dense_promotions(archive: zipfile.ZipFile, commit_sha: str, tree_sha: str) -> dict[str, dict]:
+    registry = json.loads(archive.read("data/corpus_registry.json"))
+    promotions: dict[str, dict] = {}
+    for corpus_id, entry in sorted(registry.items()):
+        if not isinstance(entry, dict) or not entry.get("dense_index_path") or not entry.get("dense_promotion_path"):
+            continue
+        index_name = PurePosixPath(str(entry["dense_index_path"])).as_posix()
+        promotion_name = PurePosixPath(str(entry["dense_promotion_path"])).as_posix()
+        if (
+            PurePosixPath(index_name).is_absolute()
+            or ".." in PurePosixPath(index_name).parts
+            or PurePosixPath(promotion_name).is_absolute()
+            or ".." in PurePosixPath(promotion_name).parts
+        ):
+            raise ValueError("archive dense promotion has an unsafe path")
+        try:
+            promotion_bytes = archive.read(promotion_name)
+            index_bytes = archive.read(index_name)
+            promotion = json.loads(promotion_bytes)
+        except (KeyError, json.JSONDecodeError) as error:
+            raise ValueError("archive dense promotion is incomplete") from error
+        if (
+            not isinstance(promotion, dict)
+            or promotion.get("status") != "promoted"
+            or promotion.get("index_sha256") != hashlib.sha256(index_bytes).hexdigest()
+        ):
+            raise ValueError("archive dense promotion identity mismatch")
+        promotions[corpus_id] = {
+            "index_path": index_name,
+            "index_sha256": promotion["index_sha256"],
+            "promotion_path": promotion_name,
+            "promotion_sha256": hashlib.sha256(promotion_bytes).hexdigest(),
+            "index_identity": promotion.get("index_identity"),
+            "recorded_runtime_commit": promotion.get("runtime_commit"),
+            "recorded_runtime_tree_sha": promotion.get("runtime_tree_sha"),
+            "runtime_commit": commit_sha,
+            "runtime_tree_sha": tree_sha,
+        }
+    return promotions
 
 
 def _archive_corpora(archive: zipfile.ZipFile, corpus_ids: list[str] | None = None) -> dict[str, dict]:

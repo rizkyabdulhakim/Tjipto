@@ -9,7 +9,7 @@ from tjipto.corpora.uud.bbox_builder import extract_pdf
 from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
 from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
-from tjipto.artifacts.writer import write_json, write_jsonl
+from tjipto.artifacts.writer import write_json, write_json_in_place, write_jsonl
 from tjipto.corpora.uud.legal_unit_builder import build_legal_units_from_sources
 from tjipto.corpora.uud.meaningful_support_builder import build_meaningful_support_units
 from tjipto.contracts.structure import apply_chunk_structural_contract
@@ -324,7 +324,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     )
     write_jsonl(final_dir / "meaningful_support_units.jsonl", meaningful_support_units)
     write_jsonl(final_dir / "propositions.jsonl", propositions)
-    write_json(final_dir / "runtime_projection.json", build_runtime_projection(
+    write_json_in_place(final_dir / "runtime_projection.json", build_runtime_projection(
         evidence_registry=evidence,
         bbox_registry=bbox_rows,
         legal_units=legal_units,

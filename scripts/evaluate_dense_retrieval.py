@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from tjipto.evidence.store import EvidenceStore
-from tjipto.retrieval.dense import DENSE_ALLOWED_MAX_LENGTHS, DenseUnavailable, LocalDenseProvider, dense_index_for_store
+from tjipto.retrieval.dense import DENSE_ALLOWED_MAX_LENGTHS, DenseIndex, DenseUnavailable, LocalDenseProvider, dense_index_for_store
 from tjipto.runtime.service import LegalRuntimeService
 
 
@@ -26,10 +26,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--max-length", type=int, choices=DENSE_ALLOWED_MAX_LENGTHS, default=256)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--model-dir", type=Path)
+    parser.add_argument("--query-batch-size", type=int, default=35)
     parser.add_argument("--runtime-commit")
     parser.add_argument("--runtime-tree")
     parser.add_argument("--identity-sidecar", type=Path)
     parser.add_argument("--persist-index", type=Path)
+    parser.add_argument("--load-index", type=Path)
+    parser.add_argument("--build-evidence", type=Path)
     args = parser.parse_args(argv)
     case_paths = (RETRIEVAL_CASES, RESEARCH_CASES)
     all_cases = [row for path in case_paths for row in _read_jsonl(path)]
@@ -78,28 +83,70 @@ def main(argv: list[str] | None = None) -> int:
         report["metrics"]["production"] = _metrics(cases, production_rankings)
         config = _copy_dense_config(store)
         dense_store = EvidenceStore(config)
-        provider = LocalDenseProvider(timeout_seconds=args.timeout, max_length=args.max_length)
+        provider = LocalDenseProvider(
+            timeout_seconds=args.timeout,
+            max_length=args.max_length,
+            batch_size=args.batch_size,
+            model_dir=args.model_dir,
+        )
         started = time.perf_counter()
-        index = dense_index_for_store(dense_store, provider=provider)
-        if args.persist_index:
+        index = DenseIndex.load(args.load_index, dense_store, provider=provider) if args.load_index else dense_index_for_store(dense_store, provider=provider)
+        if args.persist_index and not args.load_index:
             index.persist(args.persist_index)
         build_seconds = time.perf_counter() - started
-        query_batch = provider.embed(tuple(case["query"] for case in cases))
+        build_evidence = None
+        if args.build_evidence:
+            build_evidence = json.loads(args.build_evidence.read_text(encoding="utf-8"))
+            build_dense = build_evidence.get("dense") or {}
+            build_identity = (build_dense.get("index") or {}).get("identity")
+            if build_identity != index.identity or build_evidence.get("status") != "valid":
+                raise DenseUnavailable("dense_build_evidence_identity_mismatch")
+            build_seconds = float(build_dense.get("build_seconds"))
+        query_started = time.perf_counter()
+        query_provider = LocalDenseProvider(
+            timeout_seconds=args.timeout,
+            max_length=args.max_length,
+            batch_size=args.query_batch_size,
+            model_dir=args.model_dir,
+        )
+        query_batch = query_provider.embed(tuple(case["query"] for case in cases))
         dense_rankings = [index.search(vector, CUTOFF) for vector in query_batch.vectors]
         dense_metrics = _metrics(cases, dense_rankings)
+        from tjipto.retrieval.bm25 import sparse_index_for_store
+        from tjipto.retrieval.hybrid import normalize_hits, reciprocal_rank_fusion
+
+        hybrid_rankings = []
+        for case, vector in zip(cases, query_batch.vectors):
+            sparse = sparse_index_for_store(dense_store).search(case["query"], CUTOFF)
+            dense = index.search(vector, CUTOFF)
+            fused = reciprocal_rank_fusion(
+                {"bm25": normalize_hits(sparse, "bm25"), "dense": normalize_hits(dense, "dense")},
+                limit=CUTOFF,
+            )
+            hybrid_rankings.append([hit.row | {"evidence_id": hit.evidence_id} for hit in fused])
+        hybrid_metrics = _metrics(cases, hybrid_rankings)
         report.update(
             {
                 "status": "valid",
                 "execution_status": "valid",
                 "dense": {
                     "metrics": dense_metrics,
+                    "hybrid_metrics": hybrid_metrics,
                     "index": index.identity_record(),
                     "build_seconds": round(build_seconds, 3),
-                    "query_seconds": round(time.perf_counter() - started, 3),
-                    "query_truncation_count": len(query_batch.truncated_indices),
+                    "build_evidence_path": str(args.build_evidence) if args.build_evidence else None,
+                    "query_seconds": round(time.perf_counter() - query_started, 3),
+                    "index_size_bytes": (
+                        (args.load_index or args.persist_index).stat().st_size
+                        if (args.load_index or args.persist_index) and (args.load_index or args.persist_index).is_file()
+                        else None
+                    ),
+                    "truncation_count": index.truncation_count + len(query_batch.truncated_indices),
+                    "truncated_retrieval_unit_ids": list(index.truncated_retrieval_unit_ids),
                     "query_truncated_case_ids": [
                         cases[index]["id"] for index in query_batch.truncated_indices if index < len(cases)
                     ],
+                    "query_truncation_count": len(query_batch.truncated_indices),
                     "worker_peak_rss_bytes": max(
                         value
                         for value in (index.worker_peak_rss_bytes, query_batch.worker_peak_rss_bytes)
@@ -108,8 +155,8 @@ def main(argv: list[str] | None = None) -> int:
                     if any(value is not None for value in (index.worker_peak_rss_bytes, query_batch.worker_peak_rss_bytes))
                     else None,
                     "worker_peak_rss_scope": "embedding_worker_peak_working_set",
-                    "artifact_path": str(args.persist_index) if args.persist_index else None,
-                    "artifact_sha256": hashlib.sha256(args.persist_index.read_bytes()).hexdigest() if args.persist_index and args.persist_index.is_file() else None,
+                    "artifact_path": str(args.load_index or args.persist_index) if args.load_index or args.persist_index else None,
+                    "artifact_sha256": hashlib.sha256((args.load_index or args.persist_index).read_bytes()).hexdigest() if (args.load_index or args.persist_index) and (args.load_index or args.persist_index).is_file() else None,
                 },
                 "production_baseline": {
                     "runtime_commit": identity["runtime_commit"],
@@ -149,7 +196,10 @@ def main(argv: list[str] | None = None) -> int:
 def _copy_dense_config(store):
     from dataclasses import replace
 
-    return replace(store.config, manifest=dict(store.config.manifest) | {"dense_retrieval": True})
+    settings = dict(store.config.settings or {})
+    settings.pop("dense_index_path", None)
+    settings.pop("dense_promotion_path", None)
+    return replace(store.config, manifest=dict(store.config.manifest) | {"dense_retrieval": True}, settings=settings)
 
 
 def _eligible_cases(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

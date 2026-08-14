@@ -1,5 +1,9 @@
 {
   "uud": {
+    "dense_index_path": "data/dense/uud/bge-m3-256.index",
+    "dense_max_length": 256,
+    "dense_promotion_path": "data/dense/uud/promotion.json",
+    "dense_retrieval": true,
     "manifest": "data/final/uud/manifest.json",
     "manifest_sha256": "219e9a327713df77936ac7e88a14844a5c26463f81564798f57eab2f2552209c",
     "runtime_required_artifacts": [
@@ -8,6 +12,11 @@
       "propositions"
     ],
     "query_strategy": "uud_1945",
+    "retrieval": {
+      "hybrid_candidate_limit": 10,
+      "mode": "hybrid",
+      "rrf_k": 60
+    },
     "structured_strategy": "uud_1945",
     "query_normalization_enabled": true,
     "exact_citation_intent_enabled": true,
