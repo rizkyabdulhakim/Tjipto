@@ -79,6 +79,7 @@ LEGAL_EDGE_TYPES = {
     "AMENDS",
     "AMENDED_BY",
     "ADDS",
+    "AMBIGUOUS_OPERATION",
     "MODIFIES",
     "DELETES",
     "RENAMES",
@@ -1439,7 +1440,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
             elif row.get("source_id") != origin.get("target_id") or row.get("target_id") != origin.get("source_id"):
                 errors.append(f"graph_inverse_direction_invalid:{row['edge_id']}")
             continue
-        if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
+        if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO", "AMBIGUOUS_OPERATION"}:
             relation = article_relations_by_id.get(row.get("relation_id"))
             if relation is None:
                 errors.append(f"graph_relation_missing_authoritative_row:{row['edge_id']}")
@@ -1585,7 +1586,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         if row["relation_id"] in seen_ids["article_amendment_relation_id"]:
             errors.append(f"duplicate_article_amendment_relation_id:{row['relation_id']}")
         seen_ids["article_amendment_relation_id"].add(row["relation_id"])
-        if row.get("relation_type") not in {"MODIFIES", "DELETES", "ADDS", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
+        if row.get("relation_type") not in {"MODIFIES", "DELETES", "ADDS", "AMBIGUOUS_OPERATION", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
             errors.append(f"invalid_article_amendment_relation_type:{row['relation_id']}:{row.get('relation_type')}")
         evidence_row = evidence_by_id.get(row.get("evidence_id"))
         if not evidence_row:
@@ -2166,7 +2167,7 @@ def _validate_schema7_contract(artifacts: Mapping[str, object]) -> tuple[str, ..
     for row in relation_rows:
         relation_id = str(row.get("relation_id") or "<missing>")
         relation_type = row.get("relation_type")
-        if relation_type not in {"MODIFIES", "DELETES", "ADDS", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
+        if relation_type not in {"MODIFIES", "DELETES", "ADDS", "AMBIGUOUS_OPERATION", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}:
             errors.append(f"invalid_enum:article_amendment_relations:{relation_id}:relation_type")
         evidence_row = evidence_by_id.get(row.get("evidence_id"))
         source_unit = units_by_id.get(row.get("source_legal_unit_id"))
@@ -2445,7 +2446,7 @@ def _source_relation_contract_errors(
         relation_ids.add(relation_id)
         if (
             not descriptor
-            or not descriptor.authority_bearing
+            or not descriptor.provenance_required
             or row.get("evidence_id") not in evidence_ids
             or row.get("source_legal_unit_id") not in unit_ids
             or row.get("target_legal_unit_id") not in unit_ids

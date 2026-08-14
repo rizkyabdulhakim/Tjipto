@@ -4,6 +4,8 @@ import hashlib
 import json
 import math
 import os
+import base64
+import binascii
 from pathlib import Path
 import struct
 import subprocess  # nosec B404 - fixed module worker, no shell
@@ -24,6 +26,8 @@ DENSE_BATCH_SIZE = 64
 DENSE_TRUNCATION_POLICY = "explicit_max_length"
 EMBEDDING_TEXT_POLICY = "source_document+breadcrumb+label+legal_text"
 INDEX_BUILDER_ID = "tjipto.dense.index"
+DENSE_ARTIFACT_SCHEMA = 1
+DENSE_ARTIFACT_MAGIC = b"TJIPTO_DENSE_INDEX\n"
 
 
 class DenseError(RuntimeError):
@@ -261,6 +265,7 @@ class DenseIndex:
     def identity_record(self) -> dict[str, object]:
         return {
             "identity": self.identity,
+            "source_identity": self.source_identity,
             "corpus_id": self.corpus_id,
             "artifact_set_digest": self.artifact_set_digest,
             "manifest_digest": self.manifest_digest,
@@ -276,6 +281,115 @@ class DenseIndex:
             "worker_peak_rss_bytes": self.worker_peak_rss_bytes,
             "worker_peak_rss_scope": "embedding_worker_peak_working_set",
         }
+
+    def persist(self, path: str | Path) -> None:
+        """Persist only the verified index state; model files never enter this artifact."""
+        target = Path(path)
+        payload = {
+            "schema": DENSE_ARTIFACT_SCHEMA,
+            "identity_record": self.identity_record(),
+            "retrieval_unit_ids": self.retrieval_unit_ids,
+            "evidence_ids": self.evidence_ids,
+            "documents": [
+                {
+                    "retrieval_unit_id": document.retrieval_unit_id,
+                    "evidence_id": document.evidence_id,
+                    "row_json": base64.b64encode(document.row_json).decode("ascii"),
+                }
+                for document in self.documents
+            ],
+            "vectors": base64.b64encode(self.vector_bytes).decode("ascii"),
+        }
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(
+            DENSE_ARTIFACT_MAGIC
+            + (json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+        )
+
+    @classmethod
+    def load(cls, path: str | Path, store, *, provider: DenseEmbeddingProvider | None = None) -> "DenseIndex":
+        """Load an identity-bound artifact and reject stale or malformed state."""
+        try:
+            raw = Path(path).read_bytes()
+            if not raw.startswith(DENSE_ARTIFACT_MAGIC):
+                raise DenseUnavailable("dense_artifact_magic_invalid")
+            payload = json.loads(raw[len(DENSE_ARTIFACT_MAGIC) :].decode("utf-8"))
+            if not isinstance(payload, dict) or payload.get("schema") != DENSE_ARTIFACT_SCHEMA:
+                raise DenseUnavailable("dense_artifact_schema_invalid")
+            identity_record = payload.get("identity_record")
+            if not isinstance(identity_record, dict):
+                raise DenseUnavailable("dense_artifact_identity_missing")
+            model = DenseModelIdentity.from_value(identity_record.get("model"))
+            current_model = (provider or LocalDenseProvider()).identity()
+            if current_model != model:
+                raise DenseUnavailable("model_identity_mismatch")
+            records = _dense_records(store)
+            texts = _embedding_texts(store, records)
+            expected_source = _source_identity(store, records, model, _digest(texts))
+            expected_retrieval = tuple(str(row["retrieval_unit_id"]) for row, _, _ in records)
+            expected_evidence = tuple(str(row["evidence_id"]) for row, _, _ in records)
+            expected_mapping = _digest((expected_retrieval, expected_evidence))
+            if (
+                identity_record.get("source_identity") != expected_source
+                or identity_record.get("identity") != _digest(
+                    {"source": expected_source, "model": model.as_dict(), "mapping": expected_mapping, "count": len(records)}
+                )
+                or tuple(payload.get("retrieval_unit_ids") or ()) != expected_retrieval
+                or tuple(payload.get("evidence_ids") or ()) != expected_evidence
+                or identity_record.get("record_count") != len(records)
+                or identity_record.get("vector_mapping_digest") != expected_mapping
+                or identity_record.get("retrieval_units_digest") != _digest([row for row, _, _ in records])
+                or identity_record.get("embedding_text_digest") != _digest(texts)
+            ):
+                raise DenseUnavailable("dense_identity_mismatch")
+            documents_value = payload.get("documents")
+            if not isinstance(documents_value, list) or len(documents_value) != len(records):
+                raise DenseUnavailable("dense_artifact_documents_invalid")
+            documents: list[DenseDocument] = []
+            for index, value in enumerate(documents_value):
+                if not isinstance(value, dict) or value.get("retrieval_unit_id") != expected_retrieval[index] or value.get("evidence_id") != expected_evidence[index]:
+                    raise DenseUnavailable("dense_artifact_mapping_invalid")
+                row_json = base64.b64decode(str(value.get("row_json") or ""), validate=True)
+                row = json.loads(row_json.decode("utf-8"))
+                if not isinstance(row, dict) or str(row.get("evidence_id")) != expected_evidence[index]:
+                    raise DenseUnavailable("dense_artifact_row_invalid")
+                documents.append(DenseDocument(expected_retrieval[index], expected_evidence[index], row_json))
+            vector_bytes = base64.b64decode(str(payload.get("vectors") or ""), validate=True)
+            expected_size = len(records) * model.dimension * 4
+            if len(vector_bytes) != expected_size:
+                raise DenseUnavailable("dense_artifact_dimension_invalid")
+            for index in range(len(records)):
+                vector = struct.unpack_from("<" + "f" * model.dimension, vector_bytes, index * model.dimension * 4)
+                _validate_vector(vector, model.dimension)
+                norm = math.sqrt(math.fsum(value * value for value in vector))
+                if abs(norm - 1.0) > 1e-3:
+                    raise DenseUnavailable("dense_artifact_not_normalized")
+            return cls(
+                identity_record["identity"],
+                expected_source,
+                identity_record.get("corpus_id"),
+                identity_record.get("artifact_set_digest"),
+                identity_record.get("manifest_digest"),
+                identity_record["retrieval_units_digest"],
+                model,
+                len(records),
+                model.dimension,
+                expected_retrieval,
+                expected_evidence,
+                tuple(documents),
+                vector_bytes,
+                expected_mapping,
+                str(identity_record.get("embedding_text_policy") or EMBEDDING_TEXT_POLICY),
+                int(identity_record.get("batch_size") or DENSE_BATCH_SIZE),
+                int(identity_record.get("truncation_count") or 0),
+                tuple(str(value) for value in identity_record.get("truncated_retrieval_unit_ids") or ()),
+                identity_record["embedding_text_digest"],
+                identity_record.get("worker_peak_rss_bytes"),
+            )
+        except DenseError:
+            raise
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError, UnicodeDecodeError, binascii.Error) as error:
+            raise DenseUnavailable("dense_artifact_invalid") from error
 
     def search(self, query_vector: tuple[float, ...], limit: int = 10) -> list[dict]:
         if len(query_vector) != self.dimension:
@@ -331,17 +445,31 @@ def dense_configured(store) -> bool:
         getattr(store.config, "manifest", {}).get("dense_retrieval")
         or getattr(store.config, "setting", lambda *_: False)("dense_retrieval", False)
         or os.environ.get("TJIPTO_DENSE_MODEL_DIR")
+        or os.environ.get("TJIPTO_DENSE_INDEX_PATH")
     )
 
 
 def dense_index_for_store(store, *, provider: DenseEmbeddingProvider | None = None) -> DenseIndex:
     provider = provider or LocalDenseProvider()
+    configured_path = os.environ.get("TJIPTO_DENSE_INDEX_PATH") or getattr(store.config, "setting", lambda *_: None)("dense_index_path", None)
+    if configured_path:
+        path = Path(configured_path)
+        records = _dense_records(store)
+        current_model = provider.identity()
+        current_source = _source_identity(store, records, current_model, _digest(_embedding_texts(store, records)))
+        cached = getattr(store, "_dense_index", None)
+        if isinstance(cached, DenseIndex) and cached.source_identity == current_source:
+            return cached
+        index = DenseIndex.load(path, store, provider=provider)
+        store._dense_index = index
+        store._dense_index_artifact_identity = index.identity
+        return index
     records = _dense_records(store)
     texts = _embedding_texts(store, records)
     source_identity = _source_identity(store, records, provider.identity(), _digest(texts))
-    index = getattr(store, "_dense_index", None)
-    if isinstance(index, DenseIndex) and index.source_identity == source_identity:
-        return index
+    cached_index = getattr(store, "_dense_index", None)
+    if isinstance(cached_index, DenseIndex) and cached_index.source_identity == source_identity:
+        return cached_index
     index = DenseIndex.build(store, provider)
     store._dense_index = index
     store._dense_index_cache_key = source_identity
@@ -496,7 +624,7 @@ def _validate_batch(batch: DenseEmbeddingBatch, expected: int) -> tuple[tuple[fl
         or identity.dtype != DENSE_DTYPE
         or identity.normalization != DENSE_NORMALIZATION
         or identity.pooling != DENSE_POOLING
-        or identity.max_length != DENSE_MAX_LENGTH
+        or identity.max_length not in DENSE_ALLOWED_MAX_LENGTHS
         or identity.truncation_policy != DENSE_TRUNCATION_POLICY
     ):
         raise DenseError("embedding_contract_invalid")

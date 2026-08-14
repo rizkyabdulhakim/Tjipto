@@ -741,29 +741,30 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(pasal["status"], "limited_answer")
         self.assertEqual(pasal["route"], "document_relation")
         self.assertEqual(pasal["answer_type"], "article_amendment_relation")
-        self.assertTrue(pasal["evidence"])
-        self.assertTrue(pasal["historical_citations"])
+        self.assertFalse(pasal["evidence"])
+        self.assertFalse(pasal["historical_citations"])
         self.assertFalse(pasal["citations"])
         self.assertFalse(pasal["viewer_refs"])
         self.assertTrue(pasal["article_amendment_relations"])
         self.assertTrue(pasal["trace_support"])
-        self.assertEqual({row["relation_type"] for row in pasal["article_amendment_relations"]}, {"MODIFIES"})
-        self.assertEqual({row["support_class"] for row in pasal["article_amendment_relations"]}, {"exact_article_relation"})
+        self.assertEqual({row["relation_type"] for row in pasal["article_amendment_relations"]}, {"AMBIGUOUS_OPERATION"})
+        self.assertEqual({row["support_class"] for row in pasal["article_amendment_relations"]}, {"trace_article_relation"})
+        self.assertEqual({tuple(row["operation_candidates"]) for row in pasal["article_amendment_relations"]}, {("MODIFIES", "ADDS")})
         self.assertFalse(pasal["context_pack"]["viewer_refs"])
         self.assertFalse(pasal["context_pack"]["citation_payloads"])
-        self.assertTrue(pasal["context_pack"]["historical_citations"])
+        self.assertFalse(pasal["context_pack"]["historical_citations"])
 
         complete = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
-        self.assertEqual(complete["status"], "answer_ready")
+        self.assertEqual(complete["status"], "limited_answer")
         self.assertEqual(
             {row["relation_type"] for row in complete["article_amendment_relations"]},
-            {"MODIFIES"},
+            {"AMBIGUOUS_OPERATION"},
         )
-        self.assertTrue(complete["evidence"])
-        self.assertTrue(complete["historical_citations"])
+        self.assertFalse(complete["evidence"])
+        self.assertFalse(complete["historical_citations"])
         self.assertFalse(complete["citations"])
         self.assertFalse(complete["viewer_refs"])
-        self.assertFalse(complete["trace_support"])
+        self.assertTrue(complete["trace_support"])
 
         for query in (
             "perubahan keempat menghapus pasal 16?",
@@ -786,13 +787,13 @@ class RuntimeContractTest(unittest.TestCase):
 
         for query in ("perubahan keempat menambahkan apa", "perubahan keempat menambahkan lembaga apa"):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "insufficient_evidence", query)
+            self.assertEqual(result["status"], "limited_answer", query)
             self.assertEqual(result["route"], "document_relation", query)
-            self.assertEqual(result["reason"], "relation_not_promoted", query)
+            self.assertEqual(result["reason"], "relation_trace_only", query)
             self.assertFalse(result["evidence"], query)
             self.assertFalse(result["citations"], query)
             self.assertFalse(result["viewer_refs"], query)
-            self.assertFalse(result["document_relations"], query)
+            self.assertEqual({row["relation_type"] for row in result["article_amendment_relations"]}, {"AMBIGUOUS_OPERATION"}, query)
 
     def test_stage7_semantic_sufficiency_is_operation_and_scope_aware(self) -> None:
         lawmaking = self.service.ask("uud", "Apa hubungan Presiden dan DPR dalam pembentukan undang-undang?")
@@ -885,32 +886,32 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_target_specific_article_amendment_relations_do_not_substitute_neighbors(self) -> None:
         unsupported = self.service.ask("uud", "amandemen keempat mengubah pasal 31?")
-        self.assertEqual(unsupported["status"], "answer_ready")
+        self.assertEqual(unsupported["status"], "insufficient_evidence")
         self.assertEqual(unsupported["route"], "document_relation")
-        self.assertTrue(unsupported["evidence"])
-        self.assertTrue(unsupported["historical_citations"])
+        self.assertFalse(unsupported["evidence"])
+        self.assertFalse(unsupported["historical_citations"])
         self.assertFalse(unsupported["citations"])
         self.assertFalse(unsupported["viewer_refs"])
-        self.assertEqual({row["target_citation"] for row in unsupported["article_amendment_relations"]}, {"Pasal 31 ayat (1)"})
+        self.assertFalse(unsupported["article_amendment_relations"])
         self.assertFalse(unsupported["trace_support"])
 
         exact = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
-        self.assertEqual(exact["status"], "answer_ready")
+        self.assertEqual(exact["status"], "limited_answer")
         self.assertEqual(
             {row["relation_type"] for row in exact["article_amendment_relations"]},
-            {"MODIFIES"},
+            {"AMBIGUOUS_OPERATION"},
         )
-        self.assertFalse(exact["trace_support"])
+        self.assertTrue(exact["trace_support"])
 
         partial = self.service.ask("uud", "pasal yang diubah perubahan keempat")
         self.assertIn(partial["status"], {"answer_ready", "limited_answer"})
         if partial["status"] == "limited_answer":
-            self.assertEqual(partial["answer_scope"], "partial_exact_article_relation")
+            self.assertEqual(partial["answer_scope"], "trace_article_relation")
             self.assertTrue(partial["trace_support"])
         else:
             self.assertEqual(partial["answer_scope"], "exact_article_relation")
             self.assertFalse(partial["trace_support"])
-        self.assertTrue(partial["historical_citations"])
+        self.assertFalse(partial["historical_citations"])
         self.assertFalse(partial["citations"])
         self.assertFalse(partial["viewer_refs"])
         self.assertTrue(partial["article_amendment_relations"])

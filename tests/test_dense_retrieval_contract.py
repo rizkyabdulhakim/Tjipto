@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import os
 import unittest
 from unittest.mock import patch
 import subprocess
@@ -12,6 +13,7 @@ from tjipto.retrieval.dense import (
     MODEL_ID,
     MODEL_REVISION,
     DenseEmbeddingBatch,
+    DenseIndex,
     DenseModelIdentity,
     DenseUnavailable,
     LocalDenseProvider,
@@ -61,21 +63,23 @@ def _store(*, configured: bool = True):
 
 
 class FakeProvider:
-    def __init__(self, *, invalid: str | None = None):
+    def __init__(self, *, invalid: str | None = None, max_length: int = DENSE_MAX_LENGTH):
         self.calls: list[tuple[str, ...]] = []
         self.invalid = invalid
+        self.max_length = max_length
 
     def identity(self) -> DenseModelIdentity:
-        return _identity()
+        identity = _identity()
+        return DenseModelIdentity(**(identity.as_dict() | {"max_length": self.max_length}))
 
     def embed(self, texts: tuple[str, ...]) -> DenseEmbeddingBatch:
         self.calls.append(texts)
         if self.invalid == "dimension":
-            return DenseEmbeddingBatch(((1.0,),) * len(texts), _identity())
+            return DenseEmbeddingBatch(((1.0,),) * len(texts), self.identity())
         if self.invalid == "nan":
-            return DenseEmbeddingBatch(((_vector(float("nan"))),) * len(texts), _identity())
+            return DenseEmbeddingBatch(((_vector(float("nan"))),) * len(texts), self.identity())
         vectors = tuple(_vector(1.0) if "alpha" in text.casefold() else _vector(0.0, 1.0) for text in texts)
-        return DenseEmbeddingBatch(vectors, _identity())
+        return DenseEmbeddingBatch(vectors, self.identity())
 
 
 class DenseRetrievalContractTest(unittest.TestCase):
@@ -94,6 +98,11 @@ class DenseRetrievalContractTest(unittest.TestCase):
         self.assertEqual(identity["pooling"], DENSE_POOLING)
         self.assertEqual(identity["max_length"], DENSE_MAX_LENGTH)
         self.assertEqual(DenseModelIdentity.from_value(identity).pooling, "cls")
+
+    def test_allowed_ablation_lengths_validate_as_distinct_index_identity(self) -> None:
+        for length in (256, 512, 1024):
+            index = dense_index_for_store(_store(), provider=FakeProvider(max_length=length))
+            self.assertEqual(index.model_identity.max_length, length)
 
     def test_cls_pooling_is_not_mean_pooling(self) -> None:
         class Probe:
@@ -230,6 +239,45 @@ class DenseRetrievalContractTest(unittest.TestCase):
         store.evidence[0]["quoted_text"] = "changed"
         second = dense_index_for_store(store, provider=provider)
         self.assertIsNot(first, second)
+
+    def test_persisted_index_is_identity_bound_and_reloadable(self) -> None:
+        store = _store()
+        provider = FakeProvider()
+        index = dense_index_for_store(store, provider=provider)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dense.index"
+            index.persist(path)
+            loaded = DenseIndex.load(path, store, provider=provider)
+            self.assertEqual(loaded.identity, index.identity)
+            self.assertEqual(loaded.identity_record()["source_identity"], index.source_identity)
+            store.evidence[0]["status"] = "draft"
+            with self.assertRaisesRegex(DenseUnavailable, "dense_identity_mismatch"):
+                DenseIndex.load(path, store, provider=provider)
+
+    def test_configured_artifact_activates_dense_search(self) -> None:
+        store = _store()
+        provider = FakeProvider()
+        index = dense_index_for_store(store, provider=provider)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dense.index"
+            index.persist(path)
+            fresh_store = _store()
+            with patch.dict(os.environ, {"TJIPTO_DENSE_INDEX_PATH": str(path)}, clear=False):
+                result = dense_search(fresh_store, "alpha", provider=FakeProvider())
+            self.assertEqual(result["status"], "found")
+            self.assertEqual(result["route"], "dense")
+
+    def test_invalid_persisted_vectors_are_rejected(self) -> None:
+        store = _store()
+        provider = FakeProvider()
+        index = dense_index_for_store(store, provider=provider)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dense.index"
+            index.persist(path)
+            payload = path.read_bytes().replace(b"TJIPTO_DENSE_INDEX", b"INVALID_DENSE_INDEX", 1)
+            path.write_bytes(payload)
+            with self.assertRaisesRegex(DenseUnavailable, "dense_artifact_magic_invalid"):
+                DenseIndex.load(path, store, provider=provider)
 
     def test_invalid_provider_vectors_are_unavailable(self) -> None:
         for kind in ("dimension", "nan"):

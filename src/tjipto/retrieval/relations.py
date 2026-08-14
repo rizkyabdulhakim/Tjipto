@@ -148,12 +148,15 @@ def amendment_relation_target(store, query: str, *, relation_family: str | None 
     )
     target_citations = (target_citation,) if relation_type == "RENAME_PROVISION" and target_citation else parsed_citations
     if add_signal:
+        relation_types = tuple(
+            dict.fromkeys(
+                (*tuple(value for value in relation_config.get("schema_only_relation_types", ()) if value not in {"RENAMES", "RENUMBERED_TO"}), "AMBIGUOUS_OPERATION")
+            )
+        )
         return {
             "mode": "article",
             "role": amendment_role,
-            "relation_types": tuple(
-                value for value in relation_config.get("schema_only_relation_types", ()) if value not in {"RENAMES", "RENUMBERED_TO"}
-            ),
+            "relation_types": relation_types,
             "target_citation": target_citation,
             "target_citations": target_citations,
         }
@@ -169,11 +172,11 @@ def amendment_relation_target(store, query: str, *, relation_family: str | None 
         return {"mode": "unsupported"}
     if article_detail:
         if relation_type == "MODIFY_PROVISION":
-            relation_types = ("MODIFIES",)
+            relation_types = ("MODIFIES", "AMBIGUOUS_OPERATION")
         return {
             "mode": "article",
             "role": amendment_role,
-            "relation_types": relation_types or ("MODIFIES", "DELETES"),
+            "relation_types": relation_types or ("MODIFIES", "DELETES", "AMBIGUOUS_OPERATION"),
             "target_citation": target_citation,
             "target_citations": target_citations,
         }

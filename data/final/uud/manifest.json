@@ -6,7 +6,7 @@
   "corpus_id": "uud",
   "contract_id": "tjipto.uud.artifact-contract",
   "contract_version": 7,
-  "contract_fingerprint": "8fdc8a3c5af053eaa38d909133723dd35479fa00e8cd858e277a38378ab744ee",
+  "contract_fingerprint": "1f57dbaba3efc9e5f82fb47c833b1dc400d4db7b0227c7fdef2b75220b0fd436",
   "extractor_fingerprint": {
     "python": "3.12.10",
     "pymupdf": "1.27.2.3",
@@ -25,7 +25,7 @@
     "document_relations": 13,
     "evidence_records": 650,
     "excluded_records": 0,
-    "graph_edges": 8124,
+    "graph_edges": 8102,
     "graph_nodes": 3209,
     "legal_units": 653,
     "metadata_assertions": 1877,
@@ -84,8 +84,8 @@
         "source_support_exact",
         "viewer_highlightable"
       ],
-      "bytes": 684770,
-      "sha256": "7dcc7bb2a6b8d05db2f0b5b3ab915e96bcadf1b71a3a5adaa5bc0fe8e3ee0700"
+      "bytes": 688488,
+      "sha256": "13e409a52913cabb7c436cf607a6149e4810dcf9cfd31238102b4f2e079b336d"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -259,8 +259,8 @@
         "support_exception_ids",
         "support_kind"
       ],
-      "bytes": 7832325,
-      "sha256": "2d80c095b6e137802edfe484989b6e384632de78d7b09f9953f66f3a2162acee"
+      "bytes": 7660179,
+      "sha256": "dd886f94bfbfdb432146019fc09ccd81b181d3ce59659d771c211cc1580ecb9d"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -441,8 +441,8 @@
         "promotion_outcome",
         "failure_reason"
       ],
-      "bytes": 254902,
-      "sha256": "042aa37f679cff92a3fc144f17661febf8d02cea10f47a73b4f7c675927810aa"
+      "bytes": 256662,
+      "sha256": "19574abad093aab81e097d50281141e3ccc0fc3fdea8690109ed72db8089a87e"
     },
     "propositions.jsonl": {
       "origin": "generated",
@@ -503,8 +503,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 26221464,
-      "sha256": "45f875d16b4f2ac155510073433481c0db209a3923413a84511f7e9ebebe8eba"
+      "bytes": 25843651,
+      "sha256": "db1bb1fdfeff764201936d3025f56dd065f5edebf918793644e0589c211e6ecc"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -651,8 +651,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 25424,
-      "sha256": "e0ccb187aec3a477eafa0ae50bf7d955cc20eb23150986d5066de006b6fa0e03"
+      "bytes": 25592,
+      "sha256": "8b658001e94618dfdcc216780e38f6c3aad9e0b82d04137977afdb70d0199f9f"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

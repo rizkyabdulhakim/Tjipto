@@ -8,8 +8,11 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from typing import Any
 
-from tjipto.retrieval.dense import DENSE_ALLOWED_MAX_LENGTHS, DENSE_MAX_LENGTH, DENSE_POOLING, MODEL_ID, MODEL_REVISION, LocalDenseProvider
+from tjipto.retrieval.dense import DENSE_ALLOWED_MAX_LENGTHS, DENSE_MAX_LENGTH, DENSE_POOLING, MODEL_ID, MODEL_REVISION, DenseIndex, LocalDenseProvider, dense_index_for_store
+from tjipto.evidence.store import EvidenceStore
+from tjipto.runtime.service import LegalRuntimeService
 from tjipto.retrieval.dense_worker import _peak_rss_bytes
 
 
@@ -25,8 +28,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runtime-commit")
     parser.add_argument("--runtime-tree")
     parser.add_argument("--identity-sidecar", type=Path)
+    parser.add_argument("--index-artifact", type=Path)
     args = parser.parse_args(argv)
-    report = {
+    report: dict[str, Any] = {
         "status": "unavailable",
         "model": {"id": MODEL_ID, "revision": MODEL_REVISION, "pooling": DENSE_POOLING, "max_length": args.max_length},
     }
@@ -36,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
         gc.collect()
         comparison = args.comparison_report or args.report.with_name(args.report.stem + ".comparison.json")
         if args.comparison_report is None:
+            index_artifact = args.index_artifact or args.report.with_suffix(".dense.index")
             command = [
                 sys.executable,
                 str(ROOT / "scripts/evaluate_dense_retrieval.py"),
@@ -45,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
                 str(args.timeout),
                 "--max-length",
                 str(args.max_length),
+                "--persist-index",
+                str(index_artifact),
             ]
             if args.runtime_commit:
                 command.extend(("--runtime-commit", args.runtime_commit))
@@ -57,19 +64,41 @@ def main(argv: list[str] | None = None) -> int:
             completed = None
         if comparison.is_file():
             report["comparison"] = json.loads(comparison.read_text(encoding="utf-8"))
-            dense = report.get("comparison", {}).get("dense") or {}
+            comparison_data = report.get("comparison")
+            comparison_data = comparison_data if isinstance(comparison_data, dict) else {}
+            dense = comparison_data.get("dense") or {}
+            dense = dense if isinstance(dense, dict) else {}
+            parity_data = report.get("parity_probe")
+            parity_data = parity_data if isinstance(parity_data, dict) else {}
             report["worker_resource"] = {
                 "worker_peak_rss_bytes": dense.get("worker_peak_rss_bytes"),
                 "worker_peak_rss_scope": dense.get("worker_peak_rss_scope"),
-                "promotion_parent_peak_rss_bytes": report.get("parity_probe", {}).get("promotion_parent_peak_rss_bytes"),
+                "promotion_parent_peak_rss_bytes": parity_data.get("promotion_parent_peak_rss_bytes"),
                 "promotion_parent_rss_scope": "promotion_parity_parent_peak_working_set",
                 "core_ci_rss_bytes": None,
                 "core_ci_rss_scope": "normal_model_free_ci_not_measured_by_dense_promotion",
                 "build_seconds": dense.get("build_seconds"),
                 "query_seconds": dense.get("query_seconds"),
             }
-        if not probe["passed"] or (completed is not None and completed.returncode) or report.get("comparison", {}).get("status") != "valid":
-            report["reason"] = report.get("comparison", {}).get("reason") or "dense_comparison_failed"
+        index_artifact = args.index_artifact or args.report.with_suffix(".dense.index")
+        if not index_artifact.is_file():
+            _persist_index(index_artifact, args.timeout, args.max_length)
+        report["dense_artifact"] = {
+            "path": str(index_artifact),
+            "sha256": hashlib.sha256(index_artifact.read_bytes()).hexdigest(),
+        }
+        service = LegalRuntimeService(ROOT)
+        store = service._store("uud")
+        if store is None:
+            raise RuntimeError("corpus_not_ready")
+        dense_store = EvidenceStore(_copy_dense_config(store))
+        loaded = DenseIndex.load(index_artifact, dense_store, provider=LocalDenseProvider(timeout_seconds=args.timeout, max_length=args.max_length))
+        report["dense_artifact"]["identity"] = loaded.identity_record()
+        report["activation"] = {"status": "identity_validated", "identity": loaded.identity}
+        comparison_data = report.get("comparison")
+        comparison_data = comparison_data if isinstance(comparison_data, dict) else {}
+        if not probe["passed"] or (completed is not None and completed.returncode) or comparison_data.get("status") != "valid":
+            report["reason"] = comparison_data.get("reason") or "dense_comparison_failed"
         else:
             report["status"] = "valid"
     except (OSError, ValueError, RuntimeError, KeyError) as error:
@@ -78,6 +107,23 @@ def main(argv: list[str] | None = None) -> int:
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"status": report["status"], "reason": report.get("reason")}, sort_keys=True))
     return 0 if report["status"] == "valid" else 2
+
+
+def _copy_dense_config(store):
+    from dataclasses import replace
+
+    return replace(store.config, manifest=dict(store.config.manifest) | {"dense_retrieval": True})
+
+
+def _persist_index(path: Path, timeout: float, max_length: int) -> None:
+    service = LegalRuntimeService(ROOT)
+    store = service._store("uud")
+    if store is None:
+        raise RuntimeError("corpus_not_ready")
+    dense_store = EvidenceStore(_copy_dense_config(store))
+    provider = LocalDenseProvider(timeout_seconds=timeout, max_length=max_length)
+    index = dense_index_for_store(dense_store, provider=provider)
+    index.persist(path)
 
 
 def _parity_probe(timeout: float, max_length: int) -> dict[str, object]:

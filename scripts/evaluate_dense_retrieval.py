@@ -29,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runtime-commit")
     parser.add_argument("--runtime-tree")
     parser.add_argument("--identity-sidecar", type=Path)
+    parser.add_argument("--persist-index", type=Path)
     args = parser.parse_args(argv)
     case_paths = (RETRIEVAL_CASES, RESEARCH_CASES)
     all_cases = [row for path in case_paths for row in _read_jsonl(path)]
@@ -80,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
         provider = LocalDenseProvider(timeout_seconds=args.timeout, max_length=args.max_length)
         started = time.perf_counter()
         index = dense_index_for_store(dense_store, provider=provider)
+        if args.persist_index:
+            index.persist(args.persist_index)
         build_seconds = time.perf_counter() - started
         query_batch = provider.embed(tuple(case["query"] for case in cases))
         dense_rankings = [index.search(vector, CUTOFF) for vector in query_batch.vectors]
@@ -105,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
                     if any(value is not None for value in (index.worker_peak_rss_bytes, query_batch.worker_peak_rss_bytes))
                     else None,
                     "worker_peak_rss_scope": "embedding_worker_peak_working_set",
+                    "artifact_path": str(args.persist_index) if args.persist_index else None,
+                    "artifact_sha256": hashlib.sha256(args.persist_index.read_bytes()).hexdigest() if args.persist_index and args.persist_index.is_file() else None,
                 },
                 "production_baseline": {
                     "runtime_commit": identity["runtime_commit"],

@@ -1,12 +1,12 @@
 {
   "base_commit": "c49291201c1f97d081454d1312dfc76aea0a1d2f",
-  "case_set_sha256": "df334abcdb34ea91d1bb1433bc3235a6e80664f23ec84d286fe5e0a965ff5f99",
+  "case_set_sha256": "e96f7e69e0a652eeb14d3d63521af6d83ac6d36a0aaee39968ee413ff0efc124",
   "evaluator_sha256": "85b3aa0a48bfc3aa137796264a7ed5988417b1faf711e8061a6d4191a2bb6e86",
   "evaluation_cutoff": 10,
   "case_count": 67,
   "behavior_counts": {
-    "retrieve": 32,
-    "abstain": 33,
+    "retrieve": 31,
+    "abstain": 34,
     "clarify": 2
   },
   "result_counts": {
@@ -16,12 +16,12 @@
   },
   "metrics": {
     "recall": 1.0,
-    "precision": 1.0,
+    "precision": 0.966667,
     "mrr": 1.0,
     "ndcg": 1.0,
-    "minimal_span_recall": 0.512821,
-    "minimal_span_precision": 1.0,
-    "over_highlight_ratio": 0.0,
+    "minimal_span_recall": 0.652174,
+    "minimal_span_precision": 0.705882,
+    "over_highlight_ratio": 0.294118,
     "wrong_page_rate": 0.0,
     "source_role_accuracy": 1.0,
     "temporal_accuracy": 1.0,
@@ -32,25 +32,25 @@
     "clarification_accuracy": 1.0
   },
   "denominators": {
-    "recall": 31.0,
-    "precision": 31.0,
-    "mrr": 31,
-    "ndcg": 31.0,
-    "minimal_span_recall": 117,
-    "minimal_span_precision": 60,
-    "over_highlight_ratio": 60,
-    "wrong_page_rate": 32,
-    "source_role_accuracy": 32,
-    "temporal_accuracy": 32,
-    "citation_target_accuracy": 32,
-    "hard_negative_false_positive_rate": 33,
-    "abstention_precision": 33,
-    "abstention_recall": 33,
+    "recall": 29.0,
+    "precision": 30.0,
+    "mrr": 29,
+    "ndcg": 29.0,
+    "minimal_span_recall": 92,
+    "minimal_span_precision": 85,
+    "over_highlight_ratio": 85,
+    "wrong_page_rate": 31,
+    "source_role_accuracy": 31,
+    "temporal_accuracy": 31,
+    "citation_target_accuracy": 31,
+    "hard_negative_false_positive_rate": 34,
+    "abstention_precision": 34,
+    "abstention_recall": 34,
     "clarification_accuracy": 2
   },
   "reproduction": {
     "method": "detached worktree at base_commit with the recorded case set and evaluator copied byte-for-byte, then evaluate_uud_retrieval.py --strict-known-gaps --report",
     "python": "3.12.10",
-    "report_sha256": "cc3edb5fe93b697d36bf1fffd086673ab6788d24dd322453e8633eca0a98b1e8"
+    "report_sha256": "54576d5945ba57b9c7608ce1e7356a4fdcce7c399e9c3130b99a9a90469d8983"
   }
 }

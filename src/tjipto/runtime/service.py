@@ -1075,7 +1075,10 @@ class LegalRuntimeService:
                 "page_numbers": tuple(proposition.get("page_numbers") or ()),
             }
             synthetic_bboxes = list(overlay)
-        relation = _relation_for_evidence(store, evidence_id, relation_id)
+        # An evidence-only viewer request resolves the evidence's own page and
+        # geometry.  Relation-specific overlays are applied only when the
+        # caller supplies the opaque relation target explicitly.
+        relation = _relation_for_evidence(store, evidence_id, relation_id) if relation_id is not None else None
         if relation_id is not None and relation is None:
             return {"status": "not_found", "reason": "invalid_viewer_target", "corpus_id": corpus_id}
         if relation is not None:
@@ -2878,6 +2881,7 @@ def _public_document_relation(row: dict) -> dict:
     return {
         "relation_id": row.get("relation_id"),
         "relation_type": row.get("relation_type"),
+        "operation_candidates": tuple(row.get("operation_candidates") or ()),
         "source_document_id": row.get("source_document_id"),
         "source_role": row.get("source_role"),
         "target_source_role": row.get("target_source_role"),
@@ -2893,6 +2897,7 @@ def public_article_relation(row: dict) -> dict:
     return {
         "relation_id": row.get("relation_id"),
         "relation_type": row.get("relation_type"),
+        "operation_candidates": tuple(row.get("operation_candidates") or ()),
         "source_document_id": row.get("support_document_id") or row.get("source_document_id"),
         "source_role": row.get("support_source_role") or row.get("source_role"),
         "source_legal_unit_id": row.get("source_legal_unit_id"),
@@ -3001,6 +3006,8 @@ def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: 
         for target in sorted(by_target, key=_legal_reference_sort_key):
             types = by_target[target]
             suffix = " / ".join(relation_labels[relation] for relation in ("DELETES", "MODIFIES", "RENAMES", "RENUMBERED_TO") if relation in types)
+            if "AMBIGUOUS_OPERATION" in types:
+                suffix = " / ".join((*filter(None, (suffix,)), "operasi diubah/ditambahkan tidak ditentukan"))
             labels.append(f"{target} ({suffix})" if suffix else target)
         return labels
 

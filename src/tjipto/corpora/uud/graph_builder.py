@@ -224,7 +224,7 @@ def build_graph_artifacts(
     for row in evidence:
         if is_scope_provision(row):
             source_node = unit_node_ids.get(row["legal_unit_id"])
-            for label in _scope_target_labels(row.get("quoted_text")):
+            for label, relation_type, operation_candidates in _scope_target_operations(row.get("quoted_text")):
                 target = resolve_relation_unit(
                     legal_units,
                     label,
@@ -246,15 +246,16 @@ def build_graph_artifacts(
                     add_edge(
                         source_node,
                         unit_node_ids[target["legal_unit_id"]],
-                        "MODIFIES",
+                        relation_type,
                         source_document_id=row["source_document_id"],
                         supporting_evidence_ids=[row["evidence_id"]],
                         source_legal_unit_id=row["legal_unit_id"],
                         target_legal_unit_id=target["legal_unit_id"],
                         target_citation=target_citation,
                         article_relation_ref=_article_relation_ref(
-                            "MODIFIES", row["evidence_id"], target["legal_unit_id"], target_citation
+                            relation_type, row["evidence_id"], target["legal_unit_id"], target_citation
                         ),
+                        operation_candidates=operation_candidates,
                         runtime_loadable=True,
                         validation_status="accepted_instrument_scope",
                         confidence_policy="explicit_scope_article_reference",
@@ -433,7 +434,7 @@ def _numeric_suffix(value: str) -> int:
     return int(match.group(1)) if match else 0
 
 
-def _scope_target_labels(text: str | None) -> list[str]:
+def _scope_target_operations(text: str | None) -> list[tuple[str, str, tuple[str, ...]]]:
     # Scope records may contain several independently typed operations.  Only
     # references in the modification/addition segment may become MODIFIES
     # edges; renumbering and deletion segments are materialized by their own
@@ -445,6 +446,8 @@ def _scope_target_labels(text: str | None) -> list[str]:
             r"\(([a-z])\)\s*(.*?)(?=\s*\([a-z]\)\s|$)", source, re.IGNORECASE | re.DOTALL
         )
     }
+    relation_type = "MODIFIES"
+    operation_candidates: tuple[str, ...] = ()
     if segments:
         # Clause (d) and clause (e) describe different lifecycle operations.
         # A target named in both must retain both source-backed operations:
@@ -452,6 +455,9 @@ def _scope_target_labels(text: str | None) -> list[str]:
         # replacement provision.  The source legal-unit owner distinguishes
         # those edges; label de-duplication here would erase clause (e).
         source = segments.get("e") or segments.get("a") or source
+        if "e" in segments and "pengubahan dan/atau penambahan" in source.casefold():
+            relation_type = "AMBIGUOUS_OPERATION"
+            operation_candidates = ("MODIFIES", "ADDS")
     else:
         operations = tuple(re.finditer(r"\bmengubah\b", source, re.IGNORECASE))
         if operations:
@@ -463,7 +469,12 @@ def _scope_target_labels(text: str | None) -> list[str]:
         if label not in seen:
             seen.add(label)
             labels.append(label)
-    return labels
+    return [(label, relation_type, operation_candidates) for label in labels]
+
+
+def _scope_target_labels(text: str | None) -> list[str]:
+    """Compatibility helper for source-local callers and parser contracts."""
+    return [label for label, _relation_type, _candidates in _scope_target_operations(text)]
 
 
 def _deletion_target_labels(text: str | None) -> list[str]:

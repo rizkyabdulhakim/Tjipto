@@ -426,7 +426,7 @@ class GraphContractTest(unittest.TestCase):
         exact_rows = [row for row in rows if row["support_class"] == "exact_article_relation"]
         trace_rows = [row for row in rows if row["support_class"] == "trace_article_relation"]
         self.assertGreater(len(exact_rows), 3)
-        self.assertLess(len(trace_rows), 69)
+        self.assertGreater(len(trace_rows), 0)
         self.assertEqual(health["article_relation_total_count"], len(rows))
         self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
         self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
@@ -525,8 +525,22 @@ class GraphContractTest(unittest.TestCase):
             for row in rows
             if row["source_role"] == "amendment_4_historical" and row["relation_type"] == "DELETES"
         }
-        self.assertIn("Pasal 16", amendment_fourth_modifies)
+        self.assertNotIn("Pasal 16", amendment_fourth_modifies)
         self.assertIn("Pasal 16", amendment_fourth_deletes)
+        ambiguous = {
+            row["target_citation"]
+            for row in rows
+            if row["source_role"] == "amendment_4_historical" and row["relation_type"] == "AMBIGUOUS_OPERATION"
+        }
+        self.assertIn("Pasal 16", ambiguous)
+        self.assertEqual(
+            {
+                tuple(row.get("operation_candidates") or ())
+                for row in rows
+                if row["relation_type"] == "AMBIGUOUS_OPERATION"
+            },
+            {("MODIFIES", "ADDS")},
+        )
 
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")

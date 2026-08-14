@@ -236,7 +236,7 @@ def build_article_amendment_relations(
     rows = []
     for edge in graph_edges:
         relation_type = edge.get("edge_type")
-        if relation_type not in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
+        if relation_type not in {"MODIFIES", "DELETES", "AMBIGUOUS_OPERATION", "RENAMES", "RENUMBERED_TO"}:
             continue
         supporting_ids = edge.get("supporting_evidence_ids") or ()
         evidence_row = evidence_by_id.get(supporting_ids[0]) if supporting_ids else None
@@ -288,13 +288,21 @@ def build_article_amendment_relations(
         )
         target_local_geometry = bool(target_word_bbox_refs or target_character_bbox_refs)
         exact_support = source_support_exact and target_support_exact and target_local_geometry
+        if relation_type == "AMBIGUOUS_OPERATION":
+            # The source names a change/addition set but does not choose one
+            # operation.  Preserve exact provenance as trace support only.
+            exact_support = False
         support_class = "exact_article_relation" if exact_support else "trace_article_relation"
         trace_only_reason = (
             None
             if exact_support
-            else _trace_reason(
-                evidence_row, target_phrase, target_span_ids, bbox_refs, mapping=mapping, source_support_exact=source_support_exact
-            )
+                else (
+                    "ambiguous_source_operation"
+                    if relation_type == "AMBIGUOUS_OPERATION"
+                    else _trace_reason(
+                    evidence_row, target_phrase, target_span_ids, bbox_refs, mapping=mapping, source_support_exact=source_support_exact
+                    )
+                )
         )
         target_reference = target_phrase
         old_reference = str(mapping.get("old_reference") or "")
@@ -307,6 +315,11 @@ def build_article_amendment_relations(
                 "source_document_id": evidence_row["source_document_id"],
                 "source_role": evidence_row["source_role"],
                 "relation_type": relation_type,
+                **(
+                    {"operation_candidates": ["MODIFIES", "ADDS"]}
+                    if relation_type == "AMBIGUOUS_OPERATION"
+                    else {}
+                ),
                 **(
                     {"substantive_change": False, "source_conflict": False, "anomaly": False}
                     if relation_type == "RENUMBERED_TO"

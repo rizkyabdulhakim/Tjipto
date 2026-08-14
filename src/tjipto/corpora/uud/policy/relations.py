@@ -67,6 +67,13 @@ def apply_graph_relation_policy(*, edges: list[dict], nodes: list[dict], evidenc
             "reason",
         ):
             edge.pop(field, None)
+        if edge_type == "AMBIGUOUS_OPERATION":
+            relation_id = str(edge.get("article_relation_ref") or "")
+            relation = relations_by_id.get(relation_id)
+            if relation is None:
+                raise ValueError(f"missing_uud_article_relation:{edge['edge_id']}")
+            edge["relation_id"] = relation_id
+            edge["support_relation_ids"] = [relation_id]
         source = nodes_by_id[edge["source_id"]]
         target = nodes_by_id[edge["target_id"]]
         evidence_ids = _direct_evidence_ids(edge, source, target, evidence_by_id)
