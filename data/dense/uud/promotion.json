@@ -10,7 +10,7 @@
         "artifact_path": "reports-local\\exact-final-1e55d10\\ablations\\dense-1024.index",
         "artifact_sha256": "b99a16330c5d962960c05dce7fab52b19c30b38064904b3b0a518db6bb960ddb",
         "build_evidence_path": null,
-        "build_seconds": 688.994,
+        "build_seconds": 12.845,
         "hybrid_metrics": {
           "case_denominator": 35,
           "hit_rate_at_k": 0.685714,
@@ -69,14 +69,14 @@
           "support_group_denominator": 35,
           "support_group_recall_at_k": 0.628571
         },
-        "query_seconds": 139.814,
+        "query_seconds": 68.94,
         "query_truncated_case_ids": [],
         "query_truncation_count": 0,
         "truncated_retrieval_unit_ids": [
           "uud_retrieval_unit::uud_current_consolidated_final_citation_evidence_00247"
         ],
         "truncation_count": 1,
-        "worker_peak_rss_bytes": 5024817152,
+        "worker_peak_rss_bytes": 4984229888,
         "worker_peak_rss_scope": "embedding_worker_peak_working_set"
       },
       "execution_status": "valid",
@@ -88,8 +88,8 @@
         "dense_eligible_case_ids_sha256": "a2221f02710f3130d38eab01e5bd864eb469b2a969a260d64f0f9ba3812eeb2f",
         "dense_eligible_queries_sha256": "0edc2232afc84e97d2b61db568689301bae4245dff3cae4de574917b2922065a",
         "evaluator_sha256": "23f9f8fae4cb3c292b42cb44596b5764b433707cdb66f12f9e5146d660ba937a",
-        "runtime_commit": "1e55d10da860689b446ccf3112c247c5646d45c2",
-        "runtime_tree_sha": "b7b93f6dd08069ac2bd0d1278e1e06d238459700"
+        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
+        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
       },
       "metrics": {
         "delta": {
@@ -140,8 +140,8 @@
           "support_group_denominator": 35,
           "support_group_recall_at_k": 0.6
         },
-        "runtime_commit": "1e55d10da860689b446ccf3112c247c5646d45c2",
-        "runtime_tree_sha": "b7b93f6dd08069ac2bd0d1278e1e06d238459700"
+        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
+        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
       },
       "status": "valid"
     },
@@ -152,10 +152,10 @@
         "retrieve": 37
       },
       "dense": {
-        "artifact_path": "reports-local\\exact-final-1e55d10\\ablations\\dense-256.index",
+        "artifact_path": "data\\dense\\uud\\bge-m3-256.index",
         "artifact_sha256": "1732fae4f57747027e4c67b2e24aa0736aa71621a41f6622ef98892dd2223651",
         "build_evidence_path": null,
-        "build_seconds": 620.429,
+        "build_seconds": 10.842,
         "hybrid_metrics": {
           "case_denominator": 35,
           "hit_rate_at_k": 0.685714,
@@ -233,7 +233,7 @@
           "support_group_denominator": 35,
           "support_group_recall_at_k": 0.628571
         },
-        "query_seconds": 155.336,
+        "query_seconds": 66.018,
         "query_truncated_case_ids": [],
         "query_truncation_count": 0,
         "truncated_retrieval_unit_ids": [
@@ -259,7 +259,7 @@
           "uud_retrieval_unit::uud_source_role_historical_final_citation_evidence_00617"
         ],
         "truncation_count": 20,
-        "worker_peak_rss_bytes": 4968849408,
+        "worker_peak_rss_bytes": 4984143872,
         "worker_peak_rss_scope": "embedding_worker_peak_working_set"
       },
       "execution_status": "valid",
@@ -271,8 +271,8 @@
         "dense_eligible_case_ids_sha256": "a2221f02710f3130d38eab01e5bd864eb469b2a969a260d64f0f9ba3812eeb2f",
         "dense_eligible_queries_sha256": "0edc2232afc84e97d2b61db568689301bae4245dff3cae4de574917b2922065a",
         "evaluator_sha256": "23f9f8fae4cb3c292b42cb44596b5764b433707cdb66f12f9e5146d660ba937a",
-        "runtime_commit": "1e55d10da860689b446ccf3112c247c5646d45c2",
-        "runtime_tree_sha": "b7b93f6dd08069ac2bd0d1278e1e06d238459700"
+        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
+        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
       },
       "metrics": {
         "delta": {
@@ -323,8 +323,8 @@
           "support_group_denominator": 35,
           "support_group_recall_at_k": 0.6
         },
-        "runtime_commit": "1e55d10da860689b446ccf3112c247c5646d45c2",
-        "runtime_tree_sha": "b7b93f6dd08069ac2bd0d1278e1e06d238459700"
+        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
+        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
       },
       "status": "valid"
     },
@@ -338,7 +338,7 @@
         "artifact_path": "reports-local\\exact-final-1e55d10\\ablations\\dense-512.index",
         "artifact_sha256": "5225348de17ce0395067d2c63e5c2791f7987d15c8a51039a07ae3ac621d7b04",
         "build_evidence_path": null,
-        "build_seconds": 589.741,
+        "build_seconds": 13.381,
         "hybrid_metrics": {
           "case_denominator": 35,
           "hit_rate_at_k": 0.685714,
@@ -400,7 +400,7 @@
           "support_group_denominator": 35,
           "support_group_recall_at_k": 0.628571
         },
-        "query_seconds": 149.812,
+        "query_seconds": 67.421,
         "query_truncated_case_ids": [],
         "query_truncation_count": 0,
         "truncated_retrieval_unit_ids": [
@@ -422,8 +422,8 @@
         "dense_eligible_case_ids_sha256": "a2221f02710f3130d38eab01e5bd864eb469b2a969a260d64f0f9ba3812eeb2f",
         "dense_eligible_queries_sha256": "0edc2232afc84e97d2b61db568689301bae4245dff3cae4de574917b2922065a",
         "evaluator_sha256": "23f9f8fae4cb3c292b42cb44596b5764b433707cdb66f12f9e5146d660ba937a",
-        "runtime_commit": "1e55d10da860689b446ccf3112c247c5646d45c2",
-        "runtime_tree_sha": "b7b93f6dd08069ac2bd0d1278e1e06d238459700"
+        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
+        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
       },
       "metrics": {
         "delta": {
@@ -474,8 +474,8 @@
           "support_group_denominator": 35,
           "support_group_recall_at_k": 0.6
         },
-        "runtime_commit": "1e55d10da860689b446ccf3112c247c5646d45c2",
-        "runtime_tree_sha": "b7b93f6dd08069ac2bd0d1278e1e06d238459700"
+        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
+        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
       },
       "status": "valid"
     }
@@ -551,8 +551,8 @@
     "tokenizer_sha256": "d0a4dfc17b8921889e27b073cd9d2a56365ae3a8da20b6ffb4586cac8ce8964c",
     "truncation_policy": "explicit_max_length"
   },
-  "runtime_commit": "1e55d10da860689b446ccf3112c247c5646d45c2",
-  "runtime_tree_sha": "b7b93f6dd08069ac2bd0d1278e1e06d238459700",
+  "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
+  "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b",
   "selected_max_length": 256,
   "status": "promoted"
 }
