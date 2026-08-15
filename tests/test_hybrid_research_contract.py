@@ -471,6 +471,99 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(seen, ["original"])
         self.assertEqual(rows, ())
 
+    def test_exact_structured_query_bypasses_semantic_orchestrator(self) -> None:
+        class Provider:
+            calls = 0
+
+            def propose(self, request):
+                self.calls += 1
+                raise AssertionError("exact legal target must bypass planner")
+
+        provider = Provider()
+        response = LegalRuntimeService(planning_provider=provider).ask("uud", "Pasal 7A bunyinya apa?")
+        self.assertEqual(provider.calls, 0)
+        self.assertNotEqual(response["status"], "insufficient_evidence")
+        self.assertTrue(response["citations"])
+
+    def test_metadata_query_bypasses_semantic_orchestrator(self) -> None:
+        class Provider:
+            calls = 0
+
+            def propose(self, request):
+                self.calls += 1
+                raise AssertionError("metadata lookup must bypass planner")
+
+        provider = Provider()
+        response = LegalRuntimeService(planning_provider=provider).ask("uud", "kapan perubahan pertama ditetapkan")
+        self.assertEqual(provider.calls, 0)
+        self.assertEqual(response["route"], "metadata_fact")
+
+    def test_freeform_semantic_query_invokes_planner_and_keeps_verified_support_server_owned(self) -> None:
+        class Provider:
+            calls = 0
+
+            def propose(self, request):
+                self.calls += 1
+                return {
+                    "variants": [{"query": "hak pendidikan"}],
+                    "information_needs": [{
+                        "description": "hak atas pendidikan",
+                        "query": "hak pendidikan",
+                        "concepts": ["pendidikan"],
+                    }],
+                }
+
+        provider = Provider()
+        response = LegalRuntimeService(planning_provider=provider).ask(
+            "uud", "Saya dilarang sekolah karena agama saya, hak konstitusional apa yang relevan?"
+        )
+        self.assertEqual(provider.calls, 1)
+        self.assertEqual(response["research_plan"].provider_status, "accepted")
+        self.assertTrue(any(row.get("citation") == "Pasal 31" for row in response["matches"]))
+        self.assertEqual(response["status"], "clarification_required")
+        self.assertEqual(response["sufficiency"]["status"], "complete")
+        self.assertTrue(response["evidence_set"]["support_ids"])
+
+    def test_planner_can_name_procedure_need_but_server_binds_corpus_requirements(self) -> None:
+        class Provider:
+            calls = 0
+
+            def propose(self, request):
+                self.calls += 1
+                return {
+                    "variants": [{"query": "prosedur pemberhentian Presiden"}],
+                    "information_needs": [{
+                        "description": "tahapan pemberhentian Presiden",
+                        "query": "prosedur pemberhentian Presiden",
+                        "concepts": ["pemberhentian"],
+                        "kind": "procedure",
+                    }],
+                }
+
+        provider = Provider()
+        response = LegalRuntimeService(planning_provider=provider).ask("uud", "Bagaimana Presiden bisa diberhentikan?")
+        self.assertEqual(provider.calls, 1)
+        self.assertEqual(response["sufficiency"]["status"], "complete")
+        self.assertEqual(
+            set(response["sufficiency"]["fulfilled_requirement_ids"]),
+            {"grounds", "procedure_basis", "constitutional_review", "assembly_decision"},
+        )
+
+    def test_planner_information_need_cannot_inject_authority_scope_or_evidence(self) -> None:
+        class Provider:
+            def propose(self, request):
+                return {"information_needs": [{
+                    "description": "forged",
+                    "query": "forged",
+                    "concepts": ["forged"],
+                    "source_role": "historical",
+                    "evidence_id": "forged",
+                }]}
+
+        plan = plan_research("pertanyaan bebas", ResearchIntent(orchestrate=True), provider=Provider())
+        self.assertFalse(plan.information_needs)
+        self.assertIn("information_need_invalid", plan.rejection_reasons)
+
 
 if __name__ == "__main__":
     unittest.main()

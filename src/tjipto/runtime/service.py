@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
@@ -29,7 +30,7 @@ from tjipto.retrieval.metadata import (
 from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
 from tjipto.retrieval.relations import amendment_relation_target
 from tjipto.retrieval.router import route_retrieval
-from tjipto.retrieval.research import ResearchIntent, ResearchPlanningProvider, execute_research_rounds
+from tjipto.retrieval.research import ResearchIntent, ResearchPlan, ResearchPlanningProvider, execute_research_rounds, plan_research
 from tjipto.retrieval.sufficiency import EvidenceRequirement, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.claim_support import all_supported, verify_claims
 from tjipto.runtime.clarification import clarification_decision
@@ -106,6 +107,13 @@ def _research_candidate_limit(store: EvidenceStore, query: str, limit: int) -> i
     except (TypeError, ValueError):
         configured = limit
     return min(len(store.evidence), max(limit, configured))
+
+
+def _semantic_orchestration_required(store: EvidenceStore, query: str, semantics) -> bool:
+    """Keep authoritative resolvers ahead of the bounded semantic planner."""
+    if getattr(semantics, "requested_function", "retrieval") != "retrieval":
+        return False
+    return not metadata_lookup(store, query, 1)
 
 
 def _research_intent_for_ask(
@@ -224,13 +232,31 @@ def _semantic_scope_covered(
     return True
 
 
-def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) -> tuple[EvidenceRequirement, ...]:
+def _research_requirements_for_ask(
+    store: EvidenceStore,
+    semantics,
+    query: str,
+    *,
+    information_needs=(),
+) -> tuple[EvidenceRequirement, ...]:
     """Derive typed requirements from corpus-backed semantic dimensions."""
     if getattr(semantics, "requested_function", "retrieval") != "retrieval":
         return ()
     config = getattr(store, "config", None)
     research: dict = getattr(config, "setting", lambda *_: {})("research", {}) or {}
-    normalized = normalize_intent_text(query)
+    planning_terms = tuple(
+        value
+        for need in information_needs
+        for value in (
+            getattr(need, "query", None),
+            getattr(need, "description", None),
+            *tuple(getattr(need, "concepts", ()) or ()),
+        )
+        if isinstance(value, str) and value.strip()
+    )
+    # The planner may name a semantic need, but only the corpus-owned rules
+    # below turn that proposal into a typed requirement.
+    normalized = normalize_intent_text(" ".join((query, *planning_terms)))
     generation = research.get("requirement_generation", {}) if isinstance(research, dict) else {}
     if not isinstance(generation, dict):
         return ()
@@ -404,7 +430,27 @@ def _research_requirements_for_ask(store: EvidenceStore, semantics, query: str) 
             )
             for index, reference in enumerate(references, 1)
         )
-    return ()
+    proposed = []
+    for index, need in enumerate(information_needs, 1):
+        concepts = tuple(
+            dict.fromkeys(
+                token
+                for concept in tuple(getattr(need, "concepts", ()) or ())
+                if isinstance(concept, str)
+                for token in meaningful_tokens(concept)
+            )
+        )
+        if not concepts:
+            continue
+        proposed.append(
+            EvidenceRequirement(
+                f"information_{index}",
+                description=str(getattr(need, "description", "")),
+                retrieval_query=getattr(need, "query", None) or query,
+                support_terms=concepts,
+            )
+        )
+    return tuple(proposed)
 
 
 def _procedure_applicable(research: dict, query: str, entities: tuple[str, ...]) -> bool:
@@ -697,6 +743,7 @@ class LegalRuntimeService:
         temporal_scope: str | None = None,
         polarity: str | None = None,
         modality: str | None = None,
+        plan: ResearchPlan | None = None,
     ) -> dict:
         """Run bounded retrieval variants and assess verified requirements."""
         store = self._store(corpus_id)
@@ -755,6 +802,7 @@ class LegalRuntimeService:
             temporal_scope=temporal_scope,
             polarity=polarity,
             modality=modality,
+            plan=plan,
         )
         assessment = result["sufficiency"]
         return {
@@ -1461,13 +1509,47 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": (),
             }
+        semantic_request = _semantic_orchestration_required(store, query, semantics)
+        planning_intent = replace(
+            _research_intent_for_ask(store, semantics, query, ()),
+            orchestrate=semantic_request,
+        )
+        planned_entities = _research_entities(
+            (store.config.setting("research", {}) or {}),
+            normalize_intent_text(query),
+        )
+        semantic_plan = (
+            plan_research(
+                query,
+                planning_intent,
+                provider=self._planning_provider,
+                required_entities=planned_entities,
+                explicit_references=tuple(getattr(semantics, "legal_references", ()) or ()),
+                source_role=semantics.source_role,
+                temporal_scope=semantics.temporal_context,
+                polarity=(semantics.requested_proposition.polarity if semantics.requested_proposition else None),
+                modality=(semantics.requested_proposition.modality if semantics.requested_proposition else None),
+            )
+            if semantic_request
+            else None
+        )
         active_requirements = tuple(evidence_requirements)
         if not active_requirements:
-            active_requirements = _research_requirements_for_ask(store, semantics, query)
+            active_requirements = _research_requirements_for_ask(
+                store,
+                semantics,
+                query,
+                information_needs=semantic_plan.information_needs if semantic_plan else (),
+            )
         semantic_scope_loss = not _semantic_scope_covered(store, semantics, query, active_requirements)
-        research_intent = _research_intent_for_ask(store, semantics, query, active_requirements)
+        research_intent = replace(
+            _research_intent_for_ask(store, semantics, query, active_requirements),
+            orchestrate=semantic_request,
+        )
+        if semantic_plan is not None:
+            semantic_plan = replace(semantic_plan, intent=research_intent, requirements=active_requirements)
         research_routed = None
-        if research_intent.complex or active_requirements:
+        if semantic_request:
             research_result = self.research(
                 corpus_id,
                 query,
@@ -1487,6 +1569,7 @@ class LegalRuntimeService:
                 temporal_scope=semantics.temporal_context,
                 polarity=(semantics.requested_proposition.polarity if semantics.requested_proposition else None),
                 modality=(semantics.requested_proposition.modality if semantics.requested_proposition else None),
+                plan=semantic_plan,
             )
             if research_result.get("routes"):
                 research_routed = dict(research_result["routes"][0])

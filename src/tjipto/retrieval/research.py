@@ -25,6 +25,9 @@ class ResearchIntent:
     comparison: bool = False
     decomposition: bool = False
     relation_traversal: bool = False
+    # The runtime, not a lexical complexity heuristic, decides when a normal
+    # semantic request is eligible for the untrusted planner.
+    orchestrate: bool = False
     max_variants: int = 4
     max_rounds: int = 2
 
@@ -48,6 +51,17 @@ class QueryVariant:
 
 
 @dataclass(frozen=True)
+class InformationNeed:
+    """Untrusted semantic topic proposal; it carries no evidence authority."""
+
+    description: str
+    query: str | None = None
+    concepts: tuple[str, ...] = ()
+    kind: str = "concept"
+    relation_traversal: bool = False
+
+
+@dataclass(frozen=True)
 class ResearchPlan:
     original_query: str
     intent: ResearchIntent
@@ -57,6 +71,7 @@ class ResearchPlan:
     retrieval_lanes: tuple[str, ...] = ("sparse",)
     requirements: tuple[EvidenceRequirement, ...] = ()
     task_kind: str = "retrieval"
+    information_needs: tuple[InformationNeed, ...] = ()
 
 
 class ResearchPlanningProvider(Protocol):
@@ -169,7 +184,7 @@ def plan_research(
         modality=modality,
     )
     base_requirements = requirement_rows
-    if provider is None or not intent.complex:
+    if provider is None or not (intent.complex or intent.orchestrate):
         return ResearchPlan(query, intent, (original,), "deterministic", requirements=base_requirements)
     try:
         proposal = provider.propose(
@@ -205,6 +220,8 @@ def plan_research(
     if task_kind is None:
         rejected = (*rejected, "task_kind_invalid")
         task_kind = "retrieval"
+    information_needs, need_rejections = _validated_information_needs(proposal, intent)
+    rejected = (*rejected, *need_rejections)
     return ResearchPlan(
         query,
         intent,
@@ -214,6 +231,7 @@ def plan_research(
         lanes,
         tuple(base_requirements),
         task_kind,
+        information_needs,
     )
 
 
@@ -248,7 +266,7 @@ def _planner_request(
             "polarity": polarity,
             "modality": modality,
         },
-        "allowed_proposals": ("variants", "task_kind", "retrieval_lanes"),
+        "allowed_proposals": ("task_kind", "variants", "information_needs", "retrieval_lanes"),
     }
 
 
@@ -334,6 +352,61 @@ def _validated_task_kind(proposal: object) -> str | None:
     value = proposal.get("task_kind")
     allowed = {"retrieval", "multiple_supports", "comparison", "decomposition", "relation_traversal"}
     return value if isinstance(value, str) and value in allowed else None
+
+
+def _validated_information_needs(
+    proposal: object,
+    intent: ResearchIntent,
+) -> tuple[tuple[InformationNeed, ...], tuple[str, ...]]:
+    """Accept bounded topic proposals only; evidence requirements stay server-owned."""
+    if not isinstance(proposal, Mapping):
+        return (), ()
+    raw = proposal.get("information_needs", ())
+    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+        return (), ("information_needs_malformed",) if raw else ()
+    allowed = {"description", "query", "concepts", "kind", "relation_traversal"}
+    kinds = {"concept", "comparison", "procedure", "relation"}
+    needs: list[InformationNeed] = []
+    rejected: list[str] = []
+    seen: set[tuple[str, str | None]] = set()
+    for item in raw:
+        if len(needs) >= max(1, intent.max_variants - 1):
+            rejected.append("information_need_budget_exceeded")
+            break
+        if not isinstance(item, Mapping) or set(item) - allowed:
+            rejected.append("information_need_invalid")
+            continue
+        description = item.get("description")
+        query = item.get("query")
+        concepts = item.get("concepts", ())
+        kind = item.get("kind", "concept")
+        traversal = item.get("relation_traversal", False)
+        if (
+            not isinstance(description, str)
+            or not description.strip()
+            or query is not None and (not isinstance(query, str) or not query.strip())
+            or not _valid_string_sequence(concepts)
+            or not isinstance(kind, str)
+            or kind not in kinds
+            or not isinstance(traversal, bool)
+        ):
+            rejected.append("information_need_invalid")
+            continue
+        key = (description.strip(), query.strip() if isinstance(query, str) else None)
+        if key in seen:
+            rejected.append("information_need_duplicate")
+            continue
+        seen.add(key)
+        needs.append(
+            InformationNeed(
+                description=description.strip(),
+                query=query.strip() if isinstance(query, str) else None,
+                concepts=tuple(str(value).strip() for value in concepts if str(value).strip()),
+                kind=kind,
+                relation_traversal=traversal,
+            )
+        )
+    return tuple(needs), tuple(rejected)
 
 
 def _validated_requirements(
@@ -454,9 +527,10 @@ def execute_research_rounds(
     temporal_scope: str | None = None,
     polarity: str | None = None,
     modality: str | None = None,
+    plan: ResearchPlan | None = None,
 ) -> dict:
     """Run retrieval rounds, retrying only requirements still missing."""
-    plan = plan_research(
+    plan = plan or plan_research(
         query,
         intent,
         provider=provider,
@@ -468,6 +542,8 @@ def execute_research_rounds(
         polarity=polarity,
         modality=modality,
     )
+    if requirements and plan.requirements != tuple(requirements):
+        plan = replace(plan, requirements=tuple(requirements))
     requirements = tuple(plan.requirements)
     rounds_limit = min(
         max(1, int(max_rounds if max_rounds is not None else plan.intent.max_rounds)),
@@ -582,6 +658,7 @@ def execute_research(
 
 __all__ = [
     "QueryVariant",
+    "InformationNeed",
     "ResearchIntent",
     "ResearchPlan",
     "ResearchPlanningProvider",
