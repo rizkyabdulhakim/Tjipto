@@ -904,6 +904,7 @@ class RuntimeContractTest(unittest.TestCase):
             "Pasal 32 mengatur pendidikan.",
             "Pasal 31 tidak mengatur pendidikan.",
             "Pasal 31 mengatur pendidikan pada tahun 2020.",
+            "Pasal 31 mengatur pendidikan dalam naskah historis.",
         ):
             with self.subTest(verified_mutated=mutated):
                 self.assertEqual(
@@ -914,6 +915,27 @@ class RuntimeContractTest(unittest.TestCase):
                     ),
                     "fallback",
                 )
+
+        structured = build_verified_claim_set((
+            {
+                "evidence_id": "structured-support",
+                "quoted_text": "Konstitusi menjamin hak atas pendidikan.",
+                "subject": "Konstitusi",
+                "predicate": "menjamin",
+                "object": "hak atas pendidikan",
+                "citation": "Pasal 31",
+                "source_role": "current_consolidated",
+                "temporal_context": "current_consolidated",
+            },
+        ))
+        self.assertEqual(
+            _render_wording(
+                {"sentences": ({"text": "Konstitusi menjamin hak atas pendidikan menurut Pasal 31.", "claim_ids": ["support:structured-support"]},)},
+                "fallback",
+                verified_claims=structured,
+            ),
+            "Konstitusi menjamin hak atas pendidikan menurut Pasal 31.",
+        )
 
     def test_target_specific_article_amendment_relations_do_not_substitute_neighbors(self) -> None:
         unsupported = self.service.ask("uud", "amandemen keempat mengubah pasal 31?")
@@ -1470,6 +1492,10 @@ class RuntimeContractTest(unittest.TestCase):
             ("Tampilkan dokumen Perubahan Keempat UUD", "amendment_4_historical"),
             ("Lihat PDF naskah asli UUD", "original_historical"),
             ("Buka naskah satu naskah UUD 1945", "current_consolidated"),
+            ("berikan dokumen perubahan pertama", "amendment_1_historical"),
+            ("tampilkan naskah perubahan keempat", "amendment_4_historical"),
+            ("berikan saya naskah UUD original", "original_historical"),
+            ("berikan saya naskah UUD konsolidasi", "current_consolidated"),
         ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "answer_ready", query)

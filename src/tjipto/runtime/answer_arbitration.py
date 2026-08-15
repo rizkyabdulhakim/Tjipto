@@ -51,9 +51,6 @@ def source_document_response(
         return None
     if has_relation_target(query, strategy=strategy, config=config):
         return None
-    relation_config = intent.get("document_relation", {})
-    if not contains_intent_phrase(query, relation_config.get("target_document_terms", ())):
-        return None
     if contains_intent_phrase(query, intent.get("instrument_analysis_signals", ())) or contains_intent_phrase(
         query, intent.get("instrument_effect_signals", ())
     ):

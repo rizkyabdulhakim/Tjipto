@@ -34,7 +34,14 @@ from tjipto.corpora.source_arbitration import (
 )
 from tjipto.retrieval.relations import amendment_relation_target, has_relation_target
 from tjipto.retrieval.router import route_retrieval
-from tjipto.retrieval.research import ResearchIntent, ResearchPlan, ResearchPlanningProvider, execute_research_rounds, plan_research
+from tjipto.retrieval.research import (
+    ResearchIntent,
+    ResearchPlan,
+    ResearchPlanningProvider,
+    execute_research_rounds,
+    plan_research,
+    research_planning_provider_from_environment,
+)
 from tjipto.retrieval.sufficiency import EvidenceRequirement, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.claim_support import all_supported, verify_claims
 from tjipto.runtime.clarification import clarification_decision
@@ -725,7 +732,7 @@ class LegalRuntimeService:
         self._bookmarks = BookmarkRepository()
         self._external_wording = wording_enabled_from_environment() if external_wording is None else external_wording
         self._answer_provider = answer_provider
-        self._planning_provider = planning_provider
+        self._planning_provider = planning_provider or research_planning_provider_from_environment()
         if self._external_wording and self._answer_provider is None:
             self._answer_provider = wording_provider_from_environment()
 
@@ -2150,13 +2157,29 @@ def _render_verified_synthesis(sentences, fallback: str, verified_claims) -> str
             return fallback
         used.update(claim_ids)
         selected = tuple(claims[claim_id] for claim_id in claim_ids)
-        allowed = set(_tokens_for_claims(selected)) | _SYNTHESIS_CONNECTORS
         output_tokens = set(re.findall(r"[a-z0-9]+", normalize_intent_text(text)))
-        if not output_tokens <= allowed:
-            return fallback
-        protected = set(_protected_tokens_for_claims(selected))
-        if not protected <= output_tokens:
-            return fallback
+        if any(not _has_structured_roles(claim) for claim in selected):
+            spans = tuple(
+                normalize_intent_text(claim.verified_span or "")
+                for claim in selected
+                if not _has_structured_roles(claim)
+            )
+            if any(not span or span not in normalize_intent_text(text) for span in spans):
+                return fallback
+            allowed = set(re.findall(r"[a-z0-9]+", " ".join(spans))) | _SYNTHESIS_CONNECTORS
+            if not output_tokens <= allowed:
+                return fallback
+        else:
+            # Structured claims are checked by exact semantic atoms.  The
+            # whitelist is intentionally limited to those atoms and harmless
+            # connective words; it is not a similarity score or an authority
+            # decision.
+            allowed = set(_tokens_for_claims(selected)) | _SYNTHESIS_CONNECTORS
+            if not output_tokens <= allowed:
+                return fallback
+            protected = set(_protected_tokens_for_claims(selected))
+            if not protected <= output_tokens:
+                return fallback
         if not _preserves_polarity(selected, text):
             return fallback
         if any(
@@ -2166,6 +2189,8 @@ def _render_verified_synthesis(sentences, fallback: str, verified_claims) -> str
         ):
             return fallback
         if _reverses_subject_object(selected, text):
+            return fallback
+        if _scope_drift(selected, text):
             return fallback
         rendered.append(text)
     if used != set(claims) or not rendered:
@@ -2203,7 +2228,8 @@ def _protected_tokens_for_claims(claims) -> tuple[str, ...]:
             value
             for value in (
                 claim.subject,
-                claim.object,
+                claim.predicate,
+                claim.object if _has_structured_roles(claim) else None,
                 *claim.legal_references,
                 claim.modality,
                 *claim.numbers,
@@ -2212,6 +2238,23 @@ def _protected_tokens_for_claims(claims) -> tuple[str, ...]:
             if value
         )
     return tuple(dict.fromkeys(re.findall(r"[a-z0-9]+", normalize_intent_text(" ".join(str(value) for value in values)))))
+
+
+def _has_structured_roles(claim) -> bool:
+    return all(isinstance(getattr(claim, field, None), str) and getattr(claim, field).strip() for field in ("subject", "predicate", "object"))
+
+
+def _scope_drift(claims, text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    current_markers = ("historis", "naskah asli", "amandemen", "perubahan pertama", "perubahan kedua", "perubahan ketiga", "perubahan keempat")
+    historical_markers = ("konsolidasi", "satu naskah", "berlaku saat ini", "saat ini")
+    for claim in claims:
+        role = normalize_intent_text(claim.source_role or claim.temporal_scope or "")
+        if role == "current consolidated" and any(marker in normalized for marker in current_markers[:2]):
+            return True
+        if role and role != "current consolidated" and any(marker in normalized for marker in historical_markers):
+            return True
+    return False
 
 
 def _preserves_polarity(claims, text: str) -> bool:

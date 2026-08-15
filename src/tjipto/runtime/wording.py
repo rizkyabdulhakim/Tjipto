@@ -34,6 +34,7 @@ class AnswerProposition:
     dates: tuple[str, ...] = ()
     source_role: str | None = None
     temporal_scope: str | None = None
+    verified_span: str | None = None
 
     @property
     def claim_id(self) -> str:
@@ -100,6 +101,7 @@ def build_answer_fact_plan(evidence: tuple[dict, ...], fallback: str) -> AnswerF
                 dates=_string_values(row.get("dates")),
                 source_role=row.get("source_role") if isinstance(row.get("source_role"), str) else None,
                 temporal_scope=row.get("temporal_context") if isinstance(row.get("temporal_context"), str) else None,
+                verified_span=quote,
             )
         )
     return AnswerFactPlan(tuple(facts))

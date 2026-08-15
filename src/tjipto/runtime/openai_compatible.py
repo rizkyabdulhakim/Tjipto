@@ -12,11 +12,11 @@ class OpenAICompatibleWordingProvider:
     def __init__(self, api_key: str, *, model: str, endpoint: str, timeout: float = 12.0):
         self._api_key, self._model, self._endpoint, self._timeout = api_key, model, endpoint, timeout
 
-    def propose(self, deterministic_answer: str) -> dict[str, object] | None:
+    def propose(self, verified_context: str) -> dict[str, object] | None:
         payload = {
             "model": self._model,
             "temperature": 0,
-            "messages": [{"role": "user", "content": _prompt(deterministic_answer)}],
+            "messages": [{"role": "user", "content": _prompt(verified_context)}],
             "response_format": {"type": "json_object"},
         }
         request = Request(
@@ -33,10 +33,10 @@ class OpenAICompatibleWordingProvider:
             return None
 
 
-def _prompt(answer: str) -> str:
+def _prompt(verified_context: str) -> str:
     return (
         "Return JSON only. Write natural Indonesian using only the supplied verified_claims. "
         "Do not add or change facts, numbers, references, modality, negation, subjects, or objects. "
         "Return {sentences:[{text:string,claim_ids:string[]}]}; use every supplied claim id.\n"
-        + json.dumps({"deterministic_answer": answer}, ensure_ascii=False)
+        + verified_context
     )

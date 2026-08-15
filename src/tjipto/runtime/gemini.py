@@ -15,14 +15,14 @@ class GeminiAnswerProvider:
         self._endpoint = endpoint.format(model=model)
         self._timeout = timeout
 
-    def propose(self, deterministic_answer: str) -> dict[str, object] | None:
-        if not deterministic_answer:
+    def propose(self, verified_context: str) -> dict[str, object] | None:
+        if not verified_context:
             return None
         prompt = (
             "Kembalikan JSON saja. Susun kalimat alami bahasa Indonesia hanya dari verified_claims. "
             "Jangan menambah atau mengubah fakta, angka, rujukan, modalitas, negasi, subjek, atau objek. "
             "Gunakan sentences dengan text dan claim_ids; setiap claim_id yang diberikan harus digunakan.\n\n"
-            + json.dumps({"deterministic_answer": deterministic_answer}, ensure_ascii=False)
+            + verified_context
         )
         payload = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],

@@ -485,6 +485,12 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertNotEqual(response["status"], "insufficient_evidence")
         self.assertTrue(response["citations"])
 
+    def test_service_binds_deployment_planner_when_no_test_provider_is_injected(self) -> None:
+        provider = object()
+        with patch("tjipto.runtime.service.research_planning_provider_from_environment", return_value=provider):
+            service = LegalRuntimeService()
+        self.assertIs(service._planning_provider, provider)
+
     def test_metadata_query_bypasses_semantic_orchestrator(self) -> None:
         class Provider:
             calls = 0
