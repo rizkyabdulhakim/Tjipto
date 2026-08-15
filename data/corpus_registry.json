@@ -385,7 +385,15 @@
       "buka naskah",
       "buka dokumen",
       "tampilkan dokumen",
-      "lihat pdf"
+      "lihat pdf",
+      "sediakan dokumen",
+      "berikan dokumen",
+      "tunjukkan dokumen",
+      "sediakan naskah",
+      "berikan naskah",
+      "tampilkan naskah",
+      "open document",
+      "show document"
     ],
     "viewer_source_status_labels": {
       "current_consolidated": "Berlaku (konsolidasi saat ini)",

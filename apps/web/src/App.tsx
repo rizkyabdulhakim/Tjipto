@@ -98,6 +98,7 @@ export default function App() {
       const citations = mapAskResponseToCitations(response);
       const documentSource = mapAskResponseToDocumentSource(response);
       const supportGroups = mapAskResponseToSupportGroups(response);
+      const messageCitations = documentSource ? [...citations, documentSource] : citations;
       const content = response.kind === "document"
         ? response.document?.label ?? "Dokumen sumber tersedia."
         : answerTextOrFallback(response);
@@ -109,7 +110,7 @@ export default function App() {
                 ...m,
                 content,
                 status: "complete",
-                citations: citations.length ? citations : undefined,
+                citations: messageCitations.length ? messageCitations : undefined,
                 supportGroups: supportGroups.length ? supportGroups : undefined,
                 clarificationOptions: (response.clarification_options ?? [])
                   .filter((option) => option.label && option.context_target)

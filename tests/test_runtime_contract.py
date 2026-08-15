@@ -827,7 +827,7 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_natural_sentence_proposals_remain_fact_bound(self) -> None:
         from tjipto.runtime.service import _render_wording
-        from tjipto.runtime.wording import build_answer_fact_plan
+        from tjipto.runtime.wording import build_answer_fact_plan, build_verified_claim_set
 
         facts = {"fact": "Pasal 31: Hak atas pendidikan."}
         accepted = _render_wording(
@@ -883,6 +883,37 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(plan.facts[1].source_role, "current_consolidated")
         self.assertEqual(plan.facts[1].temporal_scope, "current_consolidated")
         self.assertEqual(plan.public()[1]["object"], "Pasal 31 mengatur pendidikan.")
+        claims = build_verified_claim_set((
+            {
+                "evidence_id": "support-id",
+                "quoted_text": "Pasal 31 mengatur pendidikan.",
+                "citation": "Pasal 31",
+                "source_role": "current_consolidated",
+                "temporal_context": "current_consolidated",
+            },
+        ))
+        self.assertEqual(
+            _render_wording(
+                {"sentences": ({"text": "Pasal 31 mengatur pendidikan.", "claim_ids": ["support:support-id"]},)},
+                "fallback",
+                verified_claims=claims,
+            ),
+            "Pasal 31 mengatur pendidikan.",
+        )
+        for mutated in (
+            "Pasal 32 mengatur pendidikan.",
+            "Pasal 31 tidak mengatur pendidikan.",
+            "Pasal 31 mengatur pendidikan pada tahun 2020.",
+        ):
+            with self.subTest(verified_mutated=mutated):
+                self.assertEqual(
+                    _render_wording(
+                        {"sentences": ({"text": mutated, "claim_ids": ["support:support-id"]},)},
+                        "fallback",
+                        verified_claims=claims,
+                    ),
+                    "fallback",
+                )
 
     def test_target_specific_article_amendment_relations_do_not_substitute_neighbors(self) -> None:
         unsupported = self.service.ask("uud", "amandemen keempat mengubah pasal 31?")
@@ -1438,12 +1469,14 @@ class RuntimeContractTest(unittest.TestCase):
             ("Buka naskah Perubahan Pertama UUD", "amendment_1_historical"),
             ("Tampilkan dokumen Perubahan Keempat UUD", "amendment_4_historical"),
             ("Lihat PDF naskah asli UUD", "original_historical"),
+            ("Buka naskah satu naskah UUD 1945", "current_consolidated"),
         ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "answer_ready", query)
             self.assertEqual(result["route"], "source_document", query)
             self.assertEqual(result["answer_type"], "source_document", query)
             self.assertEqual(result["document_source"]["source_role"], role, query)
+            self.assertEqual(result["intent"], "document_delivery", query)
             self.assertEqual(result["document_source"]["viewer_target"]["action"], "open_document", query)
             self.assertFalse(result["citations"], query)
             self.assertFalse(result["viewer_refs"], query)

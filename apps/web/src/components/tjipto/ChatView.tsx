@@ -326,7 +326,7 @@ function CitationFooter({
   activeId?: number;
 }) {
   const relevantCitations = citations.filter(
-    (citation) => citation.authorityKind === "legal_citation",
+    (citation) => citation.authorityKind === "legal_citation" || citation.viewerMode === "document",
   );
   if (!relevantCitations.length) return null;
   const hasProvenance = relevantCitations.some((c) => c.citationFinal === false);
@@ -335,7 +335,7 @@ function CitationFooter({
       <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[var(--tj-border-subtle)]">
         <FileText size={13} className="text-[var(--tj-text-secondary)]" />
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.02em", color: "var(--tj-text-secondary)" }}>
-          {hasProvenance ? "PROVENANSI SUMBER" : "SUMBER"} · {relevantCitations.length} sitasi
+          {hasProvenance ? "PROVENANSI SUMBER" : relevantCitations.some((citation) => citation.viewerMode === "document") ? "DOKUMEN SUMBER" : "SUMBER"} · {relevantCitations.length} sitasi
         </span>
       </div>
       {hasProvenance && (

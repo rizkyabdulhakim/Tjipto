@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import json
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
+from tjipto.corpora.source_arbitration import source_reference_mappings_for_query
 from tjipto.retrieval.bm25 import meaningful_tokens, tokens
 
 
@@ -26,6 +27,9 @@ def clarification_decision(store, semantics, routed: dict) -> ClarificationDecis
     """Offer choices only when distinct, already-published interpretations exist."""
     config = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
     policy = config.get("clarification", {})
+    source_reference = _source_reference_options(store, semantics, routed)
+    if len(source_reference) > 1:
+        return _decision(policy, "source_scope", source_reference)
     if semantics.legal_references and len(semantics.legal_references) > 1 and routed.get("route") != "document_relation":
         options = tuple(
             ClarificationOption(reference, {"legal_target": reference})
@@ -48,6 +52,49 @@ def clarification_decision(store, semantics, routed: dict) -> ClarificationDecis
         kind = "legal_target" if contains_intent_phrase(routed.get("original_query") or "", config.get("relation_words", ())) else "concept_facet"
         return _decision(policy, kind, lexical)
     return None
+
+
+def _source_reference_options(store, semantics, routed: dict) -> tuple[ClarificationOption, ...]:
+    """Expose configured printed-reference scopes only when both are viable."""
+    query = str(routed.get("original_query") or "")
+    legal_references = {normalize_intent_text(reference) for reference in semantics.legal_references or ()}
+    units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
+    options: dict[str, ClarificationOption] = {}
+    for mapping in source_reference_mappings_for_query(query, store.config) or tuple(
+        mapping
+        for mapping in store.config.setting("source_reference_mappings", ()) or ()
+        if contains_intent_phrase(query, (str(mapping.get("raw_reference") or ""),))
+    ):
+        raw = normalize_intent_text(mapping.get("raw_reference"))
+        if raw not in legal_references and not contains_intent_phrase(query, (str(mapping.get("raw_reference") or ""),)):
+            continue
+        role = str(mapping.get("source_role") or getattr(semantics, "source_role", None) or "")
+        if getattr(semantics, "source_role", None) and role != semantics.source_role:
+            continue
+        context_labels = {str(term) for term in mapping.get("context_terms") or () if str(term).strip()}
+        for row in store.evidence:
+            if str(row.get("source_role") or "") != role:
+                continue
+            if normalize_intent_text(row.get("citation")) != raw:
+                continue
+            unit = units.get(str(row.get("legal_unit_id") or ""))
+            while unit is not None:
+                label = str(unit.get("unit_label") or "").strip()
+                if label and "aturan" in normalize_intent_text(label):
+                    context_labels.add(label)
+                unit = units.get(str(unit.get("parent_legal_unit_id") or ""))
+        explicit = normalize_intent_text(query)
+        context_labels = {
+            label
+            for label in context_labels
+            if f" {normalize_intent_text(label)} " not in f" {explicit} "
+        }
+        for label in context_labels:
+            options[normalize_intent_text(label)] = ClarificationOption(
+                f"{mapping.get('raw_reference')} — {label}",
+                {"source_reference": label},
+            )
+    return tuple(options.values())
 
 
 def _decision(policy: dict, kind: str, options: tuple[ClarificationOption, ...]) -> ClarificationDecision:

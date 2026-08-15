@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict, dataclass
+from builtins import object as builtin_object
 from typing import Protocol
 from urllib.parse import urlparse
 
@@ -34,6 +35,15 @@ class AnswerProposition:
     source_role: str | None = None
     temporal_scope: str | None = None
 
+    @property
+    def claim_id(self) -> str:
+        return self.fact_id
+
+    def public(self) -> dict[str, builtin_object]:
+        value = asdict(self)
+        value["claim_id"] = value["fact_id"]
+        return value
+
 
 @dataclass(frozen=True)
 class AnswerFactPlan:
@@ -42,7 +52,17 @@ class AnswerFactPlan:
     facts: tuple[AnswerProposition, ...]
 
     def public(self) -> tuple[dict[str, object], ...]:
-        return tuple(asdict(fact) for fact in self.facts)
+        return tuple(fact.public() for fact in self.facts)
+
+
+@dataclass(frozen=True)
+class VerifiedClaimSet:
+    """Immutable, server-owned claims exposed to the optional wording layer."""
+
+    claims: tuple[AnswerProposition, ...]
+
+    def public(self) -> tuple[dict[str, object], ...]:
+        return tuple(claim.public() for claim in self.claims)
 
 
 def build_answer_fact_plan(evidence: tuple[dict, ...], fallback: str) -> AnswerFactPlan:
@@ -83,6 +103,12 @@ def build_answer_fact_plan(evidence: tuple[dict, ...], fallback: str) -> AnswerF
             )
         )
     return AnswerFactPlan(tuple(facts))
+
+
+def build_verified_claim_set(evidence: tuple[dict, ...]) -> VerifiedClaimSet:
+    """Project only verified evidence rows into immutable claim slots."""
+    plan = build_answer_fact_plan(evidence, "")
+    return VerifiedClaimSet(tuple(fact for fact in plan.facts if fact.fact_id != "deterministic_answer"))
 
 
 def _string_values(value: object) -> tuple[str, ...]:
@@ -140,13 +166,24 @@ def valid_proposal(value: object) -> dict[str, object] | None:
         return None
     normalized = []
     for sentence in sentences:
-        if not isinstance(sentence, dict) or set(sentence) != {"style", "referenced_fact_ids"}:
+        if not isinstance(sentence, dict):
             return None
-        style = sentence.get("style")
-        refs = sentence.get("referenced_fact_ids")
-        if style not in {"direct", "grounded"} or not isinstance(refs, list) or not refs or not all(isinstance(item, str) for item in refs):
+        if set(sentence) == {"style", "referenced_fact_ids"}:
+            style = sentence.get("style")
+            refs = sentence.get("referenced_fact_ids")
+            if style not in {"direct", "grounded"} or not isinstance(refs, list) or not refs or not all(isinstance(item, str) for item in refs):
+                return None
+            normalized.append({"style": style, "referenced_fact_ids": tuple(refs)})
+            continue
+        if set(sentence) != {"text", "claim_ids"}:
             return None
-        normalized.append({"style": style, "referenced_fact_ids": tuple(refs)})
+        text = sentence.get("text")
+        claim_ids = sentence.get("claim_ids")
+        if not isinstance(text, str) or not text.strip() or not isinstance(claim_ids, list) or not claim_ids or not all(
+            isinstance(item, str) and item.strip() for item in claim_ids
+        ):
+            return None
+        normalized.append({"text": text.strip(), "claim_ids": tuple(claim_ids)})
     return {"sentences": tuple(normalized)}
 
 

@@ -27,8 +27,12 @@ from tjipto.retrieval.metadata import (
     normalize_filters,
     public_filters,
 )
-from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
-from tjipto.retrieval.relations import amendment_relation_target
+from tjipto.corpora.source_arbitration import (
+    resolve_source_scope,
+    source_reference_mappings_for_query,
+    source_roles_for_query,
+)
+from tjipto.retrieval.relations import amendment_relation_target, has_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.retrieval.research import ResearchIntent, ResearchPlan, ResearchPlanningProvider, execute_research_rounds, plan_research
 from tjipto.retrieval.sufficiency import EvidenceRequirement, assess_sufficiency, collect_evidence_set
@@ -38,11 +42,7 @@ from tjipto.runtime.answer_arbitration import document_summary_query, source_doc
 from tjipto.runtime.bookmarks import BookmarkRepository
 from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.response import AnswerDecision, project_response
-from tjipto.runtime.wording import (
-    build_answer_fact_plan,
-    wording_enabled_from_environment,
-    wording_provider_from_environment,
-)
+from tjipto.runtime.wording import build_verified_claim_set, wording_enabled_from_environment, wording_provider_from_environment
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.runtime.source_text import source_text_response
 from tjipto.telemetry import Telemetry
@@ -113,7 +113,30 @@ def _semantic_orchestration_required(store: EvidenceStore, query: str, semantics
     """Keep authoritative resolvers ahead of the bounded semantic planner."""
     if getattr(semantics, "requested_function", "retrieval") != "retrieval":
         return False
-    return not metadata_lookup(store, query, 1)
+    if metadata_lookup(store, query, 1):
+        return False
+    if amendment_relation_target(store, query).get("mode") is not None:
+        return False
+    if has_relation_target(query, strategy=getattr(store.config, "query_strategy", "generic"), config=store.config):
+        return False
+    return True
+
+
+_AUTHORITATIVE_RETRIEVAL_ROUTES = frozenset(
+    {
+        "document_relation",
+        "relation",
+        "structured",
+        "exact",
+        "metadata",
+        "structural_navigation",
+        "structure_list",
+    }
+)
+
+
+def _is_authoritative_retrieval_route(routed: dict | None) -> bool:
+    return bool(routed and routed.get("route") in _AUTHORITATIVE_RETRIEVAL_ROUTES)
 
 
 def _research_intent_for_ask(
@@ -637,7 +660,21 @@ def _apply_clarification_constraint(store: EvidenceStore, routed: dict, resoluti
     """Filter routed candidates without changing the user's semantic query."""
     legal_target = resolution.get("legal_target")
     concept_facet = resolution.get("concept_facet")
-    if legal_target:
+    source_reference = resolution.get("source_reference")
+    if source_reference:
+        units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
+        requested = normalize_intent_text(source_reference)
+
+        def in_source_scope(row: dict) -> bool:
+            unit = units.get(str(row.get("legal_unit_id") or ""))
+            labels = [str(row.get("hierarchy") or "")]
+            while unit is not None:
+                labels.append(str(unit.get("unit_label") or ""))
+                unit = units.get(str(unit.get("parent_legal_unit_id") or ""))
+            return requested in normalize_intent_text(" ".join(labels))
+
+        routed["matches"] = tuple(row for row in routed.get("matches", ()) if in_source_scope(row))
+    elif legal_target:
         units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
 
         def matches_target(row: dict) -> bool:
@@ -854,7 +891,7 @@ class LegalRuntimeService:
     def public_clarification_context(self, corpus_id: str, target: str | None) -> dict | None:
         request = self._public_target_request(corpus_id, target)
         resolution = request.get("resolution") if request and request.get("kind") == "clarification_context" else None
-        allowed = {"source_role", "legal_target", "relation_family", "entity", "temporal_scope", "concept_facet"}
+        allowed = {"source_role", "source_reference", "legal_target", "relation_family", "entity", "temporal_scope", "concept_facet"}
         if not isinstance(resolution, dict) or set(resolution) - allowed:
             return None
         original_query = request.get("original_query") if request else None
@@ -1654,7 +1691,14 @@ class LegalRuntimeService:
             semantic_filters["source_role"] = resolution["source_role"]
         if semantics.source_role and "source_role" not in semantic_filters:
             semantic_filters["source_role"] = semantics.source_role
-        routed = scoped_routed or research_routed or self._route_retrieval(
+        mapped_source_roles = tuple(
+            str(mapping.get("source_role"))
+            for mapping in source_reference_mappings_for_query(query, store.config)
+            if mapping.get("source_role")
+        )
+        if mapped_source_roles and "source_role" not in semantic_filters:
+            semantic_filters["source_role"] = mapped_source_roles[0]
+        typed_routed = scoped_routed or self._route_retrieval(
             corpus_id,
             query,
             store,
@@ -1664,6 +1708,12 @@ class LegalRuntimeService:
             allow_relation=semantics.requested_function != "temporal_quotation",
             relation_family=relation_family,
         )
+        # Research may improve normal free-form retrieval, but it cannot
+        # replace a source-owned typed route (relations, structured lookup,
+        # exact citation, or metadata/navigation).
+        routed = typed_routed
+        if research_routed is not None and not _is_authoritative_retrieval_route(typed_routed):
+            routed = research_routed
         _apply_clarification_constraint(store, routed, resolution)
         if resolution.get("entity"):
             routed["matches"] = tuple(
@@ -1838,7 +1888,7 @@ class LegalRuntimeService:
                 if labels:
                     deterministic_answer = ", ".join(labels)
         answer = self._agent_answer(evidence, deterministic_answer)
-        return project_response(
+        response = project_response(
             routed,
             AnswerDecision(
                 status,
@@ -1863,23 +1913,27 @@ class LegalRuntimeService:
                 claim_support=tuple(claim.public() for claim in claim_support),
             ),
         )
+        return _attach_source_reference_provenance(store, query, response)
 
     def _agent_answer(self, evidence: tuple[dict, ...], fallback: str) -> str:
         if not self._external_wording or self._answer_provider is None:
             return fallback
-        facts = _verified_answer_facts(evidence, fallback)
-        fact_plan = build_answer_fact_plan(evidence, fallback)
+        verified_claims = build_verified_claim_set(evidence)
+        if not verified_claims.claims:
+            return fallback
         try:
             proposal = self._answer_provider.propose(
                 json.dumps(
-                    {"facts": facts, "fact_plan": fact_plan.public()},
+                    {
+                        "verified_claims": verified_claims.public(),
+                    },
                     ensure_ascii=False,
                     sort_keys=True,
                 )
             )
         except Exception:
             return fallback
-        return _render_wording(proposal, fallback, facts)
+        return _render_wording(proposal, fallback, verified_claims=verified_claims)
 
     def _answer_text(
         self,
@@ -2025,10 +2079,20 @@ def _verified_answer_facts(evidence: tuple[dict, ...], fallback: str) -> dict[st
     return facts
 
 
-def _render_wording(proposal: object, fallback: str, facts: dict[str, str] | None = None) -> str:
+def _render_wording(
+    proposal: object,
+    fallback: str,
+    facts: dict[str, str] | None = None,
+    verified_claims=None,
+) -> str:
     """Render server-owned fact slots; an external model never publishes prose."""
     if isinstance(proposal, dict) and set(proposal) == {"sentences"}:
         sentences = proposal.get("sentences")
+        if verified_claims is not None and sentences and all(
+            isinstance(sentence, dict) and set(sentence) == {"text", "claim_ids"}
+            for sentence in sentences
+        ):
+            return _render_verified_synthesis(sentences, fallback, verified_claims)
         approved = facts or {"deterministic_answer": fallback}
         if not isinstance(sentences, tuple) or not sentences:
             return fallback
@@ -2064,6 +2128,120 @@ def _render_wording(proposal: object, fallback: str, facts: dict[str, str] | Non
     if proposal.get("presentation") == "direct":
         return " ".join(approved[item] for item in references)
     return fallback
+
+
+_SYNTHESIS_CONNECTORS = frozenset(
+    "adalah akan bahwa dengan dan dari dalam ini itu karena ke pada sebagai serta untuk yang terdapat menurut dapat dapatnya"
+    .split()
+)
+_UNSUPPORTED_CONCLUSIONS = ("oleh karena itu", "dengan demikian", "berarti", "sehingga", "maka")
+
+
+def _render_verified_synthesis(sentences, fallback: str, verified_claims) -> str:
+    claims = {claim.claim_id: claim for claim in verified_claims.claims}
+    if not claims:
+        return fallback
+    used: set[str] = set()
+    rendered: list[str] = []
+    for sentence in sentences:
+        text = str(sentence.get("text") or "").strip()
+        claim_ids = tuple(sentence.get("claim_ids") or ())
+        if not text or not claim_ids or len(claim_ids) != len(set(claim_ids)) or not set(claim_ids) <= set(claims):
+            return fallback
+        used.update(claim_ids)
+        selected = tuple(claims[claim_id] for claim_id in claim_ids)
+        allowed = set(_tokens_for_claims(selected)) | _SYNTHESIS_CONNECTORS
+        output_tokens = set(re.findall(r"[a-z0-9]+", normalize_intent_text(text)))
+        if not output_tokens <= allowed:
+            return fallback
+        protected = set(_protected_tokens_for_claims(selected))
+        if not protected <= output_tokens:
+            return fallback
+        if not _preserves_polarity(selected, text):
+            return fallback
+        if any(
+            phrase in normalize_intent_text(text)
+            and phrase not in " ".join(_claim_texts(selected))
+            for phrase in _UNSUPPORTED_CONCLUSIONS
+        ):
+            return fallback
+        if _reverses_subject_object(selected, text):
+            return fallback
+        rendered.append(text)
+    if used != set(claims) or not rendered:
+        return fallback
+    return " ".join(rendered)
+
+
+def _claim_texts(claims) -> tuple[str, ...]:
+    values: list[str] = []
+    for claim in claims:
+        values.extend(
+            value
+            for value in (
+                claim.subject,
+                claim.predicate,
+                claim.object,
+                *claim.legal_references,
+                claim.modality,
+                *claim.numbers,
+                *claim.dates,
+            )
+            if value
+        )
+    return tuple(str(value) for value in values)
+
+
+def _tokens_for_claims(claims) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(re.findall(r"[a-z0-9]+", normalize_intent_text(" ".join(_claim_texts(claims))))))
+
+
+def _protected_tokens_for_claims(claims) -> tuple[str, ...]:
+    values: list[str] = []
+    for claim in claims:
+        values.extend(
+            value
+            for value in (
+                claim.subject,
+                claim.object,
+                *claim.legal_references,
+                claim.modality,
+                *claim.numbers,
+                *claim.dates,
+            )
+            if value
+        )
+    return tuple(dict.fromkeys(re.findall(r"[a-z0-9]+", normalize_intent_text(" ".join(str(value) for value in values)))))
+
+
+def _preserves_polarity(claims, text: str) -> bool:
+    output = set(re.findall(r"[a-z0-9]+", normalize_intent_text(text)))
+    negations = {"tidak", "bukan", "belum", "tanpa"}
+    for claim in claims:
+        polarity = normalize_intent_text(claim.polarity or "")
+        claim_tokens = set(re.findall(r"[a-z0-9]+", normalize_intent_text(" ".join(_claim_texts((claim,))))))
+        if any(marker in polarity for marker in ("negative", "negated", "not")):
+            if not output.intersection(negations):
+                return False
+        elif output.intersection(negations) - claim_tokens:
+            return False
+    return True
+
+
+def _reverses_subject_object(claims, text: str) -> bool:
+    normalized = normalize_intent_text(text)
+    for claim in claims:
+        subject = tuple(re.findall(r"[a-z0-9]+", normalize_intent_text(claim.subject or "")))
+        object_tokens = tuple(re.findall(r"[a-z0-9]+", normalize_intent_text(claim.object or "")))
+        subject_anchor = next((token for token in subject if len(token) > 2), None)
+        object_anchor = next((token for token in object_tokens if len(token) > 2 and token != subject_anchor), None)
+        if not subject_anchor or not object_anchor:
+            continue
+        subject_pos = normalized.find(subject_anchor)
+        object_pos = normalized.find(object_anchor)
+        if subject_pos >= 0 and object_pos >= 0 and subject_pos > object_pos:
+            return True
+    return False
 
 
 def _empty_citation_fields() -> dict:
@@ -3622,6 +3800,90 @@ def _synthetic_source_conflict_support(store, conflict: dict) -> dict | None:
             "citation_payloads": (),
             "viewer_refs": (viewer_ref,),
             "validation_reasons": {evidence["evidence_id"]: "source_conflict_exact_span_bbox"},
+        },
+        "evidence": (evidence,),
+        "citations": (_citation_with_authority(store, citation, conflict=conflict),),
+        "viewer_refs": (viewer_ref,),
+        "bboxes": bboxes,
+    }
+
+
+def _attach_source_reference_provenance(store, query: str, response: dict) -> dict:
+    """Expose an explicitly requested printed occurrence as non-final trace."""
+    mappings = source_reference_mappings_for_query(query, store.config)
+    if not mappings:
+        return response
+    for mapping in mappings:
+        conflict_id = str(mapping.get("provenance") or "")
+        conflict = next(
+            (row for row in store.source_conflicts if row.get("source_conflict_id") == conflict_id),
+            None,
+        )
+        synthetic = _source_reference_synthetic_support(store, conflict) if conflict is not None else None
+        if synthetic is None:
+            continue
+        citation = synthetic["citations"][0] | {
+            "source_reference_mapping": mapping.get("mapping_kind"),
+            "printed_reference": mapping.get("raw_reference"),
+            "canonical_reference": mapping.get("canonical_target"),
+            "citation_final": False,
+            "authority_kind": "source_anomaly",
+        }
+        viewer_ref = synthetic["viewer_refs"][0]
+        trace_support = tuple(response.get("trace_support") or ()) + (citation,)
+        viewer_refs = tuple(response.get("viewer_refs") or ()) + (viewer_ref,)
+        context_pack = response.get("context_pack") or empty_context_pack("source_reference_provenance")
+        context_pack = context_pack | {
+            "trace_support": tuple(context_pack.get("trace_support") or ()) + (citation,),
+            "viewer_refs": tuple(context_pack.get("viewer_refs") or ()) + (viewer_ref,),
+        }
+        return response | {
+            "context_pack": context_pack,
+            "trace_support": trace_support,
+            "viewer_refs": viewer_refs,
+            "source_reference_provenance": (citation,),
+            "warnings": tuple(dict.fromkeys((*response.get("warnings", ()), "source_reference_mapping_not_final_authority"))),
+        }
+    return response
+
+
+def _source_reference_synthetic_support(store, conflict: dict) -> dict | None:
+    """Build query-scoped provenance from the configured raw occurrence BBoxes."""
+    synthetic = _synthetic_source_conflict_support(store, conflict)
+    if synthetic is not None:
+        return synthetic
+    bboxes = tuple(store.bboxes_for_refs(tuple(conflict.get("raw_provenance_bbox_ids") or ())))
+    if not bboxes:
+        return None
+    evidence = _synthetic_source_conflict_evidence(store, conflict, bboxes)
+    viewer_ref = {
+        "action": "viewer",
+        "evidence_id": evidence["evidence_id"],
+        "source_document_id": evidence.get("source_document_id"),
+        "page_numbers": evidence["page_numbers"],
+        "bbox_count": len(bboxes),
+        "can_resolve": True,
+    } | _authority_policy(store, evidence, can_resolve=True, conflict=conflict)
+    citation = evidence | {
+        "label": conflict.get("classification"),
+        "document_title": _document_title(store, _source_document_meta(store, conflict.get("source_document_id"))),
+        "viewer_ref": viewer_ref,
+        "bbox_count": len(bboxes),
+        "evidence_status": conflict.get("status"),
+    }
+    return {
+        "context_pack": {
+            "answer_evidence": (evidence,),
+            "supporting_context": (),
+            "excluded_results": (),
+            "final_citations": (),
+            "historical_citations": (),
+            "metadata_support": (),
+            "structural_support": (),
+            "trace_support": (),
+            "citation_payloads": (),
+            "viewer_refs": (viewer_ref,),
+            "validation_reasons": {evidence["evidence_id"]: "source_conflict_raw_provenance_bbox"},
         },
         "evidence": (evidence,),
         "citations": (_citation_with_authority(store, citation, conflict=conflict),),

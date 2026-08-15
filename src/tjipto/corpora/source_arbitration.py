@@ -92,6 +92,29 @@ def source_role_for_query(query: str, *, strategy: str = "generic", config=None)
     return decision.role if decision.explicit else None
 
 
+def source_reference_mappings_for_query(query: str, config=None) -> tuple[dict, ...]:
+    """Return configured printed-to-canonical mappings explicitly in *query*.
+
+    Mapping policy stays corpus-owned.  A mapping is usable only when its
+    printed reference and every configured context term are present, so a
+    bare reference can never silently acquire the anomaly's source meaning.
+    """
+    normalized = normalize_intent_text(query)
+    mappings = getattr(config, "setting", lambda *_: ())("source_reference_mappings", ()) if config is not None else ()
+
+    def present(value: object) -> bool:
+        phrase = normalize_intent_text(str(value or ""))
+        return bool(phrase and re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", normalized))
+
+    return tuple(
+        dict(mapping)
+        for mapping in mappings or ()
+        if isinstance(mapping, dict)
+        and present(mapping.get("raw_reference"))
+        and all(present(term) for term in mapping.get("context_terms") or ())
+    )
+
+
 def _near_source_scope_match(query: str, intent: dict) -> bool:
     tokens = normalize_intent_text(query).split()
     for index, token in enumerate(tokens):

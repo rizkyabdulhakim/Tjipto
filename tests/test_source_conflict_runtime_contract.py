@@ -155,12 +155,25 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertTrue(pasal_iii["citations"])
         self.assertEqual(pasal_ii["citations"][0]["citation"], "Pasal II")
         self.assertEqual(pasal_iii["citations"][0]["citation"], "Pasal II")
+        self.assertEqual(pasal_iii["trace_support"][0]["printed_reference"], "Pasal III")
+        self.assertEqual(pasal_iii["trace_support"][0]["canonical_reference"], "Pasal II")
+        self.assertEqual(pasal_iii["trace_support"][0]["source_role"], "amendment_4_historical")
+        self.assertEqual(pasal_iii["trace_support"][0]["bbox_count"], 2)
+        self.assertFalse(pasal_iii["trace_support"][0]["citation_final"])
+        self.assertTrue(pasal_iii["viewer_refs"])
         self.assertFalse(pasal_ii.get("source_conflict"))
         self.assertFalse(pasal_iii.get("source_conflict"))
         peralihan = self.service.ask("uud", "Pasal III Aturan Peralihan Perubahan Keempat")
         self.assertEqual(peralihan["route"], "legal_reference")
         self.assertIsNone(peralihan.get("source_conflict"))
         self.assertEqual(peralihan["citations"][0]["citation"], "Pasal III")
+        clarification = self.service.ask("uud", "Pasal III Perubahan Keempat UUD 1945")
+        self.assertEqual(clarification["status"], "clarification_required")
+        self.assertEqual(clarification["clarification_kind"], "source_scope")
+        self.assertEqual(
+            {row["resolution"]["source_reference"] for row in clarification["clarification_options"]},
+            {"ATURAN PERALIHAN", "Aturan Tambahan"},
+        )
 
     def test_inserted_bab_heading_queries_publish_the_heading_as_the_answer(self) -> None:
         for label in ("BAB IXA", "BAB XA", "BAB VIIA", "BAB VIIB", "BAB VIIIA"):

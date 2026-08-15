@@ -5,7 +5,6 @@ from typing import Any
 
 from tjipto.corpora.intent_config import contains_intent_phrase
 from tjipto.corpora.intent_config import intent_config_for
-from tjipto.retrieval.metadata import has_metadata_target, metadata_lookup
 from tjipto.retrieval.relations import has_relation_target
 from tjipto.corpora.source_arbitration import resolve_source_scope
 
@@ -59,18 +58,13 @@ def source_document_response(
         query, intent.get("instrument_effect_signals", ())
     ):
         return None
-    if has_metadata_target(query, strategy=strategy, config=config, store=store) and _has_metadata_field_target(query, intent):
-        return None
-    metadata_rows = metadata_lookup(store, query, 1)
-    if metadata_rows and metadata_rows[0].get("metadata_field") != "official_title":
-        return None
     source = next((row for row in store.source_documents if row.get("source_role") == scope.role), None)
     if source is None:
         reason = "source_document_not_found"
         return {
             "status": "insufficient_evidence",
             "route": "source_document",
-            "intent": "source_document_lookup",
+            "intent": "document_delivery",
             "corpus_id": corpus_id,
             "original_query": query,
             "normalized_query": query.strip(),
@@ -96,6 +90,7 @@ def source_document_response(
         "source_role": source.get("source_role"),
         "temporal_context": source.get("temporal_context"),
         "document_title": title,
+        "intent": "document_delivery",
         "viewer_target": {
             "action": "open_document",
             "source_document_id": source.get("source_document_id"),
@@ -104,7 +99,7 @@ def source_document_response(
     return {
         "status": "answer_ready",
         "route": "source_document",
-        "intent": "source_document_lookup",
+        "intent": "document_delivery",
         "corpus_id": corpus_id,
         "original_query": query,
         "normalized_query": query.strip(),
@@ -124,10 +119,3 @@ def source_document_response(
         "warnings": ("document_source_has_no_legal_citation",),
         "insufficient_reasons": (),
     }
-
-
-def _has_metadata_field_target(query: str, intent: dict) -> bool:
-    return any(
-        field != "official_title" and contains_intent_phrase(query, aliases)
-        for field, aliases in intent.get("metadata_fields", {}).items()
-    )

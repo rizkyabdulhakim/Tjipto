@@ -60,7 +60,7 @@ export interface TjiptoAskResponse {
   clarification_kind?: "legal_target" | "source_scope" | "temporal_scope" | "relation_operation" | "entity" | "concept_facet";
   question?: string;
   original_query?: string;
-  document?: { label?: string; source_status_label?: string; viewer_target?: ViewerTargetPayload };
+  document?: { label?: string; title?: string; legal_identity?: string; source_status_label?: string; viewer_target?: ViewerTargetPayload };
   clarification_options?: { context_target?: string; label?: string }[];
   supports?: SupportPayload[];
   support_groups?: SupportGroupPayload[];
@@ -254,8 +254,11 @@ export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Cit
   return {
     id: 1,
     publicTargetId: target,
-    documentTitle: source.label ?? "Dokumen sumber",
+    documentTitle: source.label ?? source.title ?? source.legal_identity ?? "Dokumen sumber",
     regulationType: "legal",
+    authorityKind: "document_source",
+    authorityLabel: "Sumber dokumen",
+    citationText: "Buka PDF sumber",
     viewerMode: "document",
     pageNumber: Number(source.viewer_target?.page_numbers?.[0] ?? 1),
     excerpt: "",
