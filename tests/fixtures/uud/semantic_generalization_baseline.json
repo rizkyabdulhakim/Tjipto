@@ -1,16 +1,16 @@
 {
   "evaluation_identity": {
     "case_count": 8,
-    "case_set_sha256": "d5b9827b0e84d61f5f3098723bbef379f5928ab42ed148293a491707e77dc56d",
-    "evaluator_sha256": "e2ce79224620046d6e62c38db1e5628078ec97db58cff8c68b0da8b1b9abde3a"
+    "case_set_sha256": "2b17f38d4acb745bb7fa6f74cb628f78a0ac5bb40bea893cef28c31a7558f565",
+    "evaluator_sha256": "512096a7b893bf30badc2e416065cbcd7107da4b2d6d641a935bef8b3b9c4930"
   },
   "metrics": {
     "hard_negative_fp": 0,
-    "orchestrated_mrr": 0.093882098293863,
+    "orchestrated_mrr": 0.218882098293863,
     "orchestrated_ndcg": 0.5768088439388757,
     "orchestrated_required_support_recall": 1.0,
     "query_drift_rate": 0.0,
-    "v0_mrr": 0.0902056277056277,
+    "v0_mrr": 0.2152056277056277,
     "v0_ndcg": 0.5524389662021524,
     "v0_required_support_recall": 0.875
   }

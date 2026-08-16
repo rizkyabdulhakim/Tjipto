@@ -7,6 +7,7 @@ from hashlib import sha256
 import json
 from math import log2
 from pathlib import Path
+import subprocess
 
 from tjipto.runtime.service import LegalRuntimeService
 
@@ -38,6 +39,23 @@ def _ranking(response: dict, expected: tuple[str, ...]) -> tuple[float, float, f
     return recall, mrr, ndcg
 
 
+def _support_fulfilled(response: dict, expected: tuple[str, ...]) -> bool:
+    """Require the server's typed sufficiency result for supported cases."""
+    if not expected:
+        return True
+    sufficiency = response.get("sufficiency") or {}
+    if sufficiency.get("status") != "complete":
+        return False
+    if sufficiency.get("missing_requirement_ids"):
+        return False
+    citations = {
+        str(row.get("citation") or "")
+        for row in response.get("matches", ())
+        if isinstance(row, dict)
+    }
+    return set(expected) <= citations
+
+
 def _measure(cases: list[dict]) -> dict:
     v0 = LegalRuntimeService(ROOT)
     planned = LegalRuntimeService(ROOT)
@@ -51,6 +69,13 @@ def _measure(cases: list[dict]) -> dict:
         base_metrics = _ranking(baseline, expected)
         planned_metrics = _ranking(orchestration, expected)
         drift = any("scope_invariant_violation" in reason for reason in orchestration.get("research_plan", ()).rejection_reasons) if orchestration.get("research_plan") else False
+        allowed_states = tuple(
+            str(value)
+            for value in case.get("expected_terminal_states", ())
+            if isinstance(value, str)
+        )
+        terminal_state_ok = orchestration["status"] in allowed_states
+        support_fulfilled = _support_fulfilled(orchestration, expected)
         rows.append({
             "case_id": case["case_id"],
             "family": case["family"],
@@ -58,6 +83,10 @@ def _measure(cases: list[dict]) -> dict:
             "orchestrated": {"required_support_recall": planned_metrics[0], "mrr": planned_metrics[1], "ndcg": planned_metrics[2]},
             "provider_calls": provider.calls,
             "status": orchestration["status"],
+            "allowed_terminal_states": allowed_states,
+            "terminal_state_ok": terminal_state_ok,
+            "required_support_fulfilled": support_fulfilled,
+            "sufficiency": orchestration.get("sufficiency"),
             "query_drift": drift,
             "hard_negative_fp": case["family"] == "out_of_corpus_hard_negative" and orchestration["status"] != "insufficient_evidence",
             "expected_status": case.get("expected_status"),
@@ -68,7 +97,8 @@ def _measure(cases: list[dict]) -> dict:
         row["case_id"]
         for row, case in zip(rows, cases)
         if row["hard_negative_fp"]
-        or case.get("expected_status") and row["status"] != case["expected_status"]
+        or not row["terminal_state_ok"]
+        or not row["required_support_fulfilled"]
         or case["family"] not in {"out_of_corpus_hard_negative", "negation_modality"} and row["provider_calls"] != 1
     ]
     return {
@@ -76,6 +106,10 @@ def _measure(cases: list[dict]) -> dict:
             "case_set_sha256": sha256(CASES.read_bytes()).hexdigest(),
             "evaluator_sha256": sha256(Path(__file__).read_bytes()).hexdigest(),
             "case_count": len(cases),
+        },
+        "runtime_identity": {
+            "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+            "tree": subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip(),
         },
         "rows": rows,
         "metrics": {

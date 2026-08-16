@@ -169,6 +169,9 @@ def main(argv: list[str] | None = None) -> int:
             report["status"] = "valid"
             if args.promotion_record:
                 promotion = {
+                    "schema_version": 2,
+                    "specification_kind": "tracked_dense_promotion_specification",
+                    "runtime_identity_binding": "post_build_attestation",
                     "status": "promoted",
                     "corpus_id": loaded.corpus_id,
                     "artifact_set_digest": loaded.artifact_set_digest,
@@ -178,12 +181,8 @@ def main(argv: list[str] | None = None) -> int:
                     "index_identity_record": loaded.identity_record(),
                     "model": loaded.model_identity.as_dict(),
                     "selected_max_length": selected_length,
-                    "ablations": report.get("ablations", {}),
+                    "ablations": _without_runtime_identity(report.get("ablations", {})),
                 }
-                if args.runtime_commit:
-                    promotion["runtime_commit"] = args.runtime_commit
-                if args.runtime_tree:
-                    promotion["runtime_tree_sha"] = args.runtime_tree
                 args.promotion_record.parent.mkdir(parents=True, exist_ok=True)
                 args.promotion_record.write_text(json.dumps(promotion, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     except (OSError, ValueError, RuntimeError, KeyError) as error:
@@ -288,6 +287,19 @@ def _select_candidate(ablations: dict[str, dict[str, Any]]) -> tuple[int, dict[s
             continue
         valid.append((int(raw_length), candidate))
     return min(valid, key=lambda item: item[0]) if valid else None
+
+
+def _without_runtime_identity(value: Any) -> Any:
+    """Keep Git identity in the post-build attestation, never in the spec."""
+    if isinstance(value, dict):
+        return {
+            key: _without_runtime_identity(item)
+            for key, item in value.items()
+            if key not in {"runtime_commit", "runtime_tree_sha"}
+        }
+    if isinstance(value, list):
+        return [_without_runtime_identity(item) for item in value]
+    return value
 
 
 if __name__ == "__main__":

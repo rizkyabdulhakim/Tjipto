@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.candidates import merge_ranked
-from tjipto.retrieval.dense import dense_configured, dense_runtime_available, dense_search
+from tjipto.retrieval.dense import DenseEmbeddingProvider, dense_configured, dense_runtime_available, dense_search
 from tjipto.retrieval.metadata import (
     filter_evidence,
     has_metadata_target,
@@ -31,6 +31,7 @@ def route_retrieval(
     metadata_filters: dict | None = None,
     relation_family: str | None = None,
     allow_structured_fallback: bool = False,
+    dense_provider: DenseEmbeddingProvider | None = None,
 ) -> dict:
     config = getattr(store, "config", None)
     query_strategy = getattr(config, "query_strategy", "generic")
@@ -344,6 +345,7 @@ def route_retrieval(
             rrf_k=int(retrieval_settings.get("rrf_k", 60)),
             filters=filters,
             preferred_source_role=scope.role,
+            provider=dense_provider,
         )
         filtered = filter_evidence(fused.get("matches", ()), filters)
         if "source_role" not in filters:

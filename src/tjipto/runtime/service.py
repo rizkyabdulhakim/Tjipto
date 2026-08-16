@@ -353,8 +353,18 @@ def _research_requirements_for_ask(
             )
             for index, entity in enumerate(entities, 1)
         )
-    if len(entities) > 1 and hinted("relation"):
-        relation_terms = _research_relation_terms(store, research, query, entities)
+    planner_requests_relation = any(
+        bool(getattr(need, "relation_traversal", False))
+        or str(getattr(need, "kind", "")).casefold() in {"relation", "multi_hop", "multi-hop"}
+        for need in information_needs
+    )
+    if len(entities) > 1 and (hinted("relation") or planner_requests_relation):
+        relation_terms = _research_relation_terms(
+            store,
+            research,
+            normalized if planner_requests_relation else query,
+            entities,
+        )
         return tuple(
             EvidenceRequirement(
                 f"relation_{index}",
@@ -367,7 +377,11 @@ def _research_requirements_for_ask(
                 # mentions cannot complete the relation.
                 support_terms=relation_terms,
                 authority_kinds=("normative_legal_text",),
-                hierarchy_depth=3,
+                # A planner-requested traversal may be supported by one
+                # source-backed provision whose legal-unit hierarchy is
+                # corpus-defined (Pasal 7B is depth 2).  The legacy typed
+                # relation route keeps its existing depth constraint.
+                hierarchy_depth=None if planner_requests_relation else 3,
                 allow_shared=len(entities) > 2,
             )
             for index, entity in enumerate(entities, 1)

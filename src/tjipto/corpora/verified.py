@@ -70,6 +70,10 @@ class CorpusPublicationService:
         semantic_attestation = _runtime_attestation(manifest, artifacts)
         retained_paths = {manifest[logical_key] for logical_key in runtime_required}
         frozen_artifacts = _freeze({path: value for path, value in artifacts.items() if path in retained_paths})
+        # The verified snapshot now owns the retained immutable rows.  Drop
+        # the decoded artifact map before freezing configuration so the
+        # mutable and immutable representations do not overlap in memory.
+        del artifacts
         frozen_manifest = _freeze(manifest)
         verified = replace(
             config,

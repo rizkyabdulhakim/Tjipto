@@ -57,7 +57,13 @@ class ClosureProvenanceContractTests(unittest.TestCase):
         }
         for name in ("release-one.json", "release-two.json"):
             self._write(backend / name, release)
-        sidecar = {"corpora": {"uud_1945": {"artifact_set_digest": "f" * 64}}}
+        sidecar = {
+            "corpora": {"uud_1945": {"artifact_set_digest": "f" * 64}},
+            "dense_promotion_attestation": {
+                "status": "valid",
+                "runtime_identity": {"commit": backend_identity["commit_sha"], "tree": backend_identity["tree_sha"]},
+            },
+        }
         self._write(backend / "release-one.sidecar.json", sidecar)
         self._write(backend / "release-two.sidecar.json", sidecar)
         self._write(backend / "release-comparison.json", {"run_identity_id": backend_identity["run_identity_id"], "archive_sha256_equal": True, "corpora_equal": True, "sidecars_equal": True, "forbidden_entry_count": 0})
@@ -70,6 +76,34 @@ class ClosureProvenanceContractTests(unittest.TestCase):
                 path.write_text("", encoding="utf-8")
             elif name == "pytest-resource-comparison.json":
                 self._write(path, closure.compare_pytest_resources(command, command, backend_identity))
+            elif name == "semantic-generalization.json":
+                self._write(path, {
+                    "status": "valid",
+                    "runtime_identity": {"commit": backend_identity["commit_sha"], "tree": backend_identity["tree_sha"]},
+                    "failures": [],
+                    "metrics": {"hard_negative_fp": 0, "query_drift_rate": 0},
+                })
+            elif name == "live-planner-integration.json":
+                self._write(path, {
+                    "status": "valid",
+                    "runtime_identity": {"commit": backend_identity["commit_sha"], "tree": backend_identity["tree_sha"]},
+                })
+            elif name == "dense-promotion-attestation.json":
+                self._write(path, {
+                    "status": "valid",
+                    "runtime_identity": {"commit": backend_identity["commit_sha"], "tree": backend_identity["tree_sha"]},
+                    "activation": {
+                        "dense_configured": True,
+                        "dense_runtime_available": True,
+                        "hybrid_active": True,
+                        "route": "hybrid",
+                        "contributing_lanes": ["bm25", "dense"],
+                        "fusion": {
+                            "algorithm": "rrf_rank_only",
+                            "lane_candidate_counts": {"bm25": 1, "dense": 1},
+                        },
+                    },
+                })
             else:
                 self._write(path, command)
         for name in closure.WEB_EVIDENCE:

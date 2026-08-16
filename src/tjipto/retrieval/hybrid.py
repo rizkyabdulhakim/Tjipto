@@ -163,6 +163,15 @@ def hybrid_search(
         "retrieval_degraded_reason": degraded,
         "candidate_count": len(hits),
         "hybrid_active": dense_executed,
+        "fusion": {
+            "algorithm": "rrf_rank_only",
+            "lane_candidate_counts": {"bm25": len(sparse_rows), "dense": len(dense_rows)},
+            "contributing_lanes": tuple(
+                lane
+                for lane in ("bm25", "dense")
+                if any(lane in (row.get("route_sources") or ()) for row in matches)
+            ),
+        },
     }
 
 

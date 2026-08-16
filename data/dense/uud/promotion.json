@@ -1,4 +1,7 @@
 {
+  "schema_version": 2,
+  "specification_kind": "tracked_dense_promotion_specification",
+  "runtime_identity_binding": "post_build_attestation",
   "ablations": {
     "1024": {
       "case_counts": {
@@ -87,9 +90,7 @@
         "dense_eligible_case_count": 35,
         "dense_eligible_case_ids_sha256": "a2221f02710f3130d38eab01e5bd864eb469b2a969a260d64f0f9ba3812eeb2f",
         "dense_eligible_queries_sha256": "0edc2232afc84e97d2b61db568689301bae4245dff3cae4de574917b2922065a",
-        "evaluator_sha256": "23f9f8fae4cb3c292b42cb44596b5764b433707cdb66f12f9e5146d660ba937a",
-        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
-        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
+        "evaluator_sha256": "23f9f8fae4cb3c292b42cb44596b5764b433707cdb66f12f9e5146d660ba937a"
       },
       "metrics": {
         "delta": {
@@ -139,9 +140,7 @@
           "retrieved_item_denominator": 163,
           "support_group_denominator": 35,
           "support_group_recall_at_k": 0.6
-        },
-        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
-        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
+        }
       },
       "status": "valid"
     },
@@ -270,9 +269,7 @@
         "dense_eligible_case_count": 35,
         "dense_eligible_case_ids_sha256": "a2221f02710f3130d38eab01e5bd864eb469b2a969a260d64f0f9ba3812eeb2f",
         "dense_eligible_queries_sha256": "0edc2232afc84e97d2b61db568689301bae4245dff3cae4de574917b2922065a",
-        "evaluator_sha256": "23f9f8fae4cb3c292b42cb44596b5764b433707cdb66f12f9e5146d660ba937a",
-        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
-        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
+        "evaluator_sha256": "23f9f8fae4cb3c292b42cb44596b5764b433707cdb66f12f9e5146d660ba937a"
       },
       "metrics": {
         "delta": {
@@ -322,9 +319,7 @@
           "retrieved_item_denominator": 163,
           "support_group_denominator": 35,
           "support_group_recall_at_k": 0.6
-        },
-        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
-        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
+        }
       },
       "status": "valid"
     },
@@ -421,9 +416,7 @@
         "dense_eligible_case_count": 35,
         "dense_eligible_case_ids_sha256": "a2221f02710f3130d38eab01e5bd864eb469b2a969a260d64f0f9ba3812eeb2f",
         "dense_eligible_queries_sha256": "0edc2232afc84e97d2b61db568689301bae4245dff3cae4de574917b2922065a",
-        "evaluator_sha256": "23f9f8fae4cb3c292b42cb44596b5764b433707cdb66f12f9e5146d660ba937a",
-        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
-        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
+        "evaluator_sha256": "23f9f8fae4cb3c292b42cb44596b5764b433707cdb66f12f9e5146d660ba937a"
       },
       "metrics": {
         "delta": {
@@ -473,9 +466,7 @@
           "retrieved_item_denominator": 163,
           "support_group_denominator": 35,
           "support_group_recall_at_k": 0.6
-        },
-        "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
-        "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b"
+        }
       },
       "status": "valid"
     }
@@ -551,8 +542,6 @@
     "tokenizer_sha256": "d0a4dfc17b8921889e27b073cd9d2a56365ae3a8da20b6ffb4586cac8ce8964c",
     "truncation_policy": "explicit_max_length"
   },
-  "runtime_commit": "ea98d54025a64e7d506c5e642709c3c2430c6e5f",
-  "runtime_tree_sha": "b635cb5dbec2b0fa48c1da10838cc57d003b129b",
   "selected_max_length": 256,
   "status": "promoted"
 }
