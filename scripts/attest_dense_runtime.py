@@ -31,6 +31,13 @@ def _sha256(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
 
 
+def _git_blob_sha256(commit: str, relative_path: str) -> str:
+    blob = subprocess.check_output(
+        ["git", "show", f"{commit}:{relative_path}"], cwd=ROOT
+    )
+    return sha256(blob).hexdigest()
+
+
 def _index_path(store, promotion: dict) -> Path:
     configured = store.config.setting("dense_index_path", None)
     if configured:
@@ -86,7 +93,7 @@ def attest(query: str) -> dict:
         "runtime_identity": {"commit": commit, "tree": tree},
         "promotion_spec": {
             "path": str(PROMOTION.relative_to(ROOT)).replace("\\", "/"),
-            "sha256": _sha256(PROMOTION),
+            "sha256": _git_blob_sha256(commit, str(PROMOTION.relative_to(ROOT)).replace("\\", "/")),
             "schema_version": promotion.get("schema_version"),
             "specification_kind": promotion.get("specification_kind"),
             "ablation_evidence_sha256": _ablation_digest(promotion),
