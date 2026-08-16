@@ -56,6 +56,19 @@ def _support_fulfilled(response: dict, expected: tuple[str, ...]) -> bool:
     return set(expected) <= citations
 
 
+def _runtime_identity() -> dict[str, str]:
+    """Bind reports when running from a checkout, but keep archive tests portable."""
+    identity: dict[str, str] = {}
+    for name, revision in (("commit", "HEAD"), ("tree", "HEAD^{tree}")):
+        try:
+            identity[name] = subprocess.check_output(
+                ["git", "rev-parse", revision], cwd=ROOT, text=True
+            ).strip()
+        except (OSError, subprocess.CalledProcessError):
+            identity[name] = "unavailable"
+    return identity
+
+
 def _measure(cases: list[dict]) -> dict:
     v0 = LegalRuntimeService(ROOT)
     planned = LegalRuntimeService(ROOT)
@@ -107,10 +120,7 @@ def _measure(cases: list[dict]) -> dict:
             "evaluator_sha256": sha256(Path(__file__).read_bytes()).hexdigest(),
             "case_count": len(cases),
         },
-        "runtime_identity": {
-            "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-            "tree": subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip(),
-        },
+        "runtime_identity": _runtime_identity(),
         "rows": rows,
         "metrics": {
             "v0_required_support_recall": average("v0", "required_support_recall"),

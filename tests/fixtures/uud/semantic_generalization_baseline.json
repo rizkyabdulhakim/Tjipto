@@ -2,7 +2,7 @@
   "evaluation_identity": {
     "case_count": 8,
     "case_set_sha256": "2b17f38d4acb745bb7fa6f74cb628f78a0ac5bb40bea893cef28c31a7558f565",
-    "evaluator_sha256": "512096a7b893bf30badc2e416065cbcd7107da4b2d6d641a935bef8b3b9c4930"
+    "evaluator_sha256": "5f70091311cfa96fbdee5269e3d24eb70d830e5508ef7f2e7f45831617214922"
   },
   "metrics": {
     "hard_negative_fp": 0,
