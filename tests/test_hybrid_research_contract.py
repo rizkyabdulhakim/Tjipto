@@ -522,7 +522,7 @@ class HybridResearchContractTest(unittest.TestCase):
                 "secret",
                 model="gemini-model",
                 endpoint=endpoint,
-            ).propose({"query": "hak pendidikan"})
+            ).propose({"query": "hak pendidikan", "intent": {"max_variants": 4}})
 
         payload = json.loads(opener.call_args.args[0].data.decode("utf-8"))
         content = payload["messages"][0]["content"]
@@ -533,6 +533,7 @@ class HybridResearchContractTest(unittest.TestCase):
             '"task_kind":',
             '"information_needs":',
             '"relation_traversal"',
+            "at most 3 provider variants",
             "Never return requirements",
         ):
             self.assertIn(fragment, content)

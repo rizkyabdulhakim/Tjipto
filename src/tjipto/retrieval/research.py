@@ -88,6 +88,9 @@ class OpenAICompatibleResearchPlanningProvider:
         self._timeout = timeout
 
     def propose(self, request: Mapping[str, object]) -> object:
+        request_intent = request.get("intent")
+        configured_max = request_intent.get("max_variants") if isinstance(request_intent, Mapping) else None
+        provider_variant_limit = max(0, configured_max - 1) if isinstance(configured_max, int) else 3
         payload = {
             "model": self._model,
             "temperature": 0,
@@ -104,6 +107,7 @@ class OpenAICompatibleResearchPlanningProvider:
                     '"description" (non-empty string), "query" (string or null), "concepts" '
                     '(array of strings), "kind" ("concept", "comparison", "procedure", or "relation"), '
                     'and "relation_traversal" (boolean). '
+                    f"Return at most {provider_variant_limit} provider variants; the server already retains the original query. "
                     "Return no other fields in those objects. Never return requirements, evidence, citations, "
                     "authority, source role, temporal status, or evidence validity; those remain server-owned.\n"
                     + json.dumps(dict(request), ensure_ascii=False, sort_keys=True)
