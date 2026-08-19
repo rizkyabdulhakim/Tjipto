@@ -327,30 +327,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     )
     write_jsonl(final_dir / "meaningful_support_units.jsonl", meaningful_support_units)
     write_jsonl(final_dir / "propositions.jsonl", propositions)
-    write_json_in_place(final_dir / "runtime_projection.json", build_runtime_projection(
-        evidence_registry=evidence,
-        bbox_registry=bbox_rows,
-        legal_units=legal_units,
-        chunks=chunks,
-        retrieval_units=retrieval_units,
-        graph_edges=graph_edges,
-        source_documents=list(source_documents.values()),
-        page_text_spans=page_text_spans,
-        document_metadata=document_metadata,
-        metadata_grounding=metadata_grounding,
-        metadata_grounding_registry=metadata_grounding_registry,
-        document_relations=document_relations,
-        article_amendment_relations=article_amendment_relations,
-        source_conflicts=source_conflicts,
-        meaningful_support_units=meaningful_support_units,
-        raw_source_spans=raw_source_spans,
-        word_bboxes=word_bboxes,
-    ))
     write_jsonl(final_dir / "promotion_decisions.jsonl", promotion_decisions)
     write_jsonl(final_dir / "validation_exceptions.jsonl", validation_exceptions)
     write_json(final_dir / "pdf_health_report.json", pdf_health_report)
-    refresh_manifest(final_dir, manifest)
-
     corpus_config = CorpusRegistry(repo_root).resolve("uud")
     validation_report = build_validation_report(
         chunks=chunks,
@@ -378,9 +357,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         intent_config=intent_config_for(getattr(corpus_config, "structured_strategy", "generic"), corpus_config),
     )
     write_json(final_dir / "validation_report.json", validation_report)
-
-    refresh_manifest(final_dir, manifest)
-    return {
+    build_counts = {
         "legal_units": len(legal_units),
         "chunks": len(chunks),
         "evidence": len(evidence),
@@ -391,6 +368,43 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         "source_objects": len(source_objects),
         "meaningful_support_units": len(meaningful_support_units),
     }
+    del (
+        corpus_config,
+        validation_report,
+        excluded_records,
+        graph_nodes,
+        pages,
+        metadata_assertions,
+        metadata_graph_edges,
+        promotion_decisions,
+        propositions,
+        pdf_health_report,
+        validation_exceptions,
+        source_objects,
+    )
+
+    write_json_in_place(final_dir / "runtime_projection.json", build_runtime_projection(
+        evidence_registry=evidence,
+        bbox_registry=bbox_rows,
+        legal_units=legal_units,
+        chunks=chunks,
+        retrieval_units=retrieval_units,
+        graph_edges=graph_edges,
+        source_documents=list(source_documents.values()),
+        page_text_spans=page_text_spans,
+        document_metadata=document_metadata,
+        metadata_grounding=metadata_grounding,
+        metadata_grounding_registry=metadata_grounding_registry,
+        document_relations=document_relations,
+        article_amendment_relations=article_amendment_relations,
+        source_conflicts=source_conflicts,
+        meaningful_support_units=meaningful_support_units,
+        raw_source_spans=raw_source_spans,
+        word_bboxes=word_bboxes,
+    ))
+
+    refresh_manifest(final_dir, manifest)
+    return build_counts
 
 
 def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:
