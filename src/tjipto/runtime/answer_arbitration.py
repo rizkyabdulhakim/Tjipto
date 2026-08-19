@@ -15,18 +15,20 @@ def document_open_requested(query: str, *, config: object) -> bool:
     return contains_intent_phrase(query, terms)
 
 
-def document_summary_query(query: str, *, strategy: str, config: object) -> str | None:
+def document_summary_query(query: str, *, strategy: str, config: object, semantics=None) -> str | None:
     """Normalize a summary operation into one adapter-owned retrieval query."""
+    if semantics is not None:
+        return getattr(semantics, "operation_query", None) if getattr(semantics, "operation", None) == "summarize" else None
     policy: dict = getattr(config, "setting", lambda *_: {})("document_summary", {}) or {}
     if not contains_intent_phrase(query, policy.get("query_terms", ())):
-        return None
-    if not contains_intent_phrase(query, policy.get("document_terms", ())):
         return None
     scope = resolve_source_scope(query, strategy=strategy, config=config)
     role_queries = policy.get("source_role_queries", {}) or {}
     if scope.explicit:
         normalized = role_queries.get(scope.role)
         return str(normalized) if normalized else None
+    if not contains_intent_phrase(query, policy.get("document_terms", ())):
+        return None
     normalized = policy.get("default_query")
     return str(normalized) if normalized else None
 
@@ -39,15 +41,25 @@ def source_document_response(
     has_resolved_target: bool,
     document_title: Callable[[object, dict], str],
     insufficient_answer: str,
+    semantics=None,
 ) -> dict | None:
     """Resolve only an explicit document-open operation to a verified source."""
     config = getattr(store, "config", None)
     strategy = getattr(config, "query_strategy", "generic")
     intent = intent_config_for(strategy, config)
-    if not document_open_requested(query, config=config):
-        return None
-    scope = resolve_source_scope(query, strategy=strategy, config=config)
-    if not scope.explicit or has_resolved_target:
+    if semantics is None:
+        if not document_open_requested(query, config=config):
+            return None
+        scope = resolve_source_scope(query, strategy=strategy, config=config)
+        scope_explicit = scope.explicit
+        scope_role = scope.role
+    else:
+        if getattr(semantics, "operation", None) != "open_document":
+            return None
+        source_scopes = tuple(getattr(semantics, "source_scopes", ()) or ())
+        scope_explicit = bool(source_scopes)
+        scope_role = getattr(semantics, "source_role", None) or (source_scopes[0] if source_scopes else None)
+    if has_resolved_target:
         return None
     if has_relation_target(query, strategy=strategy, config=config):
         return None
@@ -55,7 +67,43 @@ def source_document_response(
         query, intent.get("instrument_effect_signals", ())
     ):
         return None
-    source = next((row for row in store.source_documents if row.get("source_role") == scope.role), None)
+    if not scope_explicit:
+        documents = tuple(
+            {
+                "source_document_id": source.get("source_document_id"),
+                "source_role": source.get("source_role"),
+                "temporal_context": source.get("temporal_context"),
+                "document_title": document_title(store, source),
+                "intent": "document_delivery",
+                "viewer_target": {"action": "open_document", "source_document_id": source.get("source_document_id")},
+            }
+            for source in store.source_documents
+        )
+        return {
+            "status": "answer_ready",
+            "route": "source_document_collection",
+            "intent": "document_delivery",
+            "corpus_id": corpus_id,
+            "original_query": query,
+            "normalized_query": query.strip(),
+            "reason": None,
+            "answer_type": "source_document_collection",
+            "answer": "Naskah sumber terverifikasi tersedia.",
+            "document_source": None,
+            "document_sources": documents,
+            "citations": (),
+            "final_citations": (),
+            "historical_citations": (),
+            "metadata_support": (),
+            "structural_support": (),
+            "trace_support": (),
+            "viewer_refs": (),
+            "metadata_facts": (),
+            "evidence": (),
+            "warnings": ("document_sources_have_no_legal_citation",),
+            "insufficient_reasons": (),
+        }
+    source = next((row for row in store.source_documents if row.get("source_role") == scope_role), None)
     if source is None:
         reason = "source_document_not_found"
         return {

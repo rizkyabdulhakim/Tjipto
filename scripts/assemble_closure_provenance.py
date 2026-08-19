@@ -8,8 +8,10 @@ import sys
 
 try:
     from scripts.measure_command import compare_pytest_resources
+    from scripts.attest_dense_runtime import _hybrid_activation_valid
 except ModuleNotFoundError:  # Direct script execution places scripts/ on sys.path.
     from measure_command import compare_pytest_resources
+    from attest_dense_runtime import _hybrid_activation_valid
 
 
 BACKEND_GATES = frozenset((
@@ -17,13 +19,13 @@ BACKEND_GATES = frozenset((
     "source_text_evaluation", "meaningful_support_evaluation", "support_reachability_evaluation",
     "artifact_validate", "clean_tree", "artifact_rebuild",
     "ruff", "mypy", "bandit", "pip_check", "pip_audit", "pytest_run_2",
-    "live_planner_integration", "dense_promotion_attestation", "true_hybrid_activation",
+    "live_planner_integration", "dense_promotion_attestation", "true_hybrid_activation", "package_origin",
     "release_a", "release_b",
 ))
 WEB_GATES = frozenset(("toolchain", "web_test", "web_lint", "web_typecheck", "web_build", "web_smoke"))
 SHARED_FIELDS = (
     "repository", "workflow_ref", "workflow_sha", "workflow_repository", "workflow_file_path",
-    "commit_sha", "tree_sha", "parent_sha", "ref", "run_id", "run_attempt", "run_identity_id",
+    "commit_sha", "tree_sha", "parent_sha", "python_lock_sha256", "dense_lock_sha256", "ref", "run_id", "run_attempt", "run_identity_id",
 )
 JOB_FIELDS = ("job_key", "job_check_run_id", "job_identity_id")
 BACKEND_EVIDENCE = frozenset((
@@ -143,20 +145,15 @@ def _validate_stage_evidence(backend: Path, identity: dict) -> dict:
         raise ClosureError("semantic end-to-end contract failed")
     if planner.get("status") != "valid" or planner_identity != expected_identity:
         raise ClosureError("live planner evidence invalid or stale")
-    if dense.get("status") != "valid" or dense_identity != expected_identity:
+    if (
+        dense.get("schema_version") != 1
+        or dense.get("kind") != "post_build_dense_runtime_attestation"
+        or dense.get("status") != "valid"
+        or dense_identity != expected_identity
+    ):
         raise ClosureError("dense promotion attestation invalid or stale")
     activation = dense.get("activation") or {}
-    fusion = activation.get("fusion") or {}
-    if not (
-        activation.get("dense_configured") is True
-        and activation.get("dense_runtime_available") is True
-        and activation.get("hybrid_active") is True
-        and activation.get("route") == "hybrid"
-        and fusion.get("algorithm") == "rrf_rank_only"
-        and fusion.get("lane_candidate_counts", {}).get("bm25", 0) > 0
-        and fusion.get("lane_candidate_counts", {}).get("dense", 0) > 0
-        and {"bm25", "dense"} <= set(activation.get("contributing_lanes") or ())
-    ):
+    if not _hybrid_activation_valid(activation):
         raise ClosureError("true hybrid activation evidence failed")
     return {
         "semantic_end_to_end": semantic,

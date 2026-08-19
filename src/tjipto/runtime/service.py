@@ -12,7 +12,6 @@ from typing import Any
 from uuid import uuid4
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
-from tjipto.corpora.parser_dispatch import parse_legal_reference
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.strategy import StrategyRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
@@ -28,9 +27,7 @@ from tjipto.retrieval.metadata import (
     public_filters,
 )
 from tjipto.corpora.source_arbitration import (
-    resolve_source_scope,
     source_reference_mappings_for_query,
-    source_roles_for_query,
 )
 from tjipto.retrieval.relations import amendment_relation_target, has_relation_target
 from tjipto.retrieval.router import route_retrieval
@@ -90,13 +87,6 @@ def _integrity_failure(corpus_id: str, query: str, error_code: str | None) -> di
         "answer_type": "none",
         "answer": _ANSWER_TEMPLATES["insufficient"],
     }
-
-
-def _has_resolved_legal_target(corpus_id: str, query: str, *, config=None) -> bool:
-    try:
-        return any(parse_legal_reference(corpus_id, query, allow_roman_pasal=True, config=config).values())
-    except ValueError:
-        return False
 
 
 def _clarification_candidate_limit(store: EvidenceStore, query: str, limit: int) -> int:
@@ -172,7 +162,7 @@ def _research_intent_for_ask(
     # a comparison signal even when the wording is an unseen paraphrase.  The
     # lexical hint remains useful for queries without an explicit dimension,
     # but it is never the source of truth for entity coverage.
-    instrument_scopes = _instrument_scope_roles(store, query)
+    instrument_scopes = _instrument_scope_roles(getattr(semantics, "source_scopes", ()))
     comparison = (len(entity_dimensions) > 1 or len(instrument_scopes) > 1) and (
         configured("comparison") or configured("authority") or configured("relation")
         or len(instrument_scopes) > 1
@@ -197,6 +187,8 @@ def _semantic_scope_covered(
     requirements: tuple[EvidenceRequirement, ...],
 ) -> bool:
     """Ensure a research plan retains explicit, corpus-backed query dimensions."""
+    if getattr(semantics, "operation", "search") == "compare" and metadata_lookup(store, query, 1):
+        return True
     # Authoritative exact/quotation routes already preserve the parsed legal
     # target and do not create a decomposed research plan.  Their direct
     # resolver is the semantic owner, so entity mentions in the quoted text
@@ -227,7 +219,7 @@ def _semantic_scope_covered(
     if len(entity_labels) > 1 and not entity_labels <= planned_entities:
         return False
 
-    instrument_roles = set(_instrument_scope_roles(store, query))
+    instrument_roles = set(_instrument_scope_roles(getattr(semantics, "source_scopes", ())))
     planned_roles = {
         str(requirement.source_role)
         for requirement in requirements
@@ -272,6 +264,8 @@ def _research_requirements_for_ask(
     """Derive typed requirements from corpus-backed semantic dimensions."""
     if getattr(semantics, "requested_function", "retrieval") != "retrieval":
         return ()
+    if getattr(semantics, "operation", "search") == "compare" and metadata_lookup(store, query, 1):
+        return ()
     config = getattr(store, "config", None)
     research: dict = getattr(config, "setting", lambda *_: {})("research", {}) or {}
     planning_terms = tuple(
@@ -305,7 +299,7 @@ def _research_requirements_for_ask(
     hints = research.get("semantic_hints", {}) if isinstance(research, dict) else {}
     entities = _research_entities(research, normalized)
     all_entities = tuple(_research_entity_labels(research))
-    instrument_roles = _instrument_scope_roles(store, query)
+    instrument_roles = _instrument_scope_roles(getattr(semantics, "source_scopes", ()))
 
     def hinted(name: str) -> bool:
         values = hints.get(name, ()) if isinstance(hints, dict) else ()
@@ -520,15 +514,11 @@ def _procedure_family(research: dict, query: str, entities: tuple[str, ...]) -> 
     return None
 
 
-def _instrument_scope_roles(store: EvidenceStore, query: str) -> tuple[str, ...]:
-    """Return every corpus-configured historical instrument named by a query."""
+def _instrument_scope_roles(source_scopes: tuple[str, ...]) -> tuple[str, ...]:
+    """Filter the source scopes already resolved by the control contract."""
     return tuple(
         role
-        for role in source_roles_for_query(
-            query,
-            strategy=getattr(store.config, "structured_strategy", "generic"),
-            config=store.config,
-        )
+        for role in source_scopes
         if str(role) not in {"current_consolidated", "original_historical"}
     )
 
@@ -1072,8 +1062,8 @@ class LegalRuntimeService:
                 **_empty_citation_fields(),
             }
         metadata_filters = dict(filters or {})
-        scope = resolve_source_scope(query, strategy=getattr(store.config, "query_strategy", "generic"), config=store.config)
-        requested_role = source_role or (scope.role if scope.explicit else None)
+        semantics = interpret_query(store, corpus_id, query, available_corpora=self.registry.corpus_ids())
+        requested_role = source_role or (semantics.source_scopes[0] if semantics.source_scopes else None)
         if requested_role is not None:
             metadata_filters["source_role"] = requested_role
         routed = self._route_retrieval(corpus_id, query, store, metadata_filters=metadata_filters)
@@ -1440,10 +1430,12 @@ class LegalRuntimeService:
         source_text = source_text_response(store, corpus_id, query)
         if source_text is not None:
             return source_text
+        semantics = interpret_query(store, corpus_id, query, available_corpora=self.registry.corpus_ids())
         normalized_summary = document_summary_query(
             query,
             strategy=getattr(store.config, "query_strategy", "generic"),
             config=store.config,
+            semantics=semantics,
         )
         if normalized_summary and normalized_summary != query:
             result = self.ask(
@@ -1455,7 +1447,29 @@ class LegalRuntimeService:
                 evidence_requirements,
             )
             return result | {"original_query": query, "normalized_query": normalized_summary}
-        semantics = interpret_query(store, corpus_id, query, available_corpora=self.registry.corpus_ids())
+        if semantics.temporal_scope == "historical_pre_change":
+            reason = "historical_normative_text_and_deletion_provenance_required"
+            return project_response(
+                {
+                    "status": "no_results",
+                    "route": "historical_pre_change",
+                    "intent": "historical_text",
+                    "corpus_id": corpus_id,
+                    "original_query": query,
+                    "normalized_query": query.strip(),
+                    "matches": (),
+                    "reason": reason,
+                },
+                AnswerDecision(
+                    "insufficient_evidence",
+                    "historical_text",
+                    "none",
+                    _answer_templates(store)["insufficient"],
+                    empty_context_pack(reason),
+                    insufficient_reasons=(reason,),
+                    reason_code=reason,
+                ),
+            )
         anomaly = _source_anomaly_response(store, corpus_id, query)
         if anomaly:
             return anomaly
@@ -1463,9 +1477,10 @@ class LegalRuntimeService:
             store,
             corpus_id,
             query,
-            has_resolved_target=_has_resolved_legal_target(corpus_id, query, config=store.config),
+            has_resolved_target=bool(semantics.legal_references),
             document_title=_document_title,
             insufficient_answer=_answer_templates(store)["insufficient"],
+            semantics=semantics,
         )
         if source_document:
             return source_document
@@ -1476,9 +1491,9 @@ class LegalRuntimeService:
         amendment_target = amendment_relation_target(store, query, relation_family=relation_family)
         instrument = None if (
             semantics.requested_function == "temporal_quotation"
-            or _has_resolved_legal_target(corpus_id, query, config=store.config)
+            or bool(semantics.legal_references)
             or amendment_target.get("mode") is not None
-            or len(_instrument_scope_roles(store, query)) > 1
+            or len(_instrument_scope_roles(semantics.source_scopes)) > 1
         ) else _instrument_intent_context(store, query)
         if instrument:
             row, route, reason = instrument
@@ -1733,7 +1748,9 @@ class LegalRuntimeService:
         # replace a source-owned typed route (relations, structured lookup,
         # exact citation, or metadata/navigation).
         routed = typed_routed
-        if research_routed is not None and not _is_authoritative_retrieval_route(typed_routed):
+        if research_routed is not None and (
+            semantics.operation == "analyze" or not _is_authoritative_retrieval_route(typed_routed)
+        ):
             routed = research_routed
         _apply_clarification_constraint(store, routed, resolution)
         if resolution.get("entity"):
@@ -1771,7 +1788,7 @@ class LegalRuntimeService:
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
         routed["original_query"] = query
-        decision = None if clarification else clarification_decision(store, semantics, routed)
+        decision = None if clarification or semantics.requires_comparison else clarification_decision(store, semantics, routed)
         if decision:
             return routed | _clarification_response(routed, decision)
         if routed.get("route") == "document_relation":

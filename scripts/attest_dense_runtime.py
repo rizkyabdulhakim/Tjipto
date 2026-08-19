@@ -51,6 +51,30 @@ def _ablation_digest(promotion: dict) -> str:
     return sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _hybrid_activation_valid(activation: object) -> bool:
+    if not isinstance(activation, dict):
+        return False
+    fusion = activation.get("fusion")
+    if not isinstance(fusion, dict):
+        return False
+    counts = fusion.get("lane_candidate_counts")
+    lanes = activation.get("contributing_lanes")
+    return (
+        activation.get("dense_configured") is True
+        and activation.get("dense_runtime_available") is True
+        and activation.get("hybrid_active") is True
+        and activation.get("route") == "hybrid"
+        and fusion.get("algorithm") == "rrf_rank_only"
+        and isinstance(counts, dict)
+        and type(counts.get("bm25")) is int
+        and counts["bm25"] > 0
+        and type(counts.get("dense")) is int
+        and counts["dense"] > 0
+        and isinstance(lanes, (list, tuple))
+        and {"bm25", "dense"} <= set(lanes)
+    )
+
+
 def attest(query: str) -> dict:
     commit = _git("rev-parse", "HEAD")
     tree = _git("rev-parse", "HEAD^{tree}")
@@ -73,18 +97,19 @@ def attest(query: str) -> dict:
     index_path = _index_path(store, promotion)
     configured = dense_configured(store)
     runtime_available = dense_runtime_available(store)
+    activation = {
+        "dense_configured": configured,
+        "dense_runtime_available": runtime_available,
+        "hybrid_active": bool(route.get("hybrid_active")),
+        "route": route.get("route"),
+        "reason": route.get("reason") or route.get("retrieval_degraded_reason"),
+        "fusion": fusion,
+        "contributing_lanes": lanes,
+    }
     valid = (
         promotion.get("specification_kind") == "tracked_dense_promotion_specification"
         and not any(key in promotion for key in ("runtime_commit", "runtime_tree_sha"))
-        and configured
-        and runtime_available
-        and route.get("dense_configured") is True
-        and route.get("hybrid_active") is True
-        and route.get("route") == "hybrid"
-        and fusion.get("algorithm") == "rrf_rank_only"
-        and fusion.get("lane_candidate_counts", {}).get("bm25", 0) > 0
-        and fusion.get("lane_candidate_counts", {}).get("dense", 0) > 0
-        and {"bm25", "dense"} <= set(lanes)
+        and _hybrid_activation_valid(activation)
     )
     return {
         "schema_version": 1,
@@ -108,15 +133,7 @@ def attest(query: str) -> dict:
             "normalization": index.model_identity.normalization,
         },
         "model": index.model_identity.as_dict(),
-        "activation": {
-            "dense_configured": configured,
-            "dense_runtime_available": runtime_available,
-            "hybrid_active": bool(route.get("hybrid_active")),
-            "route": route.get("route"),
-            "reason": route.get("reason") or route.get("retrieval_degraded_reason"),
-            "fusion": fusion,
-            "contributing_lanes": lanes,
-        },
+        "activation": activation,
         "query_sha256": sha256(query.encode("utf-8")).hexdigest(),
         "raw_credentials_logged": False,
     }
@@ -131,18 +148,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_only:
         try:
             report = json.loads(args.report.read_text(encoding="utf-8"))
-            activation = report.get("activation") or {}
-            valid = (
-                report.get("status") == "valid"
-                and activation.get("dense_configured") is True
-                and activation.get("dense_runtime_available") is True
-                and activation.get("hybrid_active") is True
-                and activation.get("route") == "hybrid"
-                and (activation.get("fusion") or {}).get("algorithm") == "rrf_rank_only"
-            )
-            if not valid:
+            if (
+                report.get("schema_version") != 1
+                or report.get("kind") != "post_build_dense_runtime_attestation"
+                or report.get("status") != "valid"
+                or report.get("runtime_identity") != {
+                    "commit": _git("rev-parse", "HEAD"),
+                    "tree": _git("rev-parse", "HEAD^{tree}"),
+                }
+                or not _hybrid_activation_valid(report.get("activation"))
+            ):
                 raise ValueError("dense_hybrid_activation_invalid")
-        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
             report = {"schema_version": 1, "kind": "post_build_dense_runtime_attestation", "status": "invalid", "reason": f"{type(error).__name__}:{error}"}
     else:
         try:

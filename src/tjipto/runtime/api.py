@@ -145,6 +145,18 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
                 else {"title": source.get("document_title"), "viewer_target": viewer_target}
             ),
         }
+    if result.get("document_sources") is not None:
+        documents = []
+        for source in result["document_sources"]:
+            target = service.register_public_target(corpus_id, {"evidence_id": None, "source_document_id": source.get("source_document_id")})
+            viewer_target = _public_target(target, "open_document", (1,), True)
+            document = service.catalog_document_for_source(source.get("source_role"))
+            documents.append(
+                project_legal_document(document, service.catalog_documents(), viewer_target=viewer_target)
+                if document is not None
+                else {"title": source.get("document_title"), "viewer_target": viewer_target}
+            )
+        return {"kind": "documents", "status": result.get("status"), "documents": tuple(documents)}
     return {
         "kind": "answer",
         "status": result.get("status"),

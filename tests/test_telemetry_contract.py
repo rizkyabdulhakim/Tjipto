@@ -6,12 +6,13 @@ import math
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import unittest
 
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.runtime.service import LegalRuntimeService
-from tjipto.telemetry import EVENT_ATTRIBUTES, Telemetry, event_record
+from tjipto.telemetry import CI_GATES, EVENT_ATTRIBUTES, Telemetry, event_record
 
 
 class TelemetryContractTest(unittest.TestCase):
@@ -62,6 +63,26 @@ class TelemetryContractTest(unittest.TestCase):
     def test_measured_pytest_gates_are_closed_ci_values(self) -> None:
         for gate in ("pytest_run_1", "pytest_run_2", "answer_evaluation", "research_retrieval_evaluation", "semantic_generalization_evaluation"):
             self.assertEqual(event_record("ci_gate", gate=gate, status="passed", duration_ms=1)["attributes"]["gate"], gate)
+
+    def test_workflow_gates_are_approved_telemetry_values(self) -> None:
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow_gates = set(re.findall(r"--gate\s+([a-z0-9_]+)", workflow))
+        self.assertTrue(workflow_gates <= CI_GATES, sorted(workflow_gates - CI_GATES))
+
+    def test_gate_a_preflight_order_is_fail_fast(self) -> None:
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        positions = {
+            gate: workflow.index(f"--gate {gate}")
+            for gate in (
+                "dense_promotion_attestation",
+                "true_hybrid_activation",
+                "package_origin",
+                "pip_audit",
+                "toolchain",
+                "pytest_run_1",
+            )
+        }
+        self.assertEqual([positions[gate] for gate in positions], sorted(positions.values()))
 
     def test_all_runtime_hybrid_and_relation_routes_are_telemetry_safe(self) -> None:
         for route, status in (

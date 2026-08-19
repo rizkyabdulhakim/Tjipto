@@ -24,6 +24,8 @@ class ClosureProvenanceContractTests(unittest.TestCase):
             "commit_sha": "b" * 40,
             "tree_sha": "c" * 40,
             "parent_sha": "d" * 40,
+            "python_lock_sha256": "f" * 64,
+            "dense_lock_sha256": "0" * 64,
             "ref": "refs/heads/main",
             "run_id": "123",
             "run_attempt": "1",
@@ -90,6 +92,8 @@ class ClosureProvenanceContractTests(unittest.TestCase):
                 })
             elif name == "dense-promotion-attestation.json":
                 self._write(path, {
+                    "schema_version": 1,
+                    "kind": "post_build_dense_runtime_attestation",
                     "status": "valid",
                     "runtime_identity": {"commit": backend_identity["commit_sha"], "tree": backend_identity["tree_sha"]},
                     "activation": {
@@ -152,6 +156,16 @@ class ClosureProvenanceContractTests(unittest.TestCase):
             duplicate = self._identity("web", "101")
             self._write(web / "run-identity.json", duplicate)
             with self.assertRaisesRegex(closure.ClosureError, "duplicate backend/web"):
+                closure.assemble(backend, web, artifact_uploads=self.uploads)
+
+    def test_dense_attestation_schema_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            backend, web = self._evidence(Path(temporary))
+            attestation_path = backend / "dense-promotion-attestation.json"
+            attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+            attestation["kind"] = "untrusted"
+            self._write(attestation_path, attestation)
+            with self.assertRaisesRegex(closure.ClosureError, "dense promotion attestation invalid or stale"):
                 closure.assemble(backend, web, artifact_uploads=self.uploads)
 
     def test_mixed_run_attempts_fail_closed(self) -> None:

@@ -157,7 +157,7 @@ def _environment_report(corpus_ids: list[str] | None = None) -> dict:
             "manifest_sha256": _sha256(config.manifest_path),
             "schema_version": manifest.get("schema_version"),
         }
-    files = {name: _sha256(root / name) for name in ("requirements.lock", "apps/web/package-lock.json", "data/corpus_registry.json")}
+    files = {name: _sha256(root / name) for name in ("requirements.lock", "requirements-dense.lock", "apps/web/package-lock.json", "data/corpus_registry.json")}
     identity = _execution_identity(root)
     return identity | {
         "commit_sha": _command_output(root, "git", "rev-parse", "HEAD"),
@@ -170,6 +170,7 @@ def _environment_report(corpus_ids: list[str] | None = None) -> dict:
         "event": os.environ.get("GITHUB_EVENT_NAME"),
         "job_name": os.environ.get("GITHUB_JOB"),
         "python_lock_sha256": files["requirements.lock"],
+        "dense_lock_sha256": files["requirements-dense.lock"],
         "node_version": _command_output(root, "node", "--version"),
         "npm_version": _command_output(root, "npm", "--version"),
         "package_lock_sha256": files["apps/web/package-lock.json"],
@@ -201,6 +202,8 @@ def _execution_identity(root: Path | None = None) -> dict:
         "commit_sha": os.environ.get("GITHUB_SHA") or _command_output(root, "git", "rev-parse", "HEAD"),
         "tree_sha": _command_output(root, "git", "rev-parse", "HEAD^{tree}"),
         "parent_sha": _command_output(root, "git", "rev-parse", "HEAD^"),
+        "python_lock_sha256": _sha256(root / "requirements.lock"),
+        "dense_lock_sha256": _sha256(root / "requirements-dense.lock"),
         "ref": os.environ.get("GITHUB_REF") or _command_output(root, "git", "symbolic-ref", "-q", "HEAD"),
         "branch": os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME") or _command_output(root, "git", "branch", "--show-current"),
         "run_id": os.environ.get("GITHUB_RUN_ID"),
@@ -219,6 +222,8 @@ def _execution_identity(root: Path | None = None) -> dict:
             "commit_sha",
             "tree_sha",
             "parent_sha",
+            "python_lock_sha256",
+            "dense_lock_sha256",
             "ref",
             "run_id",
             "run_attempt",
@@ -246,6 +251,8 @@ def _validate_ci_identity(identity: dict) -> None:
         "commit_sha",
         "tree_sha",
         "parent_sha",
+        "python_lock_sha256",
+        "dense_lock_sha256",
         "ref",
         "run_id",
         "run_attempt",

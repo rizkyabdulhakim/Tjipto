@@ -88,11 +88,12 @@ _INTEGRITY_REASONS = frozenset(
         "trusted_manifest_mismatch", "trusted_manifest_missing", "unknown_corpus", "unknown_field", "unsupported_schema",
     }
 )
-_CI_GATES = frozenset(
+CI_GATES = frozenset(
     {
         "compileall", "unittest", "pytest", "pytest_run_1", "pytest_run_2", "retrieval_evaluation", "research_retrieval_evaluation", "semantic_generalization_evaluation", "answer_evaluation", "source_text_evaluation", "meaningful_support_evaluation", "support_reachability_evaluation", "artifact_validate", "artifact_rebuild", "ruff", "mypy",
         "bandit", "pip_check", "pip_audit", "clean_tree", "release_validation", "web_test", "web_lint", "web_typecheck",
-        "web_build", "web_smoke", "toolchain", "release_a", "release_b",
+        "web_build", "web_smoke", "toolchain", "package_origin", "release_a", "release_b", "dense_promotion_attestation",
+        "true_hybrid_activation", "live_planner_integration",
     }
 )
 
@@ -140,7 +141,7 @@ def _valid_attribute(event: str, key: str, value: Any, registry: CorpusRegistry 
     if event == "integrity_failure":
         return value in _INTEGRITY_REASONS
     if event == "ci_gate":
-        return value in _CI_GATES if key == "gate" else value in {"passed", "failed"} if key == "status" else value >= 0
+        return value in CI_GATES if key == "gate" else value in {"passed", "failed"} if key == "status" else value >= 0
     return value in {"passed", "failed"} if key == "status" else value >= 0 if key == "forbidden_entry_count" else bool(_ARCHIVE_SHA256.fullmatch(value))
 
 

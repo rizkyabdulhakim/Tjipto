@@ -10,7 +10,7 @@ from tjipto.retrieval.metadata import (
     normalize_filters,
     public_filters,
 )
-from tjipto.corpora.source_arbitration import resolve_source_scope
+from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.relations import amendment_relation_lookup, has_relation_target, relation_lookup
 from tjipto.retrieval.service import RetrievalService
@@ -38,9 +38,10 @@ def route_retrieval(
     structured_strategy = getattr(config, "structured_strategy", "generic")
     normalized = normalize_query(query, strategy=query_strategy, config=config)
     scope = resolve_source_scope(normalized["normalized_query"], strategy=query_strategy, config=config)
+    named_roles = source_roles_for_query(normalized["normalized_query"], strategy=query_strategy, config=config)
     filters = normalize_filters(metadata_filters, config=config)
     if "source_role" not in filters:
-        if scope.explicit:
+        if scope.explicit and len(named_roles) <= 1:
             filters = dict(filters) | {"source_role": scope.role}
     applied_filters = public_filters(filters)
     corpus_supported = store is not None

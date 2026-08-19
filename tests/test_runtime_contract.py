@@ -1509,6 +1509,87 @@ class RuntimeContractTest(unittest.TestCase):
         for query in ("Apa isi Perubahan Pertama UUD?", "ringkasan UUD amandemen pertama"):
             self.assertNotEqual(self.service.ask("uud", query).get("answer_type"), "source_document", query)
 
+    def test_deterministic_legal_operations_keep_explicit_scope_and_evidence_rules(self) -> None:
+        store = self.service._store("uud")
+        semantics = {
+            query: interpret_query(store, "uud", query)
+            for query in (
+                "berikan naskah UUD original",
+                "ringkas amandemen keempat",
+                "amandemen pertama vs kedua",
+                "perbedaan penandatangan amandemen pertama dan kedua",
+                "Pasal 16 sebelum dihapus bunyinya apa",
+                "BAB setelah BAB IX",
+                "legal opinion tentang HAM dari Pasal 28",
+            )
+        }
+        self.assertEqual(semantics["berikan naskah UUD original"].operation, "open_document")
+        self.assertEqual(semantics["berikan naskah UUD original"].source_scopes, ("original_historical",))
+        self.assertEqual(semantics["ringkas amandemen keempat"].operation, "summarize")
+        comparison = semantics["amandemen pertama vs kedua"]
+        self.assertEqual(comparison.operation, "compare")
+        self.assertEqual(comparison.source_scopes, ("amendment_1_historical", "amendment_2_historical"))
+        self.assertTrue(comparison.requires_multiple_supports)
+        metadata_comparison = semantics["perbedaan penandatangan amandemen pertama dan kedua"]
+        self.assertEqual(metadata_comparison.targets, ("signatory_metadata",))
+        historical = semantics["Pasal 16 sebelum dihapus bunyinya apa"]
+        self.assertEqual(historical.temporal_scope, "historical_pre_change")
+        self.assertTrue(historical.requires_multiple_supports)
+        self.assertTrue(historical.requires_graph)
+        navigation_semantics = semantics["BAB setelah BAB IX"]
+        self.assertEqual(navigation_semantics.operation, "navigate")
+        self.assertEqual(navigation_semantics.targets, ("BAB IX",))
+        self.assertEqual(navigation_semantics.navigation_operation, "next")
+        analysis_semantics = semantics["legal opinion tentang HAM dari Pasal 28"]
+        self.assertEqual(analysis_semantics.operation, "analyze")
+        self.assertTrue(analysis_semantics.requires_multiple_supports)
+        self.assertTrue(analysis_semantics.requires_decomposition)
+
+        collection = self.service.ask("uud", "berikan saya naskah UUD")
+        self.assertEqual(collection["route"], "source_document_collection")
+        self.assertEqual(
+            {row["source_role"] for row in collection["document_sources"]},
+            {"original_historical", "amendment_1_historical", "amendment_2_historical", "amendment_3_historical", "amendment_4_historical", "current_consolidated"},
+        )
+        self.assertEqual(self.service.ask("uud", "ringkas amandemen keempat")["route"], "instrument_resolved_answerable")
+        compared = self.service.ask("uud", "amandemen pertama vs kedua", limit=30)
+        self.assertEqual(compared["status"], "answer_ready")
+        self.assertEqual(
+            {row["source_role"] for row in compared["evidence"]},
+            {"amendment_1_historical", "amendment_2_historical"},
+        )
+        metadata = self.service.ask("uud", "perbedaan penandatangan amandemen pertama dan kedua")
+        self.assertEqual(metadata["status"], "answer_ready")
+        self.assertEqual(
+            {row["source_role"] for row in metadata["metadata_support"]},
+            {"amendment_1_historical", "amendment_2_historical"},
+        )
+        historical_response = self.service.ask("uud", "Pasal 16 sebelum dihapus bunyinya apa")
+        self.assertEqual(historical_response["status"], "insufficient_evidence")
+        self.assertEqual(historical_response["reason"], "historical_normative_text_and_deletion_provenance_required")
+        navigation = self.service.ask("uud", "BAB setelah BAB IX")
+        self.assertEqual(navigation["route"], "structural_navigation")
+        self.assertIn("BAB IXA", navigation["answer"])
+        analysis = self.service.ask("uud", "legal opinion tentang HAM dari Pasal 28")
+        self.assertIsNotNone(analysis.get("research_plan"))
+        self.assertTrue(analysis["citations"])
+
+    def test_control_plane_resolves_source_roles_once_and_publication_reuses_semantics(self) -> None:
+        store = self.service._store("uud")
+        from tjipto.corpora import source_arbitration
+
+        with patch.object(source_arbitration, "source_roles_for_query", wraps=source_arbitration.source_roles_for_query) as roles:
+            semantics = interpret_query(store, "uud", "berikan naskah UUD original")
+        self.assertEqual(roles.call_count, 1)
+        self.assertEqual(semantics.source_scope_state, "explicit_resolved")
+        self.assertEqual(semantics.operation_query, None)
+
+        with patch("tjipto.runtime.answer_arbitration.resolve_source_scope", side_effect=AssertionError("duplicate source resolution")):
+            opened = self.service.ask("uud", "berikan naskah UUD original")
+            summarized = self.service.ask("uud", "ringkas amandemen keempat")
+        self.assertEqual(opened["route"], "source_document")
+        self.assertEqual(summarized["route"], "instrument_resolved_answerable")
+
     def test_unresolved_scoped_document_never_falls_back_to_consolidated(self) -> None:
         result = self.service.ask("uud", "Apa isi amandement pertama UUD?")
         self.assertEqual(result["status"], "insufficient_evidence")
@@ -1525,6 +1606,14 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["kind"], "document")
         self.assertEqual(result["document"]["viewer_target"]["action"], "open_document")
         self.assertNotIn("supports", result)
+
+        collection = handle_request("uud", "ask", {"query": "berikan saya naskah UUD"}, service=self.service)
+        self.assertEqual(collection["kind"], "documents")
+        self.assertEqual(len(collection["documents"]), 6)
+        self.assertEqual({row["document_role"] for row in collection["documents"]}, {"Naskah Asli", "Amandemen", "Naskah Konsolidasi"})
+        self.assertTrue(any("Perubahan Pertama" in row["title"] for row in collection["documents"]))
+        self.assertTrue(any("Perubahan Keempat" in row["title"] for row in collection["documents"]))
+        self.assertTrue(all(row["viewer_target"]["action"] == "open_document" for row in collection["documents"]))
 
     def test_two_artifact_declared_document_scopes_route_to_their_document_relation(self) -> None:
         result = self.service.ask("uud", "apakah perubahan kedua mengamandemen naskah asli")

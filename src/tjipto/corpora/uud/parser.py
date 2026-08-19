@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from tjipto.corpora.uud.specs import UUD_INSERTED_BAB_PREDECESSORS
+
 
 UUD_LEGAL_TOKEN_RE = re.compile(
     r"(?m)^(BAB\s+[IVXLCDM]+[A-Z]?|ATURAN PERALIHAN|ATURAN TAMBAHAN|PEMBUKAAN|Pasal\s+(?:[0-9]+[A-Z]?|[IVX]+)|\([0-9]+\)|UNDANG-?UNDANG DASAR)"
@@ -171,18 +173,22 @@ def uud_label_keys(value: object) -> set[str]:
 
 
 def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
-    target = parse_uud_pasal_reference(text, allow_roman=True)
+    target = parse_uud_pasal_reference(text, allow_roman=True) or parse_uud_bab_reference(text)
     if not target:
         return None
     normalized = normalize_uud_query_reference(text).casefold().rstrip("?!. ")
-    article = r"pasal\s+\d+(?:[a-z])?\b(?:\s+ayat\s+\(?\d+\)?)?"
+    article = r"(?:pasal\s+\d+(?:[a-z])?\b(?:\s+ayat\s+\(?\d+\)?)?|bab\s+[ivxlcdm]+[a-z]?)"
     if re.search(
         rf"^(?:setelah|sesudah)\s+{article}(?:\s+(?:pasal\s+berapa|apa))?$|"
         rf"\bpasal\s+(?:apa\s+)?berikutnya\s+(?:setelah|sesudah)\s+{article}\b|"
-        rf"\b(?:apa\s+)?(?:ketentuan|pasal)\s+(?:setelah|sesudah)\s+{article}\b",
+        rf"\b(?:apa\s+)?(?:ketentuan|pasal|bab)\s+(?:setelah|sesudah)\s+{article}\b",
         normalized,
     ):
-        return target, "next"
+        inserted = next(
+            (label for label, predecessors in UUD_INSERTED_BAB_PREDECESSORS.items() if target in predecessors),
+            None,
+        )
+        return (inserted, "direct") if inserted else (target, "next")
     if re.search(
         rf"^(?:sebelum|sebelumnya)\s+{article}(?:\s+(?:pasal\s+berapa|apa))?$|"
         rf"\b(?:apa\s+)?(?:ketentuan|pasal)\s+(?:sebelum|sebelumnya)\s+{article}\b",

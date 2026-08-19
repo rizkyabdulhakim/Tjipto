@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from tjipto.corpora.intent_config import intent_config_for, normalize_intent_text
-from tjipto.corpora.source_arbitration import resolve_source_scope
+from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
 from tjipto.corpora.parser_dispatch import normalize_metadata_intent, parse_legal_reference
 
 
@@ -74,11 +74,14 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
     if field is None and requested_role is None and not _matching_signatories(store, query):
         return ()
     scope = resolve_source_scope(query, strategy=strategy, config=config)
-    role = scope.role if scope.explicit else None
+    roles = source_roles_for_query(query, strategy=strategy, config=config)
+    role = scope.role if scope.explicit and len(roles) <= 1 else None
     requires_penetapan = _asks_enactment_context((query or "").casefold(), intent)
     rows = []
     grounding_by_id = {row["metadata_grounding_id"]: row for row in store.metadata_grounding}
     for row in store.document_metadata:
+        if roles and row.get("source_role") not in roles:
+            continue
         if role is not None and row.get("source_role") != role:
             continue
         if requires_penetapan and row.get("field_statuses", {}).get("penetapan") != "grounded":

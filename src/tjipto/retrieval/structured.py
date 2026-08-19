@@ -445,7 +445,7 @@ def _navigation_rows(
             row
             for row in store.legal_units
             if row.get("unit_label", "").casefold() == label.casefold()
-            and row.get("structural_role") in {"provision", "subprovision"}
+            and row.get("structural_role") in {"division", "provision", "subprovision"}
             and (preferred_role is None or row.get("source_role") == preferred_role)
         ),
         None,
@@ -466,6 +466,13 @@ def _navigation_rows(
         )
     if source is None:
         return ()
+    if direction == "direct":
+        rows = [
+            row | {"candidate_type": "structural_navigation_candidate", "navigation_direction": direction}
+            for row in store.evidence
+            if row.get("legal_unit_id") == source.get("legal_unit_id") and row.get("status") == "final" and store.bboxes_for(row["evidence_id"])
+        ]
+        return tuple(rows[:limit])
     # Article sequence may cross a chapter boundary, while paragraph sequence
     # remains inside its article.  Artifact order is the source-derived order
     # for this document; sibling_order alone resets at each parent.
@@ -477,6 +484,17 @@ def _navigation_rows(
             and row.get("parent_legal_unit_id") == source.get("parent_legal_unit_id")
             and row.get("structural_role") == "subprovision"
         ]
+    elif source.get("structural_role") == "division":
+        ordered = sorted(
+            (
+                row
+                for row in store.legal_units
+                if row.get("source_document_id") == source.get("source_document_id")
+                and row.get("structural_role") == "division"
+                and row.get("parent_legal_unit_id") == source.get("parent_legal_unit_id")
+            ),
+            key=lambda row: (row.get("page_start") or 0, row.get("sibling_order") or 0, row.get("legal_unit_id") or ""),
+        )
     else:
         ordered = [
             row

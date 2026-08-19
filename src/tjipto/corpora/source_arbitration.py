@@ -12,6 +12,7 @@ from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_f
 class SourceScopeDecision:
     role: str | None
     state: str
+    roles: tuple[str, ...] = ()
 
     @property
     def explicit(self) -> bool:
@@ -46,11 +47,11 @@ def source_roles_for_query(query: str, *, strategy: str = "generic", config=None
                 forms = _ordinal_forms(ordinal)
                 forms_pattern = "|".join(forms)
                 if re.search(
-                    rf"\b(?:dan|atau|serta|maupun|,|/)\s*(?:perubahan|amandemen)?\s*(?:ke[-\s]*)?(?:{forms_pattern})\b",
+                    rf"\b(?:dan|atau|serta|maupun|vs|versus|,|/)\s*(?:perubahan|amandemen)?\s*(?:ke[-\s]*)?(?:{forms_pattern})\b",
                     query or "",
                     re.IGNORECASE,
                 ) or re.search(
-                    rf"(?:^|[,\s])(?:{forms_pattern})\s*(?:dan|atau|serta|maupun|,|/)\b",
+                    rf"(?:^|[,\s])(?:{forms_pattern})\s*(?:dan|atau|serta|maupun|vs|versus|,|/)\b",
                     query or "",
                     re.IGNORECASE,
                 ):
@@ -74,17 +75,17 @@ def _ordinal_forms(label: str) -> tuple[str, ...]:
 def resolve_source_scope(query: str, *, strategy: str = "generic", config=None) -> SourceScopeDecision:
     roles = source_roles_for_query(query, strategy=strategy, config=config)
     if roles:
-        return SourceScopeDecision(roles[0], "explicit_resolved")
+        return SourceScopeDecision(roles[0], "explicit_resolved", roles)
     intent = intent_config_for(strategy, config)
     if contains_intent_phrase(query, intent.get("temporal_current_terms", ())):
-        return SourceScopeDecision(getattr(config, "preferred_source_role", None), "generic_post_amendment")
+        return SourceScopeDecision(getattr(config, "preferred_source_role", None), "generic_post_amendment", roles)
     if any(pattern.search(query or "") for pattern in intent["unresolved_source_scope_patterns"]):
-        return SourceScopeDecision(None, "unresolved")
+        return SourceScopeDecision(None, "unresolved", roles)
     if contains_intent_phrase(query, intent.get("instrument_source_signals", ())):
-        return SourceScopeDecision(None, "unresolved")
+        return SourceScopeDecision(None, "unresolved", roles)
     if _near_source_scope_match(query, intent):
-        return SourceScopeDecision(None, "unresolved")
-    return SourceScopeDecision(getattr(config, "preferred_source_role", None), "unscoped")
+        return SourceScopeDecision(None, "unresolved", roles)
+    return SourceScopeDecision(getattr(config, "preferred_source_role", None), "unscoped", roles)
 
 
 def source_role_for_query(query: str, *, strategy: str = "generic", config=None) -> str | None:

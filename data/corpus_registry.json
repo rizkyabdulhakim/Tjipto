@@ -367,7 +367,8 @@
     },
     "document_summary": {
       "query_terms": [
-        "ringkasan"
+        "ringkasan",
+        "ringkas"
       ],
       "document_terms": [
         "uud",
@@ -602,6 +603,7 @@
       "document_target_words": [
         "uud",
         "perubahan",
+        "amandemen",
         "amendment",
         "naskah"
       ],
