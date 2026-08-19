@@ -119,6 +119,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     )
     for span in page_text_spans:
         span.setdefault("metadata_grounding_ids", [])
+    extracted_source_objects = tuple(
+        item for extraction in extracted_pdfs.values() for item in extraction.source_objects
+    )
     legal_units = build_legal_units_from_sources(
         pages_by_source=pages_by_source,
         source_documents=source_documents,
@@ -131,6 +134,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         pdf_lines_by_source=pdf_lines_by_source,
         word_bboxes=word_bboxes,
     )
+    # Source-object rows are small; release the extraction graph and line cache
+    # before metadata and graph construction to keep rebuild RSS bounded.
+    del extracted_pdfs, pdf_lines_by_source
     metadata_grounding = build_metadata_block_grounding(
         pages_by_source=pages_by_source,
         source_documents=source_documents,
@@ -193,14 +199,12 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
     )
     source_objects = build_source_object_inventory(
-        source_objects=tuple(item for extraction in extracted_pdfs.values() for item in extraction.source_objects),
+        source_objects=extracted_source_objects,
         page_text_spans=page_text_spans,
         raw_source_spans=raw_source_spans,
         source_documents=source_documents,
     )
-    # Source-object classification and evidence geometry are complete.  The
-    # extraction graph and line cache have no downstream consumer.
-    del extracted_pdfs, pdf_lines_by_source
+    del extracted_source_objects
     propositions = build_propositions(
         legal_units=legal_units,
         evidence=evidence,
