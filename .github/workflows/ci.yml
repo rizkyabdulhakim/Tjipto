@@ -96,7 +96,7 @@ jobs:
       - name: Validate current-checkout package origin
         run: python scripts/measure_command.py --gate package_origin --report reports/ci-gates.jsonl -- python scripts/validate_toolchain.py --package-origin
       - name: Audit hash-pinned dense dependency closure
-        run: python scripts/measure_command.py --gate pip_audit --report reports/ci-gates.jsonl -- python -m pip_audit --no-deps --strict -r requirements.lock -r requirements-dense.lock -f json -o reports/pip-audit.json
+        run: python scripts/measure_command.py --gate pip_audit --report reports/ci-gates.jsonl -- python -m pip_audit --disable-pip --no-deps --strict -r requirements.lock -r requirements-dense.lock -f json -o reports/pip-audit.json
       - name: Validate canonical toolchain
         run: python scripts/measure_command.py --gate toolchain --report reports/ci-gates.jsonl -- python scripts/validate_toolchain.py
       - name: Record environment identity
