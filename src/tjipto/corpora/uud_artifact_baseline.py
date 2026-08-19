@@ -96,6 +96,7 @@ def _refresh_trusted_manifest_digest(repo_root: Path, final_dir: Path) -> None:
 
 
 def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
+    _release_build_memory()
     try:
         import fitz
     except ImportError as error:  # pragma: no cover
