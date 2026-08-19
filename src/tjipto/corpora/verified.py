@@ -69,11 +69,13 @@ class CorpusPublicationService:
         artifacts = _verify_artifacts(config.manifest_path.parent.resolve(), manifest, runtime_required)
         semantic_attestation = _runtime_attestation(manifest, artifacts)
         retained_paths = {manifest[logical_key] for logical_key in runtime_required}
-        frozen_artifacts = _freeze({path: value for path, value in artifacts.items() if path in retained_paths})
-        # The verified snapshot now owns the retained immutable rows.  Drop
-        # the decoded artifact map before freezing configuration so the
-        # mutable and immutable representations do not overlap in memory.
+        retained_artifacts = {path: artifacts[path] for path in retained_paths}
+        # Keep only the runtime projection while freezing it.  The verifier
+        # decoded every manifest artifact for attestation; retaining that
+        # full map during the deep immutable conversion needlessly raises RSS.
         del artifacts
+        frozen_artifacts = _freeze(retained_artifacts)
+        del retained_artifacts
         frozen_manifest = _freeze(manifest)
         verified = replace(
             config,
