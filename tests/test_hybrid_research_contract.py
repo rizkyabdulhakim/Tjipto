@@ -22,6 +22,61 @@ def _hit(evidence_id: str, lane: str, rank: int, score: float) -> RetrievalHit:
 
 
 class HybridResearchContractTest(unittest.TestCase):
+    def test_stage8_9_operations_bind_requirements_to_shared_sufficiency(self) -> None:
+        service = LegalRuntimeService()
+        store = service._store("uud")
+        cases = (
+            (
+                "amandemen pertama vs kedua",
+                {"instrument_amendment_1_historical", "instrument_amendment_2_historical"},
+            ),
+            (
+                "perbedaan penandatangan amandemen pertama dan kedua",
+                {"signatory_amendment_1_historical", "signatory_amendment_2_historical"},
+            ),
+            (
+                "Pasal 16 sebelum dihapus bunyinya apa",
+                {"historical_normative_text", "deletion_provenance"},
+            ),
+            (
+                "legal opinion tentang HAM dari Pasal 28",
+                {"analysis_issue_provisions", "analysis_limitations_exceptions"},
+            ),
+        )
+        for query, expected_ids in cases:
+            semantics = interpret_query(store, "uud", query)
+            requirements = _research_requirements_for_ask(store, semantics, query)
+            self.assertEqual({item.requirement_id for item in requirements}, expected_ids, query)
+            response = service.ask("uud", query, limit=30)
+            self.assertEqual(response["sufficiency"]["status"], "complete", query)
+            self.assertEqual(
+                set(response["sufficiency"]["fulfilled_requirement_ids"]),
+                expected_ids,
+                query,
+            )
+        metadata_requirements = _research_requirements_for_ask(
+            store,
+            interpret_query(store, "uud", cases[1][0]),
+            cases[1][0],
+        )
+        self.assertEqual({item.metadata_field for item in metadata_requirements}, {"signatories"})
+        evidence = EvidenceSet(
+            ({"evidence_id": "mandatory"},),
+            (("mandatory", ("mandatory",)),),
+            ("allowed",),
+            (("allowed", "verified_support_missing"),),
+        )
+        self.assertEqual(
+            assess_sufficiency(
+                evidence,
+                (
+                    EvidenceRequirement("mandatory", evidence_ids=("mandatory",)),
+                    EvidenceRequirement("allowed", evidence_ids=("allowed",), allow_partial=True),
+                ),
+            ).status,
+            "partial",
+        )
+
     def test_heldout_semantics_derive_typed_requirements_without_runtime_fixture_data(self) -> None:
         service = LegalRuntimeService()
         store = service._store("uud")

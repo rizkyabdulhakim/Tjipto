@@ -348,6 +348,31 @@
         "mengubah",
         "pasal"
       ],
+      "operation_requirements": {
+        "change_relation_signals": [
+          "mengubah",
+          "diubah",
+          "pasal yang berubah",
+          "pasal yang diubah"
+        ],
+        "analyze": {
+          "source_role": "current_consolidated",
+          "limitations_by_target": {
+            "Pasal 28": [
+              "Pasal 28J"
+            ]
+          },
+          "relation_signals": [
+            "sejarah",
+            "historis",
+            "sebelum",
+            "sesudah",
+            "hubungan",
+            "kaitan",
+            "relasi"
+          ]
+        }
+      },
       "max_variants": 4,
       "max_rounds": 2,
       "max_candidates": 30,

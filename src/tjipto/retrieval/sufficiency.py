@@ -36,6 +36,7 @@ class EvidenceRequirement:
     allow_partial: bool = False
     allow_shared: bool = False
     shareable_with: tuple[str, ...] = ()
+    metadata_field: str | None = None
 
     @property
     def typed(self) -> bool:
@@ -55,6 +56,7 @@ class EvidenceRequirement:
             or self.hierarchy_depth is not None
             or self.evidence_ids
             or self.legal_unit_ids
+            or self.metadata_field
         )
 
     def accepts(self, row: dict) -> bool:
@@ -71,6 +73,8 @@ class EvidenceRequirement:
         if self.evidence_ids and str(row.get("evidence_id")) not in set(self.evidence_ids):
             return False
         if self.legal_unit_ids and str(row.get("legal_unit_id")) not in set(self.legal_unit_ids):
+            return False
+        if self.metadata_field is not None and row.get("metadata_field") != self.metadata_field:
             return False
         text = _semantic_text(row)
         if self.required_entities:
@@ -97,7 +101,8 @@ class EvidenceRequirement:
                 return False
         if self.legal_target:
             haystack = " ".join(
-                str(row.get(key) or "") for key in ("citation", "label", "legal_unit_id", "hierarchy")
+                str(row.get(key) or "")
+                for key in ("citation", "label", "legal_unit_id", "hierarchy", "quoted_text")
             ).casefold()
             if str(self.legal_target).casefold() not in haystack:
                 return False
@@ -250,7 +255,7 @@ def assess_sufficiency(
     missing = evidence_set.missing_requirement_ids
     if not missing:
         status = "complete"
-    elif partial_allowed and fulfilled and all(requirement.allow_partial for requirement in requirements if requirement.requirement_id in missing):
+    elif fulfilled and all(requirement.allow_partial for requirement in requirements if requirement.requirement_id in missing):
         status = "partial"
     else:
         status = "insufficient"
