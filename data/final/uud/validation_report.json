@@ -707,7 +707,7 @@
       "source_anomaly_trace": 4
     }
   },
-  "validated_artifact_set_digest": "5b380eb0468c6bad27fbb549ce71e5f64d43bae2bdb414deef1e5576148f193b",
+  "validated_artifact_set_digest": "8283227f5c8cb68ad24d21360c6a45858dcd1bdef1ba59178e1f08f0ae03fcea",
   "required_health": {
     "status": "complete",
     "required_section_count": 15,
