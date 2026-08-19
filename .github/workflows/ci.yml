@@ -23,7 +23,7 @@ jobs:
       - name: Install dense promotion environment
         run: |
           python -m pip install --require-hashes --upgrade -r requirements.lock
-          python -m pip install --require-hashes --upgrade -r requirements-dense.lock
+          python -m pip install --require-hashes --no-deps --upgrade -r requirements-dense.lock
           python -m pip install --no-deps --no-build-isolation -e .
       - name: Validate current-checkout package origin
         run: python scripts/validate_toolchain.py --package-origin

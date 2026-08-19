@@ -71,6 +71,7 @@ class TelemetryContractTest(unittest.TestCase):
 
     def test_gate_a_preflight_order_is_fail_fast(self) -> None:
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("--require-hashes --no-deps --upgrade -r requirements-dense.lock", workflow)
         positions = {
             gate: workflow.index(f"--gate {gate}")
             for gate in (

@@ -18,7 +18,7 @@ test = [
   "pytest>=9.1,<10",
 ]
 dense = [
-  "torch==2.13.0",
+  "torch==2.13.0+cpu",
   "transformers==5.15.0",
   "sentencepiece==0.2.1",
 ]
