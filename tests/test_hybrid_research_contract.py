@@ -7,7 +7,12 @@ import unittest
 from unittest.mock import patch
 
 from tjipto.retrieval.hybrid import RetrievalHit, hybrid_search, reciprocal_rank_fusion
-from tjipto.retrieval.research import ResearchIntent, execute_research, plan_research
+from tjipto.retrieval.research import (
+    OpenAICompatibleResearchPlanningProvider,
+    ResearchIntent,
+    execute_research,
+    plan_research,
+)
 from tjipto.retrieval.sufficiency import EvidenceRequirement, EvidenceSet, SufficiencyAssessment, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.query_semantics import interpret_query
@@ -482,6 +487,56 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertNotIn("evidence_ids", seen["constraints"])
         self.assertFalse(plan.requirements)
         self.assertIn("provider_requirements_forbidden", plan.rejection_reasons)
+
+    def test_openai_compatible_planner_prompt_declares_validated_json_contract(self) -> None:
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return None
+
+            def read(self):
+                return json.dumps({
+                    "choices": [{
+                        "message": {
+                            "content": json.dumps({
+                                "variants": [{"query": "hak pendidikan"}],
+                                "retrieval_lanes": ["hybrid"],
+                                "task_kind": "multiple_supports",
+                                "information_needs": [{
+                                    "description": "hak atas pendidikan",
+                                    "query": "hak pendidikan",
+                                    "concepts": ["pendidikan"],
+                                    "kind": "concept",
+                                    "relation_traversal": False,
+                                }],
+                            }),
+                        },
+                    }],
+                }).encode("utf-8")
+
+        endpoint = "https://planner.example/v1/chat/completions"
+        with patch("tjipto.retrieval.research.urlopen", return_value=Response()) as opener:
+            proposal = OpenAICompatibleResearchPlanningProvider(
+                "secret",
+                model="gemini-model",
+                endpoint=endpoint,
+            ).propose({"query": "hak pendidikan"})
+
+        payload = json.loads(opener.call_args.args[0].data.decode("utf-8"))
+        content = payload["messages"][0]["content"]
+        self.assertEqual(payload["response_format"], {"type": "json_object"})
+        for fragment in (
+            '"variants":',
+            '"retrieval_lanes":',
+            '"task_kind":',
+            '"information_needs":',
+            '"relation_traversal"',
+            "Never return requirements",
+        ):
+            self.assertIn(fragment, content)
+        self.assertEqual(proposal["retrieval_lanes"], ["hybrid"])
 
     def test_coordinated_ordinals_preserve_reordered_instrument_scope(self) -> None:
         from tjipto.corpora.source_arbitration import source_roles_for_query

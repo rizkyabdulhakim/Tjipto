@@ -94,8 +94,18 @@ class OpenAICompatibleResearchPlanningProvider:
             "messages": [{
                 "role": "user",
                 "content": (
-                    "Return JSON only. Propose retrieval planning data, never legal truth, authority, "
-                    "source role, temporal status, citations, or evidence validity.\n"
+                    "Return exactly one JSON object and no markdown or prose. "
+                    "Use only these top-level keys and exact shapes: "
+                    '"variants": an array of objects with a non-empty string "query" (never strings); '
+                    '"retrieval_lanes": a non-empty array containing only "sparse", "dense", or "hybrid"; '
+                    '"task_kind": exactly one of "retrieval", "multiple_supports", "comparison", '
+                    '"decomposition", or "relation_traversal"; '
+                    '"information_needs": an array of objects whose allowed fields are '
+                    '"description" (non-empty string), "query" (string or null), "concepts" '
+                    '(array of strings), "kind" ("concept", "comparison", "procedure", or "relation"), '
+                    'and "relation_traversal" (boolean). '
+                    "Return no other fields in those objects. Never return requirements, evidence, citations, "
+                    "authority, source role, temporal status, or evidence validity; those remain server-owned.\n"
                     + json.dumps(dict(request), ensure_ascii=False, sort_keys=True)
                 ),
             }],
