@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from hashlib import sha256
+import gc
 import json
 import sys
 
@@ -50,6 +51,19 @@ from tjipto.grounding.promotion import build_promotion_decisions
 from tjipto.ingestion.pdf.health import build_pdf_health_report
 from tjipto.ingestion.pdf.source_objects import build_source_object_inventory
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
+
+
+def _release_build_memory() -> None:
+    """Return released builder arenas before the RSS-gated runtime projection."""
+    gc.collect()
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        import ctypes
+
+        ctypes.CDLL(None).malloc_trim(0)
+    except (AttributeError, OSError):
+        return
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
@@ -382,6 +396,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         validation_exceptions,
         source_objects,
     )
+    _release_build_memory()
 
     write_json_in_place(final_dir / "runtime_projection.json", build_runtime_projection(
         evidence_registry=evidence,
