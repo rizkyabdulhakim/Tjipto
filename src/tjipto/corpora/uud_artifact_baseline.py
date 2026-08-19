@@ -39,6 +39,7 @@ from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_gro
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import build_validation_report, validate_uud_artifact_dir
+from tjipto.core.manifest import artifact_set_digest
 from tjipto.corpora.uud.policy.authority import apply_authority_contract, apply_retrieval_semantics
 from tjipto.corpora.uud.policy.relations import apply_graph_relation_policy
 from tjipto.contracts.relations import materialize_inverse_edges
@@ -370,7 +371,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     }
     del (
         corpus_config,
-        validation_report,
         excluded_records,
         graph_nodes,
         pages,
@@ -404,6 +404,12 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     ))
 
     refresh_manifest(final_dir, manifest)
+    validation_report["validated_artifact_set_digest"] = artifact_set_digest(
+        {"files": manifest["files"]}, exclude=("validation_report.json",)
+    )
+    write_json(final_dir / "validation_report.json", validation_report)
+    refresh_manifest(final_dir, manifest)
+    del validation_report
     return build_counts
 
 

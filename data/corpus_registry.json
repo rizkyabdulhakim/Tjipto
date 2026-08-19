@@ -5,7 +5,7 @@
     "dense_promotion_path": "data/dense/uud/promotion.json",
     "dense_retrieval": true,
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "50206cdee74b16e804fe6ff6325f7f3aaaf90c2f949553bb7e2a2fec66ce716b",
+    "manifest_sha256": "219e9a327713df77936ac7e88a14844a5c26463f81564798f57eab2f2552209c",
     "runtime_required_artifacts": [
       "runtime_projection",
       "validation_report",

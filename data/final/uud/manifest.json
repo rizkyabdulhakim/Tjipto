@@ -652,7 +652,7 @@
       "format": "json",
       "artifact_schema": 7,
       "bytes": 25592,
-      "sha256": "90c1ec995915961b342bccbd728a959825a943f42459cec119f754f19e6d3b6d"
+      "sha256": "8b658001e94618dfdcc216780e38f6c3aad9e0b82d04137977afdb70d0199f9f"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",
