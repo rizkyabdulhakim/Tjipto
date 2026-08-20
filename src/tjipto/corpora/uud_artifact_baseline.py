@@ -112,6 +112,10 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     try:
         extracted_pdfs = {source_id: extract_pdf(doc, source_id) for source_id, doc in docs.items()}
         pdf_lines_by_source = {source_id: extraction.lines for source_id, extraction in extracted_pdfs.items()}
+        extracted_source_objects = tuple(
+            item for extraction in extracted_pdfs.values() for item in extraction.source_objects
+        )
+        del extracted_pdfs
         word_bboxes = [
             row
             for source_id, doc in docs.items()
@@ -135,9 +139,6 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     )
     for span in page_text_spans:
         span.setdefault("metadata_grounding_ids", [])
-    extracted_source_objects = tuple(
-        item for extraction in extracted_pdfs.values() for item in extraction.source_objects
-    )
     legal_units = build_legal_units_from_sources(
         pages_by_source=pages_by_source,
         source_documents=source_documents,
@@ -150,9 +151,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         pdf_lines_by_source=pdf_lines_by_source,
         word_bboxes=word_bboxes,
     )
-    # Source-object rows are small; release the extraction graph and line cache
-    # before metadata and graph construction to keep rebuild RSS bounded.
-    del extracted_pdfs, pdf_lines_by_source
+    # Release the line cache before metadata and graph construction to keep
+    # rebuild RSS bounded; source-object rows remain for the inventory stage.
+    del pdf_lines_by_source
     metadata_grounding = build_metadata_block_grounding(
         pages_by_source=pages_by_source,
         source_documents=source_documents,
