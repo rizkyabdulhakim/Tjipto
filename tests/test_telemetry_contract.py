@@ -94,6 +94,9 @@ class TelemetryContractTest(unittest.TestCase):
         self.assertNotIn("Profile suspected memory owners", workflow)
         self.assertNotIn("Profile per-test RSS", workflow)
         self.assertNotIn("Profile Python allocations", workflow)
+        self.assertEqual(workflow.count("ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}"), 4)
+        self.assertNotIn('"$GITHUB_SHA"', workflow)
+        self.assertIn('TJIPTO_RESEARCH_PLANNING_TIMEOUT_SECONDS: "30"', workflow)
         for gate in ("unittest", "pytest_run_1", "pytest_run_2"):
             self.assertEqual(workflow.count(f"--gate {gate}"), 1)
 

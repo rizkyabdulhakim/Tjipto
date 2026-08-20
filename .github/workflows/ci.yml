@@ -12,6 +12,9 @@ concurrency:
   group: ci-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
+env:
+  TJIPTO_EXACT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   dense:
     runs-on: ubuntu-24.04
@@ -21,6 +24,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 2
+          ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12.10"
@@ -65,6 +69,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 2
+          ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12.10"
@@ -124,9 +129,10 @@ jobs:
           TJIPTO_RESEARCH_PLANNING_API_KEY: ${{ secrets.TJIPTO_RESEARCH_PLANNING_API_KEY }}
           TJIPTO_RESEARCH_PLANNING_MODEL: ${{ secrets.TJIPTO_RESEARCH_PLANNING_MODEL }}
           TJIPTO_RESEARCH_PLANNING_BASE_URL: ${{ secrets.TJIPTO_RESEARCH_PLANNING_BASE_URL }}
+          TJIPTO_RESEARCH_PLANNING_TIMEOUT_SECONDS: "30"
         run: python scripts/measure_command.py --gate live_planner_integration --report reports/ci-gates.jsonl -- python scripts/verify_live_planner.py --report reports/live-planner-integration.json
       - name: Grounded-answer evaluation
-        run: python scripts/measure_command.py --gate answer_evaluation --report reports/ci-gates.jsonl --result-report reports/answer-evaluation-command.json -- python scripts/evaluate_uud_answers.py --runtime-commit "$GITHUB_SHA" --report reports/answer-evaluation.json
+        run: python scripts/measure_command.py --gate answer_evaluation --report reports/ci-gates.jsonl --result-report reports/answer-evaluation-command.json -- python scripts/evaluate_uud_answers.py --runtime-commit "$TJIPTO_EXACT_HEAD_SHA" --report reports/answer-evaluation.json
       - name: Source-text reachability evaluation
         run: python scripts/measure_command.py --gate source_text_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_source_text_reachability.py --report reports/source-text-evaluation.json
       - name: Meaningful-support evaluation
@@ -173,7 +179,7 @@ jobs:
       - name: Verify exact archive (first build)
         run: |
           set -euo pipefail
-          python scripts/measure_command.py --gate release_a --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" --dense-attestation reports/dense-promotion-attestation.json | tee "$RUNNER_TEMP/tjipto-release-one.json"'
+          python scripts/measure_command.py --gate release_a --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$TJIPTO_EXACT_HEAD_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" --dense-attestation reports/dense-promotion-attestation.json | tee "$RUNNER_TEMP/tjipto-release-one.json"'
           test -s "$RUNNER_TEMP/tjipto-release-one.json"
           test -s "$RUNNER_TEMP/tjipto-release-one.zip.sidecar.json"
           cp "$RUNNER_TEMP/tjipto-release-one.json" reports/release-one.json
@@ -181,7 +187,7 @@ jobs:
       - name: Verify exact archive (second build)
         run: |
           set -euo pipefail
-          python scripts/measure_command.py --gate release_b --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" --dense-attestation reports/dense-promotion-attestation.json | tee "$RUNNER_TEMP/tjipto-release-two.json"'
+          python scripts/measure_command.py --gate release_b --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$TJIPTO_EXACT_HEAD_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" --dense-attestation reports/dense-promotion-attestation.json | tee "$RUNNER_TEMP/tjipto-release-two.json"'
           test -s "$RUNNER_TEMP/tjipto-release-two.json"
           test -s "$RUNNER_TEMP/tjipto-release-two.zip.sidecar.json"
           cp "$RUNNER_TEMP/tjipto-release-two.json" reports/release-two.json
@@ -241,6 +247,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 2
+          ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12.10"
@@ -311,6 +318,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 2
+          ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12.10"

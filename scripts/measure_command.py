@@ -199,7 +199,7 @@ def _execution_identity(root: Path | None = None) -> dict:
         "workflow_sha": os.environ.get("TJIPTO_JOB_WORKFLOW_SHA") or os.environ.get("GITHUB_WORKFLOW_SHA"),
         "workflow_repository": os.environ.get("TJIPTO_JOB_WORKFLOW_REPOSITORY"),
         "workflow_file_path": os.environ.get("TJIPTO_JOB_WORKFLOW_FILE_PATH"),
-        "commit_sha": os.environ.get("GITHUB_SHA") or _command_output(root, "git", "rev-parse", "HEAD"),
+        "commit_sha": os.environ.get("TJIPTO_EXACT_HEAD_SHA") or _command_output(root, "git", "rev-parse", "HEAD"),
         "tree_sha": _command_output(root, "git", "rev-parse", "HEAD^{tree}"),
         "parent_sha": _command_output(root, "git", "rev-parse", "HEAD^"),
         "python_lock_sha256": _sha256(root / "requirements.lock"),
