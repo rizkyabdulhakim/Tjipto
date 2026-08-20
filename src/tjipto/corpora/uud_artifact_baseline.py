@@ -109,24 +109,24 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     pages = build_pages(repo_root, source_documents)
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
     docs = {source_id: fitz.open(repo_root / meta["path"]) for source_id, meta in source_documents.items()}
+    pdf_lines_by_source: dict[str, object] = {}
+    extracted_source_objects: list[dict] = []
+    word_bboxes: list[dict] = []
     try:
-        extracted_pdfs = {source_id: extract_pdf(doc, source_id) for source_id, doc in docs.items()}
-        pdf_lines_by_source = {source_id: extraction.lines for source_id, extraction in extracted_pdfs.items()}
-        extracted_source_objects = tuple(
-            item for extraction in extracted_pdfs.values() for item in extraction.source_objects
-        )
-        del extracted_pdfs
-        word_bboxes = [
-            row
-            for source_id, doc in docs.items()
-            for row in build_word_bbox_rows(
+        for source_id, doc in docs.items():
+            extraction = extract_pdf(doc, source_id)
+            pdf_lines_by_source[source_id] = extraction.lines
+            extracted_source_objects.extend(extraction.source_objects)
+            word_bboxes.extend(
+                build_word_bbox_rows(
                 doc=doc,
                 corpus_id="uud",
                 source_document_id=source_id,
                 source_meta=source_documents[source_id],
                 bbox_id_prefix="uud_word_bbox",
+                )
             )
-        ]
+            del extraction
     finally:
         for doc in docs.values():
             doc.close()
