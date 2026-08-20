@@ -62,6 +62,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       PYTHONPATH: ${{ github.workspace }}/src
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
     outputs:
       artifact_id: ${{ steps.upload_backend.outputs.artifact-id }}
       artifact_digest: ${{ steps.upload_backend.outputs.artifact-digest }}

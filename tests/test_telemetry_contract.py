@@ -97,6 +97,7 @@ class TelemetryContractTest(unittest.TestCase):
         self.assertEqual(workflow.count("ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}"), 4)
         self.assertNotIn('"$GITHUB_SHA"', workflow)
         self.assertIn('TJIPTO_RESEARCH_PLANNING_TIMEOUT_SECONDS: "30"', workflow)
+        self.assertEqual(workflow.count('PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"'), 1)
         for gate in ("unittest", "pytest_run_1", "pytest_run_2"):
             self.assertEqual(workflow.count(f"--gate {gate}"), 1)
 
