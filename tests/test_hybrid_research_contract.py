@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from tjipto.retrieval.hybrid import RetrievalHit, hybrid_search, reciprocal_rank_fusion
 from tjipto.retrieval.research import (
@@ -34,31 +35,34 @@ class HybridResearchContractTest(unittest.TestCase):
             (
                 "amandemen pertama vs kedua",
                 {"instrument_amendment_1_historical", "instrument_amendment_2_historical"},
+                "complete",
             ),
             (
                 "perbedaan penandatangan amandemen pertama dan kedua",
                 {"signatory_amendment_1_historical", "signatory_amendment_2_historical"},
+                "complete",
             ),
             (
                 "Pasal 16 sebelum dihapus bunyinya apa",
                 {"historical_normative_text", "deletion_provenance"},
+                "insufficient",
             ),
             (
                 "legal opinion tentang HAM dari Pasal 28",
                 {"analysis_issue_provisions", "analysis_limitations_exceptions"},
+                "complete",
             ),
         )
-        for query, expected_ids in cases:
+        for query, expected_ids, expected_status in cases:
             semantics = interpret_query(store, "uud", query)
             requirements = _research_requirements_for_ask(store, semantics, query)
             self.assertEqual({item.requirement_id for item in requirements}, expected_ids, query)
             response = service.ask("uud", query, limit=30)
-            self.assertEqual(response["sufficiency"]["status"], "complete", query)
-            self.assertEqual(
-                set(response["sufficiency"]["fulfilled_requirement_ids"]),
-                expected_ids,
-                query,
-            )
+            self.assertEqual(response["sufficiency"]["status"], expected_status, query)
+            if expected_status == "complete":
+                self.assertEqual(set(response["sufficiency"]["fulfilled_requirement_ids"]), expected_ids, query)
+            else:
+                self.assertEqual(response["sufficiency"]["missing_requirement_ids"], ("deletion_provenance",), query)
         metadata_requirements = _research_requirements_for_ask(
             store,
             interpret_query(store, "uud", cases[1][0]),
@@ -199,10 +203,29 @@ class HybridResearchContractTest(unittest.TestCase):
     def test_sufficiency_reports_partial_and_retry_without_fabrication(self) -> None:
         requirement = EvidenceRequirement("missing", allow_partial=True)
         evidence = collect_evidence_set(SimpleNamespace(), (), (requirement,))
-        assessment = assess_sufficiency(evidence, (requirement,), partial_allowed=True, retry_budget=1)
+        assessment = assess_sufficiency(evidence, (requirement,), retry_budget=1)
         self.assertEqual(assessment.status, "insufficient")
         self.assertEqual(assessment.missing_requirement_ids, ("missing",))
         self.assertTrue(assessment.retry_allowed)
+
+    def test_mandatory_final_support_rejects_trace_only_provenance(self) -> None:
+        requirement = EvidenceRequirement(
+            "provenance",
+            authority_kinds=("instrument_provenance",),
+            requires_final_citation=True,
+        )
+        row = {
+            "evidence_id": "trace",
+            "authority_kind": "instrument_provenance",
+            "citation_final": False,
+        }
+        with patch("tjipto.retrieval.sufficiency.validate_answer_candidate", return_value=(True, "answer_evidence")):
+            evidence = collect_evidence_set(SimpleNamespace(), (row,), (requirement,))
+
+        assessment = assess_sufficiency(evidence, (requirement,))
+
+        self.assertEqual(assessment.status, "insufficient")
+        self.assertEqual(assessment.missing_requirement_ids, ("provenance",))
 
     def test_description_alone_cannot_assign_arbitrary_verified_row(self) -> None:
         row = {"evidence_id": "unrelated", "source_role": "current"}
@@ -538,6 +561,25 @@ class HybridResearchContractTest(unittest.TestCase):
         ):
             self.assertIn(fragment, content)
         self.assertEqual(proposal["retrieval_lanes"], ["hybrid"])
+
+    def test_openai_compatible_planner_retries_one_transient_http_failure(self) -> None:
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return None
+
+            def read(self):
+                return b'{"choices":[{"message":{"content":"{}"}}]}'
+
+        endpoint = "https://planner.example/v1/chat/completions"
+        transient = HTTPError(endpoint, 503, "unavailable", None, None)
+        with patch("tjipto.retrieval.research.urlopen", side_effect=[transient, Response()]) as opener:
+            proposal = OpenAICompatibleResearchPlanningProvider("secret", model="gemini-model", endpoint=endpoint).propose({})
+
+        self.assertEqual(proposal, {})
+        self.assertEqual(opener.call_count, 2)
 
     def test_coordinated_ordinals_preserve_reordered_instrument_scope(self) -> None:
         from tjipto.corpora.source_arbitration import source_roles_for_query

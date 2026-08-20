@@ -37,6 +37,7 @@ class EvidenceRequirement:
     allow_shared: bool = False
     shareable_with: tuple[str, ...] = ()
     metadata_field: str | None = None
+    requires_final_citation: bool = False
 
     @property
     def typed(self) -> bool:
@@ -57,6 +58,7 @@ class EvidenceRequirement:
             or self.evidence_ids
             or self.legal_unit_ids
             or self.metadata_field
+            or self.requires_final_citation
         )
 
     def accepts(self, row: dict) -> bool:
@@ -75,6 +77,8 @@ class EvidenceRequirement:
         if self.legal_unit_ids and str(row.get("legal_unit_id")) not in set(self.legal_unit_ids):
             return False
         if self.metadata_field is not None and row.get("metadata_field") != self.metadata_field:
+            return False
+        if self.requires_final_citation and row.get("citation_final") is not True:
             return False
         text = _semantic_text(row)
         if self.required_entities:
@@ -247,7 +251,6 @@ def assess_sufficiency(
     evidence_set: EvidenceSet,
     requirements: Iterable[EvidenceRequirement],
     *,
-    partial_allowed: bool = False,
     retry_budget: int = 0,
 ) -> SufficiencyAssessment:
     requirements = tuple(requirements)

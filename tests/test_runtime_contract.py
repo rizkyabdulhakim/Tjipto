@@ -1567,6 +1567,8 @@ class RuntimeContractTest(unittest.TestCase):
         historical_response = self.service.ask("uud", "Pasal 16 sebelum dihapus bunyinya apa")
         self.assertEqual(historical_response["status"], "insufficient_evidence")
         self.assertEqual(historical_response["reason"], "historical_normative_text_and_deletion_provenance_required")
+        self.assertEqual(historical_response["sufficiency"]["status"], "insufficient")
+        self.assertEqual(historical_response["sufficiency"]["missing_requirement_ids"], ("deletion_provenance",))
         navigation = self.service.ask("uud", "BAB setelah BAB IX")
         self.assertEqual(navigation["route"], "structural_navigation")
         self.assertIn("BAB IXA", navigation["answer"])

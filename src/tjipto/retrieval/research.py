@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 import json
 import os
 from typing import Mapping, Protocol, Sequence
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
@@ -121,9 +122,18 @@ class OpenAICompatibleResearchPlanningProvider:
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {self._api_key}"},
             method="POST",
         )
-        with urlopen(req, timeout=self._timeout) as response:  # nosec B310 - factory restricts HTTPS.
-            body = json.load(response)
-        return json.loads(str(body["choices"][0]["message"]["content"]))
+        for attempt in range(2):
+            try:
+                with urlopen(req, timeout=self._timeout) as response:  # nosec B310 - factory restricts HTTPS.
+                    body = json.load(response)
+                return json.loads(str(body["choices"][0]["message"]["content"]))
+            except HTTPError as error:
+                if attempt or error.code not in {429, 500, 502, 503, 504}:
+                    raise
+            except (TimeoutError, URLError):
+                if attempt:
+                    raise
+        raise RuntimeError("planner request retry exhausted")  # pragma: no cover
 
 
 def research_planning_provider_from_environment() -> ResearchPlanningProvider | None:

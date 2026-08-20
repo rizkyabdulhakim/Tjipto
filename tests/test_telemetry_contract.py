@@ -88,6 +88,15 @@ class TelemetryContractTest(unittest.TestCase):
         }
         self.assertEqual([positions[gate] for gate in positions], sorted(positions.values()))
 
+    def test_ci_cancels_superseded_runs_without_dropping_release_suites(self) -> None:
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("cancel-in-progress: true", workflow)
+        self.assertNotIn("Profile suspected memory owners", workflow)
+        self.assertNotIn("Profile per-test RSS", workflow)
+        self.assertNotIn("Profile Python allocations", workflow)
+        for gate in ("unittest", "pytest_run_1", "pytest_run_2"):
+            self.assertEqual(workflow.count(f"--gate {gate}"), 1)
+
     def test_all_runtime_hybrid_and_relation_routes_are_telemetry_safe(self) -> None:
         for route, status in (
             ("hybrid", "found"),

@@ -337,8 +337,9 @@ def _research_requirements_for_ask(
                 legal_target=target or None,
                 source_role=role,
                 temporal_context=role,
-                authority_kinds=("instrument_provenance",),
+                authority_kinds=("instrument_provenance", "normative_legal_text"),
                 support_terms=deletion_terms,
+                requires_final_citation=True,
             ),
         )
 
@@ -1048,26 +1049,6 @@ class LegalRuntimeService:
             {key: value for key, value in row.items() if not str(key).startswith("_")}
             for row in evidence_set.supports
         )
-        # The requirement set may be complete while the provenance leg remains
-        # non-final for publication.  Preserve the existing fail-closed legal
-        # response until that provenance has its own final citation status.
-        if any(
-            row.get("authority_kind") == "instrument_provenance" and row.get("citation_final") is not True
-            for row in evidence
-        ):
-            reason = "historical_normative_text_and_deletion_provenance_required"
-            return project_response(
-                routed | {"status": "no_results", "reason": reason},
-                AnswerDecision(
-                    "insufficient_evidence",
-                    "historical_pre_change",
-                    "none",
-                    templates["insufficient"],
-                    empty_context_pack(reason),
-                    insufficient_reasons=(reason,),
-                    reason_code=reason,
-                ),
-            )
         context_pack = assemble_context_pack(store, evidence)
         answer = _research_answer(store, evidence, evidence_set, requirements, assessment)
         citations = tuple(_citation_with_authority(store, row) for row in context_pack["citation_payloads"])
