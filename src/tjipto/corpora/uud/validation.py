@@ -47,6 +47,7 @@ from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
 from tjipto.corpora.uud.policy.source_text import validate_source_text_closure
 from tjipto.corpora.uud.proposition_builder import source_marker_character_boxes
 from tjipto.evidence.bbox import (
+    VIEWER_GEOMETRY_SPACE_FIELDS,
     derive_viewer_overlay,
     geometry_space_key,
     positive_area_intersection,
@@ -2510,11 +2511,19 @@ def _selector_geometry_health(
     character_count = 0
     characters_by_id: dict[str, dict] = {}
     for word in word_bboxes:
+        geometry_space = {field: word.get(field) for field in VIEWER_GEOMETRY_SPACE_FIELDS}
         for character in word.get("characters") or ():
             character_id = character.get("character_bbox_id")
             if character_id:
                 character_count += 1
-                characters_by_id[character_id] = word | character
+                characters_by_id[character_id] = geometry_space | {
+                    "word_bbox_id": word.get("word_bbox_id"),
+                    "character_bbox_id": character_id,
+                    "x0": character["x0"],
+                    "y0": character["y0"],
+                    "x1": character["x1"],
+                    "y1": character["y1"],
+                }
     known_character_ids = characters_by_id.keys()
     marker_boxes: dict[tuple[object, ...], list[dict]] = defaultdict(list)
     for marker in source_marker_character_boxes(word_bboxes):
