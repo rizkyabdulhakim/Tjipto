@@ -2007,7 +2007,10 @@ class LegalRuntimeService:
         )
         if mapped_source_roles and "source_role" not in semantic_filters:
             semantic_filters["source_role"] = mapped_source_roles[0]
-        typed_routed = scoped_routed or self._route_retrieval(
+        # The original research variant has already passed through every
+        # authoritative resolver in ``route_retrieval``. Reuse it instead of
+        # loading the dense model a second time for the same query.
+        typed_routed = scoped_routed or research_routed or self._route_retrieval(
             corpus_id,
             query,
             store,

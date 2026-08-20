@@ -575,11 +575,14 @@ def execute_research_rounds(
     )
     rows: dict[str, dict] = {}
     routes: list[dict] = []
+    requested_lanes = set(plan.retrieval_lanes)
     lane = (
         "hybrid"
-        if "hybrid" in plan.retrieval_lanes or (plan.intent.complex and plan.provider_status == "deterministic")
+        if "hybrid" in requested_lanes
+        or {"sparse", "dense"} <= requested_lanes
+        or (plan.intent.complex and plan.provider_status == "deterministic")
         else "dense"
-        if "dense" in plan.retrieval_lanes
+        if "dense" in requested_lanes
         else "auto"
     )
     plan = replace(plan, retrieval_lanes=(lane,))

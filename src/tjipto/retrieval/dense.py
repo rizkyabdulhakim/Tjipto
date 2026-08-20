@@ -114,7 +114,7 @@ class LocalDenseProvider:
     def __init__(
         self,
         *,
-        timeout_seconds: float = 120.0,
+        timeout_seconds: float = 300.0,
         python_executable: str | None = None,
         batch_size: int = DENSE_BATCH_SIZE,
         max_length: int = DENSE_MAX_LENGTH,

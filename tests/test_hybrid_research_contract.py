@@ -28,6 +28,44 @@ def _hit(evidence_id: str, lane: str, rank: int, score: float) -> RetrievalHit:
 
 
 class HybridResearchContractTest(unittest.TestCase):
+    def test_semantic_research_reuses_original_route(self) -> None:
+        service = LegalRuntimeService()
+        routed = {
+            "status": "no_results",
+            "route": "hybrid",
+            "intent": "natural_language",
+            "matches": (),
+            "reason": "no_results",
+        }
+        with patch.object(service, "_route_retrieval", return_value=routed) as retrieval:
+            service.ask("uud", "hak konstitusional ketika sekolah melarang agama")
+        self.assertEqual(retrieval.call_count, 1)
+
+    def test_planner_sparse_and_dense_lanes_execute_as_true_hybrid(self) -> None:
+        class Provider:
+            def propose(self, _request):
+                return {
+                    "variants": [],
+                    "retrieval_lanes": ["sparse", "dense"],
+                    "task_kind": "comparison",
+                    "information_needs": [],
+                }
+
+        observed = []
+
+        def retrieve(_query, variant):
+            observed.append(variant.retrieval_lane)
+            return {"matches": ()}
+
+        plan, _ = execute_research(
+            "amandemen pertama vs kedua",
+            retrieve,
+            intent=ResearchIntent(comparison=True, max_rounds=1),
+            provider=Provider(),
+        )
+        self.assertEqual(plan.retrieval_lanes, ("hybrid",))
+        self.assertEqual(observed, ["hybrid"])
+
     def test_stage8_9_operations_bind_requirements_to_shared_sufficiency(self) -> None:
         service = LegalRuntimeService()
         store = service._store("uud")
