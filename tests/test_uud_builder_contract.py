@@ -46,8 +46,11 @@ FINAL = ROOT / "data/final/uud"
 
 
 class UudBuilderContractTest(unittest.TestCase):
+    _cached_word_bboxes: list[dict] | None = None
+
     @classmethod
     def setUpClass(cls) -> None:
+        cls._release_word_bboxes()
         source_documents = build_source_documents(ROOT)
         cls._source_documents = {row["source_document_id"]: row for row in source_documents}
         cls._pages = build_pages(ROOT, cls._source_documents)
@@ -55,7 +58,6 @@ class UudBuilderContractTest(unittest.TestCase):
             (row["source_document_id"], row["page_number"]): row["text"]
             for row in cls._pages
         }
-        cls._cached_word_bboxes: list[dict] | None = None
 
     @classmethod
     def tearDownClass(cls) -> None:
