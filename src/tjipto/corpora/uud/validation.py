@@ -2507,15 +2507,15 @@ def _selector_geometry_health(
     *, propositions: list[dict], evidence: list[dict], page_text_spans: list[dict], word_bboxes: list[dict]
 ) -> dict:
     spans = {row.get("text_span_id"): row for row in page_text_spans}
-    characters = [
-        word | character
-        for word in word_bboxes
-        for character in word.get("characters") or ()
-        if character.get("character_bbox_id")
-    ]
-    character_ids = [character["character_bbox_id"] for character in characters]
-    known_character_ids = set(character_ids)
-    characters_by_id = {character["character_bbox_id"]: character for character in characters}
+    character_count = 0
+    characters_by_id: dict[str, dict] = {}
+    for word in word_bboxes:
+        for character in word.get("characters") or ():
+            character_id = character.get("character_bbox_id")
+            if character_id:
+                character_count += 1
+                characters_by_id[character_id] = word | character
+    known_character_ids = characters_by_id.keys()
     marker_boxes: dict[tuple[object, ...], list[dict]] = defaultdict(list)
     for marker in source_marker_character_boxes(word_bboxes):
         marker_boxes[geometry_space_key(marker)].append(marker)
@@ -2584,7 +2584,7 @@ def _selector_geometry_health(
         "absolute_selector_mismatch_count": absolute_selector_mismatches,
         "unknown_selected_character_id_count": unknown_selected_character_ids,
         "partial_selector_whole_span_bbox_count": whole_span_bboxes,
-        "persisted_character_bbox_id_duplicate_count": len(character_ids) - len(set(character_ids)),
+        "persisted_character_bbox_id_duplicate_count": character_count - len(known_character_ids),
         "marker_text_in_exact_quote_count": marker_text_in_quotes,
         "marker_viewer_geometry_intersection_count": marker_geometry_intersections,
         "viewer_geometry_without_exact_selector_lineage_count": overlay_lineage_failures,
