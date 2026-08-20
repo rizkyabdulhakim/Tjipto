@@ -130,6 +130,8 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     finally:
         for doc in docs.values():
             doc.close()
+    del docs
+    _release_build_memory()
     raw_source_spans: list[dict] = []
     page_text_spans = build_page_text_spans(
         source_documents=source_documents,
