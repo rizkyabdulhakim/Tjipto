@@ -146,6 +146,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_documents=source_documents,
     )
     chunks = build_chunks_from_legal_units(legal_units)
+    _release_build_memory()
     evidence, bbox_rows = build_evidence_and_bboxes(
         legal_units=legal_units,
         chunks=chunks,
