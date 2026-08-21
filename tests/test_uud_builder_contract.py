@@ -14,6 +14,7 @@ import unittest
 from tjipto.core.manifest import read_json, read_jsonl
 from tjipto.corpora.intent_config import intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.corpora.uud.bbox_builder import extract_pdf
 from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
 from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
@@ -38,7 +39,9 @@ from tjipto.corpora.uud.validation import (
     build_validation_report,
 )
 from tjipto.corpora.uud_artifact_baseline import rebuild_uud_artifact_baseline
+from tjipto.evidence.store import EvidenceStore
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
+from tjipto.runtime.api import _service_for
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +69,9 @@ class UudBuilderContractTest(unittest.TestCase):
     @classmethod
     def _release_word_bboxes(cls) -> None:
         cls._cached_word_bboxes = None
+        _service_for.cache_clear()
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
         gc.collect()
         try:
             ctypes.CDLL(None).malloc_trim(0)
