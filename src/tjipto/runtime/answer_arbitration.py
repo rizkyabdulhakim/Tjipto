@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from tjipto.corpora.intent_config import contains_intent_phrase
-from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, resolve_instrument_intent
+from tjipto.retrieval.answer import validate_answer_candidate
+from tjipto.retrieval.metadata import metadata_lookup
 from tjipto.retrieval.relations import has_relation_target
 from tjipto.corpora.source_arbitration import resolve_source_scope
 
@@ -31,6 +32,43 @@ def document_summary_query(query: str, *, strategy: str, config: object, semanti
         return None
     normalized = policy.get("default_query")
     return str(normalized) if normalized else None
+
+
+def instrument_intent_context(store: Any, query: str) -> tuple[dict | None, str, str] | None:
+    """Resolve an adapter-owned instrument lookup before general retrieval."""
+    config = getattr(store, "config", None)
+    intent = intent_config_for(getattr(config, "structured_strategy", "generic"), config)
+    decision = resolve_instrument_intent(query, intent, corpus=getattr(config, "corpus_id", ""))
+    if metadata_lookup(store, query, 1) and decision.reason not in {
+        "analysis_metadata_conflict",
+        "unsupported_analysis_intent",
+    }:
+        return None
+    if decision.target_status == "not_instrument":
+        return None
+    if decision.target_status == "instrument_unresolved":
+        return None, "instrument_unresolved", decision.reason
+    row = next(
+        (
+            item
+            for item in store.evidence
+            if item.get("source_role") == decision.amendment and item.get("citation") == decision.target_citation
+        ),
+        None,
+    )
+    if row is None:
+        return None, "instrument_unresolved", decision.reason
+    row = row | {
+        "route_sources": ("structured",),
+        "candidate_type": f"instrument_{decision.role_family}_candidate",
+    }
+    if validate_answer_candidate(store, row)[0]:
+        return row, "instrument_resolved_answerable", "answer_evidence"
+    return (
+        row | {"forced_rejection_reason": "instrument_resolved_fail_closed"},
+        "instrument_resolved_fail_closed",
+        "instrument_resolved_fail_closed",
+    )
 
 
 def source_document_response(

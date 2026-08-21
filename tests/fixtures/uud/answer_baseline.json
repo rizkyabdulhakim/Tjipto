@@ -1,13 +1,13 @@
 {
   "runtime_commit": "96335404db139b9e76b4bc382f8d071dbc4ebe53",
-  "case_set_sha256": "5a2300e87d3129ce9ceb206cc7055c004041c3ddca7faa651846380f9d1d15a3",
-  "evaluator_sha256": "69202dc7d7bdbae9c5978c514366068bfdcc79b2d0ed06ba90dfc470876fb5f8",
-  "full_report_sha256": "87b80fcd049e4a00e06e5cc8c95a987e1871dd19b61354cfe973aa7b50b2762a",
-  "counts": {"pass": 23, "fail": 1},
+  "case_set_sha256": "655ed008d8a432fffa6b3fbcb738b7dfe19aaa5b0e2343e4fe3ed6263de6b550",
+  "evaluator_sha256": "2655daaa01a96447bf78781deff1af5c4044ada0893fdce311d162476362c2b8",
+  "full_report_sha256": "0888435d3602ff6e4860d4378b0053db9753a4b3c1bf83c6c8738238ffcb3254",
+  "counts": {"pass": 24, "fail": 0},
   "metrics": {
-    "case_pass_rate": 0.958333,
-    "behavior_accuracy": 0.958333,
-    "factual_unit_recall": 0.970588,
+    "case_pass_rate": 1.0,
+    "behavior_accuracy": 1.0,
+    "factual_unit_recall": 1.0,
     "required_support_recall": 1.0,
     "forbidden_support_false_positive_rate": 0.0,
     "source_role_accuracy": 1.0,
@@ -16,7 +16,7 @@
     "claim_verdict_accuracy": 1.0,
     "denominators": {
       "case_pass_rate": 24, "behavior_accuracy": 24, "factual_unit_recall": 34,
-      "required_support_recall": 15, "forbidden_support_false_positive_rate": 2,
+      "required_support_recall": 16, "forbidden_support_false_positive_rate": 2,
       "source_role_accuracy": 24, "temporal_accuracy": 24, "public_target_accuracy": 24,
       "claim_verdict_accuracy": 3
     }

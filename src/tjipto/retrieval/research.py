@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import json
-import os
 from typing import Mapping, Protocol, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from tjipto.core.external_llm import external_llm_config
+from tjipto.retrieval.candidates import graph_expand
 from tjipto.retrieval.sufficiency import (
     EvidenceRequirement,
     EvidenceSet,
@@ -36,6 +36,24 @@ class ResearchIntent:
     @property
     def complex(self) -> bool:
         return self.multiple_supports or self.comparison or self.decomposition or self.relation_traversal
+
+
+def expand_research_candidates(store, result: dict, *, decomposition: bool, limit: int) -> dict:
+    """Add bounded graph candidates without granting them authority."""
+    if not decomposition or not result.get("matches"):
+        return result
+    seeds = tuple(
+        dict(row) | {"route_sources": tuple(dict.fromkeys(("structured", *(row.get("route_sources") or ()))))}
+        for row in result.get("matches", ())
+        if row.get("evidence_id")
+    )
+    trace = graph_expand(store, seeds, {}, per_seed=max(1, limit), semantic=True)
+    expanded = tuple(
+        dict(row) | {"route_sources": ("graph",)}
+        for item in trace
+        if (row := store.get(str(item.get("evidence_id") or ""))) is not None
+    )
+    return dict(result) | {"matches": tuple(result.get("matches", ())) + expanded} if expanded else result
 
 
 @dataclass(frozen=True)
@@ -74,6 +92,8 @@ class ResearchPlan:
     requirements: tuple[EvidenceRequirement, ...] = ()
     task_kind: str = "retrieval"
     information_needs: tuple[InformationNeed, ...] = ()
+    clarification_question: str | None = None
+    missing_dimensions: tuple[str, ...] = ()
 
 
 class ResearchPlanningProvider(Protocol):
@@ -81,7 +101,7 @@ class ResearchPlanningProvider(Protocol):
 
 
 class OpenAICompatibleResearchPlanningProvider:
-    """Optional, untrusted structured planner adapter."""
+    """Untrusted structured planner adapter; the server validates every proposal."""
 
     def __init__(self, api_key: str, *, model: str, endpoint: str, timeout: float = 12.0):
         self._api_key = api_key
@@ -109,6 +129,9 @@ class OpenAICompatibleResearchPlanningProvider:
                     '"description" (non-empty string), "query" (string or null), "concepts" '
                     '(array of strings), "kind" ("concept", "comparison", "procedure", or "relation"), '
                     'and "relation_traversal" (boolean). '
+                    'If and only if a required user choice is missing, set "status" to "clarification_required", '
+                    'name the missing dimensions, and write one neutral Indonesian clarification_question. '
+                    'Otherwise set "status" to "ready" with empty missing_dimensions and null clarification_question. '
                     f"Return at most {provider_variant_limit} provider variants; the server already retains the original query. "
                     "Return no other fields in those objects. Never return requirements, evidence, citations, "
                     "authority, source role, temporal status, or evidence validity; those remain server-owned.\n"
@@ -181,15 +204,20 @@ def _planner_schema(provider_variant_limit: int) -> dict[str, object]:
                 "enum": ["retrieval", "multiple_supports", "comparison", "decomposition", "relation_traversal"],
             },
             "information_needs": {"type": "array", "maxItems": 3, "items": need},
+            "status": {"type": "string", "enum": ["ready", "clarification_required"]},
+            "missing_dimensions": {
+                "type": "array",
+                "maxItems": 2,
+                "items": {"type": "string", "enum": ["legal_target", "source_scope", "temporal_scope", "comparison_target"]},
+            },
+            "clarification_question": {"type": ["string", "null"], "maxLength": 240},
         },
-        "required": ["variants", "retrieval_lanes", "task_kind", "information_needs"],
+        "required": ["variants", "retrieval_lanes", "task_kind", "information_needs", "status", "missing_dimensions", "clarification_question"],
     }
 
 
 def research_planning_provider_from_environment() -> ResearchPlanningProvider | None:
-    """Create the optional planner only after explicit opt-in and valid config."""
-    if os.environ.get("TJIPTO_EXTERNAL_RESEARCH_PLANNING", "").strip().casefold() != "enabled":
-        return None
+    """Create the configured planner; capability flags do not disable it."""
     config = external_llm_config("RESEARCH_PLANNING")
     if config is None or config.provider != "openai_compatible" or not config.base_url:
         return None
@@ -265,7 +293,7 @@ def plan_research(
                 modality=modality,
             )
         )
-    except Exception:  # provider is optional and untrusted
+    except Exception:
         return ResearchPlan(query, intent, (original,), "unavailable", ("provider_failure",), requirements=base_requirements)
     variants, rejected = _validated_variants(proposal, original, intent)
     lanes = _validated_lanes(proposal)
@@ -288,6 +316,8 @@ def plan_research(
         task_kind = "retrieval"
     information_needs, need_rejections = _validated_information_needs(proposal, intent)
     rejected = (*rejected, *need_rejections)
+    clarification_question, missing_dimensions, clarification_rejections = _validated_clarification(proposal)
+    rejected = (*rejected, *clarification_rejections)
     return ResearchPlan(
         query,
         intent,
@@ -298,6 +328,8 @@ def plan_research(
         tuple(base_requirements),
         task_kind,
         information_needs,
+        clarification_question,
+        missing_dimensions,
     )
 
 
@@ -332,8 +364,35 @@ def _planner_request(
             "polarity": polarity,
             "modality": modality,
         },
-        "allowed_proposals": ("task_kind", "variants", "information_needs", "retrieval_lanes"),
+        "allowed_proposals": (
+            "task_kind", "variants", "information_needs", "retrieval_lanes",
+            "status", "missing_dimensions", "clarification_question",
+        ),
     }
+
+
+def _validated_clarification(proposal: object) -> tuple[str | None, tuple[str, ...], tuple[str, ...]]:
+    if not isinstance(proposal, Mapping):
+        return None, (), ()
+    status = proposal.get("status", "ready")
+    if status == "ready":
+        return None, (), ()
+    dimensions = proposal.get("missing_dimensions")
+    question = proposal.get("clarification_question")
+    allowed = {"legal_target", "source_scope", "temporal_scope", "comparison_target"}
+    if (
+        status != "clarification_required"
+        or not isinstance(dimensions, Sequence)
+        or isinstance(dimensions, (str, bytes))
+        or not dimensions
+        or len(dimensions) > 2
+        or not all(isinstance(value, str) and value in allowed for value in dimensions)
+        or len(set(dimensions)) != len(dimensions)
+        or not isinstance(question, str)
+        or not 1 <= len(question.strip()) <= 240
+    ):
+        return None, (), ("clarification_invalid",)
+    return question.strip(), tuple(dimensions), ()
 
 
 def _validated_variants(
@@ -625,7 +684,7 @@ def execute_research_rounds(
         or (plan.intent.complex and plan.provider_status == "deterministic")
         else "dense"
         if "dense" in requested_lanes
-        else "auto"
+        else "sparse"
     )
     plan = replace(plan, retrieval_lanes=(lane,))
     current_variants = _bounded_variant_lanes(

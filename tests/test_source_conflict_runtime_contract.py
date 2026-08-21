@@ -167,13 +167,11 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertEqual(peralihan["route"], "legal_reference")
         self.assertIsNone(peralihan.get("source_conflict"))
         self.assertEqual(peralihan["citations"][0]["citation"], "Pasal III")
-        clarification = self.service.ask("uud", "Pasal III Perubahan Keempat UUD 1945")
-        self.assertEqual(clarification["status"], "clarification_required")
-        self.assertEqual(clarification["clarification_kind"], "source_scope")
-        self.assertEqual(
-            {row["resolution"]["source_reference"] for row in clarification["clarification_options"]},
-            {"ATURAN PERALIHAN", "Aturan Tambahan"},
-        )
+        unqualified = self.service.ask("uud", "Pasal III Perubahan Keempat UUD 1945")
+        self.assertEqual(unqualified["status"], "answer_ready")
+        self.assertEqual(unqualified["citations"][0]["citation"], "Pasal III")
+        self.assertIn("ATURAN PERALIHAN", unqualified["citations"][0]["hierarchy"])
+        self.assertNotIn("clarification_options", unqualified)
 
     def test_inserted_bab_heading_queries_publish_the_heading_as_the_answer(self) -> None:
         for label in ("BAB IXA", "BAB XA", "BAB VIIA", "BAB VIIB", "BAB VIIIA"):

@@ -9,35 +9,28 @@ from dataclasses import dataclass
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
-# Shared Indonesian lexical baseline; keep corpus config for legal structure/policy.
+# Shared Indonesian function words only; legal vocabulary belongs to corpus policy.
 RANKING_STOPWORDS = {
     "adalah",
     "atas",
     "apa",
-    "bagaimana",
-    "atau",
     "aturan",
+    "bagaimana",
     "berapa",
     "dalam",
     "dan",
     "dari",
     "dengan",
     "di",
-    "diatur",
-    "dilakukan",
     "dimana",
     "isi",
     "ke",
     "kapan",
-    "ketentuan",
     "lembaga",
     "mana",
     "pada",
-    "pasal",
     "tentang",
     "menurut",
-    "undang",
-    "undang-undang",
     "untuk",
     "yang",
     "siapa",
@@ -166,7 +159,7 @@ class SparseIndex:
     def build(
         cls, evidence: list[dict], *, config=None, k1: float = 1.5, b: float = 0.75, identity: str | None = None,
     ) -> "SparseIndex":
-        aliases = _lexical_aliases(config)
+        aliases = lexical_aliases(config)
         alias_items = tuple(sorted(aliases.items()))
         related_items = tuple(sorted(_lexical_related_terms(config).items()))
         documents: list[SparseDocument] = []
@@ -205,7 +198,7 @@ class SparseIndex:
         aliases: tuple[tuple[str, str], ...] | None = None,
         related_terms: tuple[tuple[str, tuple[str, ...]], ...] | None = None,
     ) -> str:
-        alias_items = aliases if aliases is not None else tuple(sorted(_lexical_aliases(config).items()))
+        alias_items = aliases if aliases is not None else tuple(sorted(lexical_aliases(config).items()))
         related_items = related_terms if related_terms is not None else tuple(sorted(_lexical_related_terms(config).items()))
         snapshot = {
             "corpus_id": getattr(config, "corpus_id", None),
@@ -267,7 +260,7 @@ def sparse_index_for_store(store, *, k1: float = 1.5, b: float = 0.75) -> Sparse
     index = getattr(store, "_sparse_index", None)
     evidence = store.evidence
     config = store.config
-    aliases = tuple(sorted(_lexical_aliases(config).items()))
+    aliases = tuple(sorted(lexical_aliases(config).items()))
     related_terms = tuple(sorted(_lexical_related_terms(config).items()))
     cache_key = SparseIndex.snapshot_identity(
         evidence,
@@ -301,7 +294,8 @@ def _with_coverage(row: dict, query: str, aliases: dict[str, str]) -> dict:
     )
 
 
-def _lexical_aliases(config) -> dict[str, str]:
+def lexical_aliases(config) -> dict[str, str]:
+    """Return the corpus-owned aliases used by every lexical control."""
     settings: dict = getattr(config, "setting", lambda *_: {})("lexical_normalization", {}) or {}
     return {str(key).casefold(): str(value).casefold() for key, value in dict(settings.get("aliases") or {}).items()}
 

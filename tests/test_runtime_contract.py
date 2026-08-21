@@ -21,7 +21,6 @@ from tjipto.retrieval.dense import dense_search
 from tjipto.retrieval.metadata import filter_evidence, normalize_filters
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.router import route_retrieval
-from tjipto.retrieval.service import RetrievalService
 from tjipto.retrieval.structured import structured_lookup
 from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candidate
 from tjipto.runtime.api import _public_bbox, handle_request
@@ -500,136 +499,55 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertIn("Historis", result["answer"])
         self.assertEqual(result["metadata_support"][0]["printed_role"], "Ketua")
 
-    def test_unscoped_metadata_requests_clarification_without_combined_citations(self) -> None:
+    def test_unscoped_metadata_fails_closed_without_combined_citations(self) -> None:
         for query in ("penandatangan UUD", "kapan UUD ditetapkan"):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "clarification_required", query)
+            self.assertEqual(result["status"], "insufficient_evidence", query)
             self.assertEqual(result["route"], "metadata_fact", query)
-            self.assertEqual(result["answer_scope"], "clarification", query)
+            self.assertEqual(result["answer_scope"], "insufficient_evidence", query)
+            self.assertEqual(result["reason_code"], "ambiguous_source_scope", query)
             self.assertFalse(result["citations"], query)
             self.assertFalse(result["viewer_refs"], query)
             self.assertFalse(result["metadata_facts"], query)
-            self.assertEqual(
-                {row["resolution"]["source_role"] for row in result["clarification_options"]},
-                {
-                    "amendment_1_historical",
-                    "amendment_2_historical",
-                    "amendment_3_historical",
-                    "amendment_4_historical",
-                },
-                query,
-            )
 
-    def test_non_metadata_ambiguities_offer_opaque_resumable_choices(self) -> None:
+    def test_ambiguous_queries_fail_closed_without_prompt_templates(self) -> None:
         cases = (
-            ("Pasal 7 atau Pasal 7A", "legal_target", "legal_reference"),
-            ("perubahan keempat mengubah atau menghapus Pasal 16", "relation_operation", "document_relation"),
-            ("Presiden atau DPR", "concept_facet", "lexical_fallback"),
-            ("pendidikan", "concept_facet", "lexical_fallback"),
-            ("hubungan Pasal 16", "relation_operation", "legal_relation"),
+            ("Pasal 7 atau Pasal 7A", "legal_reference", "ambiguous_legal_target"),
+            ("perubahan keempat mengubah atau menghapus Pasal 16", "document_relation", "ambiguous_target"),
+            ("Presiden atau DPR", "lexical_fallback", "ambiguous_target"),
+            ("pendidikan", "lexical_fallback", "ambiguous_concept"),
+            ("hubungan Pasal 16", "legal_relation", "relation_not_found"),
         )
-        for query, kind, route in cases:
+        for query, route, reason in cases:
             with self.subTest(query=query):
                 result = self.service.ask("uud", query)
-                self.assertEqual(result["status"], "clarification_required")
-                self.assertEqual(result["clarification_kind"], kind)
+                self.assertEqual(result["status"], "insufficient_evidence")
                 self.assertEqual(result["route"], route)
-                self.assertGreaterEqual(len(result["clarification_options"]), 2)
+                self.assertEqual(result.get("reason_code") or result.get("reason"), reason)
+                self.assertNotIn("clarification_options", result)
                 public = handle_request("uud", "ask", {"query": query}, service=self.service)
-                self.assertEqual(public["original_query"], query)
-                self.assertEqual(public["clarification_kind"], kind)
-                self.assertEqual(public["question"], result["clarification_question"])
-                target = public["clarification_options"][0]["context_target"]
-                resumed = handle_request("uud", "ask", {"query": query, "clarification_context": target}, service=self.service)
-                self.assertNotEqual(resumed["status"], "clarification_required")
-                with self.assertRaisesRegex(ValueError, "invalid_request"):
-                    handle_request("uud", "ask", {"query": query + " changed", "clarification_context": target}, service=self.service)
+                self.assertEqual(public["status"], "insufficient_evidence")
+                self.assertFalse(public.get("supports"))
 
-    def test_noisy_and_out_of_corpus_queries_do_not_clarify(self) -> None:
+    def test_noisy_and_out_of_corpus_queries_keep_typed_failures(self) -> None:
         for query in ("berapa lama presiden menjabat", "apa hukuman pidana korupsi"):
             with self.subTest(query=query):
-                self.assertNotEqual(self.service.ask("uud", query)["status"], "clarification_required")
-
-    def test_selected_constraints_preserve_original_query(self) -> None:
-        for query, kind in (
-            ("Pasal 7 atau Pasal 7A", "legal_target"),
-            ("hak warga negara", "concept_facet"),
-            ("Presiden atau DPR", "concept_facet"),
-        ):
-            with self.subTest(query=query):
                 result = self.service.ask("uud", query)
-                self.assertEqual(result["status"], "clarification_required")
-                self.assertEqual(result["clarification_kind"], kind)
-                public = handle_request("uud", "ask", {"query": query}, service=self.service)
-                target = public["clarification_options"][0]["context_target"]
-                with patch.object(self.service, "_route_retrieval", wraps=self.service._route_retrieval) as route:
-                    resumed = handle_request(
-                        "uud", "ask", {"query": query, "clarification_context": target}, service=self.service
-                    )
-                self.assertNotEqual(resumed["status"], "clarification_required")
-                self.assertTrue(route.call_args_list)
-                self.assertTrue(all(call.args[1] == query for call in route.call_args_list))
+                self.assertNotIn(result.get("reason_code"), {"ambiguous_concept", "ambiguous_target"})
 
-    def test_concept_facet_resume_never_runs_an_alternate_query(self) -> None:
-        query = "Presiden atau DPR"
-        public = handle_request("uud", "ask", {"query": query}, service=self.service)
-        self.assertEqual(public["clarification_kind"], "concept_facet")
-        target = public["clarification_options"][0]["context_target"]
-        search_queries: list[str] = []
-        original_search = RetrievalService.search
-
-        def observed_search(instance, search_query, limit):
-            search_queries.append(search_query)
-            return original_search(instance, search_query, limit)
-
-        with patch.object(RetrievalService, "search", autospec=True, side_effect=observed_search):
-            resumed = handle_request(
-                "uud", "ask", {"query": query, "clarification_context": target}, service=self.service
-            )
-        self.assertNotEqual(resumed["status"], "clarification_required")
-        self.assertTrue(search_queries)
-        self.assertTrue(all(search_query == query for search_query in search_queries))
-
-    def test_concept_facet_empty_intersection_does_not_widen_candidates(self) -> None:
-        query = "Presiden atau DPR"
-        public = handle_request("uud", "ask", {"query": query}, service=self.service)
-        target = public["clarification_options"][0]["context_target"]
-        context = self.service.public_clarification_context("uud", target)
-        self.assertIsNotNone(context)
-        allowed = set(json.loads(context["resolution"]["concept_facet"]))
-        store = self.service._store("uud")
-        routed = self.service._route_retrieval(
-            "uud", query, store, limit=len(store.evidence), metadata_filters={},
-            allow_navigation=True, allow_relation=True, relation_family=None,
-        )
-        mutated = routed | {
-            "matches": tuple(
-                row for row in routed["matches"]
-                if str(row.get("evidence_id") or row.get("legal_unit_id")) not in allowed
-            )
-        }
-        with patch.object(self.service, "_route_retrieval", return_value=mutated):
-            resumed = self.service.ask("uud", query, clarification=context["resolution"])
-        self.assertIn(resumed["status"], {"no_results", "insufficient_evidence"})
-        self.assertEqual(resumed["matches"], ())
-
-    def test_multiword_ambiguity_has_no_length_gate(self) -> None:
-        result = self.service.ask("uud", "hak warga negara")
-        self.assertGreaterEqual(len(result["clarification_options"]), 2)
-
-    def test_inflected_metadata_wording_requires_source_clarification(self) -> None:
+    def test_inflected_metadata_wording_requires_explicit_source_scope(self) -> None:
         for query in ("siapa yang menandatangani UUD", "siapa yang menandatangi UUD"):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "clarification_required", query)
+            self.assertEqual(result["status"], "insufficient_evidence", query)
             self.assertEqual(result["route"], "metadata_fact", query)
-            self.assertTrue(result["clarification_options"], query)
+            self.assertEqual(result["reason_code"], "ambiguous_source_scope", query)
             self.assertFalse(result["citations"], query)
             self.assertFalse(result["viewer_refs"], query)
             self.assertFalse(result["metadata_facts"], query)
 
     def test_unresolved_temporal_scope_never_uses_preferred_source(self) -> None:
         metadata = self.service.ask("uud", "tanggal ditetapkan perubahan ke-5 UUD")
-        self.assertEqual(metadata["status"], "clarification_required")
+        self.assertEqual(metadata["status"], "insufficient_evidence")
         self.assertEqual(metadata["reason"], "unresolved_source_scope")
         self.assertFalse(metadata["citations"])
         self.assertFalse(metadata["viewer_refs"])

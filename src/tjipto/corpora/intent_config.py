@@ -47,6 +47,9 @@ _GENERIC = {
     "instrument_legal_object_signals": (),
     "instrument_change_signals": (),
     "source_role_labels": {},
+    "source_role_aliases": {},
+    "source_role_connectors": (),
+    "source_role_separator_pattern": "",
     "temporal_current_terms": (),
     "structured_sections": (),
     "structural_navigation": {},
@@ -55,7 +58,6 @@ _GENERIC = {
     "structure_unit_type": "",
     "structure_detail_terms": (),
     "structure_request_terms": {},
-    "clarification": {},
 }
 
 
@@ -96,6 +98,9 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "instrument_legal_object_signals": tuple(raw.get("instrument_legal_object_signals") or ()),
         "instrument_change_signals": tuple(raw.get("instrument_change_signals") or ()),
         "source_role_labels": dict(raw.get("source_role_labels") or {}),
+        "source_role_aliases": {key: tuple(value) for key, value in (raw.get("source_role_aliases") or {}).items()},
+        "source_role_connectors": tuple(raw.get("source_role_connectors") or ()),
+        "source_role_separator_pattern": str(raw.get("source_role_separator_pattern") or ""),
         "temporal_current_terms": tuple(raw.get("temporal_current_terms") or ()),
         "structured_sections": tuple(raw.get("structured_sections") or ()),
         "structural_navigation": {key: tuple(value) for key, value in (raw.get("structural_navigation") or {}).items()},
@@ -106,7 +111,6 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "structure_request_terms": {
             key: tuple(value) for key, value in (raw.get("structure_request_terms") or {}).items()
         },
-        "clarification": dict(raw.get("clarification") or {}),
     }
 
 

@@ -17,7 +17,7 @@ class BadRequest(ValueError):
 
 
 _PUBLIC_REQUEST_FIELDS = {
-    "ask": {"query", "limit", "filters", "clarification_context"},
+    "ask": {"query", "limit", "filters", "clarification_id", "clarification_answer"},
     "search": {"query", "limit", "filters"},
     "citation": {"query", "source_role", "filters"},
     "viewer": {"target"},
@@ -55,19 +55,13 @@ def handle_request(
         return _public_viewer(service.viewer_public(corpus_id, target), service, corpus_id, target)
     if action == "ask":
         filters = dict(_filters(payload) or {})
-        context_target = _optional_str(payload, "clarification_context")
-        clarification = None
-        if context_target:
-            context = service.public_clarification_context(corpus_id, context_target)
-            if context is None or context["original_query"] != _query(payload):
-                raise BadRequest()
-            clarification = context["resolution"]
         result = service.ask(
             corpus_id,
             _query(payload),
             _limit(payload, default=3),
             filters or None,
-            clarification,
+            clarification_id=_optional_str(payload, "clarification_id"),
+            clarification_answer=_optional_str(payload, "clarification_answer"),
         )
         return _public_ask(result, service, corpus_id)
     if action == "capabilities":
@@ -118,19 +112,6 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
     footnotes = FootnoteBook()
     projected = tuple((_public_support(row, service, corpus_id, footnotes), row) for row in support_rows)
     supports = tuple(support for support, _ in projected)
-    if result.get("clarification_options"):
-        return {
-            "kind": "clarification",
-            "status": result.get("status"),
-            "answer": result.get("answer"),
-            "clarification_kind": result.get("clarification_kind"),
-            "question": result.get("clarification_question"),
-            "original_query": result.get("original_query"),
-            "clarification_options": tuple(
-                _public_clarification_option(row, service, corpus_id, result.get("original_query"))
-                for row in result["clarification_options"]
-            ),
-        }
     if result.get("document_source") is not None:
         source = result["document_source"]
         target = service.register_public_target(corpus_id, {"evidence_id": None, "source_document_id": source.get("source_document_id")})
@@ -164,6 +145,11 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
         "supports": supports,
         "support_groups": _support_groups(projected, service, corpus_id),
     }
+    if result.get("clarification_id"):
+        public["clarification"] = {
+            "id": result["clarification_id"],
+            "missing_dimensions": tuple(result.get("missing_dimensions") or ()),
+        }
     if result.get("operation"):
         public["operation"] = result["operation"]
     if result.get("source_scopes"):
@@ -412,14 +398,6 @@ def _support_group_label(group_kind: str, members: list[dict]) -> str:
     if group_kind == "article_relation_members":
         return f"{members[0].get('source_label') or 'Sumber perubahan'} · {len(members)} ketentuan"
     return str(members[0].get("source_label") or members[0].get("label") or "Sumber dokumen")
-
-
-def _public_clarification_option(row: dict, service: LegalRuntimeService, corpus_id: str, original_query: str | None = None) -> dict:
-    target = service.register_public_target(
-        corpus_id,
-        {"kind": "clarification_context", "original_query": original_query, "resolution": row.get("resolution")},
-    )
-    return {"context_target": target, "label": row.get("label")}
 
 
 def _public_capabilities(result: dict) -> dict:

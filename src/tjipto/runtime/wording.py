@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import asdict, dataclass
 from builtins import object as builtin_object
@@ -125,14 +124,8 @@ def _string_values(value: object) -> tuple[str, ...]:
     return ()
 
 
-def wording_enabled_from_environment() -> bool:
-    return os.environ.get("TJIPTO_EXTERNAL_WORDING", "").strip().casefold() == "enabled"
-
-
 def wording_provider_from_environment() -> WordingProvider | None:
-    """Build an opted-in adapter; invalid optional configuration is harmless."""
-    if not wording_enabled_from_environment():
-        return None
+    """Build the configured answer provider."""
     config = external_llm_config("WORDING")
     if config is None:
         return None

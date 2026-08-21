@@ -16,7 +16,6 @@ import { Composer } from "./Composer";
 interface ChatViewProps {
   messages: ChatMessage[];
   onSubmit: (value: string) => void;
-  onClarify: (query: string, contextTarget: string, label: string) => void;
   isStreaming: boolean;
   onStop: () => void;
   onCitationClick: (citation: Citation) => void;
@@ -189,12 +188,10 @@ function UserMessage({ content }: { content: string }) {
 
 function AssistantMessage({
   message,
-  onClarify,
   onCitationClick,
   activeCitationId,
 }: {
   message: ChatMessage;
-  onClarify: (query: string, contextTarget: string, label: string) => void;
   onCitationClick: (c: Citation) => void;
   activeCitationId?: number;
 }) {
@@ -253,31 +250,6 @@ function AssistantMessage({
               includeDocuments={!message.documentCollection?.length}
             />
             )}
-
-            {message.status !== "streaming" && message.clarificationOptions?.length ? (
-              <div
-                data-clarification-options="true"
-                className="mt-4 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3.5 py-2.5"
-              >
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}>
-                  PILIH KONTEKS SUMBER
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {message.clarificationOptions.map((option) => (
-                    <button
-                      key={option.contextTarget ?? option.label}
-                      type="button"
-                      data-clarification-option={option.contextTarget ?? option.label}
-                      disabled={!option.contextTarget || !message.clarificationQuery}
-                      onClick={() => option.contextTarget && message.clarificationQuery && onClarify(message.clarificationQuery, option.contextTarget, option.label)}
-                      className="rounded-lg border border-[var(--tj-border-subtle)] px-2.5 py-1.5 text-xs hover:bg-[var(--tj-surface-hover)]"
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
 
           {message.status !== "streaming" && (
             <SupportFooter
@@ -520,7 +492,6 @@ function SupportFooter({
 export function ChatView({
   messages,
   onSubmit,
-  onClarify,
   isStreaming,
   onStop,
   onCitationClick,
@@ -558,7 +529,6 @@ export function ChatView({
               >
                 <AssistantMessage
                   message={m}
-                  onClarify={onClarify}
                   onCitationClick={onCitationClick}
                   activeCitationId={activeCitationId}
                 />

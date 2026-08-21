@@ -11,45 +11,54 @@ from collections import OrderedDict
 from typing import Any
 from uuid import uuid4
 
-from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
+from tjipto.corpora.intent_config import contains_intent_phrase, normalize_intent_text
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.parser_dispatch import parse_legal_reference
 from tjipto.corpora.strategy import StrategyRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
 from tjipto.evidence.bbox import viewer_overlay_rectangles
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack, validate_answer_candidate
-from tjipto.retrieval.bm25 import meaningful_tokens, sparse_index_for_store, tokens
-from tjipto.retrieval.candidates import graph_expand
+from tjipto.retrieval.bm25 import lexical_aliases, meaningful_tokens
 from tjipto.retrieval.dense import dense_configured
 from tjipto.retrieval.metadata import (
-    metadata_lookup,
     normalize_filters,
     public_filters,
 )
 from tjipto.corpora.source_arbitration import (
     source_reference_mappings_for_query,
 )
-from tjipto.retrieval.relations import amendment_relation_lookup, amendment_relation_target, has_relation_target
+from tjipto.retrieval.relations import amendment_relation_target
 from tjipto.retrieval.router import route_retrieval
 from tjipto.retrieval.research import (
     ResearchIntent,
     ResearchPlan,
     ResearchPlanningProvider,
+    expand_research_candidates,
     execute_research_rounds,
     plan_research,
     research_planning_provider_from_environment,
 )
 from tjipto.retrieval.sufficiency import EvidenceRequirement, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.claim_support import all_supported, verify_claims
-from tjipto.runtime.clarification import clarification_decision
-from tjipto.runtime.answer_arbitration import document_summary_query, source_document_response
+from tjipto.runtime.answer_arbitration import document_summary_query, instrument_intent_context, source_document_response
 from tjipto.runtime.bookmarks import BookmarkRepository
 from tjipto.runtime.query_semantics import interpret_query
+from tjipto.runtime.research_control import (
+    authoritative_retrieval_route,
+    ambiguity_reason,
+    instrument_scope_roles,
+    research_entities,
+    research_intent_for_ask,
+    research_requirements_for_ask,
+    semantic_orchestration_required,
+    semantic_scope_covered,
+    semantic_support_excluded_terms,
+)
 from tjipto.runtime.response import AnswerDecision, compose_research_answer, project_response
 from tjipto.runtime.wording import (
     build_verified_claim_set,
     render_wording as _render_wording,
-    wording_enabled_from_environment,
     wording_provider_from_environment,
 )
 from tjipto.runtime.scope_guard import scope_guard_context
@@ -94,11 +103,44 @@ def _integrity_failure(corpus_id: str, query: str, error_code: str | None) -> di
     }
 
 
-def _clarification_candidate_limit(store: EvidenceStore, query: str, limit: int) -> int:
-    config = intent_config_for(getattr(store.config, "query_strategy", "generic"), store.config)
-    terms = tuple(config.get("clarification", {}).get("choice_terms") or ())
-    normalized = f" {normalize_intent_text(query)} "
-    return len(store.evidence) if any(f" {normalize_intent_text(term)} " in normalized for term in terms) else limit
+def _clarification_invalid_response(corpus_id: str) -> dict:
+    return {
+        "status": "insufficient_evidence",
+        "route": "planner_clarification",
+        "intent": "clarification",
+        "corpus_id": corpus_id,
+        "reason": "clarification_session_invalid",
+        "answer": _ANSWER_TEMPLATES["insufficient"],
+        "evidence": (),
+        "citations": (),
+        "final_citations": (),
+        "historical_citations": (),
+        "metadata_support": (),
+        "structural_support": (),
+        "trace_support": (),
+        "viewer_refs": (),
+        "context_pack": empty_context_pack("clarification_session_invalid"),
+        "answer_scope": "insufficient_evidence",
+        "answer_type": "none",
+        "warnings": (),
+        "insufficient_reasons": ("clarification_session_invalid",),
+    }
+
+
+def _empty_query_response(corpus_id: str) -> dict:
+    return _clarification_invalid_response(corpus_id) | {
+        "route": "empty_query",
+        "intent": "empty_query",
+        "reason": "empty_query",
+        "insufficient_reasons": ("empty_query",),
+    }
+
+
+def _clarification_exhausted_response(corpus_id: str) -> dict:
+    return _clarification_invalid_response(corpus_id) | {
+        "reason": "clarification_unresolved",
+        "insufficient_reasons": ("clarification_unresolved",),
+    }
 
 
 def _research_candidate_limit(store: EvidenceStore, query: str, limit: int) -> int:
@@ -111,778 +153,6 @@ def _research_candidate_limit(store: EvidenceStore, query: str, limit: int) -> i
     return min(len(store.evidence), max(limit, configured))
 
 
-def _semantic_orchestration_required(store: EvidenceStore, query: str, semantics) -> bool:
-    """Keep authoritative resolvers ahead of the bounded semantic planner."""
-    if (
-        getattr(semantics, "requested_function", "retrieval") != "retrieval"
-        and getattr(semantics, "operation", "search") != "analyze"
-    ):
-        return False
-    analysis = getattr(semantics, "operation", "search") == "analyze"
-    if metadata_lookup(store, query, 1) and not analysis:
-        return False
-    if amendment_relation_target(store, query).get("mode") is not None and not analysis:
-        return False
-    if has_relation_target(query, strategy=getattr(store.config, "query_strategy", "generic"), config=store.config) and not analysis:
-        return False
-    return True
-
-
-_AUTHORITATIVE_RETRIEVAL_ROUTES = frozenset(
-    {
-        "document_relation",
-        "relation",
-        "structured",
-        "exact",
-        "metadata",
-        "structural_navigation",
-        "structure_list",
-    }
-)
-
-
-def _is_authoritative_retrieval_route(routed: dict | None) -> bool:
-    return bool(routed and routed.get("route") in _AUTHORITATIVE_RETRIEVAL_ROUTES)
-
-
-def _research_intent_for_ask(
-    store: EvidenceStore,
-    semantics,
-    query: str,
-    requirements: tuple[EvidenceRequirement, ...],
-) -> ResearchIntent:
-    """Derive complexity from the server-owned evidence requirements."""
-    if (
-        getattr(semantics, "requested_function", "retrieval") not in {"retrieval", "source_discrepancy"}
-        and getattr(semantics, "operation", "search") not in {"analyze", "compare"}
-    ):
-        return ResearchIntent()
-    config = getattr(store, "config", None)
-    research: dict = getattr(config, "setting", lambda *_: {})("research", {}) or {}
-    hints = research.get("semantic_hints", {}) if isinstance(research, dict) else {}
-    normalized_query = normalize_intent_text(query)
-    def configured(name: str) -> bool:
-        return bool(
-            isinstance(hints, dict)
-            and contains_intent_phrase(
-                normalized_query,
-                tuple(str(value) for value in hints.get(name, ()) if isinstance(value, str)),
-            )
-        )
-    entity_dimensions = tuple(requirement for requirement in requirements if requirement.required_entities)
-    # Multiple corpus-backed entities carrying the same semantic dimension are
-    # a comparison signal even when the wording is an unseen paraphrase.  The
-    # lexical hint remains useful for queries without an explicit dimension,
-    # but it is never the source of truth for entity coverage.
-    instrument_scopes = _instrument_scope_roles(getattr(semantics, "source_scopes", ()))
-    comparison = (len(entity_dimensions) > 1 or len(instrument_scopes) > 1) and (
-        configured("comparison") or configured("authority") or configured("relation")
-        or len(instrument_scopes) > 1
-    )
-    multiple = len(requirements) > 1 or any(requirement.min_supports > 1 for requirement in requirements)
-    relation = bool(requirements) and configured("relation")
-    decomposition = multiple and (configured("procedure") or comparison)
-    return ResearchIntent(
-        multiple_supports=multiple,
-        comparison=comparison,
-        decomposition=decomposition,
-        relation_traversal=relation,
-        max_variants=max(1, int(research.get("max_variants", 4))) if isinstance(research, dict) else 4,
-        max_rounds=max(1, int(research.get("max_rounds", 2))) if isinstance(research, dict) else 2,
-    )
-
-
-def _semantic_scope_covered(
-    store: EvidenceStore,
-    semantics,
-    query: str,
-    requirements: tuple[EvidenceRequirement, ...],
-) -> bool:
-    """Ensure a research plan retains explicit, corpus-backed query dimensions."""
-    if getattr(semantics, "operation", "search") == "compare" and metadata_lookup(store, query, 1):
-        return True
-    # Authoritative exact/quotation routes already preserve the parsed legal
-    # target and do not create a decomposed research plan.  Their direct
-    # resolver is the semantic owner, so entity mentions in the quoted text
-    # must not be mistaken for uncovered research dimensions.
-    if (
-        getattr(semantics, "requested_function", "retrieval") in {"exact_citation", "temporal_quotation"}
-        or (
-            getattr(semantics, "requested_function", "retrieval") == "proposition_verification"
-            and len(tuple(getattr(semantics, "legal_references", ()) or ())) == 1
-        )
-    ):
-        return True
-    config = getattr(store, "config", None)
-    research: dict = getattr(config, "setting", lambda *_: {})("research", {}) or {}
-    normalized = normalize_intent_text(query)
-    hints = research.get("semantic_hints", {}) if isinstance(research, dict) else {}
-
-    def hinted(name: str) -> bool:
-        values = hints.get(name, ()) if isinstance(hints, dict) else ()
-        return contains_intent_phrase(normalized, tuple(str(value) for value in values if isinstance(value, str)))
-
-    entity_labels = set(_research_entities(research, normalized))
-    planned_entities = {
-        entity
-        for requirement in requirements
-        for entity in requirement.required_entities
-    }
-    if len(entity_labels) > 1 and not entity_labels <= planned_entities:
-        return False
-
-    instrument_roles = set(_instrument_scope_roles(getattr(semantics, "source_scopes", ())))
-    planned_roles = {
-        str(requirement.source_role)
-        for requirement in requirements
-        if requirement.source_role
-    }
-    if len(instrument_roles) > 1 and not instrument_roles <= planned_roles:
-        return False
-    if semantics.source_role and semantics.source_role not in planned_roles and requirements:
-        return False
-
-    complex_signal = hinted("comparison") or hinted("procedure") or hinted("relation")
-    entity_scope_requirement = any(
-        entity_labels <= set(requirement.required_entities)
-        for requirement in requirements
-    )
-    if (
-        len(entity_labels) > 1
-        and (complex_signal or len(requirements) > 1)
-        and len(requirements) < 2
-        and not entity_scope_requirement
-    ):
-        return False
-    if complex_signal and not requirements and not _single_support_covers_query(store, query):
-        return False
-    if semantics.relation_intent and len(entity_labels) > 1:
-        covered = all(
-            entity in planned_entities
-            for entity in entity_labels
-        )
-        if not covered:
-            return False
-    return True
-
-
-def _research_requirements_for_ask(
-    store: EvidenceStore,
-    semantics,
-    query: str,
-    *,
-    information_needs=(),
-) -> tuple[EvidenceRequirement, ...]:
-    """Derive typed requirements from corpus-backed semantic dimensions."""
-    operation = getattr(semantics, "operation", "search")
-    historical_pre_change = getattr(semantics, "temporal_scope", None) == "historical_pre_change"
-    if (
-        getattr(semantics, "requested_function", "retrieval") != "retrieval"
-        and operation not in {"compare", "analyze"}
-        and not historical_pre_change
-    ):
-        return ()
-    config = getattr(store, "config", None)
-    research: dict = getattr(config, "setting", lambda *_: {})("research", {}) or {}
-    targets = tuple(str(value) for value in (getattr(semantics, "targets", ()) or ()))
-    instrument_roles = _instrument_scope_roles(getattr(semantics, "source_scopes", ()))
-
-    # Metadata comparison is still evidence comparison: each source role must
-    # contribute its own grounded metadata field before publication.
-    if operation == "compare" and "signatory_metadata" in targets:
-        return tuple(
-            EvidenceRequirement(
-                f"signatory_{role}",
-                description=f"{role} signatories",
-                source_role=role,
-                temporal_context=role,
-                metadata_field="signatories",
-            )
-            for role in instrument_roles
-        )
-
-    if historical_pre_change:
-        target = next(
-            (value for value in (getattr(semantics, "legal_references", ()) or ()) if value),
-            next((value for value in targets if value.casefold().startswith("pasal ")), ""),
-        )
-        _, relation_edges = amendment_relation_lookup(store, query)
-        projection = next(
-            (edge.get("relation_projection") or {} for edge in relation_edges if edge.get("relation_projection")),
-            {},
-        )
-        role = str(projection.get("source_role") or "") or None
-        source_label = str(projection.get("source_label") or query)
-        intent = intent_config_for(getattr(config, "query_strategy", "generic"), config)
-        relation_families = intent.get("document_relation", {}).get("relation_families", {})
-        deletion_terms = tuple(
-            str(value).casefold()
-            for value in (
-                relation_families.get("DELETE_OR_REMOVE_PROVISION", {}).get("terms", ())
-                if isinstance(relation_families, dict)
-                else ()
-            )
-            if isinstance(value, str)
-        )
-        return (
-            EvidenceRequirement(
-                "historical_normative_text",
-                description="historical normative text",
-                retrieval_query=target or query,
-                explicit_references=(target,) if target else (),
-                legal_target=target or None,
-                source_role=role,
-                temporal_context=role,
-                authority_kinds=("normative_legal_text",),
-            ),
-            EvidenceRequirement(
-                "deletion_provenance",
-                description="deletion/amendment provenance",
-                retrieval_query=source_label,
-                legal_target=target or None,
-                source_role=role,
-                temporal_context=role,
-                authority_kinds=("instrument_provenance", "normative_legal_text"),
-                support_terms=deletion_terms,
-                requires_final_citation=True,
-            ),
-        )
-
-    if operation == "analyze":
-        operation_policy = research.get("operation_requirements", {}) if isinstance(research, dict) else {}
-        analysis_policy = operation_policy.get("analyze", {}) if isinstance(operation_policy, dict) else {}
-        if not isinstance(analysis_policy, dict):
-            analysis_policy = {}
-        source_role = str(analysis_policy.get("source_role") or "") or None
-        references = tuple(str(value) for value in (getattr(semantics, "legal_references", ()) or ()) if value)
-        analysis_requirements: list[EvidenceRequirement] = []
-        for index, reference in enumerate(references, 1):
-            analysis_requirements.append(
-                EvidenceRequirement(
-                    "analysis_issue_provisions" if index == 1 else f"analysis_issue_provision_{index}",
-                    description="issue-relevant constitutional provisions",
-                    retrieval_query=reference,
-                    explicit_references=(reference,),
-                    legal_target=reference,
-                    source_role=source_role,
-                    temporal_context=source_role,
-                    authority_kinds=("normative_legal_text",),
-                )
-            )
-        limitation_map = analysis_policy.get("limitations_by_target", {})
-        limitations: tuple[str, ...]
-        if isinstance(limitation_map, dict) and references:
-            limitations = tuple(
-                str(value)
-                for target, values in limitation_map.items()
-                if normalize_intent_text(str(target)) in {normalize_intent_text(reference) for reference in references}
-                for value in (values if isinstance(values, (tuple, list)) else ())
-                if isinstance(value, str) and value.strip()
-            )
-        else:
-            limitations = tuple(
-                str(value)
-                for value in analysis_policy.get("limitations_references", ())
-                if isinstance(value, str) and value.strip()
-            )
-        for index, reference in enumerate(limitations, 1):
-            analysis_requirements.append(
-                EvidenceRequirement(
-                    "analysis_limitations_exceptions" if index == 1 else f"analysis_limitation_exception_{index}",
-                    description="applicable limitations/exceptions",
-                    retrieval_query=reference,
-                    explicit_references=(reference,),
-                    source_role=source_role,
-                    temporal_context=source_role,
-                    authority_kinds=("normative_legal_text",),
-                )
-            )
-        relation_signals = tuple(
-            str(value) for value in analysis_policy.get("relation_signals", ()) if isinstance(value, str) and value.strip()
-        )
-        if getattr(semantics, "relation_intent", None) or contains_intent_phrase(query, relation_signals):
-            analysis_requirements.append(
-                EvidenceRequirement(
-                    "analysis_historical_relation",
-                    description="historical/relation support",
-                    retrieval_query=query,
-                    source_role=source_role,
-                    temporal_context=source_role,
-                    authority_kinds=("normative_legal_text", "instrument_provenance"),
-                )
-            )
-        return tuple(analysis_requirements)
-
-    planning_terms = tuple(
-        value
-        for need in information_needs
-        for value in (
-            getattr(need, "query", None),
-            getattr(need, "description", None),
-            *tuple(getattr(need, "concepts", ()) or ()),
-        )
-        if isinstance(value, str) and value.strip()
-    )
-    # The planner may name a semantic need, but only the corpus-owned rules
-    # below turn that proposal into a typed requirement.
-    normalized = normalize_intent_text(" ".join((query, *planning_terms)))
-    generation = research.get("requirement_generation", {}) if isinstance(research, dict) else {}
-    if not isinstance(generation, dict):
-        return ()
-    delimiters = generation.get("conjunction_delimiters") or ()
-    if not isinstance(delimiters, (tuple, list)):
-        delimiters = ()
-    segments = []
-    for delimiter in delimiters:
-        if isinstance(delimiter, str):
-            segments = [part.strip() for part in normalized.split(f" {normalize_intent_text(delimiter)} ") if part.strip()]
-            if len(segments) > 1:
-                break
-    minimums = generation.get("minimum_supports") or {}
-    if not isinstance(minimums, dict):
-        minimums = {}
-    hints = research.get("semantic_hints", {}) if isinstance(research, dict) else {}
-    entities = _research_entities(research, normalized)
-    all_entities = tuple(_research_entity_labels(research))
-
-    def hinted(name: str) -> bool:
-        values = hints.get(name, ()) if isinstance(hints, dict) else ()
-        return contains_intent_phrase(normalized, tuple(str(value) for value in values if isinstance(value, str)))
-
-    support_terms = research.get("support_terms", {}) if isinstance(research, dict) else {}
-    authority_terms = tuple(str(value) for value in support_terms.get("authority", ()) if isinstance(value, str))
-    procedure_terms = tuple(str(value) for value in support_terms.get("procedure", ()) if isinstance(value, str))
-    relation_terms = tuple(str(value) for value in support_terms.get("relation", ()) if isinstance(value, str))
-    source_role_labels = intent_config_for(
-        getattr(store.config, "structured_strategy", "generic"), store.config
-    ).get("source_role_labels", {})
-    instrument_scope_terms = tuple(
-        str(value).casefold()
-        for value in research.get("instrument_scope_terms", ())
-        if isinstance(value, str) and value.strip()
-    )
-    if len(instrument_roles) > 1:
-        requirements = tuple(
-            EvidenceRequirement(
-                f"instrument_{role}",
-                description=role,
-                retrieval_query=" ".join(
-                    (str(source_role_labels.get(role, "")), *instrument_scope_terms)
-                ).strip() or query,
-                source_role=role,
-                temporal_context=role,
-                semantic_terms=tuple(meaningful_tokens(str(source_role_labels.get(role, "")))),
-                support_terms=instrument_scope_terms,
-                authority_kinds=("instrument_provenance", "normative_legal_text"),
-            )
-            for role in instrument_roles
-        )
-        operation_policy = research.get("operation_requirements", {}) if isinstance(research, dict) else {}
-        change_terms = tuple(
-            str(value)
-            for value in (
-                operation_policy.get("change_relation_signals", ())
-                if isinstance(operation_policy, dict)
-                else ()
-            )
-            if isinstance(value, str)
-        )
-        relation_required = bool(
-            getattr(semantics, "requires_graph", False)
-            or getattr(semantics, "relation_intent", None)
-            or contains_intent_phrase(query, change_terms)
-        )
-        if relation_required:
-            requirements += (
-                EvidenceRequirement(
-                    "change_relations",
-                    description="change relations",
-                    retrieval_query=query,
-                    support_terms=tuple(dict.fromkeys((*instrument_scope_terms, *change_terms))),
-                    required_operation_terms=("mengubah",) if "mengubah" in change_terms else (),
-                    authority_kinds=("instrument_provenance", "normative_legal_text"),
-                    allow_shared=True,
-                ),
-            )
-        return requirements
-    if len(entities) > 1 and (hinted("comparison") or (hinted("authority") and len(entities) > 1)):
-        return tuple(
-            EvidenceRequirement(
-                f"entity_{index}",
-                description=entity,
-                retrieval_query=f"{entity} {' '.join(authority_terms)}".strip(),
-                required_entities=(entity,),
-                contrast_entities=tuple(value for value in all_entities if value != entity),
-                support_terms=authority_terms,
-                entity_must_lead=True,
-                authority_kinds=("normative_legal_text",),
-            )
-            for index, entity in enumerate(entities, 1)
-        )
-    planner_requests_relation = any(
-        bool(getattr(need, "relation_traversal", False))
-        or str(getattr(need, "kind", "")).casefold() in {"relation", "multi_hop", "multi-hop"}
-        for need in information_needs
-    )
-    if len(entities) > 1 and (hinted("relation") or planner_requests_relation):
-        relation_terms = _research_relation_terms(
-            store,
-            research,
-            normalized if planner_requests_relation else query,
-            entities,
-        )
-        return tuple(
-            EvidenceRequirement(
-                f"relation_{index}",
-                description=entity,
-                retrieval_query=f"{entity} {_research_focus_query(store, research, query)}",
-                required_entities=(entity,),
-                relation_endpoints=entities,
-                # Every assigned support must carry both typed endpoints and
-                # at least one corpus-owned operation cue; independent entity
-                # mentions cannot complete the relation.
-                support_terms=relation_terms,
-                authority_kinds=("normative_legal_text",),
-                # A planner-requested traversal may be supported by one
-                # source-backed provision whose legal-unit hierarchy is
-                # corpus-defined (Pasal 7B is depth 2).  The legacy typed
-                # relation route keeps its existing depth constraint.
-                hierarchy_depth=None if planner_requests_relation else 3,
-                allow_shared=len(entities) > 2,
-            )
-            for index, entity in enumerate(entities, 1)
-        )
-    if len(segments) > 1 and not _single_support_covers_query(store, query):
-        return tuple(
-            EvidenceRequirement(
-                f"dimension_{index}",
-                description=segment,
-                retrieval_query=_research_focus_query(store, research, segment),
-                semantic_terms=_research_semantic_terms(store, research, segment, ()),
-            )
-            for index, segment in enumerate(segments, 1)
-        )
-    if hinted("procedure") and _procedure_applicable(research, normalized, entities):
-        family = _procedure_family(research, normalized, entities)
-        family_requirements = research.get("procedure_requirements_by_family", {}) if isinstance(research, dict) else {}
-        configured_stages = (
-            family_requirements.get(family, ())
-            if family and isinstance(family_requirements, dict)
-            else ()
-        )
-        # The historical top-level procedure contract is the corpus-owned
-        # impeachment template. Dispatch it by family without duplicating the
-        # requirement rows in configuration.
-        stages = configured_stages or (
-            research.get("procedure_requirements", ()) if isinstance(research, dict) else ()
-        )
-        if isinstance(stages, (tuple, list)) and stages:
-            return tuple(
-                EvidenceRequirement(
-                    str(stage["requirement_id"]),
-                    description=str(stage.get("description") or stage["requirement_id"]),
-                    retrieval_query=" ".join(
-                        (*tuple(str(value) for value in stage.get("required_entities") or ()),
-                         *tuple(str(value) for value in stage.get("support_terms") or ()))
-                    ),
-                    required_entities=tuple(str(value) for value in stage.get("required_entities") or ()),
-                    support_terms=tuple(str(value) for value in stage.get("support_terms") or ()),
-                    authority_kinds=("normative_legal_text",),
-                    hierarchy_depth=int(stage["hierarchy_depth"]) if stage.get("hierarchy_depth") else None,
-                )
-                for stage in stages
-                if isinstance(stage, dict) and stage.get("requirement_id")
-            )
-        try:
-            minimum = max(1, int(minimums.get("procedure", 3)))
-        except (TypeError, ValueError):
-            minimum = 3
-        return (
-            EvidenceRequirement(
-                "procedure",
-                description="procedure",
-                retrieval_query=_research_focus_query(store, research, query),
-                required_entities=entities,
-                semantic_terms=_research_semantic_terms(store, research, query, entities),
-                support_terms=procedure_terms,
-                authority_kinds=("normative_legal_text",),
-                min_supports=minimum,
-            ),
-        )
-    if entities and hinted("authority"):
-        try:
-            minimum = max(1, int(minimums.get("authority", 2)))
-        except (TypeError, ValueError):
-            minimum = 2
-        entity = entities[0]
-        return (
-            EvidenceRequirement(
-                "authority",
-                description=entity,
-                retrieval_query=_research_focus_query(store, research, query),
-                required_entities=(entity,),
-                contrast_entities=tuple(value for value in all_entities if value != entity),
-                support_terms=authority_terms,
-                entity_must_lead=True,
-                authority_kinds=("normative_legal_text",),
-                min_supports=minimum,
-                allow_partial=True,
-            ),
-        )
-    references = tuple(getattr(semantics, "legal_references", ()) or ())
-    if len(references) > 1:
-        return tuple(
-            EvidenceRequirement(
-                f"reference_{index}",
-                description=reference,
-                retrieval_query=reference,
-                explicit_references=(reference,),
-            )
-            for index, reference in enumerate(references, 1)
-        )
-    proposed = []
-    for index, need in enumerate(information_needs, 1):
-        concepts = tuple(
-            dict.fromkeys(
-                token
-                for concept in tuple(getattr(need, "concepts", ()) or ())
-                if isinstance(concept, str)
-                for token in meaningful_tokens(concept)
-            )
-        )
-        if not concepts:
-            continue
-        proposed.append(
-            EvidenceRequirement(
-                f"information_{index}",
-                description=str(getattr(need, "description", "")),
-                retrieval_query=getattr(need, "query", None) or query,
-                support_terms=concepts,
-            )
-        )
-    return tuple(proposed)
-
-
-def _procedure_applicable(research: dict, query: str, entities: tuple[str, ...]) -> bool:
-    """Apply a configured procedure family only within its typed scope."""
-    return _procedure_family(research, query, entities) is not None
-
-
-def _procedure_family(research: dict, query: str, entities: tuple[str, ...]) -> str | None:
-    """Return the corpus-owned procedure family matching the request."""
-    families = research.get("procedure_applicability", {}) if isinstance(research, dict) else {}
-    if not isinstance(families, dict):
-        return None
-    for name, family in families.items():
-        if not isinstance(family, dict):
-            continue
-        required_entities = tuple(str(value) for value in family.get("required_entities") or ())
-        signals = tuple(str(value) for value in family.get("signals") or ())
-        if required_entities and not set(required_entities).intersection(entities):
-            continue
-        if signals and not contains_intent_phrase(query, signals):
-            continue
-        return str(name)
-    return None
-
-
-def _instrument_scope_roles(source_scopes: tuple[str, ...]) -> tuple[str, ...]:
-    """Filter the source scopes already resolved by the control contract."""
-    return tuple(
-        role
-        for role in source_scopes
-        if str(role) not in {"current_consolidated", "original_historical"}
-    )
-
-
-def _research_focus_query(store: EvidenceStore, research: dict, query: str) -> str:
-    """Remove only corpus-configured task framing from a requirement query."""
-    signals = research.get("semantic_hints", {}) if isinstance(research, dict) else {}
-    excluded: set[str] = set()
-    if isinstance(signals, dict):
-        for name, values in signals.items():
-            if name not in {"comparison", "procedure", "relation"}:
-                continue
-            if isinstance(values, (tuple, list)):
-                for value in values:
-                    if isinstance(value, str):
-                        excluded.update(normalize_intent_text(value).split())
-    summary = store.config.setting("document_summary", {}) or {}
-    if isinstance(summary, dict):
-        for value in summary.get("document_terms", ()) or ():
-            if isinstance(value, str):
-                excluded.update(normalize_intent_text(value).split())
-    aliases = {
-        normalize_intent_text(key): normalize_intent_text(value)
-        for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
-    }
-    words = [word for word in meaningful_tokens(query, aliases=aliases) if word not in excluded]
-    return " ".join(sorted(words)) or query
-
-
-def _research_entity_labels(research: dict) -> tuple[str, ...]:
-    aliases = research.get("entity_aliases", {}) if isinstance(research, dict) else {}
-    return tuple(str(label) for label in aliases) if isinstance(aliases, dict) else ()
-
-
-def _research_entities(research: dict, query: str) -> tuple[str, ...]:
-    aliases = research.get("entity_aliases", {}) if isinstance(research, dict) else {}
-    if not isinstance(aliases, dict):
-        return ()
-    found = []
-    for label, values in aliases.items():
-        terms = (str(label), *(str(value) for value in values if isinstance(value, str))) if isinstance(values, (tuple, list)) else (str(label),)
-        if contains_intent_phrase(query, terms):
-            found.append(str(label))
-    return tuple(found)
-
-
-def _research_semantic_terms(
-    store: EvidenceStore,
-    research: dict,
-    query: str,
-    entities: tuple[str, ...],
-) -> tuple[str, ...]:
-    aliases = {
-        normalize_intent_text(key): normalize_intent_text(value)
-        for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
-    }
-    excluded = {
-        token
-        for values in (research.get("semantic_hints", {}) or {}).values()
-        if isinstance(values, (tuple, list))
-        for value in values
-        if isinstance(value, str)
-        for token in meaningful_tokens(value, aliases=aliases)
-    }
-    excluded.update(
-        token
-        for entity in entities
-        for token in meaningful_tokens(entity, aliases=aliases)
-    )
-    return tuple(sorted(meaningful_tokens(query, aliases=aliases) - excluded))
-
-
-def _research_relation_terms(
-    store: EvidenceStore,
-    research: dict,
-    query: str,
-    entities: tuple[str, ...],
-) -> tuple[str, ...]:
-    """Keep operation vocabulary separate from ranking stopwords.
-
-    A relation requirement needs one source-backed operation cue, while the
-    ranker may still ignore common terms such as ``undang``.  Entity and
-    relation framing are deliberately removed; the residual input is an
-    immutable constraint rather than a second query or a synonym table.
-    """
-    aliases = {
-        normalize_intent_text(key): normalize_intent_text(value)
-        for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
-    }
-    ignored = {
-        token
-        for values in (research.get("semantic_hints", {}) or {}).values()
-        if isinstance(values, (tuple, list))
-        for value in values
-        if isinstance(value, str)
-        for token in tokens(value, aliases=aliases)
-    }
-    ignored.update(token for entity in entities for token in tokens(entity, aliases=aliases))
-    ignored.update(
-        token
-        for value in (research.get("relation_frame_terms", ()) if isinstance(research, dict) else ())
-        if isinstance(value, str)
-        for token in tokens(value, aliases=aliases)
-    )
-    operation_terms = research.get("relation_operation_terms", {})
-    if isinstance(operation_terms, dict):
-        for phrase, values in operation_terms.items():
-            if not isinstance(phrase, str) or not isinstance(values, (tuple, list)):
-                continue
-            if contains_intent_phrase(query, (phrase,)):
-                return tuple(
-                    token
-                    for value in values
-                    if isinstance(value, str)
-                    for token in tokens(value, aliases=aliases)
-                    if token
-                )
-    return tuple(sorted({token for token in tokens(query, aliases=aliases) if len(token) > 2 and token not in ignored}))
-
-
-def _semantic_support_excluded_terms(store: EvidenceStore, aliases: dict[str, str]) -> set[str]:
-    policy = store.config.setting("lexical_normalization", {}) or {}
-    return {
-        token
-        for phrase in policy.get("semantic_support_excluded_terms", ())
-        if isinstance(phrase, str)
-        for token in tokens(phrase, aliases=aliases)
-    }
-
-
-def _single_support_covers_query(store: EvidenceStore, query: str) -> bool:
-    """Do not decompose a coordinated phrase already proved by one row."""
-    aliases = {
-        str(key).casefold(): str(value).casefold()
-        for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
-    }
-    requested = meaningful_tokens(query, aliases=aliases)
-    requested.difference_update(_semantic_support_excluded_terms(store, aliases))
-    return any(
-        validate_answer_candidate(store, row | {"route_sources": ("bm25",)})[0]
-        and requested <= meaningful_tokens(
-            " ".join(str(row.get(key) or "") for key in ("citation", "hierarchy", "quoted_text")),
-            aliases=aliases,
-        )
-        for row in sparse_index_for_store(store).search(query, limit=10)
-    )
-
-
-def _apply_clarification_constraint(store: EvidenceStore, routed: dict, resolution: dict[str, str]) -> None:
-    """Filter routed candidates without changing the user's semantic query."""
-    legal_target = resolution.get("legal_target")
-    concept_facet = resolution.get("concept_facet")
-    source_reference = resolution.get("source_reference")
-    if source_reference:
-        units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
-        requested = normalize_intent_text(source_reference)
-
-        def in_source_scope(row: dict) -> bool:
-            unit = units.get(str(row.get("legal_unit_id") or ""))
-            labels = [str(row.get("hierarchy") or "")]
-            while unit is not None:
-                labels.append(str(unit.get("unit_label") or ""))
-                unit = units.get(str(unit.get("parent_legal_unit_id") or ""))
-            return requested in normalize_intent_text(" ".join(labels))
-
-        routed["matches"] = tuple(row for row in routed.get("matches", ()) if in_source_scope(row))
-    elif legal_target:
-        units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
-
-        def matches_target(row: dict) -> bool:
-            unit = units.get(str(row.get("legal_unit_id") or ""))
-            while unit is not None:
-                if str(unit.get("unit_label") or "").casefold() == legal_target.casefold():
-                    return True
-                unit = units.get(str(unit.get("parent_legal_unit_id") or ""))
-            return False
-
-        routed["matches"] = tuple(row for row in routed.get("matches", ()) if matches_target(row))
-    elif concept_facet:
-        try:
-            allowed = set(json.loads(concept_facet))
-        except (TypeError, ValueError, json.JSONDecodeError):
-            allowed = set()
-        routed["matches"] = tuple(
-            row
-            for row in routed.get("matches", ())
-            if str(row.get("evidence_id") or row.get("legal_unit_id")) in allowed
-        )
-    if resolution and not routed.get("matches"):
-        routed["status"] = "no_results"
-
-
 class LegalRuntimeService:
     def __init__(
         self,
@@ -891,7 +161,6 @@ class LegalRuntimeService:
         strategy_registry: StrategyRegistry | None = None,
         *,
         answer_provider=None,
-        external_wording: bool | None = None,
         planning_provider: ResearchPlanningProvider | None = None,
     ):
         self.registry = CorpusRegistry(repo_root, strategies=strategy_registry)
@@ -904,13 +173,13 @@ class LegalRuntimeService:
         self._public_targets: OrderedDict[str, tuple[str, dict]] = OrderedDict()
         self._public_target_limit = 1024
         self._public_target_lock = RLock()
+        self._clarifications: OrderedDict[str, tuple[str, str, int]] = OrderedDict()
+        self._clarification_limit = 128
+        self._clarification_lock = RLock()
         self._catalog_service = None
         self._bookmarks = BookmarkRepository()
-        self._external_wording = wording_enabled_from_environment() if external_wording is None else external_wording
-        self._answer_provider = answer_provider
+        self._answer_provider = answer_provider or wording_provider_from_environment()
         self._planning_provider = planning_provider or research_planning_provider_from_environment()
-        if self._external_wording and self._answer_provider is None:
-            self._answer_provider = wording_provider_from_environment()
 
     def _store(self, corpus_id: str):
         cached = self._store_cache.get(corpus_id)
@@ -949,7 +218,7 @@ class LegalRuntimeService:
 
     def _historical_pre_change_response(self, corpus_id: str, query: str, store, semantics) -> dict:
         """Resolve historical text and its change provenance as one evidence set."""
-        requirements = _research_requirements_for_ask(store, semantics, query)
+        requirements = research_requirements_for_ask(store, semantics, query)
         relation_route = self._route_retrieval(
             corpus_id,
             query,
@@ -1118,25 +387,12 @@ class LegalRuntimeService:
             if route == "dense" and result.get("status") == "dense_unavailable":
                 fallback = self._route_retrieval(corpus_id, variant_query, store, limit=limit, route="auto")
                 result = dict(fallback) | {"retrieval_degraded_reason": result.get("reason", "dense_unavailable")}
-            if getattr(intent, "decomposition", False) and result.get("matches"):
-                # A decomposition round may follow validated structural
-                # relations from the lexical seed.  The seed remains a
-                # candidate only; graph-expanded rows still pass the normal
-                # support validator before assignment/publication.
-                seeds = tuple(
-                    dict(row) | {"route_sources": tuple(dict.fromkeys(("structured", *(row.get("route_sources") or ()))))}
-                    for row in result.get("matches", ())
-                    if row.get("evidence_id")
-                )
-                trace = graph_expand(store, seeds, {}, per_seed=max(1, limit), semantic=True)
-                expanded = []
-                for item in trace:
-                    row = store.get(str(item.get("evidence_id") or ""))
-                    if row is not None:
-                        expanded.append(dict(row) | {"route_sources": ("graph",)})
-                if expanded:
-                    result = dict(result) | {"matches": tuple(result.get("matches", ())) + tuple(expanded)}
-            return result
+            return expand_research_candidates(
+                store,
+                result,
+                decomposition=bool(getattr(intent, "decomposition", False)),
+                limit=limit,
+            )
 
         result = execute_research_rounds(
             query,
@@ -1200,20 +456,6 @@ class LegalRuntimeService:
                 return None
             self._public_targets.move_to_end(target)
             return dict(record[1])
-
-    def public_clarification_context(self, corpus_id: str, target: str | None) -> dict | None:
-        request = self._public_target_request(corpus_id, target)
-        resolution = request.get("resolution") if request and request.get("kind") == "clarification_context" else None
-        allowed = {"source_role", "source_reference", "legal_target", "relation_family", "entity", "temporal_scope", "concept_facet"}
-        if not isinstance(resolution, dict) or set(resolution) - allowed:
-            return None
-        original_query = request.get("original_query") if request else None
-        if not isinstance(original_query, str) or not original_query:
-            return None
-        return {
-            "original_query": original_query,
-            "resolution": {str(key): str(value) for key, value in resolution.items() if isinstance(value, str) and value},
-        }
 
     def public_source_status_label(self, corpus_id: str, source_role: object) -> str | None:
         store = self._store(corpus_id)
@@ -1723,9 +965,18 @@ class LegalRuntimeService:
         query: str,
         limit: int = 3,
         filters: dict | None = None,
-        clarification: dict[str, str] | None = None,
         evidence_requirements: tuple[EvidenceRequirement, ...] = (),
+        clarification_id: str | None = None,
+        clarification_answer: str | None = None,
     ) -> dict:
+        resumed = self._resume_clarification(corpus_id, clarification_id, clarification_answer)
+        if isinstance(resumed, dict):
+            return resumed
+        clarification_round = 0
+        if isinstance(resumed, tuple):
+            query, clarification_round = resumed
+        if not query.strip():
+            return _empty_query_response(corpus_id)
         store = self._store(corpus_id)
         if store is None:
             return _integrity_failure(corpus_id, query, self._integrity_error)
@@ -1745,7 +996,6 @@ class LegalRuntimeService:
                 normalized_summary,
                 limit,
                 filters,
-                clarification,
                 evidence_requirements,
             )
             return result | {"original_query": query, "normalized_query": normalized_summary}
@@ -1767,15 +1017,14 @@ class LegalRuntimeService:
             return source_document
         # A resolved legal target has precedence over the instrument classifier.
         # Amendment wording then scopes the structured lookup to that source role.
-        resolution = clarification or {}
-        relation_family = resolution.get("relation_family")
-        amendment_target = amendment_relation_target(store, query, relation_family=relation_family)
+        relation_family = None
+        amendment_target = amendment_relation_target(store, query)
         instrument = None if (
             semantics.requested_function == "temporal_quotation"
             or bool(semantics.legal_references)
             or amendment_target.get("mode") is not None
-            or len(_instrument_scope_roles(semantics.source_scopes)) > 1
-        ) else _instrument_intent_context(store, query)
+            or len(instrument_scope_roles(store, semantics.source_scopes)) > 1
+        ) else instrument_intent_context(store, query)
         if instrument:
             row, route, reason = instrument
             templates = _answer_templates(store)
@@ -1847,7 +1096,7 @@ class LegalRuntimeService:
                 "matches": (row,),
                 "reason": None,
                 "answer_type": "quoted_evidence",
-                "answer": self._answer_text(store, instrument_status, evidence, templates),
+                "answer": self._agent_answer(evidence, self._answer_text(store, instrument_status, evidence, templates)),
                 "context_pack": context_pack,
                 "evidence": evidence,
                 "citations": tuple(_citation_with_authority(store, item) for item in context_pack["citation_payloads"]),
@@ -1863,12 +1112,12 @@ class LegalRuntimeService:
                 "warnings": (),
                 "insufficient_reasons": (),
             }
-        semantic_request = _semantic_orchestration_required(store, query, semantics)
+        semantic_request = clarification_round > 0 or semantic_orchestration_required(store, query, semantics)
         planning_intent = replace(
-            _research_intent_for_ask(store, semantics, query, ()),
+            research_intent_for_ask(store, semantics, query, ()),
             orchestrate=semantic_request,
         )
-        planned_entities = _research_entities(
+        planned_entities = research_entities(
             (store.config.setting("research", {}) or {}),
             normalize_intent_text(query),
         )
@@ -1887,17 +1136,19 @@ class LegalRuntimeService:
             if semantic_request
             else None
         )
+        if semantic_plan and semantic_plan.clarification_question:
+            return self._clarification_response(corpus_id, query, semantic_plan, clarification_round)
         active_requirements = tuple(evidence_requirements)
         if not active_requirements:
-            active_requirements = _research_requirements_for_ask(
+            active_requirements = research_requirements_for_ask(
                 store,
                 semantics,
                 query,
                 information_needs=semantic_plan.information_needs if semantic_plan else (),
             )
-        semantic_scope_loss = not _semantic_scope_covered(store, semantics, query, active_requirements)
+        semantic_scope_loss = not semantic_scope_covered(store, semantics, query, active_requirements)
         research_intent = replace(
-            _research_intent_for_ask(store, semantics, query, active_requirements),
+            research_intent_for_ask(store, semantics, query, active_requirements),
             orchestrate=semantic_request,
         )
         if semantic_plan is not None:
@@ -1910,7 +1161,7 @@ class LegalRuntimeService:
                 intent=research_intent,
                 requirements=active_requirements,
                 planning_provider=self._planning_provider,
-                limit=_research_candidate_limit(store, query, _clarification_candidate_limit(store, query, limit)),
+                limit=_research_candidate_limit(store, query, limit),
                 required_entities=tuple(
                     dict.fromkeys(
                         value
@@ -1941,26 +1192,18 @@ class LegalRuntimeService:
                 corpus_id,
                 query,
                 store,
-                limit=_clarification_candidate_limit(store, query, limit),
+                limit=limit,
                 metadata_filters=filters,
                 allow_navigation=semantics.requested_function != "temporal_quotation",
                 allow_relation=semantics.requested_function != "temporal_quotation",
                 relation_family=relation_family,
             )
             scoped_routed["original_query"] = query
-            _apply_clarification_constraint(store, scoped_routed, resolution)
             if (
                 scope["route"] == "current_fact_unsupported"
                 or semantics.capability_decision.missing_capabilities
                 or not _scope_has_verified_support(store, scoped_routed)
             ):
-                decision = (
-                    clarification_decision(store, semantics, scoped_routed)
-                    if scope["route"] != "current_fact_unsupported" and not semantics.capability_decision.missing_capabilities
-                    else None
-                )
-                if decision:
-                    return scoped_routed | _clarification_response(scoped_routed, decision)
                 templates = _answer_templates(store)
                 capability = semantics.capability_decision
                 missing_corpora = capability.missing_corpora
@@ -2004,8 +1247,6 @@ class LegalRuntimeService:
                     "retrieval_candidate_count": len(scoped_routed["matches"]),
                 }
         semantic_filters = dict(filters or {})
-        if resolution.get("source_role"):
-            semantic_filters["source_role"] = resolution["source_role"]
         if semantics.source_role and "source_role" not in semantic_filters:
             semantic_filters["source_role"] = semantics.source_role
         mapped_source_roles = tuple(
@@ -2022,7 +1263,7 @@ class LegalRuntimeService:
             corpus_id,
             query,
             store,
-            limit=_clarification_candidate_limit(store, query, limit),
+            limit=limit,
             metadata_filters=semantic_filters,
             allow_navigation=semantics.requested_function != "temporal_quotation",
             allow_relation=semantics.requested_function != "temporal_quotation",
@@ -2033,23 +1274,12 @@ class LegalRuntimeService:
         # exact citation, or metadata/navigation).
         routed = typed_routed
         if research_routed is not None and (
-            semantics.operation == "analyze" or not _is_authoritative_retrieval_route(typed_routed)
+            semantics.operation == "analyze" or not authoritative_retrieval_route(typed_routed)
         ):
             routed = research_routed
         routed["operation"] = semantics.operation
         routed["source_scopes"] = semantics.source_scopes
         routed["temporal_scope"] = semantics.temporal_scope
-        _apply_clarification_constraint(store, routed, resolution)
-        if resolution.get("entity"):
-            routed["matches"] = tuple(
-                row for row in routed.get("matches", ()) if row.get("entity_identity") == resolution["entity"]
-            )
-        if resolution.get("temporal_scope"):
-            routed["matches"] = tuple(
-                row for row in routed.get("matches", ()) if row.get("temporal_context") == resolution["temporal_scope"]
-            )
-        if not routed.get("matches") and resolution:
-            routed["status"] = "no_results"
         if semantic_scope_loss:
             routed["semantic_scope_loss"] = True
         evidence_set = collect_evidence_set(store, routed.get("matches", ()), active_requirements) if active_requirements else None
@@ -2075,16 +1305,27 @@ class LegalRuntimeService:
         ask_route = _ask_route(routed["route"])
         templates = _answer_templates(store)
         routed["original_query"] = query
-        decision = None if clarification or semantics.requires_comparison else clarification_decision(store, semantics, routed)
-        if decision:
-            return routed | _clarification_response(routed, decision)
+        ambiguous = ambiguity_reason(semantics, routed)
+        if ambiguous:
+            return project_response(
+                routed | {"reason": ambiguous},
+                AnswerDecision(
+                    "insufficient_evidence",
+                    ask_route,
+                    "none",
+                    templates["insufficient"],
+                    empty_context_pack(ambiguous),
+                    insufficient_reasons=(ambiguous,),
+                    reason_code=ambiguous,
+                ),
+            )
         if routed.get("route") == "document_relation":
             return _relation_response(store, routed)
         if routed["status"] != "found":
             public_status = (
                 "insufficient_evidence"
                 if routed.get("route")
-                in {"metadata_not_found", "relation_not_found", "structured_not_found", "scope_unresolved"}
+                in {"metadata_not_found", "metadata_scope_unresolved", "relation_not_found", "structured_not_found", "scope_unresolved"}
                 else routed["status"]
             )
             context_pack = empty_context_pack(routed.get("reason") or routed["status"])
@@ -2241,8 +1482,57 @@ class LegalRuntimeService:
         )
         return _attach_source_reference_provenance(store, query, response)
 
+    def _clarification_response(self, corpus_id: str, query: str, plan: ResearchPlan, round_number: int) -> dict:
+        if round_number >= 1:
+            return _clarification_exhausted_response(corpus_id)
+        token = uuid4().hex
+        with self._clarification_lock:
+            self._clarifications[token] = (corpus_id, query, round_number)
+            self._clarifications.move_to_end(token)
+            while len(self._clarifications) > self._clarification_limit:
+                self._clarifications.popitem(last=False)
+        return {
+            "status": "clarification_required",
+            "route": "planner_clarification",
+            "intent": "clarification",
+            "corpus_id": corpus_id,
+            "original_query": query,
+            "answer": plan.clarification_question,
+            "clarification_id": token,
+            "missing_dimensions": plan.missing_dimensions,
+            "evidence": (),
+            "citations": (),
+            "final_citations": (),
+            "historical_citations": (),
+            "metadata_support": (),
+            "structural_support": (),
+            "trace_support": (),
+            "viewer_refs": (),
+            "context_pack": empty_context_pack("clarification_required"),
+            "answer_scope": "clarification_required",
+            "answer_type": "none",
+            "warnings": (),
+            "insufficient_reasons": (),
+        }
+
+    def _resume_clarification(
+        self,
+        corpus_id: str,
+        clarification_id: str | None,
+        clarification_answer: str | None,
+    ) -> tuple[str, int] | dict | None:
+        if clarification_id is None and clarification_answer is None:
+            return None
+        if not isinstance(clarification_id, str) or not isinstance(clarification_answer, str) or not clarification_answer.strip():
+            return _clarification_invalid_response(corpus_id)
+        with self._clarification_lock:
+            pending = self._clarifications.pop(clarification_id, None)
+        if pending is None or pending[0] != corpus_id:
+            return _clarification_invalid_response(corpus_id)
+        return f"{pending[1]}\n\nJawaban klarifikasi pengguna: {clarification_answer.strip()}", pending[2] + 1
+
     def _agent_answer(self, evidence: tuple[dict, ...], fallback: str) -> str:
-        if not self._external_wording or self._answer_provider is None:
+        if self._answer_provider is None:
             return fallback
         verified_claims = build_verified_claim_set(evidence)
         if not verified_claims.claims:
@@ -2283,7 +1573,8 @@ class LegalRuntimeService:
             return f"Klaim “{claim.claim_text}” didukung oleh segmen terverifikasi: {segment or quote}."
         source_label = _source_status_label(evidence[0], store)
         citation = evidence[0].get("label") or evidence[0].get("citation") or "Bukti"
-        prefix = f"{source_label} — " if evidence[0].get("source_role") != "current_consolidated" and source_label else ""
+        preferred_role = getattr(store.config, "preferred_source_role", None)
+        prefix = f"{source_label} — " if evidence[0].get("source_role") != preferred_role and source_label else ""
         return f"{prefix}{citation}: {quote}" if quote else templates["citation"].format(citation=citation)
 
 
@@ -2293,12 +1584,9 @@ def _compact_text(value: object) -> str:
 
 def _semantic_supports_query(store: EvidenceStore, query: str, row: dict) -> bool:
     """Guard the single-row lexical fallback after safe lexical normalization."""
-    aliases = {
-        str(key).casefold(): str(value).casefold()
-        for key, value in (store.config.setting("lexical_normalization", {}) or {}).get("aliases", {}).items()
-    }
+    aliases = lexical_aliases(store.config)
     requested = meaningful_tokens(query, aliases=aliases)
-    requested.difference_update(_semantic_support_excluded_terms(store, aliases))
+    requested.difference_update(semantic_support_excluded_terms(store, aliases))
     source = " ".join(
         str(value or "")
         for value in (row.get("citation"), " ".join(row.get("hierarchy") or ()), row.get("quoted_text"))
@@ -2368,20 +1656,6 @@ def _empty_citation_fields() -> dict:
 def _answer_templates(store) -> dict[str, str]:
     configured: dict = getattr(getattr(store, "config", None), "setting", lambda *args: {})("answer_templates", {})
     return _ANSWER_TEMPLATES | dict(configured or {})
-
-
-def _clarification_response(routed: dict, decision) -> dict:
-    options = tuple({"label": item.label, "resolution": item.resolution} for item in decision.options)
-    return {
-        "status": "clarification_required", "route": _ask_route(str(routed.get("route") or "")), "intent": routed.get("intent"),
-        "reason": routed.get("reason") or "ambiguous_interpretation", "answer_type": "clarification", "answer": decision.question,
-        "answer_scope": "clarification", "clarification_kind": decision.kind, "clarification_question": decision.question,
-        "clarification_options": options,
-        "context_pack": empty_context_pack(routed.get("reason") or "ambiguous_interpretation"), "evidence": (), "citations": (),
-        "final_citations": (), "historical_citations": (), "metadata_support": (), "structural_support": (), "trace_support": (),
-        "viewer_refs": (), "metadata_facts": (), "legal_relations": (), "warnings": ("clarification_required",),
-        "insufficient_reasons": ("ambiguous_interpretation",),
-    }
 
 
 def _scope_has_verified_support(store, routed: dict) -> bool:
@@ -3195,7 +2469,7 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
         "relation_id": relation.get("relation_id"),
         "support_kind": "article_relation",
         "fact_kind": "article_relation",
-        "display_label": relation.get("target_label") or relation.get("target_citation") or relation.get("relation_type") or "Relasi Pasal",
+        "display_label": relation.get("target_label") or relation.get("target_citation") or relation.get("relation_type") or "Relasi hukum",
         "display_text": source_quote or relation.get("quoted_text") or row.get("quoted_text"),
         "bbox_refs": proof_bbox_refs,
         "text_span_ids": proof_text_span_ids,
@@ -3357,7 +2631,20 @@ def _document_relation_answer(store, relations: tuple[dict, ...]) -> str:
     relation_config = intent.get("document_relation", {}) or {}
     labels = intent.get("source_role_labels", {}) or {}
     prefix = str(relation_config.get("source_role_label_prefix", ""))
-    amendment_roles = [_document_relation_amendment_role(row) for row in relations]
+    amendment_roles = [
+        role
+        for row in relations
+        if (
+            role := next(
+                (
+                    candidate
+                    for candidate in (str(row.get("source_role") or ""), str(row.get("target_source_role") or ""))
+                    if candidate in labels
+                ),
+                None,
+            )
+        )
+    ]
     amendment_roles = [role for role in amendment_roles if role]
     names = [f"{prefix}{labels.get(role, role)}" for role in amendment_roles]
     if len(names) > 1:
@@ -3365,14 +2652,6 @@ def _document_relation_answer(store, relations: tuple[dict, ...]) -> str:
         return str(relation_config.get("document_answer_template", "{relations}")).format(relations=listed)
     name = names[0] if names else "Perubahan"
     return str(relation_config.get("single_document_answer_template", "{relation}")).format(relation=name)
-
-
-def _document_relation_amendment_role(row: dict) -> str | None:
-    for key in ("source_role", "target_source_role"):
-        role = str(row.get(key) or "")
-        if role.startswith("amendment_"):
-            return role
-    return None
 
 
 def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: tuple[dict, ...]) -> str:
@@ -3383,7 +2662,7 @@ def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: 
             if target:
                 by_target.setdefault(target, set()).add(str(row.get("relation_type") or ""))
         labels = []
-        for target in sorted(by_target, key=_legal_reference_sort_key):
+        for target in sorted(by_target, key=_natural_label_sort_key):
             types = by_target[target]
             suffix = " / ".join(relation_labels[relation] for relation in ("DELETES", "MODIFIES", "RENAMES", "RENUMBERED_TO") if relation in types)
             if "AMBIGUOUS_OPERATION" in types:
@@ -3400,7 +2679,7 @@ def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: 
     exact_labels = labels_for(tuple(relations))
     trace_labels = labels_for(tuple(trace_support))
     if not exact_labels and not trace_labels:
-        return "Sumber terverifikasi tidak memuat relasi pasal yang dapat dipublikasikan."
+        return "Sumber terverifikasi tidak memuat relasi hukum yang dapat dipublikasikan."
     source_label = next(
         (str(row.get("source_label") or "").removesuffix(" Scope") for row in (*relations, *trace_support) if row.get("source_label")),
         "Sumber perubahan",
@@ -3415,46 +2694,12 @@ def _article_relation_answer(store, relations: tuple[dict, ...], trace_support: 
     return f"{source_label} secara terverifikasi mengubah {', '.join(exact_labels)}."
 
 
-def _legal_reference_sort_key(value: str) -> tuple[int, str]:
-    match = re.search(r"Pasal\s*(\d+)([A-Za-z]?)", value)
-    if not match:
-        return (10**9, value.casefold())
-    return (int(match.group(1)), match.group(2).casefold())
-
-
-def _instrument_intent_context(store, query: str) -> tuple[dict | None, str, str] | None:
-    if store is None:
-        return None
-    config = getattr(store, "config", None)
-    intent = intent_config_for(getattr(config, "structured_strategy", "generic"), config)
-    decision = resolve_instrument_intent(query, intent, corpus=getattr(config, "corpus_id", ""))
-    if metadata_lookup(store, query, 1) and decision.reason not in {"analysis_metadata_conflict", "unsupported_analysis_intent"}:
-        return None
-    if decision.target_status == "not_instrument":
-        return None
-    if decision.target_status == "instrument_unresolved":
-        return None, "instrument_unresolved", decision.reason
-    row = next(
-        (
-            item
-            for item in store.evidence
-            if item.get("source_role") == decision.amendment and item.get("citation") == decision.target_citation
-        ),
-        None,
-    )
-    if row is None:
-        return None, "instrument_unresolved", decision.reason
-    row = row | {
-        "route_sources": ("structured",),
-        "candidate_type": f"instrument_{decision.role_family}_candidate",
-    }
-    accepted, _ = validate_answer_candidate(store, row)
-    if accepted:
-        return row, "instrument_resolved_answerable", "answer_evidence"
-    return (
-        row | {"forced_rejection_reason": "instrument_resolved_fail_closed"},
-        "instrument_resolved_fail_closed",
-        "instrument_resolved_fail_closed",
+def _natural_label_sort_key(value: str) -> tuple[tuple[int, object], ...]:
+    """Sort configured legal labels without knowing a corpus's vocabulary."""
+    return tuple(
+        (1, int(part)) if part.isdigit() else (0, part.casefold())
+        for part in re.split(r"(\d+)", value)
+        if part
     )
 
 
@@ -3584,7 +2829,7 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
     explicit_anchor_match = any(
         len(anchor.split()) > 1 and _query_contains_term(folded_query, anchor) for anchor in anchors
     )
-    semantic_required = tuple(term for term in required if term not in anchors or "pasal" not in term)
+    semantic_required = tuple(term for term in required if term not in anchors or not _is_legal_reference_term(store, term))
     marker_context = role_anchor_match or natural_discrepancy or any(_query_contains_term(folded_query, term) for term in semantic_required)
     if (
         semantic_required
@@ -3629,10 +2874,23 @@ def _source_conflict_match_score(store, conflict: dict, folded_query: str, inten
 
 
 def _query_contains_term(query: str, term: str) -> bool:
-    """Match policy terms on token boundaries so Pasal suffixes cannot alias."""
+    """Match policy terms on token boundaries so reference suffixes cannot alias."""
     if not term:
         return False
     return re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", query) is not None
+
+
+def _is_legal_reference_term(store, term: str) -> bool:
+    try:
+        parsed = parse_legal_reference(
+            store.config.corpus_id,
+            term,
+            allow_roman_pasal=True,
+            config=store.config,
+        )
+    except ValueError:
+        return False
+    return any(parsed.values())
 
 
 def _source_document_meta(store, source_document_id: object) -> dict:

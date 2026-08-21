@@ -125,7 +125,6 @@ jobs:
         run: python scripts/measure_command.py --gate semantic_generalization_evaluation --report reports/ci-gates.jsonl --result-report reports/semantic-generalization-command.json -- python scripts/evaluate_semantic_generalization.py --report reports/semantic-generalization.json
       - name: Live deployment planner integration
         env:
-          TJIPTO_EXTERNAL_RESEARCH_PLANNING: enabled
           TJIPTO_RESEARCH_PLANNING_PROVIDER: openai_compatible
           TJIPTO_RESEARCH_PLANNING_API_KEY: ${{ secrets.TJIPTO_RESEARCH_PLANNING_API_KEY }}
           TJIPTO_RESEARCH_PLANNING_MODEL: ${{ secrets.TJIPTO_RESEARCH_PLANNING_MODEL }}

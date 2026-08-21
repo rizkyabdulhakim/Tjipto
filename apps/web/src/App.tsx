@@ -30,6 +30,7 @@ export default function App() {
   const [hasChat, setHasChat] = useState(conversation.length > 0);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [clarification, setClarification] = useState<{ id: string } | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCompactNav, setPanelCompactNav] = useState(false);
@@ -69,17 +70,18 @@ export default function App() {
     setHasChat(false);
     setRoute("chat");
     setActiveCitation(null);
+    setClarification(null);
     setMobileNavOpen(false);
   };
 
-  const submit = async (value: string, clarificationContext?: string, displayValue = value) => {
+  const submit = async (value: string) => {
     if (!hasChat) setHasChat(true);
     setRoute("chat");
     setActiveCitation(null);
     const userMsg: TMessage = {
       id: "u_" + Date.now(),
       role: "user",
-      content: displayValue,
+      content: value,
     };
     const asstId = "a_" + Date.now();
     setMessages((prev) => [
@@ -95,7 +97,8 @@ export default function App() {
     setIsStreaming(true);
 
     try {
-      const response = await askLegal(value, clarificationContext);
+      const response = await askLegal(value, clarification ?? undefined);
+      setClarification(response.clarification ? { id: response.clarification.id } : null);
       const citations = mapAskResponseToCitations(response);
       const documentSource = mapAskResponseToDocumentSource(response);
       const documentCollection = mapAskResponseToDocumentSources(response);
@@ -124,10 +127,6 @@ export default function App() {
                       sufficiency: response.sufficiency?.status,
                     }
                   : undefined,
-                clarificationOptions: (response.clarification_options ?? [])
-                  .filter((option) => option.label && option.context_target)
-                  .map((option) => ({ contextTarget: option.context_target as string, label: option.label as string })),
-                clarificationQuery: response.status === "clarification_required" ? value : undefined,
               }
             : m,
         ),
@@ -148,9 +147,6 @@ export default function App() {
       setIsStreaming(false);
     }
   };
-
-  const clarify = (query: string, contextTarget: string, label: string) =>
-    submit(query, contextTarget, `${query}\nKonteks sumber: ${label}`);
 
   const stop = () => setIsStreaming(false);
   const allCitations = messages.flatMap((message) => message.citations ?? []);
@@ -272,7 +268,6 @@ export default function App() {
                 <ChatView
                   messages={messages}
                   onSubmit={submit}
-                  onClarify={clarify}
                   isStreaming={isStreaming}
                   onStop={stop}
                   onCitationClick={setActiveCitation}

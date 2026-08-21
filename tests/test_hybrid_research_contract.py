@@ -17,7 +17,7 @@ from tjipto.retrieval.research import (
 from tjipto.retrieval.sufficiency import EvidenceRequirement, EvidenceSet, SufficiencyAssessment, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.query_semantics import interpret_query
-from tjipto.runtime.service import _research_requirements_for_ask
+from tjipto.runtime.research_control import research_requirements_for_ask
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -112,7 +112,7 @@ class HybridResearchContractTest(unittest.TestCase):
         )
         for query, expected_ids, expected_status in cases:
             semantics = interpret_query(store, "uud", query)
-            requirements = _research_requirements_for_ask(store, semantics, query)
+            requirements = research_requirements_for_ask(store, semantics, query)
             self.assertEqual({item.requirement_id for item in requirements}, expected_ids, query)
             response = service.ask("uud", query, limit=30)
             self.assertEqual(response["sufficiency"]["status"], expected_status, query)
@@ -120,7 +120,7 @@ class HybridResearchContractTest(unittest.TestCase):
                 self.assertEqual(set(response["sufficiency"]["fulfilled_requirement_ids"]), expected_ids, query)
             else:
                 self.assertEqual(response["sufficiency"]["missing_requirement_ids"], ("deletion_provenance",), query)
-        metadata_requirements = _research_requirements_for_ask(
+        metadata_requirements = research_requirements_for_ask(
             store,
             interpret_query(store, "uud", cases[1][0]),
             cases[1][0],
@@ -150,7 +150,7 @@ class HybridResearchContractTest(unittest.TestCase):
         for line in fixture.read_text(encoding="utf-8").splitlines():
             case = json.loads(line)
             semantics = interpret_query(store, "uud", case["query"])
-            requirements = _research_requirements_for_ask(store, semantics, case["query"])
+            requirements = research_requirements_for_ask(store, semantics, case["query"])
             self.assertEqual([row.requirement_id for row in requirements], case["required_ids"], case["case_id"])
             response = service.ask("uud", case["query"])
             self.assertIn(response["status"], {"answer_ready", "limited_answer"}, case["case_id"])
@@ -415,7 +415,7 @@ class HybridResearchContractTest(unittest.TestCase):
         service = LegalRuntimeService()
         store = service._store("uud")
         for query in ("kontraskan kewenangan DPR dengan DPD", "DPR dibandingkan dengan DPD dalam kewenangan"):
-            requirements = _research_requirements_for_ask(store, interpret_query(store, "uud", query), query)
+            requirements = research_requirements_for_ask(store, interpret_query(store, "uud", query), query)
             self.assertEqual({item.required_entities[0] for item in requirements}, {
                 "Dewan Perwakilan Rakyat",
                 "Dewan Perwakilan Daerah",
@@ -753,9 +753,53 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(provider.calls, 1)
         self.assertEqual(response["research_plan"].provider_status, "accepted")
         self.assertTrue(any(row.get("citation") == "Pasal 31" for row in response["matches"]))
-        self.assertEqual(response["status"], "clarification_required")
+        self.assertNotEqual(response["status"], "clarification_required")
         self.assertEqual(response["sufficiency"]["status"], "complete")
         self.assertTrue(response["evidence_set"]["support_ids"])
+
+    def test_planner_clarification_resumes_with_the_original_query(self) -> None:
+        class Provider:
+            def __init__(self):
+                self.calls = 0
+
+            def propose(self, _request):
+                self.calls += 1
+                common = {
+                    "variants": [],
+                    "retrieval_lanes": ["sparse"],
+                    "task_kind": "retrieval",
+                    "information_needs": [],
+                }
+                if self.calls == 1:
+                    return common | {
+                        "status": "clarification_required",
+                        "missing_dimensions": ["source_scope"],
+                        "clarification_question": "Naskah sumber mana yang ingin digunakan?",
+                    }
+                return common | {
+                    "status": "ready",
+                    "missing_dimensions": [],
+                    "clarification_question": None,
+                }
+
+        provider = Provider()
+        service = LegalRuntimeService(planning_provider=provider)
+        first = service.ask("uud", "Saya dilarang sekolah karena agama saya, hak konstitusional apa yang relevan?")
+        self.assertEqual(first["status"], "clarification_required")
+        self.assertEqual(first["missing_dimensions"], ("source_scope",))
+        resumed = service.ask(
+            "uud",
+            "naskah konsolidasi saat ini",
+            clarification_id=first["clarification_id"],
+            clarification_answer="naskah konsolidasi saat ini",
+        )
+        self.assertNotEqual(resumed["status"], "clarification_required")
+        self.assertEqual(provider.calls, 2)
+
+    def test_clarification_token_is_single_use_and_corpus_bound(self) -> None:
+        service = LegalRuntimeService()
+        invalid = service.ask("uud", "jawaban", clarification_id="unknown", clarification_answer="jawaban")
+        self.assertEqual(invalid["reason"], "clarification_session_invalid")
 
     def test_planner_can_name_procedure_need_but_server_binds_corpus_requirements(self) -> None:
         class Provider:

@@ -54,20 +54,18 @@ export interface SupportGroupPayload {
 }
 
 export interface TjiptoAskResponse {
-  kind: "answer" | "document" | "documents" | "clarification" | "unavailable";
+  kind: "answer" | "document" | "documents" | "unavailable";
   status: string;
   answer?: string;
   operation?: string;
   source_scopes?: { label: string }[];
   sufficiency?: { status: "complete" | "partial" | "insufficient"; missing_requirement_ids?: string[] };
-  clarification_kind?: "legal_target" | "source_scope" | "temporal_scope" | "relation_operation" | "entity" | "concept_facet";
-  question?: string;
   original_query?: string;
-  document?: { label?: string; title?: string; legal_identity?: string; source_status_label?: string; viewer_target?: ViewerTargetPayload };
+  document?: LegalDocumentPayload & { label?: string; source_status_label?: string };
   documents?: LegalDocumentPayload[];
-  clarification_options?: { context_target?: string; label?: string }[];
   supports?: SupportPayload[];
   support_groups?: SupportGroupPayload[];
+  clarification?: { id: string; missing_dimensions: string[] };
 }
 
 export interface LegalDocumentPayload {
@@ -170,8 +168,10 @@ export interface BookmarkPointer {
   document?: LegalDocumentPayload;
 }
 
-export async function askLegal(query: string, clarificationContext?: string): Promise<TjiptoAskResponse> {
-  return request("ask", { query, ...(clarificationContext ? { clarification_context: clarificationContext } : {}) });
+export async function askLegal(query: string, clarification?: { id: string }): Promise<TjiptoAskResponse> {
+  return request("ask", clarification
+    ? { query, clarification_id: clarification.id, clarification_answer: query }
+    : { query });
 }
 
 export async function searchLegal(query: string, filters: Record<string, string> = {}): Promise<CatalogResponse> {
@@ -253,40 +253,37 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
 
 export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Citation | null {
   const source = response.document;
-  const target = source?.viewer_target?.public_target_id;
-  if (!target) return null;
-  return {
-    id: 1,
-    publicTargetId: target,
-    documentTitle: source.label ?? source.title ?? source.legal_identity ?? "Dokumen sumber",
-    regulationType: "legal",
-    authorityKind: "document_source",
-    authorityLabel: "Sumber dokumen",
-    citationText: "Buka PDF sumber",
-    viewerMode: "document",
-    pageNumber: Number(source.viewer_target?.page_numbers?.[0] ?? 1),
-    excerpt: "",
-  };
+  return source ? mapDocumentToCitation(source, 1, source.label, false) : null;
 }
 
 export function mapAskResponseToDocumentSources(response: TjiptoAskResponse): Citation[] {
   return (response.documents ?? []).flatMap((source, index) => {
-    const target = source.viewer_target?.public_target_id;
-    if (!target) return [];
-    return [{
-      id: index + 1,
-      publicTargetId: target,
-      documentTitle: source.title ?? source.legal_identity ?? "Dokumen sumber",
-      regulationType: "legal",
-      authorityKind: "document_source" as const,
-      authorityLabel: source.document_role ?? "Sumber dokumen",
-      citationText: "Buka PDF sumber",
-      viewerMode: "document" as const,
-      pageNumber: Number(source.viewer_target?.page_numbers?.[0] ?? 1),
-      excerpt: source.title ?? "",
-      sourceStatusLabel: source.document_role,
-    }];
+    const citation = mapDocumentToCitation(source, index + 1, undefined, true);
+    return citation ? [citation] : [];
   });
+}
+
+function mapDocumentToCitation(
+  source: LegalDocumentPayload,
+  id: number,
+  preferredTitle?: string,
+  includeRole = false,
+): Citation | null {
+  const target = source.viewer_target?.public_target_id;
+  if (!target) return null;
+  return {
+    id,
+    publicTargetId: target,
+    documentTitle: preferredTitle ?? source.title ?? source.legal_identity ?? "Dokumen sumber",
+    regulationType: "legal",
+    authorityKind: "document_source",
+    authorityLabel: includeRole ? source.document_role ?? "Sumber dokumen" : "Sumber dokumen",
+    citationText: "Buka PDF sumber",
+    viewerMode: "document",
+    pageNumber: Number(source.viewer_target?.page_numbers?.[0] ?? 1),
+    excerpt: includeRole ? source.title ?? "" : "",
+    sourceStatusLabel: includeRole ? source.document_role : undefined,
+  };
 }
 
 export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): SupportGroup[] {

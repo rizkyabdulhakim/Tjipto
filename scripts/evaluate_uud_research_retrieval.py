@@ -96,7 +96,7 @@ def _evaluate_runtime(args: argparse.Namespace) -> int:
             "runtime_tree_sha": runtime_tree,
             "runtime_snapshot_sha256": runtime_digest,
             "family_counts": {family: sum(row["family"] == family for row in cases) for family in sorted({row["family"] for row in cases})},
-            "behavior_counts": {behavior: sum(row["expected_behavior"] == behavior for row in cases) for behavior in ("retrieve", "abstain", "clarify")},
+            "behavior_counts": {behavior: sum(row["expected_behavior"] == behavior for row in cases) for behavior in ("retrieve", "abstain")},
         },
     }
     if args.report:
@@ -144,7 +144,7 @@ def _evaluate(case: dict[str, Any], service: Any) -> dict[str, Any]:
         "gap": capability_status == "gap",
         "invalid": execution_status == "invalid",
         "errors": errors,
-        "gold": {key: case.get(key) for key in ("expected_behavior", "expected_status", "expected_route", "expected_clarification_kind", "gold_support_groups", "alternative_support_groups")},
+        "gold": {key: case.get(key) for key in ("expected_behavior", "expected_status", "expected_route", "gold_support_groups", "alternative_support_groups")},
         "observed": {
             "status": response.get("status"),
             "route": response.get("route"),
@@ -154,7 +154,6 @@ def _evaluate(case: dict[str, Any], service: Any) -> dict[str, Any]:
             "assigned_support_ids": assigned_ids,
             "requirement_assignments": (response.get("evidence_set") or {}).get("assignments"),
             "citations": actual_citations,
-            "clarification_kind": response.get("clarification_kind"),
         },
     }
 
@@ -171,8 +170,6 @@ def _compare(
         errors.append(f"status:{response.get('status')}!={case.get('expected_status')}")
     if case.get("expected_route") and response.get("route") != case["expected_route"]:
         errors.append(f"route:{response.get('route')}!={case['expected_route']}")
-    if case.get("expected_clarification_kind") and response.get("clarification_kind") != case["expected_clarification_kind"]:
-        errors.append(f"clarification_kind:{response.get('clarification_kind')}")
     required_citations = set(case.get("expected_citations") or ())
     if required_citations and not required_citations <= set(actual_citations):
         errors.append("citations_missing")

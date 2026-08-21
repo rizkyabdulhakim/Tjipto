@@ -292,6 +292,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             ("/legal/uud/viewer", {"target": "bad", "evidence_id": "forged"}),
             ("/legal/uud/bookmarks", {"evidence_id": "forged"}),
             ("/legal/uud/ask", {"query": "Pasal 1", "context_pack": {}}),
+            ("/legal/uud/ask", {"query": "Pasal 1", "clarification_context": "retired"}),
         ):
             with self.assertRaises(HTTPError) as error:
                 self._post(path, payload)

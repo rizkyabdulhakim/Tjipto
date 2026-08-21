@@ -43,7 +43,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     sys.path.insert(0, str(runtime_root / "src"))
     from tjipto.runtime.service import LegalRuntimeService
     from tjipto.runtime.query_semantics import interpret_query
-    from tjipto.runtime.service import _research_intent_for_ask, _research_requirements_for_ask
+    from tjipto.runtime.research_control import research_intent_for_ask, research_requirements_for_ask
 
     service = LegalRuntimeService(runtime_root)
     lanes: dict[str, dict[str, Any]] = {}
@@ -55,8 +55,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 if lane == "planning":
                     store = service._store(case["corpus_id"])
                     semantics = interpret_query(store, case["corpus_id"], case["query"])
-                    requirements = _research_requirements_for_ask(store, semantics, case["query"])
-                    intent = _research_intent_for_ask(store, semantics, case["query"], requirements)
+                    requirements = research_requirements_for_ask(store, semantics, case["query"])
+                    intent = research_intent_for_ask(store, semantics, case["query"], requirements)
                     response = service.research(
                         case["corpus_id"],
                         case["query"],

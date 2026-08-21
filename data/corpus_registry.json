@@ -51,13 +51,6 @@
         "kebebasan": [
           "hak"
         ],
-        "kewenangan": [
-          "kekuasaan",
-          "wewenang",
-          "tugas",
-          "fungsi",
-          "hak"
-        ],
         "lama": [
           "tahun",
           "masa jabatan"
@@ -357,6 +350,8 @@
         ],
         "analyze": {
           "source_role": "current_consolidated",
+          "issue_description": "issue-relevant constitutional provisions",
+          "limitation_description": "applicable limitations/exceptions",
           "limitations_by_target": {
             "Pasal 28": [
               "Pasal 28J"
@@ -1165,32 +1160,40 @@
         "amendment_3_historical": "Ketiga",
         "amendment_4_historical": "Keempat"
       },
-      "clarification": {
-        "choice_terms": [
-          "atau"
+      "source_role_aliases": {
+        "amendment_1_historical": [
+          "pertama",
+          "1",
+          "i"
         ],
-        "concept_aliases": {
-          "dpr": "Dewan Perwakilan Rakyat"
-        },
-        "maximum_options": 3,
-        "direct_retrieval_terms": [
-          "di mana",
-          "dimana",
-          "diatur"
+        "amendment_2_historical": [
+          "kedua",
+          "dua",
+          "2",
+          "ii"
         ],
-        "legal_target_unit_types": [
-          "pasal_record"
+        "amendment_3_historical": [
+          "ketiga",
+          "tiga",
+          "3",
+          "iii"
         ],
-        "questions": {
-          "default": "Mohon pilih konteks yang dimaksud.",
-          "legal_target": "Ketentuan hukum mana yang dimaksud?",
-          "source_scope": "Naskah sumber atau periode mana yang dimaksud?",
-          "temporal_scope": "Periode hukum mana yang dimaksud?",
-          "relation_operation": "Jenis perubahan atau hubungan hukum mana yang dimaksud?",
-          "entity": "Orang atau lembaga mana yang dimaksud?",
-          "concept_facet": "Aspek konsep mana yang dimaksud?"
-        }
+        "amendment_4_historical": [
+          "keempat",
+          "empat",
+          "4",
+          "iv"
+        ]
       },
+      "source_role_connectors": [
+        "dan",
+        "atau",
+        "serta",
+        "maupun",
+        "vs",
+        "versus"
+      ],
+      "source_role_separator_pattern": "[,/]",
       "temporal_current_terms": [
         "setelah perubahan",
         "sesudah perubahan",

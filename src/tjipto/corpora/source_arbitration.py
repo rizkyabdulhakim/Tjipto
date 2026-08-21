@@ -30,46 +30,49 @@ class SourceScopeDecision:
 def source_roles_for_query(query: str, *, strategy: str = "generic", config=None) -> tuple[str, ...]:
     intent = intent_config_for(strategy, config)
     roles = [role for role, pattern in intent["metadata_roles"] if pattern.search(query or "")]
-    if len(roles) < 2:
-        labels = intent.get("source_role_labels", {})
-        explicit_instrument = re.search(
-            r"\b(?:perubahan|amandemen)\s*(?:ke[-\s]*)?(?:pertama|kedua|ketiga|keempat|\d+|i{1,3}|iv)\b",
-            query or "",
-            re.IGNORECASE,
-        )
-        if explicit_instrument:
-            for role, label in labels.items():
-                if role in roles:
-                    continue
-                ordinal = str(label or "")
-                if not ordinal:
-                    continue
-                forms = _ordinal_forms(ordinal)
-                forms_pattern = "|".join(forms)
-                if re.search(
-                    rf"\b(?:dan|atau|serta|maupun|vs|versus|,|/)\s*(?:perubahan|amandemen)?\s*(?:ke[-\s]*)?(?:{forms_pattern})\b",
-                    query or "",
-                    re.IGNORECASE,
-                ) or re.search(
-                    rf"(?:^|[,\s])(?:{forms_pattern})\s*(?:dan|atau|serta|maupun|vs|versus|,|/)\b",
-                    query or "",
-                    re.IGNORECASE,
-                ):
-                    roles.append(role)
+    if len(roles) == 1:
+        roles.extend(_coordinated_source_roles(query, intent, excluded=set(roles)))
     return tuple(dict.fromkeys(roles))
 
 
-def _ordinal_forms(label: str) -> tuple[str, ...]:
-    """Return generic ordinal spellings used by configured source labels."""
-    forms = {label.casefold()}
-    values = {
-        "pertama": ("1", "i"),
-        "kedua": ("2", "ii", "dua"),
-        "ketiga": ("3", "iii", "tiga"),
-        "keempat": ("4", "iv", "empat"),
-    }
-    forms.update(values.get(label.casefold(), ()))
-    return tuple(sorted(forms, key=len, reverse=True))
+def _coordinated_source_roles(query: str, intent: dict, *, excluded: set[str]) -> tuple[str, ...]:
+    aliases = intent.get("source_role_aliases", {})
+    connectors = tuple(normalize_intent_text(value) for value in intent.get("source_role_connectors", ()) if value)
+    source_terms = tuple(
+        normalize_intent_text(value)
+        for value in intent.get("document_relation", {}).get("source_terms", ())
+        if value
+    )
+    if not isinstance(aliases, dict) or not connectors:
+        return ()
+    normalized = normalize_intent_text(query)
+    raw_query = str(query or "").casefold()
+    connector_pattern = "|".join(re.escape(value) for value in connectors)
+    source_pattern = "|".join(re.escape(value) for value in source_terms)
+    separator_pattern = str(intent.get("source_role_separator_pattern") or "")
+    found = []
+    for role, values in aliases.items():
+        if role in excluded:
+            continue
+        alias_pattern = "|".join(
+            re.escape(normalize_intent_text(value))
+            for value in values
+            if isinstance(value, str) and normalize_intent_text(value)
+        )
+        if not alias_pattern:
+            continue
+        optional_source = rf"(?:(?:{source_pattern})\s+)?" if source_pattern else ""
+        after_connector = rf"\b(?:{connector_pattern})\s+{optional_source}(?:ke\s+)?(?:{alias_pattern})\b"
+        before_connector = rf"\b(?:{alias_pattern})\s+(?:{connector_pattern})\b"
+        after_separator = rf"(?:{separator_pattern})\s*{optional_source}(?:ke[-\s]*)?(?:{alias_pattern})\b"
+        before_separator = rf"\b(?:{alias_pattern})\s*(?:{separator_pattern})"
+        word_match = re.search(after_connector, normalized) or re.search(before_connector, normalized)
+        separator_match = separator_pattern and (
+            re.search(after_separator, raw_query) or re.search(before_separator, raw_query)
+        )
+        if word_match or separator_match:
+            found.append(str(role))
+    return tuple(found)
 
 
 def resolve_source_scope(query: str, *, strategy: str = "generic", config=None) -> SourceScopeDecision:

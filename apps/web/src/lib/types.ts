@@ -55,8 +55,6 @@ export interface ChatMessage {
     sourceScopes: { label: string }[];
     sufficiency?: "complete" | "partial" | "insufficient";
   };
-  clarificationOptions?: { contextTarget: string; label: string }[];
-  clarificationQuery?: string;
   status?: "streaming" | "complete";
 }
 
