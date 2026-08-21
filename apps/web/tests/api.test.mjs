@@ -5,6 +5,7 @@ import {
   answerTextOrFallback,
   mapAskResponseToCitations,
   mapAskResponseToDocumentSource,
+  mapAskResponseToDocumentSources,
   mapAskResponseToSupportGroups,
   mapSearchResultToCitation,
 } from "../src/lib/api.ts";
@@ -97,6 +98,19 @@ test("maps search and document source through public targets only", () => {
   const document = mapAskResponseToDocumentSource({ kind: "document", status: "answer_ready", document: { label: "Dokumen", viewer_target: { public_target_id: "document_1" } } });
   assert.equal(document?.publicTargetId, "document_1");
   assert.equal(document?.viewerMode, "document");
+});
+
+test("maps a verified document collection to independently openable cards", () => {
+  const documents = mapAskResponseToDocumentSources({
+    kind: "documents",
+    status: "answer_ready",
+    documents: [
+      { title: "Naskah Asli", document_role: "Naskah Asli", viewer_target: { public_target_id: "original" } },
+      { title: "Perubahan Pertama", document_role: "Amandemen", viewer_target: { public_target_id: "amendment-1" } },
+    ],
+  });
+  assert.deepEqual(documents.map((document) => document.publicTargetId), ["original", "amendment-1"]);
+  assert.ok(documents.every((document) => document.viewerMode === "document"));
 });
 
 test("uses a safe answer fallback only when the public answer is empty", () => {

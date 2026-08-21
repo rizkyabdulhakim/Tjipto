@@ -17,7 +17,37 @@ class OpenAICompatibleWordingProvider:
             "model": self._model,
             "temperature": 0,
             "messages": [{"role": "user", "content": _prompt(verified_context)}],
-            "response_format": {"type": "json_object"},
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "tjipto_verified_wording",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "sentences": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "text": {"type": "string", "minLength": 1},
+                                        "claim_ids": {
+                                            "type": "array",
+                                            "minItems": 1,
+                                            "items": {"type": "string"},
+                                        },
+                                    },
+                                    "required": ["text", "claim_ids"],
+                                },
+                            },
+                        },
+                        "required": ["sentences"],
+                    },
+                },
+            },
         }
         request = Request(
             self._endpoint,

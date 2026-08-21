@@ -49,6 +49,12 @@ export interface ChatMessage {
   content: string;
   citations?: Citation[];
   supportGroups?: SupportGroup[];
+  documentCollection?: Citation[];
+  researchContext?: {
+    operation?: string;
+    sourceScopes: { label: string }[];
+    sufficiency?: "complete" | "partial" | "insufficient";
+  };
   clarificationOptions?: { contextTarget: string; label: string }[];
   clarificationQuery?: string;
   status?: "streaming" | "complete";

@@ -84,6 +84,14 @@ class RuntimeHttpContractTest(unittest.TestCase):
             self.assertTrue(result["supports"][0]["citation"]["text"], query)
             self.assertNotIn("document", result, query)
 
+    def test_research_context_is_public_without_internal_scope_identifiers(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "amandemen pertama vs kedua", "limit": 30})
+        self.assertEqual(result["operation"], "compare")
+        self.assertEqual(result["sufficiency"]["status"], "complete")
+        self.assertEqual(len(result["source_scopes"]), 2)
+        self.assertTrue(all(set(scope) == {"label"} for scope in result["source_scopes"]))
+        self._assert_public(result)
+
     def test_rc2_scenario_manifest_is_complete_and_versioned(self) -> None:
         manifest = json.loads((ROOT / "tests/scenarios/public_evidence_rc2.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["version"], 3)

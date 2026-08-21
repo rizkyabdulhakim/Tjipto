@@ -157,13 +157,33 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
                 else {"title": source.get("document_title"), "viewer_target": viewer_target}
             )
         return {"kind": "documents", "status": result.get("status"), "documents": tuple(documents)}
-    return {
+    public = {
         "kind": "answer",
         "status": result.get("status"),
         "answer": result.get("answer"),
         "supports": supports,
         "support_groups": _support_groups(projected, service, corpus_id),
     }
+    if result.get("operation"):
+        public["operation"] = result["operation"]
+    if result.get("source_scopes"):
+        public["source_scopes"] = tuple(
+            {
+                "label": (
+                    project_legal_document(document, service.catalog_documents()).get("title")
+                    if (document := service.catalog_document_for_source(role)) is not None
+                    else service.public_source_status_label(corpus_id, role) or str(role).replace("_", " ")
+                ),
+            }
+            for role in result["source_scopes"]
+        )
+    sufficiency = result.get("sufficiency")
+    if isinstance(sufficiency, dict) and sufficiency.get("status"):
+        public["sufficiency"] = {
+            "status": sufficiency["status"],
+            "missing_requirement_ids": tuple(sufficiency.get("missing_requirement_ids") or ()),
+        }
+    return public
 
 
 def _public_citation_response(result: dict, service: LegalRuntimeService, corpus_id: str) -> dict:

@@ -66,6 +66,25 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(plan.retrieval_lanes, ("hybrid",))
         self.assertEqual(observed, ["hybrid"])
 
+    def test_planner_variants_pay_dense_worker_startup_once_per_request(self) -> None:
+        class Provider:
+            def propose(self, _request):
+                return {
+                    "variants": [{"query": "varian satu"}, {"query": "varian dua"}],
+                    "retrieval_lanes": ["hybrid"],
+                    "task_kind": "comparison",
+                    "information_needs": [],
+                }
+
+        observed = []
+        execute_research(
+            "query asli",
+            lambda _query, variant: observed.append(variant.retrieval_lane) or {"matches": ()},
+            intent=ResearchIntent(comparison=True, max_rounds=1),
+            provider=Provider(),
+        )
+        self.assertEqual(observed, ["hybrid", "sparse", "sparse"])
+
     def test_stage8_9_operations_bind_requirements_to_shared_sufficiency(self) -> None:
         service = LegalRuntimeService()
         store = service._store("uud")
@@ -294,13 +313,13 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(evidence.assignment_map(), {"authority": ("president",)})
 
     def test_requirement_retry_is_scoped_and_carries_forward_support(self) -> None:
-        from tjipto.retrieval.research import execute_research_rounds
+        from tjipto.retrieval.research import QueryVariant, ResearchPlan, execute_research_rounds
 
         calls = []
         requirement = EvidenceRequirement("missing", retrieval_query="missing query", evidence_ids=("target",))
 
         def retrieve(query, variant):
-            calls.append((query, variant.requirement_id))
+            calls.append((query, variant.requirement_id, variant.retrieval_lane))
             row = {"evidence_id": "target", "status": "final"} if variant.requirement_id == "missing" else {}
             return {"status": "found" if row else "no_results", "matches": (row,) if row else ()}
 
@@ -308,8 +327,21 @@ class HybridResearchContractTest(unittest.TestCase):
         with patch("tjipto.retrieval.research.collect_evidence_set", side_effect=lambda _store, rows, reqs: EvidenceSet((rows[0],) if rows else (), (("missing", ("target",)),) if rows else (), () if rows else ("missing",))), patch(
             "tjipto.retrieval.research.assess_sufficiency", side_effect=lambda evidence, reqs, **kwargs: SufficiencyAssessment("complete" if evidence.complete else "insufficient", ("missing",) if evidence.complete else (), () if evidence.complete else ("missing",), (), False),
         ):
-            result = execute_research_rounds("original", retrieve, store=store, requirements=(requirement,), max_rounds=2)
-        self.assertEqual(calls, [("original", None), ("missing query", "missing")])
+            result = execute_research_rounds(
+                "original",
+                retrieve,
+                store=store,
+                requirements=(requirement,),
+                max_rounds=2,
+                plan=ResearchPlan(
+                    "original",
+                    ResearchIntent(max_rounds=2),
+                    (QueryVariant("original"),),
+                    retrieval_lanes=("hybrid",),
+                    requirements=(requirement,),
+                ),
+            )
+        self.assertEqual(calls, [("original", None, "hybrid"), ("missing query", "missing", "sparse")])
         self.assertEqual(result["stop_reason"], "complete")
 
     def test_requirement_marker_survives_carry_forward_deduplication(self) -> None:
@@ -587,7 +619,11 @@ class HybridResearchContractTest(unittest.TestCase):
 
         payload = json.loads(opener.call_args.args[0].data.decode("utf-8"))
         content = payload["messages"][0]["content"]
-        self.assertEqual(payload["response_format"], {"type": "json_object"})
+        self.assertEqual(payload["response_format"]["type"], "json_schema")
+        schema = payload["response_format"]["json_schema"]
+        self.assertTrue(schema["strict"])
+        self.assertEqual(schema["schema"]["properties"]["variants"]["maxItems"], 3)
+        self.assertFalse(schema["schema"]["additionalProperties"])
         for fragment in (
             '"variants":',
             '"retrieval_lanes":',

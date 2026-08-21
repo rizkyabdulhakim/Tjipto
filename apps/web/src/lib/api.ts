@@ -54,13 +54,17 @@ export interface SupportGroupPayload {
 }
 
 export interface TjiptoAskResponse {
-  kind: "answer" | "document" | "clarification" | "unavailable";
+  kind: "answer" | "document" | "documents" | "clarification" | "unavailable";
   status: string;
   answer?: string;
+  operation?: string;
+  source_scopes?: { label: string }[];
+  sufficiency?: { status: "complete" | "partial" | "insufficient"; missing_requirement_ids?: string[] };
   clarification_kind?: "legal_target" | "source_scope" | "temporal_scope" | "relation_operation" | "entity" | "concept_facet";
   question?: string;
   original_query?: string;
   document?: { label?: string; title?: string; legal_identity?: string; source_status_label?: string; viewer_target?: ViewerTargetPayload };
+  documents?: LegalDocumentPayload[];
   clarification_options?: { context_target?: string; label?: string }[];
   supports?: SupportPayload[];
   support_groups?: SupportGroupPayload[];
@@ -263,6 +267,26 @@ export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Cit
     pageNumber: Number(source.viewer_target?.page_numbers?.[0] ?? 1),
     excerpt: "",
   };
+}
+
+export function mapAskResponseToDocumentSources(response: TjiptoAskResponse): Citation[] {
+  return (response.documents ?? []).flatMap((source, index) => {
+    const target = source.viewer_target?.public_target_id;
+    if (!target) return [];
+    return [{
+      id: index + 1,
+      publicTargetId: target,
+      documentTitle: source.title ?? source.legal_identity ?? "Dokumen sumber",
+      regulationType: "legal",
+      authorityKind: "document_source" as const,
+      authorityLabel: source.document_role ?? "Sumber dokumen",
+      citationText: "Buka PDF sumber",
+      viewerMode: "document" as const,
+      pageNumber: Number(source.viewer_target?.page_numbers?.[0] ?? 1),
+      excerpt: source.title ?? "",
+      sourceStatusLabel: source.document_role,
+    }];
+  });
 }
 
 export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): SupportGroup[] {

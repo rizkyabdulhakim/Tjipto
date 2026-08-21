@@ -11,6 +11,7 @@ import {
   askLegal,
   mapAskResponseToCitations,
   mapAskResponseToDocumentSource,
+  mapAskResponseToDocumentSources,
   mapAskResponseToSupportGroups,
 } from "./lib/api";
 import { Menu, SquarePen } from "lucide-react";
@@ -97,10 +98,13 @@ export default function App() {
       const response = await askLegal(value, clarificationContext);
       const citations = mapAskResponseToCitations(response);
       const documentSource = mapAskResponseToDocumentSource(response);
+      const documentCollection = mapAskResponseToDocumentSources(response);
       const supportGroups = mapAskResponseToSupportGroups(response);
-      const messageCitations = documentSource ? [...citations, documentSource] : citations;
+      const messageCitations = [...citations, ...documentCollection, ...(documentSource ? [documentSource] : [])];
       const content = response.kind === "document"
         ? response.document?.label ?? "Dokumen sumber tersedia."
+        : response.kind === "documents"
+          ? `${response.documents?.length ?? 0} dokumen sumber terverifikasi tersedia.`
         : answerTextOrFallback(response);
       setActiveCitation(documentSource);
       setMessages((prev) =>
@@ -111,7 +115,15 @@ export default function App() {
                 content,
                 status: "complete",
                 citations: messageCitations.length ? messageCitations : undefined,
+                documentCollection: documentCollection.length ? documentCollection : undefined,
                 supportGroups: supportGroups.length ? supportGroups : undefined,
+                researchContext: response.operation || response.source_scopes?.length || response.sufficiency
+                  ? {
+                      operation: response.operation,
+                      sourceScopes: response.source_scopes ?? [],
+                      sufficiency: response.sufficiency?.status,
+                    }
+                  : undefined,
                 clarificationOptions: (response.clarification_options ?? [])
                   .filter((option) => option.label && option.context_target)
                   .map((option) => ({ contextTarget: option.context_target as string, label: option.label as string })),

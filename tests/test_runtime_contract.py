@@ -683,6 +683,9 @@ class RuntimeContractTest(unittest.TestCase):
             provider = OpenAICompatibleWordingProvider("test-secret", model="test-model", endpoint="https://example.invalid/v1/chat/completions")
             self.assertEqual(provider.propose("Jawaban deterministik."), {"sentences": ({"style": "direct", "referenced_fact_ids": ("deterministic_answer",)},)})
         http_request = request.call_args.args[0]
+        payload = json.loads(http_request.data.decode("utf-8"))
+        self.assertEqual(payload["response_format"]["type"], "json_schema")
+        self.assertTrue(payload["response_format"]["json_schema"]["strict"])
         self.assertEqual(http_request.get_header("Authorization"), "Bearer test-secret")
         self.assertNotIn("test-secret", http_request.data.decode("utf-8"))
 
@@ -1558,6 +1561,16 @@ class RuntimeContractTest(unittest.TestCase):
             {row["source_role"] for row in compared["evidence"]},
             {"amendment_1_historical", "amendment_2_historical"},
         )
+        public_comparison = handle_request(
+            "uud",
+            "ask",
+            {"query": "amandemen pertama vs kedua", "limit": 30},
+            service=self.service,
+        )
+        self.assertEqual(public_comparison["operation"], "compare")
+        self.assertEqual(public_comparison["sufficiency"]["status"], "complete")
+        self.assertEqual(len(public_comparison["source_scopes"]), 2)
+        self.assertTrue(all(set(scope) == {"label"} for scope in public_comparison["source_scopes"]))
         metadata = self.service.ask("uud", "perbedaan penandatangan amandemen pertama dan kedua")
         self.assertEqual(metadata["status"], "answer_ready")
         self.assertEqual(

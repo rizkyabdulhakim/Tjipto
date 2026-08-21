@@ -10,6 +10,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from tjipto.core.external_llm import external_llm_config
 from tjipto.retrieval.sufficiency import (
     EvidenceRequirement,
     EvidenceSet,
@@ -114,7 +115,14 @@ class OpenAICompatibleResearchPlanningProvider:
                     + json.dumps(dict(request), ensure_ascii=False, sort_keys=True)
                 ),
             }],
-            "response_format": {"type": "json_object"},
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "tjipto_research_plan",
+                    "strict": True,
+                    "schema": _planner_schema(provider_variant_limit),
+                },
+            },
         }
         req = Request(
             self._endpoint,
@@ -136,29 +144,63 @@ class OpenAICompatibleResearchPlanningProvider:
         raise RuntimeError("planner request retry exhausted")  # pragma: no cover
 
 
+def _planner_schema(provider_variant_limit: int) -> dict[str, object]:
+    need = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "description": {"type": "string", "minLength": 1},
+            "query": {"type": ["string", "null"]},
+            "concepts": {"type": "array", "items": {"type": "string"}},
+            "kind": {"type": "string", "enum": ["concept", "comparison", "procedure", "relation"]},
+            "relation_traversal": {"type": "boolean"},
+        },
+        "required": ["description", "query", "concepts", "kind", "relation_traversal"],
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "variants": {
+                "type": "array",
+                "maxItems": provider_variant_limit,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {"query": {"type": "string", "minLength": 1}},
+                    "required": ["query"],
+                },
+            },
+            "retrieval_lanes": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "enum": ["sparse", "dense", "hybrid"]},
+            },
+            "task_kind": {
+                "type": "string",
+                "enum": ["retrieval", "multiple_supports", "comparison", "decomposition", "relation_traversal"],
+            },
+            "information_needs": {"type": "array", "maxItems": 3, "items": need},
+        },
+        "required": ["variants", "retrieval_lanes", "task_kind", "information_needs"],
+    }
+
+
 def research_planning_provider_from_environment() -> ResearchPlanningProvider | None:
     """Create the optional planner only after explicit opt-in and valid config."""
     if os.environ.get("TJIPTO_EXTERNAL_RESEARCH_PLANNING", "").strip().casefold() != "enabled":
         return None
-    if os.environ.get("TJIPTO_RESEARCH_PLANNING_PROVIDER", "").strip().casefold() != "openai_compatible":
+    config = external_llm_config("RESEARCH_PLANNING")
+    if config is None or config.provider != "openai_compatible" or not config.base_url:
         return None
-    api_key = os.environ.get("TJIPTO_RESEARCH_PLANNING_API_KEY", "").strip()
-    model = os.environ.get("TJIPTO_RESEARCH_PLANNING_MODEL", "").strip()
-    base_url = os.environ.get("TJIPTO_RESEARCH_PLANNING_BASE_URL", "").strip().rstrip("/")
-    if not api_key or not model or not base_url:
-        return None
-    try:
-        timeout = max(1.0, float(os.environ.get("TJIPTO_RESEARCH_PLANNING_TIMEOUT_SECONDS", "12")))
-    except ValueError:
-        return None
-    parsed = urlparse(base_url + "/chat/completions")
+    parsed = urlparse(config.base_url + "/chat/completions")
     if parsed.scheme != "https" or not parsed.netloc:
         return None
     return OpenAICompatibleResearchPlanningProvider(
-        api_key,
-        model=model,
-        endpoint=base_url + "/chat/completions",
-        timeout=timeout,
+        config.api_key,
+        model=config.model,
+        endpoint=config.base_url + "/chat/completions",
+        timeout=config.timeout,
     )
 
 
@@ -586,10 +628,11 @@ def execute_research_rounds(
         else "auto"
     )
     plan = replace(plan, retrieval_lanes=(lane,))
-    current_variants = tuple(
-        replace(variant, retrieval_lane=lane)
-        for variant in plan.variants[: max(1, plan.intent.max_variants)]
+    current_variants = _bounded_variant_lanes(
+        plan.variants[: max(1, plan.intent.max_variants)],
+        lane,
     )
+    expensive_lane_used = any(variant.retrieval_lane != "sparse" for variant in current_variants)
     evidence_set: EvidenceSet | None = None
     assessment: SufficiencyAssessment | None = None
     stop_reason = "max_rounds"
@@ -636,18 +679,25 @@ def execute_research_rounds(
             if round_number + 1 >= rounds_limit:
                 stop_reason = "max_rounds"
                 break
-            current_variants = tuple(
-                QueryVariant(
-                    query=requirement.retrieval_query or query,
-                    origin=f"requirement:{requirement.requirement_id}",
-                    required_entities=tuple(dict.fromkeys((*requirement.required_entities, *requirement.relation_endpoints))),
-                    explicit_references=requirement.explicit_references,
-                    source_role=requirement.source_role,
-                    temporal_scope=requirement.temporal_context,
-                    requirement_id=requirement.requirement_id,
-                    retrieval_lane=lane,
-                )
-                for requirement in unresolved
+            current_variants = _bounded_variant_lanes(
+                tuple(
+                    QueryVariant(
+                        query=requirement.retrieval_query or query,
+                        origin=f"requirement:{requirement.requirement_id}",
+                        required_entities=tuple(dict.fromkeys((*requirement.required_entities, *requirement.relation_endpoints))),
+                        explicit_references=requirement.explicit_references,
+                        source_role=requirement.source_role,
+                        temporal_scope=requirement.temporal_context,
+                        requirement_id=requirement.requirement_id,
+                        retrieval_lane=lane,
+                    )
+                    for requirement in unresolved
+                ),
+                lane,
+                allow_expensive=not expensive_lane_used,
+            )
+            expensive_lane_used = expensive_lane_used or any(
+                variant.retrieval_lane != "sparse" for variant in current_variants
             )
             if not current_variants:
                 stop_reason = "no_progress"
@@ -668,6 +718,19 @@ def execute_research_rounds(
         "stop_reason": stop_reason,
         "rounds": len({route.get("research_round") for route in routes}),
     }
+
+
+def _bounded_variant_lanes(
+    variants: Sequence[QueryVariant],
+    primary_lane: str,
+    *,
+    allow_expensive: bool = True,
+) -> tuple[QueryVariant, ...]:
+    """Pay the short-lived dense model startup cost at most once per request."""
+    return tuple(
+        replace(variant, retrieval_lane=primary_lane if index == 0 and allow_expensive else "sparse")
+        for index, variant in enumerate(variants)
+    )
 
 
 def execute_research(

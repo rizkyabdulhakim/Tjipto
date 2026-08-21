@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
+from tjipto.retrieval.research import research_planning_provider_from_environment
 from tjipto.runtime.http import make_server
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.wording import wording_provider_from_environment
@@ -169,6 +170,26 @@ class RuntimeTrustBoundaryTest(unittest.TestCase):
             with self.subTest(values=values), patch.dict(os.environ, values, clear=True):
                 self.assertIsNone(wording_provider_from_environment())
                 self.assertNotIn(sentinel, LegalRuntimeService(ROOT).ask("uud", "Pasal 7")["answer"])
+
+    def test_planner_and_wording_share_one_provider_configuration_owner(self) -> None:
+        values = {
+            "TJIPTO_EXTERNAL_RESEARCH_PLANNING": "enabled",
+            "TJIPTO_EXTERNAL_WORDING": "enabled",
+            "TJIPTO_LLM_PROVIDER": "openai_compatible",
+            "TJIPTO_LLM_API_KEY": "not-a-real-secret",
+            "TJIPTO_LLM_MODEL": "test-model",
+            "TJIPTO_LLM_BASE_URL": "https://provider.example/v1",
+            "TJIPTO_LLM_TIMEOUT_SECONDS": "7",
+        }
+        with patch.dict(os.environ, values, clear=True):
+            planner = research_planning_provider_from_environment()
+            wording = wording_provider_from_environment()
+        self.assertIsNotNone(planner)
+        self.assertIsNotNone(wording)
+        self.assertEqual(planner._endpoint, "https://provider.example/v1/chat/completions")
+        self.assertEqual(wording._endpoint, "https://provider.example/v1/chat/completions")
+        self.assertEqual(planner._timeout, 7)
+        self.assertEqual(wording._timeout, 7)
 
     def test_bookmark_read_write_is_concurrency_safe_and_sorted(self) -> None:
         service = LegalRuntimeService(ROOT)
