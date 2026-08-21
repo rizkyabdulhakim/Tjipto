@@ -321,7 +321,7 @@ def build_validation_report(
     }
     validation_report["metadata_bbox_registry_health"] = _metadata_bbox_registry_health(
         metadata_grounding_registry,
-        {row["bbox_id"]: row for row in bbox_rows} | {row["word_bbox_id"]: {"bbox_id": row["word_bbox_id"], **row} for row in word_bboxes},
+        {row["bbox_id"] for row in bbox_rows} | {row["word_bbox_id"] for row in word_bboxes},
     )
     validation_report["source_quote_fidelity_health"] = _source_quote_fidelity_health(
         metadata_grounding=metadata_grounding,
@@ -2459,13 +2459,13 @@ def _source_relation_contract_errors(
     return tuple(errors)
 
 
-def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], bbox_by_id: dict[str, dict]) -> dict:
+def _metadata_bbox_registry_health(metadata_grounding_registry: list[dict], known_bbox_ids: set[str]) -> dict:
     bbox_ids = [row.get("bbox_id") for row in metadata_grounding_registry if row.get("bbox_id")]
     ref_ids = [row.get("metadata_grounding_ref_id") for row in metadata_grounding_registry if row.get("metadata_grounding_ref_id")]
     exact_rows = [row for row in metadata_grounding_registry if row.get("bbox_precision") == "exact"]
     page_rows = [row for row in metadata_grounding_registry if row.get("bbox_precision") == "page_grounded_only"]
-    unresolved = [row for row in metadata_grounding_registry if row.get("bbox_id") and row.get("bbox_id") not in bbox_by_id]
-    unresolved_exact = [row for row in exact_rows if row.get("bbox_id") not in bbox_by_id]
+    unresolved = [row for row in metadata_grounding_registry if row.get("bbox_id") and row.get("bbox_id") not in known_bbox_ids]
+    unresolved_exact = [row for row in exact_rows if row.get("bbox_id") not in known_bbox_ids]
     return {
         "metadata_grounding_registry_rows": len(metadata_grounding_registry),
         "metadata_grounding_ref_id_count": len(ref_ids),
@@ -3012,17 +3012,24 @@ def _article_relation_runtime_policy_health(
     evidence: list[dict],
     legal_units: list[dict],
 ) -> dict:
-    bbox_by_id = {
-        str(row.get("bbox_id") or row.get("word_bbox_id")): row
-        for row in (*bbox_rows, *word_bboxes)
+    referenced_bbox_ids = {
+        str(bbox_id)
+        for row in article_amendment_relations
+        for bbox_id in row.get("bbox_refs") or ()
     }
-    bbox_by_id.update(
-        {
-            character["character_bbox_id"]: {**word, **character, "bbox_id": character["character_bbox_id"]}
-            for word in word_bboxes
-            for character in word.get("characters") or ()
-        }
-    )
+    bbox_by_id = {
+        str(row.get("bbox_id")): row
+        for row in bbox_rows
+        if str(row.get("bbox_id")) in referenced_bbox_ids
+    }
+    for word in word_bboxes:
+        word_id = str(word.get("word_bbox_id"))
+        if word_id in referenced_bbox_ids:
+            bbox_by_id[word_id] = word
+        for character in word.get("characters") or ():
+            character_id = str(character.get("character_bbox_id"))
+            if character_id in referenced_bbox_ids:
+                bbox_by_id[character_id] = character
     exact_rows = [row for row in article_amendment_relations if row.get("support_class") == "exact_article_relation"]
     trace_rows = [row for row in article_amendment_relations if row.get("support_class") == "trace_article_relation"]
     invalid_refs = [ref for row in article_amendment_relations for ref in row.get("bbox_refs") or () if ref not in bbox_by_id]
