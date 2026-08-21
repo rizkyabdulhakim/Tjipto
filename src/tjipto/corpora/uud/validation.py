@@ -2508,14 +2508,29 @@ def _selector_geometry_health(
     *, propositions: list[dict], evidence: list[dict], page_text_spans: list[dict], word_bboxes: list[dict]
 ) -> dict:
     spans = {row.get("text_span_id"): row for row in page_text_spans}
+    referenced_character_ids = {
+        str(character_id)
+        for proposition in propositions
+        for character_id in (
+            *(proposition.get("bbox_refs") or ()),
+            *(
+                character_id
+                for selector in proposition.get("source_selectors") or ()
+                for character_id in selector.get("character_bbox_ids") or ()
+            ),
+        )
+    }
     character_count = 0
+    known_character_ids: set[str] = set()
     characters_by_id: dict[str, dict] = {}
     for word in word_bboxes:
-        geometry_space = {field: word.get(field) for field in VIEWER_GEOMETRY_SPACE_FIELDS}
         for character in word.get("characters") or ():
-            character_id = character.get("character_bbox_id")
+            character_id = str(character.get("character_bbox_id") or "")
             if character_id:
                 character_count += 1
+                known_character_ids.add(character_id)
+            if character_id in referenced_character_ids:
+                geometry_space = {field: word.get(field) for field in VIEWER_GEOMETRY_SPACE_FIELDS}
                 characters_by_id[character_id] = geometry_space | {
                     "word_bbox_id": word.get("word_bbox_id"),
                     "character_bbox_id": character_id,
@@ -2524,7 +2539,6 @@ def _selector_geometry_health(
                     "x1": character["x1"],
                     "y1": character["y1"],
                 }
-    known_character_ids = characters_by_id.keys()
     marker_boxes: dict[tuple[object, ...], list[dict]] = defaultdict(list)
     for marker in source_marker_character_boxes(word_bboxes):
         marker_boxes[geometry_space_key(marker)].append(marker)
