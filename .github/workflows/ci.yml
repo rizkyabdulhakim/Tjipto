@@ -356,18 +356,36 @@ jobs:
           path: closure-evidence/web
       - name: Assemble closure provenance
         if: always()
-        run: >-
-          python scripts/assemble_closure_provenance.py
-          --backend-dir closure-evidence/backend
-          --web-dir closure-evidence/web
-          --closure-identity closure-evidence/closure-run-identity.json
-          --backend-result '${{ needs.backend.result }}'
-          --web-result '${{ needs.web.result }}'
-          --backend-artifact-id '${{ needs.backend.outputs.artifact_id }}'
-          --backend-artifact-digest '${{ needs.backend.outputs.artifact_digest }}'
-          --web-artifact-id '${{ needs.web.outputs.artifact_id }}'
-          --web-artifact-digest '${{ needs.web.outputs.artifact_digest }}'
-          --output closure-evidence/closure-provenance.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TJIPTO_GH_REPOSITORY: ${{ github.repository }}
+          TJIPTO_BACKEND_ARTIFACT_ID: ${{ needs.backend.outputs.artifact_id }}
+          TJIPTO_WEB_ARTIFACT_ID: ${{ needs.web.outputs.artifact_id }}
+        run: |
+          set -euo pipefail
+
+          artifact_digest() {
+            local artifact_id="$1"
+            if [[ "$artifact_id" =~ ^[0-9]+$ ]]; then
+              local digest
+              digest="$(gh api "repos/$TJIPTO_GH_REPOSITORY/actions/artifacts/$artifact_id" --jq '.digest')"
+              printf '%s\n' "${digest#sha256:}"
+            fi
+          }
+
+          backend_artifact_digest="$(artifact_digest "$TJIPTO_BACKEND_ARTIFACT_ID")"
+          web_artifact_digest="$(artifact_digest "$TJIPTO_WEB_ARTIFACT_ID")"
+          python scripts/assemble_closure_provenance.py \
+            --backend-dir closure-evidence/backend \
+            --web-dir closure-evidence/web \
+            --closure-identity closure-evidence/closure-run-identity.json \
+            --backend-result '${{ needs.backend.result }}' \
+            --web-result '${{ needs.web.result }}' \
+            --backend-artifact-id "$TJIPTO_BACKEND_ARTIFACT_ID" \
+            --backend-artifact-digest "$backend_artifact_digest" \
+            --web-artifact-id "$TJIPTO_WEB_ARTIFACT_ID" \
+            --web-artifact-digest "$web_artifact_digest" \
+            --output closure-evidence/closure-provenance.json
       - name: Upload closure provenance
         id: upload_closure
         if: always()
