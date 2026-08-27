@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, resolve_instrument_intent
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text, resolve_instrument_intent
 from tjipto.retrieval.answer import validate_answer_candidate
-from tjipto.retrieval.metadata import metadata_lookup
+from tjipto.retrieval.metadata import has_metadata_target, metadata_lookup
 from tjipto.retrieval.relations import has_relation_target
 from tjipto.corpora.source_arbitration import resolve_source_scope
 
@@ -26,12 +26,50 @@ def document_summary_query(query: str, *, strategy: str, config: object, semanti
     scope = resolve_source_scope(query, strategy=strategy, config=config)
     role_queries = policy.get("source_role_queries", {}) or {}
     if scope.explicit:
+        # A multi-document request is decomposed by the runtime.  Selecting
+        # the first role here would silently discard every other requested
+        # source.
+        if len(scope.roles) > 1:
+            return None
         normalized = role_queries.get(scope.role)
         return str(normalized) if normalized else None
     if not contains_intent_phrase(query, policy.get("document_terms", ())):
         return None
     normalized = policy.get("default_query")
     return str(normalized) if normalized else None
+
+
+def compound_query_parts(query: str, *, semantics, config: object) -> tuple[str, ...]:
+    """Split only an explicit mixed quote-and-summary request.
+
+    The corpus parser already owns legal references and source scopes.  This
+    small adapter preserves each explicit target instead of letting one summary
+    normalization consume the rest of the request.
+    """
+    source_scopes = tuple(getattr(semantics, "source_scopes", ()) or ())
+    references = tuple(getattr(semantics, "legal_references", ()) or ())
+    alternatives = " atau " in f" {normalize_intent_text(query)} "
+    quotes = (
+        tuple(f"berikan {reference}" for reference in references)
+        if len(references) > 1
+        and getattr(semantics, "operation", None) in {"quote_or_explain", "summarize"}
+        and not alternatives
+        else ()
+    )
+    summaries: tuple[str, ...] = ()
+    if getattr(semantics, "operation", None) == "summarize" and len(source_scopes) > 1:
+        policy: dict = getattr(config, "setting", lambda *_: {})("document_summary", {}) or {}
+        role_queries = policy.get("source_role_queries", {}) if isinstance(policy, dict) else {}
+        summaries = tuple(
+            f"ringkas {normalized}"
+            for role in source_scopes
+            if isinstance(normalized := role_queries.get(role), str) and normalized.strip()
+        )
+        if len(summaries) < 2:
+            summaries = ()
+    if not quotes and not summaries:
+        return ()
+    return tuple(dict.fromkeys((*quotes, *summaries)))
 
 
 def instrument_intent_context(store: Any, query: str) -> tuple[dict | None, str, str] | None:
@@ -91,6 +129,7 @@ def source_document_response(
         scope = resolve_source_scope(query, strategy=strategy, config=config)
         scope_explicit = scope.explicit
         scope_role = scope.role
+        source_scopes = tuple(scope.roles or ())
     else:
         if getattr(semantics, "operation", None) != "open_document":
             return None
@@ -99,6 +138,8 @@ def source_document_response(
         scope_role = getattr(semantics, "source_role", None) or (source_scopes[0] if source_scopes else None)
     if has_resolved_target:
         return None
+    if semantics is None and has_metadata_target(query, strategy=strategy, config=config, store=store):
+        return None
     if has_relation_target(query, strategy=strategy, config=config):
         return None
     if contains_intent_phrase(query, intent.get("instrument_analysis_signals", ())) or contains_intent_phrase(
@@ -106,17 +147,7 @@ def source_document_response(
     ):
         return None
     if not scope_explicit:
-        documents = tuple(
-            {
-                "source_document_id": source.get("source_document_id"),
-                "source_role": source.get("source_role"),
-                "temporal_context": source.get("temporal_context"),
-                "document_title": document_title(store, source),
-                "intent": "document_delivery",
-                "viewer_target": {"action": "open_document", "source_document_id": source.get("source_document_id")},
-            }
-            for source in store.source_documents
-        )
+        documents = tuple(source_document_payload(store, source, document_title) for source in store.source_documents)
         return {
             "status": "answer_ready",
             "route": "source_document_collection",
@@ -129,6 +160,39 @@ def source_document_response(
             "answer": "Naskah sumber terverifikasi tersedia.",
             "document_source": None,
             "document_sources": documents,
+            "citations": (),
+            "final_citations": (),
+            "historical_citations": (),
+            "metadata_support": (),
+            "structural_support": (),
+            "trace_support": (),
+            "viewer_refs": (),
+            "metadata_facts": (),
+            "evidence": (),
+            "warnings": ("document_sources_have_no_legal_citation",),
+            "insufficient_reasons": (),
+        }
+    if len(source_scopes) > 1:
+        requested = set(source_scopes)
+        sources = tuple(
+            source_document_payload(store, source, document_title)
+            for source in store.source_documents
+            if source.get("source_role") in requested
+        )
+        if not sources:
+            return None
+        return {
+            "status": "answer_ready",
+            "route": "source_document_collection",
+            "intent": "document_delivery",
+            "corpus_id": corpus_id,
+            "original_query": query,
+            "normalized_query": query.strip(),
+            "reason": None,
+            "answer_type": "source_document_collection",
+            "answer": "Naskah sumber terverifikasi tersedia.",
+            "document_source": None,
+            "document_sources": sources,
             "citations": (),
             "final_citations": (),
             "historical_citations": (),
@@ -167,18 +231,8 @@ def source_document_response(
             "warnings": (),
             "insufficient_reasons": (reason,),
         }
-    title = document_title(store, source)
-    document_source = {
-        "source_document_id": source.get("source_document_id"),
-        "source_role": source.get("source_role"),
-        "temporal_context": source.get("temporal_context"),
-        "document_title": title,
-        "intent": "document_delivery",
-        "viewer_target": {
-            "action": "open_document",
-            "source_document_id": source.get("source_document_id"),
-        },
-    }
+    document_source = source_document_payload(store, source, document_title)
+    title = document_source["document_title"]
     return {
         "status": "answer_ready",
         "route": "source_document",
@@ -201,4 +255,18 @@ def source_document_response(
         "evidence": (),
         "warnings": ("document_source_has_no_legal_citation",),
         "insufficient_reasons": (),
+    }
+
+
+def source_document_payload(store: Any, source: dict, document_title: Callable[[object, dict], str]) -> dict:
+    return {
+        "source_document_id": source.get("source_document_id"),
+        "source_role": source.get("source_role"),
+        "temporal_context": source.get("temporal_context"),
+        "document_title": document_title(store, source),
+        "intent": "document_delivery",
+        "viewer_target": {
+            "action": "open_document",
+            "source_document_id": source.get("source_document_id"),
+        },
     }

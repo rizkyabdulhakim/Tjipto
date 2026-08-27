@@ -9,8 +9,21 @@ from tjipto.contracts.legal_information import FieldState, LifecycleKind, Relati
 _RELATION_LABELS = {
     RelationKind.AMENDS: "Mengubah",
     RelationKind.AMENDED_BY: "Diubah oleh",
+    RelationKind.CONSOLIDATES: "Menggabungkan",
+    RelationKind.CONSOLIDATED_BY: "Digabungkan dalam",
+    RelationKind.DERIVED_FROM: "Berasal dari",
+    RelationKind.DERIVES: "Menjadi dasar bagi",
     RelationKind.REVOKES: "Mencabut",
     RelationKind.REVOKED_BY: "Dicabut oleh",
+}
+
+_EFFECT_LABELS = {
+    "MODIFIES": "Ketentuan yang diubah",
+    "RENAMES": "Penomoran menjadi",
+    "RENUMBERED_TO": "Penomoran menjadi",
+    "DELETES": "Ketentuan yang dihapus",
+    "ADDS": "Ketentuan yang ditambahkan",
+    "AMBIGUOUS_OPERATION": "Ketentuan yang diubah dan/atau ditambahkan",
 }
 
 
@@ -27,9 +40,12 @@ def project_legal_document(
         "title": _display_value(document.identity.official_title),
         "legal_identity": _identity_display(document),
         "legal_status": _status_display(document.legal_status.status),
+        "legal_status_scope": _status_scope_display(document.legal_status.scope),
         "document_role": document.document_role_label,
         "issuer": _display_value(document.identity.issuer),
+        "signatories": _public_value(document.signatories) if document.signatories else None,
         "establishment_date": lifecycle.get(LifecycleKind.ESTABLISHMENT),
+        "establishment_place": _public_value(document.establishment_place) if document.establishment_place else None,
         "promulgation_date": lifecycle.get(LifecycleKind.PROMULGATION),
         "effective_date": lifecycle.get(LifecycleKind.EFFECTIVENESS),
         "publication": _public_value(document.publication),
@@ -75,6 +91,13 @@ def _status_display(value: VerifiedValue) -> str:
     return "Belum Diverifikasi"
 
 
+def _status_scope_display(scope: str) -> str:
+    return {
+        "document_record": "Record peraturan",
+        "parent_record": "Record induk sumber",
+    }.get(scope, "Cakupan sumber tidak tersedia")
+
+
 def _public_value(value: VerifiedValue) -> str | None:
     return value.display_value if value.state in {FieldState.VERIFIED, FieldState.CONFLICTING_SOURCES} else None
 
@@ -100,10 +123,10 @@ def _public_relation(document: CatalogDocument, relation, by_id: dict[str, Catal
 def _public_effect(effect, by_id: dict[str, CatalogDocument]) -> dict:
     target = by_id.get(effect.target_document_id)
     return {
-        "label": "Ketentuan yang diubah",
+        "label": _EFFECT_LABELS.get(effect.operation, "Ketentuan yang diubah"),
         "target": effect.exact_target,
         "document": _identity_display(target) if target else None,
-        "verification_state": "Terverifikasi",
+        "verification_state": "Ruang lingkup naskah" if effect.operation == "AMBIGUOUS_OPERATION" else "Terverifikasi",
         "source_reference": effect.provenance.reference,
         "page_number": effect.provenance.page_number,
     }

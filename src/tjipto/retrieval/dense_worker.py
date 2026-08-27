@@ -77,6 +77,14 @@ def _embed(texts: tuple[str, ...], *, batch_size: int, max_length: int):
         from transformers import AutoModel, AutoTokenizer
     except ImportError as error:
         raise ValueError("worker_dependencies_missing") from error
+    try:
+        thread_limit = int(os.environ.get("TJIPTO_DENSE_THREADS", min(4, os.cpu_count() or 1)))
+    except ValueError as error:
+        raise ValueError("worker_configuration_invalid") from error
+    if not 1 <= thread_limit <= 16:
+        raise ValueError("worker_configuration_invalid")
+    torch.set_num_threads(thread_limit)
+    torch.set_num_interop_threads(1)
     cache_dir = os.environ.get("TJIPTO_DENSE_MODEL_DIR")
     local_snapshot = Path(cache_dir) if cache_dir and (Path(cache_dir) / "config.json").exists() else None
     if local_snapshot is None:

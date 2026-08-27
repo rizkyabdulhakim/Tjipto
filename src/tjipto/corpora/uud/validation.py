@@ -46,6 +46,7 @@ from tjipto.corpora.uud.specs import UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.uud.policy.validation import validate_uud_trust_boundary
 from tjipto.corpora.uud.policy.source_text import validate_source_text_closure
 from tjipto.corpora.uud.proposition_builder import source_marker_character_boxes
+from tjipto.corpora.uud.relation_builder import _normalized_normative_text
 from tjipto.evidence.bbox import (
     VIEWER_GEOMETRY_SPACE_FIELDS,
     derive_viewer_overlay,
@@ -1441,7 +1442,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
             elif row.get("source_id") != origin.get("target_id") or row.get("target_id") != origin.get("source_id"):
                 errors.append(f"graph_inverse_direction_invalid:{row['edge_id']}")
             continue
-        if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO", "AMBIGUOUS_OPERATION"}:
+        if edge_type in {"MODIFIES", "DELETES", "ADDS", "RENAMES", "RENUMBERED_TO", "AMBIGUOUS_OPERATION"}:
             relation = article_relations_by_id.get(row.get("relation_id"))
             if relation is None:
                 errors.append(f"graph_relation_missing_authoritative_row:{row['edge_id']}")
@@ -1506,7 +1507,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
                     errors.append(f"graph_renames_range_kind_mismatch:{row['edge_id']}")
                 if relation.get("source_legal_unit_role") != mapping.get("source_role"):
                     errors.append(f"graph_renames_source_role_mismatch:{row['edge_id']}")
-        if edge_type in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
+        if edge_type in {"MODIFIES", "DELETES", "ADDS", "RENAMES", "RENUMBERED_TO"}:
             relation = article_relations_by_id.get(row.get("article_relation_ref"))
             if relation is not None:
                 if list(row.get("supporting_evidence_ids") or ()) != [relation.get("evidence_id")]:
@@ -1534,7 +1535,7 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
         for evidence_id in supporting_ids:
             if evidence_id not in evidence_by_id:
                 errors.append(f"graph_edge_non_evidence_support:{row['edge_id']}:{evidence_id}")
-        if edge_type in {"MODIFIES", "DELETES"}:
+        if edge_type in {"MODIFIES", "DELETES", "ADDS"}:
             evidence_row = evidence_by_id.get(supporting_ids[0]) if supporting_ids else None
             if not evidence_row:
                 errors.append(f"graph_relation_edge_invalid_evidence:{row['edge_id']}:{supporting_ids}")
@@ -1630,6 +1631,15 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
             errors.append(f"article_relation_missing_target_unit_role:{row['relation_id']}")
         elif target_unit is not None and row.get("target_source_role") != target_unit.get("source_role"):
             errors.append(f"article_relation_target_role_mismatch:{row['relation_id']}")
+        errors.extend(
+            f"{code}:{row['relation_id']}"
+            for code in _validate_versioned_relation_lineage(
+                row,
+                units_by_id=units_by_id,
+                span_by_id=span_by_id,
+                bbox_by_id=bbox_by_id,
+            )
+        )
         if row.get("relation_type") in {"RENAMES", "RENUMBERED_TO"}:
             if not row.get("old_reference") or not row.get("new_reference"):
                 errors.append(f"article_relation_missing_renumber_mapping:{row['relation_id']}")
@@ -1784,6 +1794,93 @@ def validate_uud_artifacts(final_dir: Path, artifacts: Mapping[str, object]) -> 
     )
     errors.extend(source_relation_errors)
 
+    return tuple(sorted(set(errors)))
+
+
+def _validate_versioned_relation_lineage(
+    row: dict,
+    *,
+    units_by_id: dict[str, dict],
+    span_by_id: dict[str, dict],
+    bbox_by_id: dict[str, dict],
+) -> tuple[str, ...]:
+    """Validate cross-version evidence for an article operation relation."""
+    relation_type = row.get("relation_type")
+    if relation_type not in {"ADDS", "MODIFIES", "DELETES"}:
+        return ()
+    fields = {
+        "predecessor_legal_unit_id",
+        "successor_legal_unit_id",
+        "predecessor_text_span_ids",
+        "successor_text_span_ids",
+        "predecessor_bbox_refs",
+        "successor_bbox_refs",
+        "predecessor_pdf_sha256",
+        "successor_pdf_sha256",
+        "comparison_basis",
+    }
+    errors = [f"article_relation_lineage_missing_field:{field}" for field in fields if field not in row]
+    if errors:
+        return tuple(sorted(errors))
+    predecessor_id = row.get("predecessor_legal_unit_id")
+    successor_id = row.get("successor_legal_unit_id")
+    predecessor = units_by_id.get(str(predecessor_id)) if predecessor_id else None
+    successor = units_by_id.get(str(successor_id)) if successor_id else None
+    if predecessor_id and predecessor is None:
+        errors.append("article_relation_lineage_unknown_predecessor")
+    if successor_id and successor is None:
+        errors.append("article_relation_lineage_unknown_successor")
+    if relation_type == "ADDS":
+        if predecessor_id or row.get("predecessor_pdf_sha256") or row.get("predecessor_text_span_ids") or row.get("predecessor_bbox_refs"):
+            errors.append("article_relation_adds_has_predecessor")
+        if successor is None or row.get("successor_legal_unit_id") != row.get("target_legal_unit_id"):
+            errors.append("article_relation_adds_successor_target_mismatch")
+    elif relation_type == "MODIFIES":
+        if predecessor is None or successor is None:
+            errors.append("article_relation_modifies_missing_version_pair")
+        elif row.get("successor_legal_unit_id") != row.get("target_legal_unit_id"):
+            errors.append("article_relation_modifies_successor_target_mismatch")
+        elif _normalized_normative_text(predecessor.get("text")) == _normalized_normative_text(successor.get("text")):
+            errors.append("article_relation_modifies_text_unchanged")
+    else:
+        if predecessor is None or row.get("predecessor_legal_unit_id") != row.get("target_legal_unit_id"):
+            errors.append("article_relation_deletes_missing_predecessor")
+        if successor_id or row.get("successor_pdf_sha256") or row.get("successor_text_span_ids") or row.get("successor_bbox_refs"):
+            errors.append("article_relation_deletes_has_successor")
+    if row.get("comparison_basis") != "versioned_normative_text":
+        errors.append("article_relation_lineage_invalid_comparison_basis")
+
+    for side, unit in (("predecessor", predecessor), ("successor", successor)):
+        text_key = f"{side}_text_span_ids"
+        bbox_key = f"{side}_bbox_refs"
+        hash_key = f"{side}_pdf_sha256"
+        expected_spans = list((unit or {}).get("source_text_span_ids") or (unit or {}).get("text_span_ids") or ())
+        expected_bboxes = list((unit or {}).get("source_bbox_refs") or (unit or {}).get("bbox_ids") or ())
+        actual_spans = list(row.get(text_key) or ())
+        actual_bboxes = list(row.get(bbox_key) or ())
+        actual_hash = row.get(hash_key)
+        if unit is None:
+            if actual_spans or actual_bboxes or actual_hash:
+                errors.append(f"article_relation_lineage_{side}_orphan_payload")
+            continue
+        if actual_spans != expected_spans:
+            errors.append(f"article_relation_lineage_{side}_span_mismatch")
+        if actual_bboxes != expected_bboxes:
+            errors.append(f"article_relation_lineage_{side}_bbox_mismatch")
+        if actual_hash != unit.get("source_sha256"):
+            errors.append(f"article_relation_lineage_{side}_sha_mismatch")
+        for span_id in actual_spans:
+            span = span_by_id.get(span_id)
+            if span is None:
+                errors.append(f"article_relation_lineage_unknown_{side}_span:{span_id}")
+            elif span.get("source_sha256") != unit.get("source_sha256"):
+                errors.append(f"article_relation_lineage_{side}_span_source_mismatch:{span_id}")
+        for bbox_id in actual_bboxes:
+            bbox = bbox_by_id.get(bbox_id)
+            if bbox is None:
+                errors.append(f"article_relation_lineage_unknown_{side}_bbox:{bbox_id}")
+            elif bbox.get("source_sha256") != unit.get("source_sha256"):
+                errors.append(f"article_relation_lineage_{side}_bbox_source_mismatch:{bbox_id}")
     return tuple(sorted(set(errors)))
 
 

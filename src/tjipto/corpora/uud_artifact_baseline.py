@@ -44,7 +44,7 @@ from tjipto.core.manifest import artifact_set_digest
 from tjipto.corpora.uud.policy.authority import apply_authority_contract, apply_retrieval_semantics
 from tjipto.corpora.uud.policy.relations import apply_graph_relation_policy
 from tjipto.contracts.relations import materialize_inverse_edges
-from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.intent_config import validation_intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, require_canonical_build_environment
 from tjipto.grounding.promotion import build_promotion_decisions
@@ -374,7 +374,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         word_bboxes=word_bboxes,
         pdf_health_report=pdf_health_report,
         pages=pages,
-        intent_config=intent_config_for(getattr(corpus_config, "structured_strategy", "generic"), corpus_config),
+        intent_config=validation_intent_config_for(
+            getattr(corpus_config, "structured_strategy", "generic"), corpus_config
+        ),
     )
     write_json(final_dir / "validation_report.json", validation_report)
     build_counts = {

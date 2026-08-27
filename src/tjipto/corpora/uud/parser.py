@@ -9,7 +9,7 @@ UUD_LEGAL_TOKEN_RE = re.compile(
     r"(?m)^(BAB\s+[IVXLCDM]+[A-Z]?|ATURAN PERALIHAN|ATURAN TAMBAHAN|PEMBUKAAN|Pasal\s+(?:[0-9]+[A-Z]?|[IVX]+)|\([0-9]+\)|UNDANG-?UNDANG DASAR)"
 )
 
-UUD_BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s*([a-z]?)\b", re.IGNORECASE)
+UUD_BAB_RE = re.compile(r"\bbab\s*([ivxlcdm]+)\s*([a-z]?)\b", re.IGNORECASE)
 UUD_PASAL_RE = re.compile(r"\bpasal[ \t\r\n]*([0-9]+)(?:[ \t\r\n]*([a-z]))?\b", re.IGNORECASE)
 UUD_PASAL_WITH_AYAT_RE = re.compile(
     r"\bpasal[ \t\r\n]*([0-9]+)(?:[ \t\r\n]*([a-z]))?\b(?:[ \t\r\n]+ayat\s*\(?\s*([0-9]+)\s*\)?)?",
@@ -19,7 +19,7 @@ UUD_PASAL_OR_ROMAN_RE = re.compile(r"\bpasal[ \t\r\n]*(?:(\d+)(?:[ \t\r\n]*([a-z
 UUD_PASAL_LETTER_RE = re.compile(r"\bpasal\s+([0-9]+)\s+([a-z])\b", re.IGNORECASE)
 UUD_PASAL_SHORTHAND_AYAT_RE = re.compile(r"\bpasal\s+([0-9]+[a-z]?)\s*\(\s*([0-9]+)\s*\)", re.IGNORECASE)
 UUD_AYAT_RE = re.compile(r"\bayat\s*\(?\s*([0-9]+)\s*\)?", re.IGNORECASE)
-UUD_COMPACT_BAB_RE = re.compile(r"\bbab\s+([ivxlcdm]+)\s+([a-z])\b", re.IGNORECASE)
+UUD_COMPACT_BAB_RE = re.compile(r"\bbab\s*([ivxlcdm]+)\s*([a-z])\b", re.IGNORECASE)
 UUD_METADATA_TOKEN_RE = re.compile(r"[0-9a-z]+", re.IGNORECASE)
 UUD_PROPOSITION_OPERATORS = (
     ("memperbolehkan", "permits", "permission"),
@@ -36,9 +36,14 @@ def uud_proposition_operator(text: str) -> tuple[str, str, str] | None:
 
 
 def normalize_uud_query_reference(text: str) -> str:
+    normalized = _normalize_uud_number_words(text or "")
+    normalized = UUD_COMPACT_BAB_RE.sub(
+        lambda match: f"BAB {match.group(1).upper()}{match.group(2).upper()}",
+        normalized,
+    )
     normalized = UUD_PASAL_LETTER_RE.sub(
         lambda match: f"Pasal {match.group(1)}{match.group(2).upper()}",
-        text or "",
+        normalized,
     )
     normalized = UUD_PASAL_SHORTHAND_AYAT_RE.sub(
         lambda match: f"Pasal {match.group(1).upper()} ayat ({match.group(2)})",
@@ -47,6 +52,38 @@ def normalize_uud_query_reference(text: str) -> str:
     normalized = UUD_PASAL_RE.sub(lambda match: f"Pasal {match.group(1)}{(match.group(2) or '').upper()}", normalized)
     normalized = UUD_AYAT_RE.sub(lambda match: f"ayat ({match.group(1)})", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+_UUD_CARDINALS = {
+    "satu": 1,
+    "dua": 2,
+    "tiga": 3,
+    "empat": 4,
+    "lima": 5,
+    "enam": 6,
+    "tujuh": 7,
+    "delapan": 8,
+    "sembilan": 9,
+    "sepuluh": 10,
+}
+
+
+def _normalize_uud_number_words(text: str) -> str:
+    """Normalize Indonesian cardinal references without changing legal prose."""
+    pattern = re.compile(
+        r"\bpasal\s+(?P<number>[a-z]+(?:\s+puluh\s+[a-z]+)?)(?=\b|\s|$)",
+        re.IGNORECASE,
+    )
+
+    def replace(match: re.Match[str]) -> str:
+        words = match.group("number").casefold().split()
+        if len(words) == 1 and words[0] in _UUD_CARDINALS:
+            return f"Pasal {_UUD_CARDINALS[words[0]]}"
+        if len(words) == 3 and words[1] == "puluh" and words[0] in _UUD_CARDINALS and words[2] in _UUD_CARDINALS:
+            return f"Pasal {_UUD_CARDINALS[words[0]] * 10 + _UUD_CARDINALS[words[2]]}"
+        return match.group(0)
+
+    return pattern.sub(replace, text)
 
 
 def normalize_uud_metadata_intent(text: str) -> str:
@@ -81,7 +118,7 @@ def parse_uud_bab_reference(text: str) -> str | None:
 
 def parse_uud_pasal_reference(text: str, *, allow_roman: bool = False) -> str | None:
     pattern = UUD_PASAL_OR_ROMAN_RE if allow_roman else UUD_PASAL_RE
-    match = pattern.search(text or "")
+    match = pattern.search(_normalize_uud_number_words(text or ""))
     if not match:
         return None
     number = match.group(1) or match.group(3)
@@ -92,7 +129,8 @@ def parse_uud_pasal_reference(text: str, *, allow_roman: bool = False) -> str | 
 def parse_uud_legal_references(text: str) -> list[dict[str, object]]:
     """Parse all Pasal references and retain their source character ranges."""
     rows: list[dict[str, object]] = []
-    matches = list(UUD_PASAL_WITH_AYAT_RE.finditer(text or ""))
+    normalized_text = _normalize_uud_number_words(text or "")
+    matches = list(UUD_PASAL_WITH_AYAT_RE.finditer(normalized_text))
     seen: set[tuple[str, int, int]] = set()
     for index, match in enumerate(matches):
         reference = f"Pasal {match.group(1)}{(match.group(2) or '').upper()}"
@@ -108,9 +146,9 @@ def parse_uud_legal_references(text: str) -> list[dict[str, object]]:
         seen.add((reference, match.start(), match.end()))
         if not match.group(3):
             continue
-        next_article = matches[index + 1].start() if index + 1 < len(matches) else len(text or "")
+        next_article = matches[index + 1].start() if index + 1 < len(matches) else len(normalized_text)
         article = f"Pasal {match.group(1)}{(match.group(2) or '').upper()}"
-        context = text[match.end() : next_article]
+        context = normalized_text[match.end() : next_article]
         # Paragraph lists routinely abbreviate the repeated article after a
         # comma as well as after a conjunction.  Preserve that inherited
         # parent article and the original source range.
@@ -123,7 +161,7 @@ def parse_uud_legal_references(text: str) -> list[dict[str, object]]:
                 continue
             rows.append({
                 "reference": contextual,
-                "raw": text[start:end],
+                "raw": normalized_text[start:end],
                 "start": start,
                 "end": end,
             })
@@ -173,6 +211,14 @@ def uud_label_keys(value: object) -> set[str]:
 
 
 def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
+    shorthand = re.search(
+        r"\b(?:pasal|ketentuan)\s+(sebelum|sebelumnya|setelah|sesudah)\s+(\d+[a-z]?)\b",
+        text or "",
+        re.IGNORECASE,
+    )
+    if shorthand:
+        operation = "previous" if shorthand.group(1).casefold().startswith("sebelum") else "next"
+        return f"Pasal {shorthand.group(2).upper()}", operation
     target = parse_uud_pasal_reference(text, allow_roman=True) or parse_uud_bab_reference(text)
     if not target:
         return None
@@ -191,7 +237,7 @@ def resolve_uud_navigation(text: str) -> tuple[str, str] | None:
         return (inserted, "direct") if inserted else (target, "next")
     if re.search(
         rf"^(?:sebelum|sebelumnya)\s+{article}(?:\s+(?:pasal\s+berapa|apa))?$|"
-        rf"\b(?:apa\s+)?(?:ketentuan|pasal)\s+(?:sebelum|sebelumnya)\s+{article}\b",
+        rf"\b(?:apa\s+)?(?:ketentuan|pasal|bab)\s+(?:sebelum|sebelumnya)\s+{article}\b",
         normalized,
     ):
         return target, "previous"

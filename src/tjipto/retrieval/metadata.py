@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from tjipto.corpora.intent_config import intent_config_for, normalize_intent_text
+from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
 from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
 from tjipto.corpora.parser_dispatch import normalize_metadata_intent, parse_legal_reference
 
@@ -107,6 +107,8 @@ def metadata_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
             value = str(signatory.get("name_text") or "") if signatory else None
             result = _metadata_result(store, row, grounding, selected_field, value=value, signatory=signatory)
             if result:
+                if selected_field == "signatories" and "halaman" in normalize_intent_text(query):
+                    result["page_query"] = True
                 rows.append(result)
     return tuple(rows[:limit])
 
@@ -117,6 +119,11 @@ def has_metadata_target(query: str, *, strategy: str = "generic", config=None, s
     return _metadata_field(query, strategy=strategy, config=config) is not None or bool(
         store is not None and _matching_signatories(store, query)
     )
+
+
+def has_named_signatory(store, query: str) -> bool:
+    """Identify a corpus-declared signatory before source-scope arbitration."""
+    return bool(store is not None and _matching_signatories(store, query))
 
 
 def _has_legal_reference(query: str, config) -> bool:
@@ -145,18 +152,58 @@ def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
     patterns = intent["metadata_fields"]
     if not patterns:
         return None
+    # A bare, corpus-declared current-source alias is an identity lookup.  The
+    # source publication field owns that fact; do not route it through summary
+    # or structural lookup, which would otherwise turn ``apa itu naskah
+    # konsolidasi`` into a request for a chapter outline.  Only apply this
+    # projection to an identity-shaped query so occurrence and metadata
+    # questions keep their existing owners.
+    current_source_terms = getattr(config, "setting", lambda *_: ())(
+        "explicit_current_source_terms", ()
+    ) or ()
+    occurrence_terms = (
+        tuple(intent.get("all_source_scope_terms", ()) or ())
+        + tuple(intent.get("source_occurrence_separators", ()) or ())
+    )
+    metadata_signals = tuple(intent.get("metadata_candidate_signals", ()) or ())
+    normalized_query = normalize_intent_text(query)
+    remaining_query = normalized_query
+    for term in current_source_terms:
+        normalized_term = normalize_intent_text(term)
+        if normalized_term:
+            remaining_query = remaining_query.replace(normalized_term, " ")
+    identity_words = {"apa", "itu", "jelaskan", "definisi", "pengertian"}
+    identity_query = not (
+        set(remaining_query.split()) - identity_words
+    )
+    if (
+        current_source_terms
+        and contains_intent_phrase(query, current_source_terms)
+        and not contains_intent_phrase(query, occurrence_terms)
+        and not contains_intent_phrase(query, metadata_signals)
+        and identity_query
+    ):
+        source_publication = intent.get("metadata_fields", {}).get("source_publication", ())
+        if source_publication:
+            folded = f"{folded} {normalize_metadata_intent(corpus_id, source_publication[0])}"
     has_document_target = any(word in folded for word in intent["document_target_words"])
     has_bounded_field = any(
         normalize_intent_text(term) in folded
         for term in intent.get("metadata_rules", {}).get("enactment_date", ())
     )
-    if not has_document_target and not has_bounded_field:
+    role_queries = intent.get("instrument_role_queries", {}) or {}
+    signatory_signal = any(
+        normalize_intent_text(term) in folded
+        for term in (role_queries.get("signatories", ()) if isinstance(role_queries, dict) else ())
+        if isinstance(term, str)
+    )
+    if not has_document_target and not has_bounded_field and not signatory_signal:
         return None
     if _asks_promulgation(folded, intent):
         return "promulgation"
     if _asks_revocation(folded, intent):
         return "revocation"
-    if _asks_signatories(folded, intent):
+    if signatory_signal or _asks_signatories(folded, intent):
         return "signatories"
     if _asks_effective_rule(folded, intent):
         return "effective_rule"
@@ -171,6 +218,8 @@ def _metadata_field(query: str, *, strategy: str, config=None) -> str | None:
     if _asks_enactment_date(folded, intent):
         return "penetapan"
     for field, field_patterns in patterns.items():
+        if field == "institution":
+            continue
         if any(pattern in folded for pattern in field_patterns):
             return field
     return None
@@ -274,11 +323,26 @@ def _asks_decision_session(folded: str, intent: dict) -> bool:
 
 
 def _asks_institution(folded: str, intent: dict) -> bool:
+    # A bare entity mention (for example, “MPR”) is not a metadata request;
+    # it may be the subject of a provision.  Keep metadata ownership for
+    # explicit field wording or an enactment/signatory context.
+    institution_terms = tuple(
+        value
+        for value in (intent.get("metadata_rules", {}).get("institution", ()) or ())
+        if isinstance(value, str)
+    )
+    field_terms = tuple(
+        value
+        for value in institution_terms
+        if len(normalize_intent_text(value).split()) > 1
+        or any(marker in normalize_intent_text(value).split() for marker in ("lembaga", "institusi"))
+    )
     return (
-        _asks_any(folded, intent, "institution")
+        any(pattern in folded for pattern in field_terms)
         or _asks_any(folded, intent, "institution_question")
         or _asks_token(folded, intent, "institution_tokens")
         or (_asks_any(folded, intent, "who_question") and _asks_any(folded, intent, "enactment_context"))
+        or (_asks_any(folded, intent, "institution") and _asks_any(folded, intent, "enactment_context"))
     )
 
 

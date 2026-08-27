@@ -9,7 +9,14 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from tjipto.core.external_llm import external_llm_config
+from tjipto.core.external_llm import (
+    ExternalLLMConfig,
+    FallbackProposalProvider,
+    OPENAI_COMPATIBLE_USER_AGENT,
+    external_llm_config,
+    fallback_external_llm_config,
+    openai_compatible_latency_options,
+)
 from tjipto.retrieval.candidates import graph_expand
 from tjipto.retrieval.sufficiency import (
     EvidenceRequirement,
@@ -116,6 +123,7 @@ class OpenAICompatibleResearchPlanningProvider:
         payload = {
             "model": self._model,
             "temperature": 0,
+            **openai_compatible_latency_options(self._model, self._endpoint),
             "messages": [{
                 "role": "user",
                 "content": (
@@ -131,6 +139,10 @@ class OpenAICompatibleResearchPlanningProvider:
                     'and "relation_traversal" (boolean). '
                     'If and only if a required user choice is missing, set "status" to "clarification_required", '
                     'name the missing dimensions, and write one neutral Indonesian clarification_question. '
+                    'When constraints.comparison_target_required is true, the comparison has only one side: '
+                    'status must be "clarification_required" and missing_dimensions must include "comparison_target". '
+                    'A legal-analysis or legal-opinion query that already names its legal issue is ready for '
+                    'semantic retrieval; it does not require an exact article, source period, or comparison target. '
                     'Otherwise set "status" to "ready" with empty missing_dimensions and null clarification_question. '
                     f"Return at most {provider_variant_limit} provider variants; the server already retains the original query. "
                     "Return no other fields in those objects. Never return requirements, evidence, citations, "
@@ -150,7 +162,11 @@ class OpenAICompatibleResearchPlanningProvider:
         req = Request(
             self._endpoint,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self._api_key}"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key}",
+                "User-Agent": OPENAI_COMPATIBLE_USER_AGENT,
+            },
             method="POST",
         )
         for attempt in range(2):
@@ -159,7 +175,7 @@ class OpenAICompatibleResearchPlanningProvider:
                     body = json.load(response)
                 return json.loads(str(body["choices"][0]["message"]["content"]))
             except HTTPError as error:
-                if attempt or error.code not in {429, 500, 502, 503, 504}:
+                if attempt or error.code not in {500, 502, 503, 504}:
                     raise
             except (TimeoutError, URLError):
                 if attempt:
@@ -218,7 +234,14 @@ def _planner_schema(provider_variant_limit: int) -> dict[str, object]:
 
 def research_planning_provider_from_environment() -> ResearchPlanningProvider | None:
     """Create the configured planner; capability flags do not disable it."""
-    config = external_llm_config("RESEARCH_PLANNING")
+    primary = _research_planning_provider(external_llm_config("RESEARCH_PLANNING"))
+    fallback = _research_planning_provider(fallback_external_llm_config())
+    if primary is not None and fallback is not None:
+        return FallbackProposalProvider(primary, fallback)
+    return primary or fallback
+
+
+def _research_planning_provider(config: ExternalLLMConfig | None) -> ResearchPlanningProvider | None:
     if config is None or config.provider != "openai_compatible" or not config.base_url:
         return None
     parsed = urlparse(config.base_url + "/chat/completions")
@@ -363,6 +386,9 @@ def _planner_request(
             "temporal_scope": temporal_scope,
             "polarity": polarity,
             "modality": modality,
+            "comparison_target_required": bool(
+                intent.comparison and source_role and len(tuple(explicit_references)) < 2 and len(tuple(required_entities)) < 2
+            ),
         },
         "allowed_proposals": (
             "task_kind", "variants", "information_needs", "retrieval_lanes",
@@ -687,11 +713,34 @@ def execute_research_rounds(
         else "sparse"
     )
     plan = replace(plan, retrieval_lanes=(lane,))
-    current_variants = _bounded_variant_lanes(
-        plan.variants[: max(1, plan.intent.max_variants)],
-        lane,
+    initial_lane = "sparse" if lane != "sparse" and rounds_limit > 1 else lane
+    source_scoped = bool(requirements) and all(
+        requirement.source_role and requirement.requirement_id.startswith("source_occurrence_")
+        for requirement in requirements
     )
-    expensive_lane_used = any(variant.retrieval_lane != "sparse" for variant in current_variants)
+    if source_scoped:
+        current_variants = _bounded_variant_lanes(
+            tuple(
+                QueryVariant(
+                    query=requirement.retrieval_query or query,
+                    origin=f"requirement:{requirement.requirement_id}",
+                    required_entities=tuple(dict.fromkeys((*requirement.required_entities, *requirement.relation_endpoints))),
+                    explicit_references=requirement.explicit_references,
+                    source_role=requirement.source_role,
+                    temporal_scope=requirement.temporal_context,
+                    requirement_id=requirement.requirement_id,
+                    retrieval_lane=initial_lane,
+                )
+                for requirement in requirements
+            ),
+            initial_lane,
+        )
+    else:
+        current_variants = _bounded_variant_lanes(
+            plan.variants[: max(1, plan.intent.max_variants)],
+            initial_lane,
+        )
+    expensive_lane_used = initial_lane != "sparse"
     evidence_set: EvidenceSet | None = None
     assessment: SufficiencyAssessment | None = None
     stop_reason = "max_rounds"
@@ -762,7 +811,14 @@ def execute_research_rounds(
                 stop_reason = "no_progress"
                 break
         else:
-            stop_reason = "complete" if len(rows) > before else "no_progress"
+            if len(rows) > before:
+                stop_reason = "complete"
+                break
+            if round_number + 1 < rounds_limit and lane != "sparse" and not expensive_lane_used:
+                current_variants = _bounded_variant_lanes(plan.variants[: max(1, plan.intent.max_variants)], lane)
+                expensive_lane_used = True
+                continue
+            stop_reason = "no_progress"
             break
         if len(rows) == before and round_number > 0 and current_variants:
             stop_reason = "no_progress"

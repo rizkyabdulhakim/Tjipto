@@ -5,7 +5,7 @@
     "dense_promotion_path": "data/dense/uud/promotion.json",
     "dense_retrieval": true,
     "manifest": "data/final/uud/manifest.json",
-    "manifest_sha256": "219e9a327713df77936ac7e88a14844a5c26463f81564798f57eab2f2552209c",
+    "manifest_sha256": "c774237055c7335f817ae2f496b054374c33c7a51a5074b2cabafbf9f9f6e286",
     "runtime_required_artifacts": [
       "runtime_projection",
       "validation_report",
@@ -21,6 +21,12 @@
     "query_normalization_enabled": true,
     "exact_citation_intent_enabled": true,
     "preferred_source_role": "current_consolidated",
+    "public_evidence_labels": {
+      "Perubahan Pertama Scope": "Ruang lingkup Perubahan Pertama",
+      "Perubahan Kedua Scope": "Ruang lingkup Perubahan Kedua",
+      "Perubahan Ketiga Scope": "Ruang lingkup Perubahan Ketiga",
+      "Perubahan Keempat Scope": "Ruang lingkup Perubahan Keempat"
+    },
     "lexical_normalization": {
       "aliases": {
         "satu": "1",
@@ -36,6 +42,7 @@
         "berhak": "hak",
         "dpr": "dewan perwakilan rakyat",
         "bekerja": "kerja",
+        "bependapat": "berpendapat",
         "menjabat": "jabatan",
         "memperoleh": "mendapat",
         "pengajaran": "pendidikan",
@@ -45,11 +52,31 @@
         "pemakzulan": "pemberhentian"
       },
       "semantic_support_excluded_terms": [
-        "uud"
+        "apakah",
+        "uud",
+        "lakukan",
+        "legal",
+        "research",
+        "riset"
+      ],
+      "semantic_context_terms": [
+        "jaminan",
+        "konstitusional",
+        "penelitian",
+        "kajian"
       ],
       "related_terms": {
+        "berekspresi": [
+          "mengeluarkan pikiran",
+          "mengeluarkan pendapat"
+        ],
         "kebebasan": [
-          "hak"
+          "hak",
+          "kemerdekaan"
+        ],
+        "berpendapat": [
+          "mengeluarkan pendapat",
+          "kemerdekaan mengeluarkan pikiran"
         ],
         "lama": [
           "tahun",
@@ -66,12 +93,12 @@
     "source_reference_mappings": [
       {
         "raw_reference": "Pasal III",
-        "canonical_target": "Pasal II",
+        "canonical_target": "Aturan Tambahan Pasal II",
         "source_role": "amendment_4_historical",
         "mapping_kind": "historical_to_canonical_mapping",
         "provenance": "uud_1945_amendment_4_aturan_tambahan_pasal_ii_iii_conflict",
         "context_terms": [
-          "Aturan Tambahan"
+          "Aturan Tambahan|typo"
         ]
       }
     ],
@@ -271,6 +298,7 @@
             "Presiden"
           ],
           "signals": [
+            "diberhentikan",
             "pemberhentian",
             "pemakzulan",
             "impeachment"
@@ -337,21 +365,30 @@
           }
         ]
       },
-      "instrument_scope_terms": [
-        "mengubah",
-        "pasal"
-      ],
       "operation_requirements": {
-        "change_relation_signals": [
-          "mengubah",
-          "diubah",
-          "pasal yang berubah",
-          "pasal yang diubah"
-        ],
         "analyze": {
           "source_role": "current_consolidated",
-          "issue_description": "issue-relevant constitutional provisions",
-          "limitation_description": "applicable limitations/exceptions",
+          "issue_description": "Ketentuan konstitusional yang relevan dengan isu",
+          "limitation_description": "Pembatasan atau pengecualian yang berlaku",
+          "issue_reference_terms": [
+            "kebebasan",
+            "berbicara",
+            "berekspresi",
+            "berpendapat",
+            "mengeluarkan pendapat"
+          ],
+          "issue_references": [
+            "Pasal 28",
+            "Pasal 28E ayat (3)",
+            "Pasal 28F"
+          ],
+          "limitation_terms": [
+            "kebebasan",
+            "hak asasi"
+          ],
+          "limitation_references": [
+            "Pasal 28J"
+          ],
           "limitations_by_target": {
             "Pasal 28": [
               "Pasal 28J"
@@ -371,6 +408,18 @@
       "max_variants": 4,
       "max_rounds": 2,
       "max_candidates": 30,
+      "broad_version_comparison": {
+        "source_roles": [
+          "original_historical",
+          "current_consolidated"
+        ],
+        "evidence_roles": [
+          "amendment_1_historical",
+          "amendment_2_historical",
+          "amendment_3_historical",
+          "amendment_4_historical"
+        ]
+      },
       "requirement_generation": {
         "conjunction_delimiters": [
           "dan",
@@ -394,14 +443,21 @@
         "uud",
         "undang undang dasar"
       ],
-      "default_query": "BAB UUD",
+      "default_query": "BAB UUD naskah konsolidasi",
       "source_role_queries": {
+        "current_consolidated": "BAB UUD naskah konsolidasi",
+        "original_historical": "BAB UUD naskah sebelum amandemen",
         "amendment_1_historical": "Perubahan Pertama Scope",
         "amendment_2_historical": "Perubahan Kedua Scope",
         "amendment_3_historical": "Perubahan Ketiga Scope",
         "amendment_4_historical": "Perubahan Keempat Scope"
       }
     },
+    "explicit_current_source_terms": [
+      "naskah konsolidasi",
+      "satu naskah",
+      "naskah berlaku saat ini"
+    ],
     "document_open_terms": [
       "buka naskah",
       "buka dokumen",
@@ -409,6 +465,10 @@
       "lihat pdf",
       "sediakan dokumen",
       "berikan dokumen",
+      "berikan saya dokumen",
+      "berikan saya document",
+      "berikan uud",
+      "berikan saya uud",
       "tunjukkan dokumen",
       "sediakan naskah",
       "berikan naskah",
@@ -688,8 +748,7 @@
         ],
         "official_title": [
           "judul",
-          "nama resmi",
-          "naskah"
+          "nama resmi"
         ]
       },
       "metadata_rules": {
@@ -767,7 +826,7 @@
       "metadata_roles": [
         {
           "role": "amendment_1_historical",
-          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(pertama|1|i)|amendment\\s*1)\\b"
+          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(pertama|satu|1|i)|amendment\\s*1)\\b"
         },
         {
           "role": "amendment_2_historical",
@@ -775,11 +834,11 @@
         },
         {
           "role": "amendment_3_historical",
-          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(ketiga|3|iii)|amendment\\s*3)\\b"
+          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(ketiga|tiga|3|iii)|amendment\\s*3)\\b"
         },
         {
           "role": "amendment_4_historical",
-          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(keempat|4|iv)|amendment\\s*4)\\b"
+          "pattern": "\\b((perubahan|amandemen)\\s*(ke[-\\s]*)?(keempat|empat|4|iv)|amendment\\s*4)\\b"
         },
         {
           "role": "current_consolidated",
@@ -787,7 +846,7 @@
         },
         {
           "role": "original_historical",
-          "pattern": "\\b((uud|undang[-\\s]*undang\\s+dasar)(\\s+1945)?\\s+asli|naskah\\s+asli|original)\\b"
+          "pattern": "\\b((uud|undang[-\\s]*undang\\s+dasar)(\\s+1945)?\\s+asli|naskah\\s+asli|naskah\\s+sebelum\\s+(perubahan|amandemen)|sebelum\\s+(perubahan|amandemen)|pra[-\\s]*(perubahan|amandemen)|original)\\b"
         }
       ],
       "relation_words": [
@@ -798,12 +857,15 @@
         "historis"
       ],
       "direct_relation_words": [
+        "ubah",
+        "berubah",
         "mengubah",
+        "mengamandemen",
         "diubah",
         "dirubah",
-        "menambah",
-        "menambahkan",
-        "amandemen",
+        "diganti",
+        "terdampak",
+        "hasil perubahan",
         "amended",
         "amends"
       ],
@@ -855,12 +917,6 @@
       },
       "unsupported_relation_context_words": [
         "perubahan"
-      ],
-      "instrument_scope_queries": [
-        "pasal apa saja",
-        "mengubah pasal apa",
-        "mengubah pasal apa saja",
-        "menambah pasal apa"
       ],
       "instrument_deletion_words": [
         "dihapus",
@@ -927,8 +983,6 @@
           "lingkup",
           "cakupan",
           "mencakup",
-          "mengubah",
-          "diubah",
           "daftar pasal",
           "pasal apa saja",
           "mengubah pasal apa",
@@ -947,63 +1001,12 @@
         ]
       },
       "instrument_intent_matrix": {
-        "role_family_terms": [
-          "scope",
-          "lingkup",
-          "ruang lingkup",
-          "ruanglingkup",
-          "cakupan",
-          "materi",
-          "substansi",
-          "daftar pasal",
-          "pasal yang diubah",
-          "pasal-pasal yang berubah",
-          "apa saja yang berubah",
-          "apa yang berubah",
-          "apa yang diubah"
-        ],
-        "amendment_terms": [
-          "perubahan pertama",
-          "perubahan ketiga",
-          "perubahan keempat",
-          "amandemen pertama",
-          "amandemen ketiga",
-          "amandemen keempat",
-          "perubahan ke-1",
-          "perubahan ke-3",
-          "perubahan ke-4",
-          "amandemen IV"
-        ],
         "word_orders": [
           "{role} {amendment}",
           "{amendment} {role}"
         ]
       },
       "partial_signal_instrument_matrix": {
-        "legal_object_terms": [
-          "pasal",
-          "ketentuan",
-          "norma",
-          "isi",
-          "objek",
-          "sasaran",
-          "bagian"
-        ],
-        "change_terms": [
-          "berubah",
-          "diubah",
-          "mengubah",
-          "diganti",
-          "terdampak"
-        ],
-        "source_terms": [
-          "perubahan pertama",
-          "perubahan ketiga",
-          "perubahan keempat",
-          "amandemen pertama",
-          "amandemen ketiga",
-          "amandemen keempat"
-        ],
         "word_orders": [
           "{object} yang {change} {source}",
           "{change} {object} apa {source}",
@@ -1011,31 +1014,6 @@
         ]
       },
       "instrument_like_boundary_matrix": {
-        "content_terms": [
-          "muatan",
-          "rincian",
-          "isi",
-          "substansi",
-          "objek",
-          "sasaran",
-          "hal",
-          "bagian"
-        ],
-        "effect_terms": [
-          "dampak",
-          "akibat",
-          "implikasi",
-          "pengaruh",
-          "konsekuensi"
-        ],
-        "source_terms": [
-          "perubahan pertama",
-          "perubahan ketiga",
-          "perubahan keempat",
-          "amandemen pertama",
-          "amandemen ketiga",
-          "amandemen keempat"
-        ],
         "word_orders": [
           "{term} {source}",
           "apa {term} {source}",
@@ -1043,25 +1021,6 @@
         ]
       },
       "instrument_intent_invariant_matrix": {
-        "analysis_terms": [
-          "tujuan",
-          "alasan",
-          "latar belakang",
-          "maksud",
-          "makna",
-          "risiko",
-          "urgensi",
-          "dasar"
-        ],
-        "valid_amendment_contexts": [
-          "perubahan pertama",
-          "perubahan ketiga",
-          "perubahan keempat",
-          "amandemen pertama",
-          "amandemen ketiga",
-          "amandemen keempat",
-          "amandemen IV"
-        ],
         "word_orders": [
           "{analysis} {amendment}",
           "apa {analysis} {amendment}",
@@ -1086,16 +1045,11 @@
         "muatan",
         "rincian",
         "isi",
-        "substansi",
-        "materi",
         "objek",
         "sasaran",
         "ketentuan",
         "bagian",
-        "hal",
-        "cakupan",
-        "lingkup",
-        "ruang lingkup"
+        "hal"
       ],
       "instrument_effect_signals": [
         "dampak",
@@ -1120,27 +1074,7 @@
       "instrument_legal_object_signals": [
         "pasal",
         "ayat",
-        "ketentuan",
-        "norma",
-        "materi",
-        "substansi",
-        "isi",
-        "objek",
-        "sasaran",
-        "bagian",
-        "hal"
-      ],
-      "instrument_change_signals": [
-        "ubah",
-        "berubah",
-        "diubah",
-        "dirubah",
-        "mengubah",
-        "menambah",
-        "menambahkan",
-        "diganti",
-        "terdampak",
-        "hasil perubahan"
+        "norma"
       ],
       "metadata_candidate_signals": [
         "tanggal",
@@ -1193,6 +1127,43 @@
         "vs",
         "versus"
       ],
+      "source_role_predecessors": {
+        "current_consolidated": "original_historical",
+        "amendment_1_historical": "original_historical",
+        "amendment_2_historical": "amendment_1_historical",
+        "amendment_3_historical": "amendment_2_historical",
+        "amendment_4_historical": "amendment_3_historical"
+      },
+      "all_source_scope_terms": [
+        "naskah apa saja",
+        "naskah mana saja",
+        "dokumen apa saja",
+        "dokumen mana saja",
+        "ada dimana saja",
+        "ada di mana saja",
+        "versi mana saja",
+        "seluruh versi",
+        "di dokumen uud mana",
+        "di naskah mana"
+      ],
+      "source_occurrence_separators": [
+        "ada di",
+        "ada dimana",
+        "ada di mana",
+        "terdapat di",
+        "tercantum di"
+      ],
+      "source_occurrence_query_wrappers": [
+        "pasal perihal",
+        "pasal terkait",
+        "pada pasal berapa",
+        "pasal berapa saja",
+        "telusuri",
+        "jelaskan",
+        "dijamin",
+        "disebut",
+        "nomor pasalnya"
+      ],
       "source_role_separator_pattern": "[,/]",
       "temporal_current_terms": [
         "setelah perubahan",
@@ -1202,6 +1173,8 @@
         "sesudah diubah",
         "setelah diamandemen",
         "sesudah diamandemen",
+        "setelah amandemen",
+        "sesudah amandemen",
         "pasca amandemen",
         "saat ini",
         "naskah konsolidasi"
@@ -1240,26 +1213,12 @@
             ]
           },
           "MODIFY_PROVISION": {
-            "terms": [
-              "mengubah",
-              "diubah",
-              "dirubah",
-              "amends",
-              "amended"
-            ],
             "relation_types": [
               "MODIFIES",
               "DELETES"
             ]
           }
         },
-        "change_terms": [
-          "mengubah",
-          "diubah",
-          "dirubah",
-          "amends",
-          "amended"
-        ],
         "add_terms": [
           "menambah",
           "menambahkan",
@@ -1277,39 +1236,18 @@
           "pasal",
           "ayat"
         ],
-        "unsupported_detail_terms": [
-          "ketentuan",
-          "norma",
-          "materi",
-          "substansi",
-          "objek",
-          "sasaran",
-          "bagian",
-          "hal",
-          "lembaga",
-          "scope",
-          "lingkup",
-          "cakupan",
-          "dampak",
-          "akibat",
-          "implikasi",
-          "konsekuensi",
-          "tujuan",
-          "alasan",
-          "latar belakang",
-          "maksud",
-          "makna",
-          "risiko",
-          "urgensi",
-          "dasar",
-          "rasional",
-          "pertimbangan",
-          "motif"
-        ],
         "schema_only_relation_types": [
           "ADDS",
           "SUPPLEMENTS"
         ],
+        "public_relation_labels": {
+          "DELETES": "dihapus",
+          "MODIFIES": "diubah",
+          "ADDS": "ditambahkan",
+          "RENAMES": "dinomori ulang",
+          "RENUMBERED_TO": "dinomori ulang"
+        },
+        "ambiguous_operation_label": "pengubahan dan/atau penambahan",
         "source_role_label_prefix": "Perubahan ",
         "document_answer_template": "Jejak relasi dokumen menunjukkan UUD 1945 diubah oleh {relations}. Relasi ini source-role/document-level dan tidak memiliki highlight BBox pasal/ayat exact.",
         "single_document_answer_template": "Jejak relasi dokumen menunjukkan {relation} mengubah UUD 1945 pada tingkat dokumen/source-role. Detail pasal/ayat exact tidak tersedia sebagai dukungan relasi terpromosi.",
@@ -1354,6 +1292,77 @@
         "bab lengkap",
         "daftar bab dalam uud",
         "bab"
+      ],
+      "structure_count_terms": [
+        "berapa pasal",
+        "jumlah pasal"
+      ],
+      "structure_count_unit_type": "pasal_record",
+      "structure_count_units": {
+        "bab": {
+          "terms": [
+            "berapa bab",
+            "jumlah bab"
+          ],
+          "unit_type": "bab_record",
+          "label_pattern": "BAB\\s+[IVXLCDM]+[A-Z]?",
+          "authority_kinds": [
+            "structural_context"
+          ],
+          "label": "BAB"
+        },
+        "pasal": {
+          "terms": [
+            "berapa pasal",
+            "jumlah pasal"
+          ],
+          "unit_type": "pasal_record",
+          "label_pattern": "Pasal\\s+\\d+[A-Z]?",
+          "authority_kinds": [
+            "normative_legal_text"
+          ],
+          "label": "Pasal"
+        },
+        "ayat": {
+          "terms": [
+            "berapa ayat",
+            "jumlah ayat"
+          ],
+          "unit_type": "ayat_record",
+          "label_pattern": "\\(\\d+\\)",
+          "authority_kinds": [
+            "normative_legal_text"
+          ],
+          "label": "ayat"
+        },
+        "perubahan": {
+          "terms": [
+            "berapa kali perubahan",
+            "jumlah perubahan",
+            "berapa amandemen",
+            "jumlah amandemen",
+            "berapa kali diubah",
+            "berapa kali dirubah",
+            "berapa kali diamandemen",
+            "berapa kali diamandemenkan",
+            "berapa kali uud diubah",
+            "berapa kali uud dirubah",
+            "berapa kali uud diamandemen",
+            "berapa kali uud diamandemenkan"
+          ],
+          "source_roles": [
+            "amendment_1_historical",
+            "amendment_2_historical",
+            "amendment_3_historical",
+            "amendment_4_historical"
+          ],
+          "label": "dokumen Perubahan"
+        }
+      },
+      "structure_count_all_source_terms": [
+        "semua naskah",
+        "seluruh naskah",
+        "setiap naskah"
       ],
       "structure_unit_type": "bab_record",
       "structure_detail_terms": [
@@ -1422,6 +1431,9 @@
         "amendment_2_historical": "perubahan kedua",
         "amendment_3_historical": "perubahan ketiga",
         "amendment_4_historical": "perubahan keempat"
+      },
+      "public_labels": {
+        "printed_numbering_typo": "Typo penomoran tercetak"
       },
       "reason_rules": [
         {

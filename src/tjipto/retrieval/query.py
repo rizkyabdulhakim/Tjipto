@@ -56,7 +56,11 @@ def _apply_source_reference_mappings(text: str, config=None) -> str:
         except (KeyError, TypeError):
             continue
         if not mapping.context_terms or not all(
-            re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text, re.IGNORECASE)
+            any(
+                re.search(rf"(?<!\w){re.escape(option.strip())}(?!\w)", text, re.IGNORECASE)
+                for option in term.split("|")
+                if option.strip()
+            )
             for term in mapping.context_terms
         ):
             continue

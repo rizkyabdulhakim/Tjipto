@@ -218,7 +218,11 @@ class SparseIndex:
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
         aliases = dict(self.aliases)
-        query_terms = _expanded_query_terms(query, aliases, dict(self.related_terms))
+        query_terms = _expanded_query_terms(
+            corpus_query_expansion(query, tuple(document.row() for document in self.documents)),
+            aliases,
+            dict(self.related_terms),
+        )
         if not query_terms or not self.documents:
             return []
         document_frequency = dict(self.document_frequency)
@@ -320,3 +324,26 @@ def _expanded_query_terms(
         for related in related_terms.get(term, ()):
             expanded.extend(tokens(related, aliases=aliases))
     return expanded
+
+
+def corpus_query_expansion(query: str, rows: tuple[dict, ...] | list[dict]) -> str:
+    """Expand only acronyms proven by uppercase phrases in this corpus."""
+    raw_tokens = TOKEN_RE.findall(query or "")
+    if not raw_tokens:
+        return query or ""
+    uppercase_words: list[str] = []
+    for row in rows:
+        text = _document_text(row)
+        uppercase_words.extend(re.findall(r"\b[A-Z][A-Z]+\b", text))
+    additions: list[str] = []
+    for token in raw_tokens:
+        if not 2 <= len(token) <= 5 or not token.isalpha() or token.casefold() in RANKING_STOPWORDS:
+            continue
+        acronym = token.upper()
+        for start in range(len(uppercase_words)):
+            for size in range(2, 6):
+                window = uppercase_words[start : start + size]
+                if len(window) != size or "".join(word[0] for word in window) != acronym:
+                    continue
+                additions.append(" ".join(window).casefold())
+    return " ".join((*((query or "").split()), *dict.fromkeys(additions)))

@@ -6,6 +6,7 @@ from tjipto.retrieval.dense import DenseEmbeddingProvider, dense_configured, den
 from tjipto.retrieval.metadata import (
     filter_evidence,
     has_metadata_target,
+    has_named_signatory,
     metadata_lookup,
     normalize_filters,
     public_filters,
@@ -90,8 +91,11 @@ def route_retrieval(
             "reason": filters["_error"],
             "invalid_filters": filters.get("_invalid_filters", ()),
         }
-    if scope.unresolved and "source_role" not in filters and not has_relation_target(
-        normalized["normalized_query"], strategy=structured_strategy, config=config
+    if (
+        scope.unresolved
+        and "source_role" not in filters
+        and not has_relation_target(normalized["normalized_query"], strategy=structured_strategy, config=config)
+        and not has_named_signatory(store, normalized["normalized_query"])
     ):
         if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config, store=store):
             source_roles = tuple(
@@ -331,11 +335,28 @@ def route_retrieval(
         }
 
     retrieval_settings: dict = getattr(config, "setting", lambda *_: {})("retrieval", {}) or {}
+    sparse_matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))
+    sparse_filtered = filter_evidence(sparse_matches, filters)
+    if "source_role" not in filters:
+        preferred = tuple(row for row in sparse_filtered if row.get("source_role") == scope.role)
+        if preferred:
+            sparse_filtered = preferred
+    lexical_complete = bool(sparse_filtered and sparse_filtered[0].get("lexical_complete_coverage") is True)
+    if route == "auto" and lexical_complete:
+        ranked, trace = merge_ranked(store, {"bm25": sparse_filtered}, filters, expand_graph=False)
+        return envelope | {
+            "status": "found",
+            "route": "bm25",
+            "intent": "natural_language",
+            "matches": ranked[:limit],
+            "expansion_trace": trace,
+            "dense_configured": dense_enabled,
+            "hybrid_active": False,
+        }
     dense_ready = dense_runtime_available(store)
     hybrid_enabled = (
         route == "hybrid"
-        or (retrieval_settings.get("mode") == "hybrid" and dense_ready)
-        or (route == "auto" and dense_ready)
+        or (route == "auto" and retrieval_settings.get("mode") == "hybrid" and dense_ready)
     )
     if hybrid_enabled:
         fused = hybrid_search(
@@ -362,12 +383,8 @@ def route_retrieval(
             "hybrid_active": fused.get("route") == "hybrid",
         }
 
-    matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))
-    filtered = filter_evidence(matches, filters)
-    if "source_role" not in filters:
-        preferred = tuple(row for row in filtered if row.get("source_role") == scope.role)
-        if preferred:
-            filtered = preferred
+    matches = sparse_matches
+    filtered = sparse_filtered
     if filtered:
         # Lexical rows are candidates only; graph proximity cannot turn a
         # neighbouring provision into answer support.

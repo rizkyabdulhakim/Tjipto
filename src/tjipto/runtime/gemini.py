@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from urllib.request import Request, urlopen
 
-from tjipto.runtime.wording import valid_proposal
+from tjipto.runtime.wording import answer_prompt, valid_proposal
 
 
 class GeminiAnswerProvider:
@@ -18,14 +18,8 @@ class GeminiAnswerProvider:
     def propose(self, verified_context: str) -> dict[str, object] | None:
         if not verified_context:
             return None
-        prompt = (
-            "Kembalikan JSON saja. Susun kalimat alami bahasa Indonesia hanya dari verified_claims. "
-            "Jangan menambah atau mengubah fakta, angka, rujukan, modalitas, negasi, subjek, atau objek. "
-            "Gunakan sentences dengan text dan claim_ids; setiap claim_id yang diberikan harus digunakan.\n\n"
-            + verified_context
-        )
         payload = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "contents": [{"role": "user", "parts": [{"text": answer_prompt(verified_context)}]}],
             "generationConfig": {
                 "candidateCount": 1,
                 "temperature": 0,
@@ -35,11 +29,19 @@ class GeminiAnswerProvider:
                     "properties": {
                         "sentences": {
                             "type": "ARRAY",
+                            "maxItems": 4,
                             "items": {
                                 "type": "OBJECT",
                                 "properties": {
-                                    "text": {"type": "STRING"},
-                                    "claim_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
+                                    "text": {
+                                        "type": "STRING",
+                                        "description": "Concise Indonesian prose preserving at least two distinctive terms from every listed claim.",
+                                    },
+                                    "claim_ids": {
+                                        "type": "ARRAY",
+                                        "items": {"type": "STRING"},
+                                        "description": "Exact verified claim IDs supporting every fact in this sentence.",
+                                    },
                                 },
                                 "required": ["text", "claim_ids"],
                             },

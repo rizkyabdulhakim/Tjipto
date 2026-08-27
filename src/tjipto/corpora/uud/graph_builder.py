@@ -6,7 +6,13 @@ import re
 from tjipto.corpora.uud.specs import UUD_INSERTED_BAB_PREDECESSORS, UUD_LEGAL_GRAPH_EDGE_SCHEMA
 from tjipto.corpora.parser_dispatch import parse_legal_references
 from tjipto.corpora.uud.policy.relations import is_deletion_provision, is_renumbering_provision, is_scope_provision
-from tjipto.corpora.uud.relation_builder import legal_unit_reference, parse_renumbering_mappings, resolve_relation_unit
+from tjipto.corpora.uud.relation_builder import (
+    classify_scope_operation,
+    legal_unit_reference,
+    parse_renumbering_mappings,
+    predecessor_unit_for_reference,
+    resolve_relation_unit,
+)
 
 
 def build_graph_artifacts(
@@ -241,6 +247,15 @@ def build_graph_artifacts(
                         label,
                         source_role="current_consolidated",
                     )
+                comparison = {}
+                if relation_type in {"ADDS", "MODIFIES", "AMBIGUOUS_OPERATION"}:
+                    comparison = classify_scope_operation(legal_units, row["source_role"], label)
+                    classified_type = str(comparison.get("relation_type") or relation_type)
+                    relation_type = classified_type
+                    operation_candidates = tuple(comparison.get("operation_candidates") or ())
+                    successor_id = comparison.get("successor_legal_unit_id")
+                    if successor_id in legal_units_by_id:
+                        target = legal_units_by_id[successor_id]
                 if source_node and target:
                     target_citation = legal_unit_reference(target, legal_units_by_id)
                     add_edge(
@@ -265,7 +280,13 @@ def build_graph_artifacts(
     if delete_clause:
         source_node = unit_node_ids[delete_clause["legal_unit_id"]]
         for label in _deletion_target_labels(delete_clause.get("quoted_text")):
-            target = resolve_relation_unit(legal_units, label, source_document_id=delete_clause["source_document_id"])
+            target = predecessor_unit_for_reference(legal_units, label, delete_clause["source_role"])
+            if target is None:
+                target = resolve_relation_unit(
+                    legal_units,
+                    label,
+                    source_document_id=delete_clause["source_document_id"],
+                )
             if target and str(target.get("unit_label") or "").startswith(("Pasal ", "Ayat ")):
                 target_citation = legal_unit_reference(target, legal_units_by_id)
                 add_edge(
@@ -455,10 +476,21 @@ def _scope_target_operations(text: str | None) -> list[tuple[str, str, tuple[str
         # replacement provision.  The source legal-unit owner distinguishes
         # those edges; label de-duplication here would erase clause (e).
         source = segments.get("e") or segments.get("a") or source
-        if "e" in segments and "pengubahan dan/atau penambahan" in source.casefold():
+        if "e" in segments and re.search(
+            r"(?:mengubah|pengubahan)\s+dan/atau\s+(?:menambah|penambahan)",
+            source,
+            re.IGNORECASE,
+        ):
             relation_type = "AMBIGUOUS_OPERATION"
             operation_candidates = ("MODIFIES", "ADDS")
     else:
+        if re.search(
+            r"(?:mengubah|pengubahan)\s+dan/atau\s+(?:menambah|penambahan)",
+            source,
+            re.IGNORECASE,
+        ):
+            relation_type = "AMBIGUOUS_OPERATION"
+            operation_candidates = ("MODIFIES", "ADDS")
         operations = tuple(re.finditer(r"\bmengubah\b", source, re.IGNORECASE))
         if operations:
             source = source[operations[-1].end() :]

@@ -298,6 +298,8 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "support_class", "target_bbox_refs", "target_citation", "target_geometry_method", "target_geometry_source_ids",
         "target_document_id", "target_label", "target_legal_unit_id", "target_precision", "target_source_role", "target_text_span_ids",
         "text_span_ids", "trace_only_reason", "validator_status", "viewer_highlightable",
+        "predecessor_legal_unit_id", "successor_legal_unit_id", "predecessor_text_span_ids", "successor_text_span_ids",
+        "predecessor_bbox_refs", "successor_bbox_refs", "predecessor_pdf_sha256", "successor_pdf_sha256", "comparison_basis",
     }),
     "bbox_registry": frozenset({
         "bbox_id", "bbox_precision", "coordinate_origin", "coordinate_space", "corpus_id", "evidence_exists",

@@ -30,6 +30,23 @@ class SourceScopeDecision:
 def source_roles_for_query(query: str, *, strategy: str = "generic", config=None) -> tuple[str, ...]:
     intent = intent_config_for(strategy, config)
     roles = [role for role, pattern in intent["metadata_roles"] if pattern.search(query or "")]
+    preferred = getattr(config, "preferred_source_role", None)
+    explicit_current_terms = getattr(config, "setting", lambda *_: ())("explicit_current_source_terms", ()) if config is not None else ()
+    if (
+        preferred in roles
+        and any(role != preferred for role in roles)
+        and not contains_intent_phrase(query, explicit_current_terms)
+        and not any(
+            re.search(rf"\b{re.escape(normalize_intent_text(connector))}\b", normalize_intent_text(query))
+            for connector in intent.get("source_role_connectors", ())
+            if normalize_intent_text(connector)
+        )
+        and not re.search(r"\bke\b", normalize_intent_text(query))
+    ):
+        # A word such as "berlaku" can describe the field being asked about,
+        # not a request for the consolidated source.  A named historical
+        # document takes precedence unless the current source is named too.
+        roles = [role for role in roles if role != preferred]
     if len(roles) == 1:
         roles.extend(_coordinated_source_roles(query, intent, excluded=set(roles)))
     return tuple(dict.fromkeys(roles))
@@ -82,6 +99,25 @@ def resolve_source_scope(query: str, *, strategy: str = "generic", config=None) 
     intent = intent_config_for(strategy, config)
     if contains_intent_phrase(query, intent.get("temporal_current_terms", ())):
         return SourceScopeDecision(getattr(config, "preferred_source_role", None), "generic_post_amendment", roles)
+    # Treat a quantified post-amendment phrase as the configured current source
+    # without adding another corpus-specific alias (for example, "setelah
+    # semua amandemen").  The source and temporal markers remain config-owned.
+    normalized = normalize_intent_text(query)
+    temporal_markers = {
+        token
+        for phrase in intent.get("temporal_current_terms", ())
+        for token in normalize_intent_text(phrase).split()
+        if token in {"setelah", "sesudah", "pasca"}
+    }
+    source_markers = tuple(intent.get("document_relation", {}).get("source_terms", ()) or ())
+    document_targets = tuple(intent.get("document_target_words", ()) or ())
+    if (
+        temporal_markers
+        and any(re.search(rf"\b{re.escape(marker)}\b", normalized) for marker in temporal_markers)
+        and contains_intent_phrase(normalized, source_markers)
+        and contains_intent_phrase(normalized, document_targets)
+    ):
+        return SourceScopeDecision(getattr(config, "preferred_source_role", None), "generic_post_amendment", roles)
     if any(pattern.search(query or "") for pattern in intent["unresolved_source_scope_patterns"]):
         return SourceScopeDecision(None, "unresolved", roles)
     if contains_intent_phrase(query, intent.get("instrument_source_signals", ())):
@@ -107,8 +143,14 @@ def source_reference_mappings_for_query(query: str, config=None) -> tuple[dict, 
     mappings = getattr(config, "setting", lambda *_: ())("source_reference_mappings", ()) if config is not None else ()
 
     def present(value: object) -> bool:
-        phrase = normalize_intent_text(str(value or ""))
-        return bool(phrase and re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", normalized))
+        alternatives = (
+            normalize_intent_text(option)
+            for option in str(value or "").split("|")
+        )
+        return any(
+            phrase and re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", normalized)
+            for phrase in alternatives
+        )
 
     return tuple(
         dict(mapping)

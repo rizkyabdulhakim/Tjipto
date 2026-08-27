@@ -823,6 +823,7 @@ def _metadata_quote(
 
 def _amendment_document_metadata(source: dict, block: dict) -> dict:
     date = _extract_metadata_date(block["quoted_text"])
+    institution, place = _closing_identity(block["quoted_text"])
     grounding_ref = block["metadata_grounding_id"]
     return {
         "corpus_id": "uud",
@@ -834,19 +835,19 @@ def _amendment_document_metadata(source: dict, block: dict) -> dict:
         "field_statuses": dict(AMENDMENT_FIELD_STATUSES),
         "grounded_fields": {},
         "grounding_refs": [],
-        "institution": "MAJELIS PERMUSYAWARATAN RAKYAT REPUBLIK INDONESIA",
+        "institution": institution,
         "ln_tln": None,
         "official_title": None,
         "officials": [],
         "penetapan": {
             "date_text": date,
             "grounding_refs": [grounding_ref],
-            "institution": "MAJELIS PERMUSYAWARATAN RAKYAT REPUBLIK INDONESIA",
-            "place": "Jakarta",
+            "institution": institution,
+            "place": place,
         },
         "pengesahan": None,
         "pengundangan": None,
-        "place": "Jakarta",
+        "place": place,
         "promulgation": None,
         "runtime_loadable": False,
         "signatories": _signatories(block["quoted_text"]),
@@ -859,8 +860,7 @@ def _amendment_document_metadata(source: dict, block: dict) -> dict:
 
 
 def _current_document_metadata(source: dict, block: dict) -> dict:
-    title = "UNDANG\xadUNDANG DASAR NEGARA REPUBLIK INDONESIA TAHUN 1945 DALAM SATU NASKAH"
-    institution = block["quoted_text"].removesuffix(f" {title}")
+    institution, title = _source_publication_header(block["quoted_text"])
     return {
         "corpus_id": "uud",
         "date": None,
@@ -950,6 +950,31 @@ def _original_document_metadata(source: dict) -> dict:
         "status": "not_found_in_source",
         "temporal_context": source["temporal_context"],
     }
+
+
+def _closing_identity(text: str) -> tuple[str, str]:
+    compact = " ".join(text.split())
+    place_match = re.search(r"\bDitetapkan di\s+(.+?)\s+Pada tanggal\b", compact, flags=re.IGNORECASE)
+    institution_match = re.search(
+        r"\bMAJELIS PERMUSYAWARATAN RAKYAT REPUBLIK INDONESIA\b",
+        compact,
+        flags=re.IGNORECASE,
+    )
+    if not place_match or not institution_match:
+        raise ValueError("amendment_closing_identity_not_found")
+    return institution_match.group(0).upper(), place_match.group(1).strip()
+
+
+def _source_publication_header(text: str) -> tuple[str, str]:
+    compact = " ".join(text.split())
+    title_match = re.search(
+        r"UNDANG\xadUNDANG DASAR NEGARA REPUBLIK INDONESIA TAHUN 1945 DALAM SATU NASKAH$",
+        compact,
+        flags=re.IGNORECASE,
+    )
+    if not title_match:
+        raise ValueError("consolidated_source_publication_header_not_found")
+    return compact[: title_match.start()].rstrip(), title_match.group(0)
 
 
 def _signatories(text: str) -> list[dict]:

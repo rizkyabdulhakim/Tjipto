@@ -6,7 +6,7 @@
   "corpus_id": "uud",
   "contract_id": "tjipto.uud.artifact-contract",
   "contract_version": 7,
-  "contract_fingerprint": "1f57dbaba3efc9e5f82fb47c833b1dc400d4db7b0227c7fdef2b75220b0fd436",
+  "contract_fingerprint": "5991227cc9caa18e7b2cfd3883da47e031720d6fb97d0a6bcf8b2313bec5e027",
   "extractor_fingerprint": {
     "python": "3.12.10",
     "pymupdf": "1.27.2.3",
@@ -25,7 +25,7 @@
     "document_relations": 13,
     "evidence_records": 650,
     "excluded_records": 0,
-    "graph_edges": 8102,
+    "graph_edges": 8122,
     "graph_nodes": 3209,
     "legal_units": 653,
     "metadata_assertions": 1877,
@@ -84,8 +84,8 @@
         "source_support_exact",
         "viewer_highlightable"
       ],
-      "bytes": 688488,
-      "sha256": "13e409a52913cabb7c436cf607a6149e4810dcf9cfd31238102b4f2e079b336d"
+      "bytes": 832466,
+      "sha256": "95a531e76915b1fdc11354c25fa91500123abc7be2349b6ab043e9c18bef4113"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -259,8 +259,8 @@
         "support_exception_ids",
         "support_kind"
       ],
-      "bytes": 7660179,
-      "sha256": "dd886f94bfbfdb432146019fc09ccd81b181d3ce59659d771c211cc1580ecb9d"
+      "bytes": 8116485,
+      "sha256": "93eefb7e60b35685681febacd78c82c2d6cf85b401a84c7f5bc343b897398725"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -441,8 +441,8 @@
         "promotion_outcome",
         "failure_reason"
       ],
-      "bytes": 256662,
-      "sha256": "19574abad093aab81e097d50281141e3ccc0fc3fdea8690109ed72db8089a87e"
+      "bytes": 272292,
+      "sha256": "e8bf516351f235e258d591f44eeee1b7f365dea4003997d5bb8859a859c87a90"
     },
     "propositions.jsonl": {
       "origin": "generated",
@@ -503,8 +503,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 25843651,
-      "sha256": "db1bb1fdfeff764201936d3025f56dd065f5edebf918793644e0589c211e6ecc"
+      "bytes": 26584302,
+      "sha256": "5e32ef008a2ae88570d17781d54e76b385f2cd9c49af562735da7ea9a34726ac"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -639,8 +639,8 @@
         "resolving_commit",
         "runtime_loadable"
       ],
-      "bytes": 21306,
-      "sha256": "eb2ee8c98560b8914e2b08869d46e6dfd0391ef8d56ff29ccf25aacf010809e4"
+      "bytes": 21454,
+      "sha256": "cd890e858b90b09d43cc1690f811d8b61ffd2fc3eb888ed86b809f657e316817"
     },
     "validation_report.json": {
       "origin": "generated",
@@ -651,8 +651,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 25592,
-      "sha256": "8b658001e94618dfdcc216780e38f6c3aad9e0b82d04137977afdb70d0199f9f"
+      "bytes": 25637,
+      "sha256": "4497cbdb719103b2374aed0c840a719e8b5c45f938048e6fc3e00c1972a8e929"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

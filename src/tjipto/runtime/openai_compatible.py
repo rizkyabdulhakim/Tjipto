@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from urllib.request import Request, urlopen
 
-from tjipto.runtime.wording import valid_proposal
+from tjipto.core.external_llm import OPENAI_COMPATIBLE_USER_AGENT, openai_compatible_latency_options
+from tjipto.runtime.wording import answer_prompt, valid_proposal
 
 
 class OpenAICompatibleWordingProvider:
@@ -16,7 +17,8 @@ class OpenAICompatibleWordingProvider:
         payload = {
             "model": self._model,
             "temperature": 0,
-            "messages": [{"role": "user", "content": _prompt(verified_context)}],
+            **openai_compatible_latency_options(self._model, self._endpoint),
+            "messages": [{"role": "user", "content": answer_prompt(verified_context)}],
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -29,15 +31,21 @@ class OpenAICompatibleWordingProvider:
                             "sentences": {
                                 "type": "array",
                                 "minItems": 1,
+                                "maxItems": 4,
                                 "items": {
                                     "type": "object",
                                     "additionalProperties": False,
                                     "properties": {
-                                        "text": {"type": "string", "minLength": 1},
+                                        "text": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "description": "Concise Indonesian prose preserving at least two distinctive terms from every listed claim.",
+                                        },
                                         "claim_ids": {
                                             "type": "array",
                                             "minItems": 1,
                                             "items": {"type": "string"},
+                                            "description": "Exact verified claim IDs supporting every fact in this sentence.",
                                         },
                                     },
                                     "required": ["text", "claim_ids"],
@@ -52,7 +60,11 @@ class OpenAICompatibleWordingProvider:
         request = Request(
             self._endpoint,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self._api_key}"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._api_key}",
+                "User-Agent": OPENAI_COMPATIBLE_USER_AGENT,
+            },
             method="POST",
         )
         try:
@@ -61,12 +73,3 @@ class OpenAICompatibleWordingProvider:
             return valid_proposal(json.loads(str(body["choices"][0]["message"]["content"])))
         except (OSError, ValueError, KeyError, TypeError, IndexError):
             return None
-
-
-def _prompt(verified_context: str) -> str:
-    return (
-        "Return JSON only. Write natural Indonesian using only the supplied verified_claims. "
-        "Do not add or change facts, numbers, references, modality, negation, subjects, or objects. "
-        "Return {sentences:[{text:string,claim_ids:string[]}]}; use every supplied claim id.\n"
-        + verified_context
-    )

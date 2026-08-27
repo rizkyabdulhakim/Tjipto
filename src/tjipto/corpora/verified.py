@@ -334,7 +334,7 @@ def _validate_cross_artifact_references(manifest: dict, artifacts: dict[str, obj
     for row in rows("graph_edges"):
         if row["source_id"] not in node_ids or row["target_id"] not in node_ids:
             raise CorpusIntegrityError("semantic_cross_reference_unresolved")
-        if row.get("edge_type") in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"} and row.get("relation_id") not in relation_ids:
+        if row.get("edge_type") in {"MODIFIES", "DELETES", "ADDS", "RENAMES", "RENUMBERED_TO"} and row.get("relation_id") not in relation_ids:
             raise CorpusIntegrityError("semantic_cross_reference_unresolved")
     for row in rows("evidence_registry"):
         if (

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+import re
 
 from tjipto.catalog import CATALOG_FILTERS
 from tjipto.evidence.legal_citation import FootnoteBook, IndonesianLegalCitationProfile
@@ -141,7 +142,7 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
     public = {
         "kind": "answer",
         "status": result.get("status"),
-        "answer": result.get("answer"),
+        "answer": _answer_with_footnotes(result.get("answer"), projected),
         "supports": supports,
         "support_groups": _support_groups(projected, service, corpus_id),
     }
@@ -170,6 +171,35 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
             "missing_requirement_ids": tuple(sufficiency.get("missing_requirement_ids") or ()),
         }
     return public
+
+
+def _answer_with_footnotes(answer: object, projected: tuple[tuple[dict, dict], ...]) -> object:
+    if not isinstance(answer, str) or not answer.strip():
+        return answer
+    citations = tuple(
+        (str(source.get("evidence_id") or ""), citation["number"])
+        for support, source in projected
+        if isinstance((citation := support.get("citation")), dict)
+        and isinstance(citation.get("number"), int)
+    )
+    numbers = tuple(dict.fromkeys(number for _, number in citations))
+    if not numbers:
+        return re.sub(r"\s*\[\[support:[^\]]+\]\]", "", answer).strip()
+    had_markers = "[[support:" in answer
+    rendered = answer
+    for evidence_id, number in citations:
+        if evidence_id:
+            rendered = rendered.replace(f"[[support:{evidence_id}]]", f"[{number}]")
+    rendered = re.sub(r"\s*\[\[support:[^\]]+\]\]", "", rendered).strip()
+    if not had_markers:
+        paragraphs = answer.strip().split("\n\n")
+        if len(paragraphs) == len(numbers):
+            return "\n\n".join(f"{paragraph.rstrip()} [{number}]" for paragraph, number in zip(paragraphs, numbers, strict=True))
+        existing = {int(value) for value in re.findall(r"\[(\d+)\]", rendered)}
+        missing = tuple(number for number in numbers if number not in existing)
+        if missing:
+            rendered = f"{rendered} {' '.join(f'[{number}]' for number in missing)}"
+    return rendered
 
 
 def _public_citation_response(result: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
@@ -272,8 +302,9 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str, foo
     linkable = target_source.get("can_resolve") is True and bool(
         row.get("source_document_id") and row.get("page_numbers")
     )
+    target_action = "open_document" if target_source.get("action") == "open_document" else "viewer"
     target = service.register_public_target(corpus_id, {
-        "evidence_id": row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
+        "evidence_id": None if target_action == "open_document" else row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
         "proposition_id": row.get("proposition_id"),
         "relation_id": row.get("relation_id") or target_source.get("relation_id"),
         "source_document_id": row.get("source_document_id"),
@@ -298,10 +329,14 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str, foo
             "citation_final": unit.citation_final,
         }
     legal_document = service.catalog_document_for_source(row.get("source_role"))
+    relation_claim = row.get("fact_kind") == "article_relation" or row.get("support_kind") == "article_relation"
     result = {
         "public_support_id": service.public_identifier(corpus_id, "support", target or (row.get("display_label"), row.get("source_role"), authority_kind)),
         "authority_kind": authority_kind,
-        "citation_final": row.get("citation_final") is True and authority_kind == "legal_citation",
+        # Relation finality is evaluated at the claim level.  The supporting
+        # clause remains instrument provenance, but an exact, isolated
+        # article relation can be published as a final relation claim.
+        "citation_final": row.get("citation_final") is True and (authority_kind == "legal_citation" or relation_claim),
         "support_kind": row.get("support_kind") or "trace_support",
         "fact_kind": fact_kind,
         "label": row.get("printed_name") or role_label or row.get("display_label") or row.get("label") or row.get("citation") or row.get("authority_label") or "Bukti sumber",
@@ -314,7 +349,7 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str, foo
             else row.get("source_status_label") or service.public_source_status_label(corpus_id, row.get("source_role"))
         ),
         "page_numbers": tuple(row.get("page_numbers") or ()),
-        "viewer_target": _public_target(target, "viewer", row.get("page_numbers") or (), linkable),
+        "viewer_target": _public_target(target, target_action, row.get("page_numbers") or (), linkable),
         "citation": citation,
     }
     if legal_document is not None:
@@ -474,8 +509,8 @@ def handle_catalog_request(
             **{
                 key: projection[key]
                 for key in (
-                    "title", "legal_identity", "legal_status", "document_role", "issuer",
-                    "establishment_date", "promulgation_date", "effective_date", "publication",
+                    "title", "legal_identity", "legal_status", "legal_status_scope", "document_role", "issuer",
+                    "establishment_date", "establishment_place", "signatories", "promulgation_date", "effective_date", "publication",
                     "official_url", "relations", "provision_effects",
                 )
             },
@@ -491,7 +526,12 @@ def handle_catalog_request(
         }
     if action == "facets":
         _validate_catalog_payload(payload, set())
-        return {"kind": "catalog_facets", "facets": service.catalog_search("", 1)["facets"]}
+        corpus_ids = service.registry.corpus_ids()
+        return {
+            "kind": "catalog_facets",
+            "facets": service.catalog_search("", 1)["facets"],
+            "default_corpus": corpus_ids[0] if len(corpus_ids) == 1 else None,
+        }
     return {"kind": "unavailable", "status": "unsupported_action"}
 
 

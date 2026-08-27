@@ -10,6 +10,13 @@ from tjipto.corpora.uud.parser import matches_uud_contextual_reference
 
 _AYAT_RE = re.compile(r"\bayat\s*\(\s*(\d+)\s*\)", re.IGNORECASE)
 _AMENDMENT_ROLE_RE = re.compile(r"\bPerubahan\s+(Pertama|Kedua|Ketiga|Keempat)\b", re.IGNORECASE)
+_AMENDMENT_ROLE_ORDER = {
+    "original_historical": 0,
+    "amendment_1_historical": 1,
+    "amendment_2_historical": 2,
+    "amendment_3_historical": 3,
+    "amendment_4_historical": 4,
+}
 
 
 def parse_renumbering_mappings(text: str) -> list[dict]:
@@ -108,6 +115,163 @@ def legal_unit_reference(unit: dict | None, units_by_id: dict[str, dict]) -> str
     if parent and str(parent.get("unit_label") or "").startswith("Pasal ") and re.fullmatch(r"\(\d+\)", label):
         return f"{parent['unit_label']} ayat {label}"
     return label or None
+
+
+def classify_scope_operation(
+    legal_units: list[dict], source_role: str, target_citation: str
+) -> dict[str, object]:
+    """Classify an ambiguous amendment scope only from adjacent source units.
+
+    A scope sentence is not enough to choose ``ADDS`` or ``MODIFIES``.  The
+    historical unit inventory supplies the predecessor/successor comparison;
+    absent predecessor means addition, while a changed predecessor text means
+    modification.  Missing or unchanged proof stays trace-only.
+    """
+    source_index = _AMENDMENT_ROLE_ORDER.get(source_role)
+    if source_index is None or not target_citation:
+        return {"relation_type": "AMBIGUOUS_OPERATION", "operation_candidates": ("MODIFIES", "ADDS")}
+    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    by_reference: dict[str, list[dict]] = {}
+    for unit in legal_units:
+        reference = legal_unit_reference(unit, units_by_id)
+        if reference:
+            by_reference.setdefault(reference, []).append(unit)
+    successor = next(
+        (row for row in by_reference.get(target_citation, ()) if row.get("source_role") == source_role),
+        None,
+    )
+    if successor is None:
+        return {
+            "relation_type": "AMBIGUOUS_OPERATION",
+            "operation_candidates": ("MODIFIES", "ADDS"),
+        }
+    previous = _previous_unit_for_reference(
+        by_reference,
+        target_citation,
+        source_index,
+    )
+    comparison = {
+        "successor_legal_unit_id": successor["legal_unit_id"],
+        "successor_source_role": successor.get("source_role"),
+        "comparison_basis": "versioned_normative_text",
+    }
+    if previous is None:
+        return {"relation_type": "ADDS", **comparison}
+    comparison.update(
+        {
+            "predecessor_legal_unit_id": previous["legal_unit_id"],
+            "predecessor_source_role": previous.get("source_role"),
+            "predecessor_reference": legal_unit_reference(previous, units_by_id),
+        }
+    )
+    if _normalized_normative_text(previous.get("text")) != _normalized_normative_text(successor.get("text")):
+        return {"relation_type": "MODIFIES", **comparison}
+    return {
+        "relation_type": "AMBIGUOUS_OPERATION",
+        "operation_candidates": ("MODIFIES", "ADDS"),
+        **comparison,
+    }
+
+
+def versioned_relation_lineage(
+    legal_units: list[dict],
+    relation_type: str,
+    source_role: str,
+    target_citation: str,
+    target_unit: dict | None,
+) -> dict[str, object] | None:
+    """Materialize the version comparison behind an article relation.
+
+    Scope text identifies an operation, but it is not the normative target.
+    Only the historical unit inventory can prove the predecessor/successor
+    pair.  Deletion edges already point at the predecessor, so they only need
+    the explicit deletion clause plus that unit's source lineage.
+    """
+    if relation_type in {"ADDS", "MODIFIES"}:
+        comparison = classify_scope_operation(legal_units, source_role, target_citation)
+        if comparison.get("relation_type") != relation_type:
+            return None
+        units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+        successor = units_by_id.get(str(comparison.get("successor_legal_unit_id") or ""))
+        predecessor = units_by_id.get(str(comparison.get("predecessor_legal_unit_id") or ""))
+        if successor is None or target_unit is None or target_unit.get("legal_unit_id") != successor.get("legal_unit_id"):
+            return None
+        if relation_type == "ADDS" and predecessor is not None:
+            return None
+        if relation_type == "MODIFIES" and predecessor is None:
+            return None
+        return _lineage_payload(predecessor, successor)
+    if relation_type == "DELETES" and target_unit is not None:
+        return _lineage_payload(target_unit, None)
+    return None
+
+
+def _lineage_payload(predecessor: dict | None, successor: dict | None) -> dict[str, object]:
+    """Return the closed, source-unit-owned comparison fields."""
+    return {
+        "predecessor_legal_unit_id": predecessor.get("legal_unit_id") if predecessor else None,
+        "successor_legal_unit_id": successor.get("legal_unit_id") if successor else None,
+        "predecessor_text_span_ids": list((predecessor or {}).get("source_text_span_ids") or (predecessor or {}).get("text_span_ids") or ()),
+        "successor_text_span_ids": list((successor or {}).get("source_text_span_ids") or (successor or {}).get("text_span_ids") or ()),
+        "predecessor_bbox_refs": list((predecessor or {}).get("source_bbox_refs") or (predecessor or {}).get("bbox_ids") or ()),
+        "successor_bbox_refs": list((successor or {}).get("source_bbox_refs") or (successor or {}).get("bbox_ids") or ()),
+        "predecessor_pdf_sha256": predecessor.get("source_sha256") if predecessor else None,
+        "successor_pdf_sha256": successor.get("source_sha256") if successor else None,
+        "comparison_basis": "versioned_normative_text",
+    }
+
+
+def _empty_lineage() -> dict[str, object]:
+    return _lineage_payload(None, None) | {"comparison_basis": None}
+
+
+def _string_refs(value: object) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(ref) for ref in value if ref]
+
+
+def predecessor_unit_for_reference(
+    legal_units: list[dict], target_citation: str, source_role: str
+) -> dict | None:
+    """Resolve the immediately preceding historical unit for a relation target."""
+    source_index = _AMENDMENT_ROLE_ORDER.get(source_role)
+    if source_index is None or not target_citation:
+        return None
+    units_by_id = {row["legal_unit_id"]: row for row in legal_units}
+    by_reference: dict[str, list[dict]] = {}
+    for unit in legal_units:
+        reference = legal_unit_reference(unit, units_by_id)
+        if reference:
+            by_reference.setdefault(reference, []).append(unit)
+    return _previous_unit_for_reference(by_reference, target_citation, source_index)
+
+
+def _previous_unit_for_reference(
+    by_reference: dict[str, list[dict]], target_citation: str, source_index: int
+) -> dict | None:
+    candidates = [
+        row
+        for row in by_reference.get(target_citation, ())
+        if _AMENDMENT_ROLE_ORDER.get(str(row.get("source_role")), 99) < source_index
+    ]
+    if not candidates:
+        match = re.fullmatch(r"(Pasal\s+\d+[A-Za-z]?)\s+ayat\s+\(1\)", target_citation, re.IGNORECASE)
+        if match:
+            candidates = [
+                row
+                for row in by_reference.get(match.group(1), ())
+                if _AMENDMENT_ROLE_ORDER.get(str(row.get("source_role")), 99) < source_index
+            ]
+    return max(candidates, key=lambda row: _AMENDMENT_ROLE_ORDER.get(str(row.get("source_role")), -1), default=None)
+
+
+def _normalized_normative_text(value: object) -> str:
+    text = str(value or "").casefold()
+    text = re.sub(r"\bpasal\s+\d+[a-z]?\b", " ", text)
+    text = re.sub(r"\bayat\s*\(\s*\d+\s*\)\b", " ", text)
+    text = re.sub(r"\(\s*\d+\s*\)", " ", text)
+    return "".join(re.findall(r"[a-z0-9]+", text))
 
 
 def _source_role_for_ordinal(ordinal: str) -> str:
@@ -236,7 +400,7 @@ def build_article_amendment_relations(
     rows = []
     for edge in graph_edges:
         relation_type = edge.get("edge_type")
-        if relation_type not in {"MODIFIES", "DELETES", "AMBIGUOUS_OPERATION", "RENAMES", "RENUMBERED_TO"}:
+        if relation_type not in {"MODIFIES", "DELETES", "ADDS", "AMBIGUOUS_OPERATION", "RENAMES", "RENUMBERED_TO"}:
             continue
         supporting_ids = edge.get("supporting_evidence_ids") or ()
         evidence_row = evidence_by_id.get(supporting_ids[0]) if supporting_ids else None
@@ -250,35 +414,82 @@ def build_article_amendment_relations(
             continue
         if not evidence_row or not target or not all(ref in bbox_ids for ref in evidence_row.get("bbox_refs") or ()):
             continue
+        lineage = versioned_relation_lineage(
+            legal_units,
+            str(relation_type),
+            str(evidence_row.get("source_role") or ""),
+            target_citation,
+            target,
+        ) or _empty_lineage()
         target_phrase = target_citation
-        target_span_ids = _target_span_ids(evidence_row, target_phrase, spans_by_id)
+        lineage_unit_id = lineage.get("successor_legal_unit_id") or lineage.get("predecessor_legal_unit_id")
+        lineage_unit = units.get(str(lineage_unit_id or ""))
+        # A child ayat's source span normally contains only ``(n)`` rather
+        # than the full ``Pasal n ayat (n)`` label.  The versioned unit is
+        # nevertheless the authoritative normative target, so retain its
+        # complete spans when the label-only matcher cannot isolate a span.
+        target_span_ids = (
+            _lineage_target_span_ids(lineage_unit, target_phrase, spans_by_id)
+            or _target_span_ids(evidence_row, target_phrase, spans_by_id)
+            or _string_refs(lineage.get("successor_text_span_ids"))
+        )
         relation_span_ids, relation_bbox_refs = _relation_support_refs(
             evidence_row,
             mapping,
             spans_by_id,
             bboxes_by_id,
         )
-        target_word_bbox_refs = _recover_target_word_bbox_refs(
-            target_phrase,
-            evidence_row["source_document_id"],
-            relation_bbox_refs,
-            bboxes_by_id,
-            word_bboxes,
-            _target_quote(target_span_ids, spans_by_id) if target_span_ids else str(evidence_row.get("quoted_text") or ""),
+        target_document_id = str(
+            (lineage_unit or {}).get("source_document_id")
+            or target.get("source_document_id")
+            or evidence_row["source_document_id"]
         )
+        target_lineage_bbox_refs = [
+            ref
+            for ref in (
+                _string_refs(lineage.get("successor_bbox_refs"))
+                or _string_refs(lineage.get("predecessor_bbox_refs"))
+            )
+            if ref in bbox_ids
+        ]
+        # Target geometry must be searched inside the versioned normative
+        # unit.  Relation-clause boxes belong to the instrument scope and can
+        # be on a different page; using them first makes an otherwise exact
+        # target look unrecoverable.
+        target_context_bbox_refs = target_lineage_bbox_refs or relation_bbox_refs
+        target_source_text = _target_page_quote(target_span_ids, spans_by_id) or (
+            _target_quote(target_span_ids, spans_by_id) if target_span_ids else str(evidence_row.get("quoted_text") or "")
+        )
+        # Character geometry is the most precise grounding available.  Try
+        # it first and retain word geometry only as a deterministic fallback
+        # for sources without a unique character match.
         target_character_bbox_refs = _recover_target_character_bbox_refs(
             target_phrase,
-            evidence_row["source_document_id"],
-            relation_bbox_refs,
+            target_document_id,
+            target_context_bbox_refs,
             bboxes_by_id,
             word_bboxes,
-            _target_quote(target_span_ids, spans_by_id) if target_span_ids else str(evidence_row.get("quoted_text") or ""),
+            target_source_text,
         )
-        target_bbox_refs = target_character_bbox_refs or target_word_bbox_refs
+        target_word_bbox_refs = (
+            []
+            if target_character_bbox_refs
+            else _recover_target_word_bbox_refs(
+                target_phrase,
+                target_document_id,
+                target_context_bbox_refs,
+                bboxes_by_id,
+                word_bboxes,
+                target_source_text,
+            )
+        )
+        lineage_bbox_refs = target_lineage_bbox_refs
+        target_bbox_refs = target_word_bbox_refs or target_character_bbox_refs or lineage_bbox_refs
+        if not target_bbox_refs:
+            target_bbox_refs = _target_bbox_refs(evidence_row, target_phrase, bboxes_by_id)
         bbox_refs = target_bbox_refs
         if not relation_bbox_refs and source_support_available(evidence_row, bboxes_by_id):
             relation_bbox_refs = list(evidence_row.get("bbox_refs") or ())
-        relation_bbox_refs = list(dict.fromkeys([*relation_bbox_refs, *bbox_refs]))
         source_support_exact = _complete_mapping_support(evidence_row, mapping)
         target_support_exact = (
             evidence_row.get("bbox_precision") == "exact"
@@ -286,7 +497,7 @@ def build_article_amendment_relations(
             and bool(bbox_refs)
             and all(ref in bbox_ids for ref in bbox_refs)
         )
-        target_local_geometry = bool(target_word_bbox_refs or target_character_bbox_refs)
+        target_local_geometry = bool(target_bbox_refs)
         exact_support = source_support_exact and target_support_exact and target_local_geometry
         if relation_type == "AMBIGUOUS_OPERATION":
             # The source names a change/addition set but does not choose one
@@ -346,10 +557,13 @@ def build_article_amendment_relations(
                 "target_text_span_ids": target_span_ids,
                 "target_bbox_refs": bbox_refs,
                 "page_number": (evidence_row.get("page_numbers") or [None])[0],
-                "quoted_text": evidence_row.get("quoted_text")
-                if mapping
-                else (_target_quote(target_span_ids, spans_by_id) if exact_support and target_span_ids else evidence_row.get("quoted_text")),
+                # Keep the operation clause as the relation quote.  The
+                # versioned normative target is carried separately through
+                # target_text_span_ids/target_bbox_refs, avoiding a synthetic
+                # quote that would blur operation and target evidence.
+                "quoted_text": evidence_row.get("quoted_text") or _target_quote(target_span_ids, spans_by_id),
                 "source_pdf_sha256": evidence_row.get("source_sha256"),
+                **lineage,
                 "grounding_level": (
                     "exact_source_text"
                     if exact_support
@@ -363,7 +577,12 @@ def build_article_amendment_relations(
                 "target_precision": "target_local" if exact_support else ("shared_span" if mapping else "unresolved"),
                 "support_class": support_class,
                 "authority_kind": evidence_row.get("authority_kind") or "instrument_provenance",
-                "citation_final": evidence_row.get("citation_final") is True,
+                # Relation finality is a claim-level contract.  A direct,
+                # isolated source clause with exact target geometry can be
+                # cited even when its owner evidence remains instrument
+                # provenance.  Ambiguous operation rows never reach this
+                # branch because they are downgraded to trace support above.
+                "citation_final": exact_support,
                 "bbox_precision": evidence_row.get("bbox_precision"),
                 "target_geometry_method": "character_geometry" if target_character_bbox_refs else ("word_geometry" if target_word_bbox_refs else "unavailable"),
                 "target_geometry_source_ids": list(bbox_refs),
@@ -393,6 +612,17 @@ def _target_span_ids(evidence: dict, citation: str, spans_by_id: dict[str, dict]
         if pattern.search(str(spans_by_id.get(span_id, {}).get("text") or ""))
         and _isolates_reference(str(spans_by_id.get(span_id, {}).get("text") or ""), citation)
     ]
+
+
+def _lineage_target_span_ids(unit: dict | None, citation: str, spans_by_id: dict[str, dict]) -> list[str]:
+    """Select the printed citation span from the normative versioned unit."""
+    if unit is None:
+        return []
+    return _target_span_ids(
+        {"text_span_ids": list(unit.get("source_text_span_ids") or unit.get("text_span_ids") or ())},
+        citation,
+        spans_by_id,
+    )
 
 
 def _relation_support_refs(
@@ -451,9 +681,9 @@ def _recover_target_word_bbox_refs(
     source_text: str,
 ) -> list[str]:
     """Return a unique contiguous word match wholly inside canonical source proof."""
-    target = _compact(citation)
     source_boxes = [bboxes_by_id[ref] for ref in source_bbox_refs if ref in bboxes_by_id]
-    if not target or not source_boxes:
+    target_fragments = _target_fragments(source_text, citation)
+    if not target_fragments or not source_boxes:
         return []
     words_by_page: dict[int, list[dict]] = {}
     for word in word_bboxes:
@@ -461,27 +691,26 @@ def _recover_target_word_bbox_refs(
             words_by_page.setdefault(int(word["page_number"]), []).append(word)
     matches: list[list[str]] = []
     for page_number, words in words_by_page.items():
-        target_offsets = _target_offsets(source_text, citation, words)
         offsets: list[int] = []
         cursor = 0
         for word in words:
             offsets.append(cursor)
             cursor += len(_compact(word.get("text", "")))
         page_boxes = [row for row in source_boxes if row.get("page_number") == page_number]
-        for start in range(len(words)):
-            joined = ""
-            matched: list[dict] = []
-            for word in words[start:]:
-                matched.append(word)
-                joined = _compact(f"{joined} {word.get('text', '')}")
-                if joined == target:
-                    if offsets[start] in target_offsets and _compact("".join(str(item.get("text") or "") for item in matched)) == target and all(
-                        _word_inside_any_box(item, page_boxes) for item in matched
-                    ):
-                        matches.append([item["word_bbox_id"] for item in matched])
-                    break
-                if len(joined) > len(target) + 24 or not target.startswith(joined):
-                    break
+        for target, relative_offset in target_fragments:
+            target_offsets = _page_target_offsets(source_text, relative_offset, words)
+            for start in range(len(words)):
+                joined = ""
+                matched: list[dict] = []
+                for word in words[start:]:
+                    matched.append(word)
+                    joined = _compact(f"{joined} {word.get('text', '')}")
+                    if joined == target:
+                        if offsets[start] in target_offsets and all(_word_inside_any_box(item, page_boxes) for item in matched):
+                            matches.append([item["word_bbox_id"] for item in matched])
+                        break
+                    if len(joined) > len(target) + 24 or not target.startswith(joined):
+                        break
     return matches[0] if len(matches) == 1 else []
 
 
@@ -493,17 +722,15 @@ def _recover_target_character_bbox_refs(
     word_bboxes: list[dict],
     source_text: str,
 ) -> list[str]:
-    target = _compact(citation)
-    if not target:
+    target_fragments = _target_fragments(source_text, citation)
+    if not target_fragments:
         return []
     source_boxes = [bboxes_by_id[ref] for ref in source_bbox_refs if ref in bboxes_by_id]
-    characters: list[dict] = []
+    characters_by_page: dict[int, list[dict]] = {}
     for word in word_bboxes:
         if word.get("source_document_id") != source_document_id:
             continue
-        if not _word_inside_any_box(word, source_boxes):
-            continue
-        characters.extend(
+        characters_by_page.setdefault(int(word["page_number"]), []).extend(
             {
                 **character,
                 "page_number": word.get("page_number"),
@@ -511,36 +738,37 @@ def _recover_target_character_bbox_refs(
                 "word_bbox_id": word.get("word_bbox_id"),
             }
             for character in word.get("characters") or ()
-            if _word_inside_any_box(character, source_boxes)
         )
     matches: list[list[str]] = []
-    target_offsets = _target_offsets(source_text, citation, characters)
-    character_offsets: list[int] = []
-    cursor = 0
-    for character in characters:
-        character_offsets.append(cursor)
-        cursor += len(_compact(character.get("text") or ""))
-    for start in range(len(characters)):
-        joined = ""
-        matched: list[dict] = []
-        for character in characters[start:]:
-            matched.append(character)
-            joined = _compact(joined + str(character.get("text") or ""))
-            if joined == target:
-                next_character = characters[start + len(matched)] if start + len(matched) < len(characters) else None
-                next_text = str(next_character.get("text") or "") if next_character else ""
-                if (
-                    character_offsets[start] in target_offsets
-                    and
-                    (not next_text.isalnum() or (next_character or {}).get("word_bbox_id") != matched[-1].get("word_bbox_id"))
-                    and len({item.get("page_number") for item in matched}) == 1
-                    and all(item.get("source_document_id") == source_document_id for item in matched)
-                    and _compact("".join(str(item.get("text") or "") for item in matched)) == target
-                ):
-                    matches.append([item["character_bbox_id"] for item in matched])
-                break
-            if len(joined) > len(target) or not target.startswith(joined):
-                break
+    for page_number, characters in characters_by_page.items():
+        page_boxes = [row for row in source_boxes if row.get("page_number") == page_number]
+        character_offsets: list[int] = []
+        cursor = 0
+        for character in characters:
+            character_offsets.append(cursor)
+            cursor += len(_compact(character.get("text") or ""))
+        for target, relative_offset in target_fragments:
+            target_offsets = _page_target_offsets(source_text, relative_offset, characters)
+            for start in range(len(characters)):
+                if not _compact(characters[start].get("text") or ""):
+                    continue
+                joined = ""
+                matched: list[dict] = []
+                for character in characters[start:]:
+                    matched.append(character)
+                    joined = _compact(joined + str(character.get("text") or ""))
+                    if joined == target:
+                        next_character = characters[start + len(matched)] if start + len(matched) < len(characters) else None
+                        next_text = str(next_character.get("text") or "") if next_character else ""
+                        if (
+                            character_offsets[start] in target_offsets
+                            and (not next_text.isalnum() or (next_character or {}).get("word_bbox_id") != matched[-1].get("word_bbox_id"))
+                            and all(_word_inside_any_box(item, page_boxes) for item in matched)
+                        ):
+                            matches.append([item["character_bbox_id"] for item in matched])
+                        break
+                    if len(joined) > len(target) or not target.startswith(joined):
+                        break
     return matches[0] if len(matches) == 1 else []
 
 
@@ -561,21 +789,51 @@ def _compact(value: object) -> str:
     return "".join(re.findall(r"\w+", str(value or "").casefold()))
 
 
-def _target_offsets(source_text: str, citation: str, tokens: list[dict]) -> set[int]:
+def _page_target_offsets(source_text: str, relative_offset: int, tokens: list[dict]) -> set[int]:
     source = _compact(source_text)
-    target = _compact(citation)
-    if not source or not target:
-        return set()
-    relative = {len(_compact(source_text[: match.start()])) for match in _reference_pattern(citation).finditer(source_text)}
-    if not relative:
+    if not source:
         return set()
     page = "".join(_compact(token.get("text") or "") for token in tokens)
     starts: set[int] = set()
     cursor = page.find(source)
     while cursor >= 0:
-        starts.update(cursor + offset for offset in relative)
+        starts.add(cursor + relative_offset)
         cursor = page.find(source, cursor + 1)
     return starts
+
+
+def _target_fragments(source_text: str, citation: str) -> tuple[tuple[str, int], ...]:
+    """Locate the printed target, including contextual ayat shorthand, once."""
+    direct = tuple(
+        (_compact(match.group(0)), len(_compact(source_text[: match.start()])))
+        for match in _reference_pattern(citation).finditer(source_text)
+    )
+    if direct:
+        return direct
+    match = re.fullmatch(r"Pasal\s+([0-9]+)([A-Za-z]?)\s+ayat\s+\((\d+)\)", citation, re.IGNORECASE)
+    if match is None:
+        return ()
+    number, suffix, ayat = match.groups()
+    # A PDF page may start with an ayat continuation while the article header
+    # is on the preceding page.  The legal-unit span already binds the
+    # continuation to its article, so the leading ayat marker is an exact
+    # local target even when the header is not repeated on this page.
+    leading = re.match(rf"\s*\(\s*{re.escape(ayat)}\s*\)", source_text)
+    if leading:
+        return ((_compact(leading.group(0)), len(_compact(source_text[: leading.start()]))),)
+    article = re.compile(rf"(?i)\bpasal\s*{number}\s*{re.escape(suffix)}(?!\w)")
+    boundary = re.compile(r"(?i)\b(?:pasal|bab)\s*[0-9ivxlcdm]")
+    candidates: list[tuple[str, int]] = []
+    for article_match in article.finditer(source_text):
+        remainder = source_text[article_match.end() :]
+        boundary_match = boundary.search(remainder)
+        segment_end = article_match.end() + (boundary_match.start() if boundary_match else len(remainder))
+        segment = source_text[article_match.end() : segment_end]
+        target = re.compile(rf"(?i)(?:\bayat\s*)?\(\s*{re.escape(ayat)}\s*\)")
+        for target_match in target.finditer(segment):
+            start = article_match.end() + target_match.start()
+            candidates.append((_compact(target_match.group(0)), len(_compact(source_text[:start]))))
+    return tuple(candidates) if len(candidates) == 1 else ()
 
 
 def _word_phrase(value: object) -> str:
@@ -605,6 +863,21 @@ def _ayat_count(text: str) -> int:
 
 def _target_quote(span_ids: list[str], spans_by_id: dict[str, dict]) -> str:
     return " ".join(str(spans_by_id[span_id].get("text") or "").strip() for span_id in span_ids).strip()
+
+
+def _target_page_quote(span_ids: list[str], spans_by_id: dict[str, dict]) -> str:
+    """Provide page context when a legal-unit span only contains ``(n)``."""
+    if not span_ids:
+        return ""
+    anchor = spans_by_id.get(span_ids[0], {})
+    stream_id = anchor.get("stream_id")
+    if not stream_id:
+        return ""
+    page_spans = sorted(
+        (row for row in spans_by_id.values() if row.get("stream_id") == stream_id),
+        key=lambda row: int(row.get("text_start") or 0),
+    )
+    return " ".join(str(row.get("text") or "").strip() for row in page_spans if row.get("text")).strip()
 
 
 def _trace_reason(

@@ -20,6 +20,7 @@ class EvidenceRequirement:
     contrast_entities: tuple[str, ...] = ()
     explicit_references: tuple[str, ...] = ()
     semantic_terms: tuple[str, ...] = ()
+    semantic_term_groups: tuple[tuple[str, ...], ...] = ()
     support_terms: tuple[str, ...] = ()
     entity_must_lead: bool = False
     legal_target: str | None = None
@@ -33,6 +34,7 @@ class EvidenceRequirement:
     evidence_ids: tuple[str, ...] = ()
     legal_unit_ids: tuple[str, ...] = ()
     min_supports: int = 1
+    max_supports: int | None = None
     allow_partial: bool = False
     allow_shared: bool = False
     shareable_with: tuple[str, ...] = ()
@@ -46,6 +48,7 @@ class EvidenceRequirement:
             or self.relation_endpoints
             or self.explicit_references
             or self.semantic_terms
+            or self.semantic_term_groups
             or self.support_terms
             or self.legal_target
             or self.relation_family
@@ -119,7 +122,17 @@ class EvidenceRequirement:
             return False
         if self.semantic_terms and not set(self.semantic_terms) <= tokens:
             return False
+        if self.semantic_term_groups and not any(set(group) <= tokens for group in self.semantic_term_groups):
+            return False
         if self.support_terms and not set(self.support_terms) & tokens:
+            return False
+        if (
+            self.entity_must_lead
+            and len(self.required_entities) == 1
+            and self.contrast_entities
+            and self.support_terms
+            and not _entity_owns_support_term(text, self.required_entities[0], self.contrast_entities, self.support_terms)
+        ):
             return False
         return True
 
@@ -130,7 +143,10 @@ class EvidenceRequirement:
         return (
             len(tokens & set(self.support_terms)),
             len(tokens & set(self.required_operation_terms)),
-            len(tokens & set(self.semantic_terms)),
+            max(
+                (len(tokens & set(group)) for group in self.semantic_term_groups),
+                default=len(tokens & set(self.semantic_terms)),
+            ),
             -len(text),
             str(row.get("evidence_id") or ""),
         )
@@ -197,6 +213,11 @@ def collect_evidence_set(store, matches: Iterable[dict], requirements: Iterable[
     reasons: list[tuple[str, str]] = []
     for requirement in requirements:
         selected: list[dict] = []
+        selected_anchors: set[tuple[str, ...]] = set()
+        selection_limit = max(
+            max(1, requirement.min_supports),
+            requirement.max_supports or requirement.min_supports,
+        )
         candidates = sorted(
             available.items(),
             key=lambda item: tuple(-value if isinstance(value, int) else value for value in requirement.match_score(item[1])),
@@ -205,8 +226,12 @@ def collect_evidence_set(store, matches: Iterable[dict], requirements: Iterable[
             if evidence_id in used and not requirement.allow_shared:
                 continue
             if requirement.discovered_for(row) and requirement.accepts(row):
+                anchor = _legal_anchor(row)
+                if requirement.max_supports is not None and anchor in selected_anchors:
+                    continue
                 selected.append(row)
-                if len(selected) >= max(1, requirement.min_supports):
+                selected_anchors.add(anchor)
+                if len(selected) >= selection_limit:
                     break
         if len(selected) < max(1, requirement.min_supports):
             missing.append(requirement.requirement_id)
@@ -238,6 +263,17 @@ def _semantic_text(row: dict) -> str:
     ).casefold()
 
 
+def _legal_anchor(row: dict) -> tuple[str, ...]:
+    hierarchy = tuple(str(value) for value in row.get("hierarchy") or () if value)
+    for index, value in enumerate(hierarchy):
+        if value.casefold().startswith("pasal "):
+            return (str(row.get("source_role") or ""), *hierarchy[: index + 1])
+    return (
+        str(row.get("source_role") or ""),
+        str(row.get("citation") or row.get("legal_unit_id") or row.get("evidence_id") or ""),
+    )
+
+
 def _tokens(value: str) -> tuple[str, ...]:
     return tuple(re.findall(r"[a-z0-9]+", value.casefold()))
 
@@ -245,6 +281,36 @@ def _tokens(value: str) -> tuple[str, ...]:
 def _phrase_position(text: str, phrase: str) -> int:
     normalized = " ".join(_tokens(phrase))
     return " ".join(_tokens(text)).find(normalized) if normalized else -1
+
+
+def _entity_owns_support_term(
+    text: str,
+    required_entity: str,
+    contrast_entities: tuple[str, ...],
+    support_terms: tuple[str, ...],
+) -> bool:
+    normalized = " ".join(_tokens(text))
+    required_positions = _phrase_positions(normalized, required_entity)
+    contrast_positions = tuple(
+        position
+        for entity in contrast_entities
+        for position in _phrase_positions(normalized, entity)
+    )
+    if not required_positions:
+        return False
+    if not contrast_positions:
+        return True
+    return any(
+        min(abs(term_position - position) for position in required_positions)
+        <= min(abs(term_position - position) for position in contrast_positions)
+        for term in support_terms
+        for term_position in _phrase_positions(normalized, term)
+    )
+
+
+def _phrase_positions(text: str, phrase: str) -> tuple[int, ...]:
+    normalized = " ".join(_tokens(phrase))
+    return tuple(match.start() for match in re.finditer(rf"(?<![a-z0-9]){re.escape(normalized)}(?![a-z0-9])", text)) if normalized else ()
 
 
 def assess_sufficiency(
