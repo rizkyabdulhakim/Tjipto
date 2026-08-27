@@ -505,12 +505,27 @@ class GraphContractTest(unittest.TestCase):
             ),
             targets,
         )
+        contextual = next(row for row in scope_rows if row["target_citation"] == "Pasal 17 ayat (3)")
+        self.assertEqual(contextual["support_class"], "exact_article_relation")
+        self.assertEqual(contextual["target_precision"], "target_local")
+        self.assertTrue(contextual["target_bbox_refs"])
+        character_targets = {
+            row["target_citation"]: row
+            for row in rows
+            if row["target_citation"] in {"Pasal 20A", "Pasal 22E ayat (6)", "Pasal 23 ayat (1)"}
+        }
+        self.assertEqual(set(character_targets), {"Pasal 20A", "Pasal 22E ayat (6)", "Pasal 23 ayat (1)"})
+        self.assertTrue(all(row["support_class"] == "exact_article_relation" for row in character_targets.values()))
+        self.assertEqual(character_targets["Pasal 20A"]["relation_type"], "ADDS")
+        self.assertEqual(character_targets["Pasal 22E ayat (6)"]["relation_type"], "ADDS")
+        self.assertEqual(character_targets["Pasal 23 ayat (1)"]["relation_type"], "MODIFIES")
+        self.assertTrue(all(row["target_geometry_method"] == "character_geometry" for row in character_targets.values()))
 
     def test_article_relations_have_one_source_operation_per_target(self) -> None:
         rows = read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")
         operations: dict[tuple[str, str], set[str]] = {}
         for row in rows:
-            if row["relation_type"] not in {"MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
+            if row["relation_type"] not in {"ADDS", "MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
                 continue
             key = (row["source_legal_unit_id"], row["target_legal_unit_id"])
             operations.setdefault(key, set()).add(row["relation_type"])
@@ -525,14 +540,14 @@ class GraphContractTest(unittest.TestCase):
             for row in rows
             if row["source_role"] == "amendment_4_historical" and row["relation_type"] == "DELETES"
         }
-        self.assertNotIn("Pasal 16", amendment_fourth_modifies)
+        self.assertIn("Pasal 16", amendment_fourth_modifies)
         self.assertIn("Pasal 16", amendment_fourth_deletes)
         ambiguous = {
             row["target_citation"]
             for row in rows
             if row["source_role"] == "amendment_4_historical" and row["relation_type"] == "AMBIGUOUS_OPERATION"
         }
-        self.assertIn("Pasal 16", ambiguous)
+        self.assertNotIn("Pasal 16", ambiguous)
         self.assertEqual(
             {
                 tuple(row.get("operation_candidates") or ())
@@ -541,6 +556,29 @@ class GraphContractTest(unittest.TestCase):
             },
             {("MODIFIES", "ADDS")},
         )
+
+    def test_versioned_relations_persist_normative_lineage(self) -> None:
+        rows = read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")
+        lineage_fields = {
+            "predecessor_legal_unit_id",
+            "successor_legal_unit_id",
+            "predecessor_text_span_ids",
+            "successor_text_span_ids",
+            "predecessor_bbox_refs",
+            "successor_bbox_refs",
+            "predecessor_pdf_sha256",
+            "successor_pdf_sha256",
+            "comparison_basis",
+        }
+        versioned = [row for row in rows if row["relation_type"] in {"ADDS", "MODIFIES", "DELETES"}]
+        self.assertEqual(len(versioned), 125)
+        self.assertTrue(all(lineage_fields <= row.keys() for row in versioned))
+        self.assertEqual(sum(row["support_class"] == "exact_article_relation" for row in versioned), 125)
+        self.assertEqual(sum(row["relation_type"] == "ADDS" and row["predecessor_legal_unit_id"] is None for row in versioned), 93)
+        self.assertEqual(sum(row["relation_type"] == "MODIFIES" and row["predecessor_legal_unit_id"] is not None for row in versioned), 31)
+        deleted = next(row for row in versioned if row["relation_type"] == "DELETES")
+        self.assertIsNotNone(deleted["predecessor_legal_unit_id"])
+        self.assertIsNone(deleted["successor_legal_unit_id"])
 
     def test_graph_edges_include_evidence_backed_legal_baseline(self) -> None:
         edges = read_jsonl(ROOT / "data/final/uud/graph_edges.jsonl")
@@ -561,10 +599,10 @@ class GraphContractTest(unittest.TestCase):
         self.assertFalse([row for row in edges if any(key in row for key in ("evidence_ref", "bbox_refs", "text_span_ids", "support_refs"))])
         self.assertTrue(all({"support_relation_ids", "support_evidence_ids", "support_exception_ids", "support_kind"} <= set(row) for row in edges))
         self.assertNotIn("legal_edge_types", report)
-        self.assertEqual(set(report["not_promoted_edge_types"]), {"ADDS", "INSERTED_BY", "SUPPLEMENTS"})
+        self.assertEqual(set(report["not_promoted_edge_types"]), {"SUPPLEMENTS"})
         for edge_type in report["not_promoted_edge_types"]:
             self.assertNotIn(edge_type, report["actual_edge_type_counts"])
-        for edge_type in {"ADDS", "INSERTED_BY", "SUPPLEMENTS"}:
+        for edge_type in {"SUPPLEMENTS"}:
             self.assertNotIn(edge_type, report["actual_promoted_legal_edge_type_counts"])
             self.assertIn(edge_type, report["schema_edge_types"])
         legal_edges = [
@@ -574,6 +612,7 @@ class GraphContractTest(unittest.TestCase):
             in {
                 "CONTAINS",
                 "PART_OF",
+                "ADDS",
                 "MODIFIES",
                 "DELETES",
                 "RENAMES",

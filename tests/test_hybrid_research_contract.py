@@ -85,6 +85,26 @@ class HybridResearchContractTest(unittest.TestCase):
         )
         self.assertEqual(observed, ["hybrid", "sparse", "sparse"])
 
+    def test_multi_round_hybrid_plan_stops_after_successful_sparse_probe(self) -> None:
+        class Provider:
+            def propose(self, _request):
+                return {
+                    "variants": [],
+                    "retrieval_lanes": ["hybrid"],
+                    "task_kind": "retrieval",
+                    "information_needs": [],
+                }
+
+        observed = []
+        _, rows = execute_research(
+            "hak atas pendidikan",
+            lambda _query, variant: observed.append(variant.retrieval_lane) or {"matches": ({"evidence_id": "support"},)},
+            intent=ResearchIntent(max_rounds=2),
+            provider=Provider(),
+        )
+        self.assertEqual(observed, ["sparse"])
+        self.assertEqual(tuple(row["evidence_id"] for row in rows), ("support",))
+
     def test_stage8_9_operations_bind_requirements_to_shared_sufficiency(self) -> None:
         service = LegalRuntimeService()
         store = service._store("uud")
@@ -95,14 +115,14 @@ class HybridResearchContractTest(unittest.TestCase):
                 "complete",
             ),
             (
-                "perbedaan penandatangan amandemen pertama dan kedua",
+                "perbedaan orang orang yang menandatangani uud amandemen pertama dan kedua",
                 {"signatory_amendment_1_historical", "signatory_amendment_2_historical"},
                 "complete",
             ),
             (
                 "Pasal 16 sebelum dihapus bunyinya apa",
                 {"historical_normative_text", "deletion_provenance"},
-                "insufficient",
+                "complete",
             ),
             (
                 "legal opinion tentang HAM dari Pasal 28",
@@ -162,6 +182,166 @@ class HybridResearchContractTest(unittest.TestCase):
             )
         runtime_config = json.dumps(store.config.setting("research", {}), ensure_ascii=False)
         self.assertNotIn("heldout_analysis_probes", runtime_config)
+
+    def test_operation_aware_research_covers_issue_version_and_source_occurrence_queries(self) -> None:
+        service = LegalRuntimeService(answer_provider=None, planning_provider=None)
+        legal_opinion = service.ask(
+            "uud",
+            "berikan saya legal opinion tentang kebebasan berbicara menggunakan dasar hukum uud",
+            limit=30,
+        )
+        self.assertEqual(legal_opinion["sufficiency"]["status"], "complete")
+        self.assertEqual(
+            {row["citation"] for row in legal_opinion["evidence"]},
+            {"Pasal 28", "(3)", "Pasal 28F", "Pasal 28J"},
+        )
+        typo_opinion = service.ask(
+            "uud",
+            "berikan legal opinion terkait kebebasan bependapat dengan dasar hukum uud",
+            limit=30,
+        )
+        self.assertEqual(typo_opinion["sufficiency"]["status"], "complete")
+        self.assertEqual(
+            {row["citation"] for row in typo_opinion["evidence"]},
+            {"Pasal 28", "(3)", "Pasal 28F", "Pasal 28J"},
+        )
+        formatted_opinion = service.ask(
+            "uud",
+            "berikan legal opinion terkait kebebasan berpendapat dengan dasar hukum UUD dalam 2 paragraf 10 kalimat",
+            limit=30,
+        )
+        self.assertEqual(formatted_opinion["sufficiency"]["status"], "complete")
+        self.assertEqual(
+            {row["citation"] for row in formatted_opinion["evidence"]},
+            {"Pasal 28", "(3)", "Pasal 28F", "Pasal 28J"},
+        )
+
+        version_comparison = service.ask(
+            "uud",
+            "apa perbedaan uud sebelum amandemen dan setelah amandemen",
+            limit=30,
+        )
+        self.assertEqual(version_comparison["sufficiency"]["status"], "complete")
+        self.assertEqual(
+            {row["source_role"] for row in version_comparison["evidence"]},
+            {
+                "amendment_1_historical",
+                "amendment_2_historical",
+                "amendment_3_historical",
+                "amendment_4_historical",
+            },
+        )
+        self.assertTrue(all("Scope" in str(row.get("citation")) for row in version_comparison["evidence"]))
+
+        occurrence = service.ask(
+            "uud",
+            "Setiap orang berhak atas kebebasan berserikat, berkumpul, dan mengeluarkan pendapat ada di uud naskah apa saja",
+            limit=30,
+        )
+        self.assertEqual(occurrence["status"], "limited_answer")
+        self.assertEqual(occurrence["sufficiency"]["status"], "partial")
+        self.assertEqual(
+            {row["source_role"] for row in occurrence["evidence"]},
+            {"amendment_2_historical", "current_consolidated"},
+        )
+
+        semantic_occurrence = service.ask(
+            "uud",
+            "pasal terkait kebebasan berpendapat ada dimana saja",
+            limit=30,
+        )
+        self.assertEqual(semantic_occurrence["sufficiency"]["status"], "partial")
+        self.assertEqual(
+            {row["source_role"] for row in semantic_occurrence["evidence"]},
+            {"original_historical", "amendment_2_historical", "current_consolidated"},
+        )
+        self.assertIn("Pasal 28", {row["citation"] for row in semantic_occurrence["evidence"]})
+        self.assertIn("(3)", {row["citation"] for row in semantic_occurrence["evidence"]})
+        self.assertIn("ketentuan tersebut tercantum", semantic_occurrence["answer"])
+        self.assertNotIn("berpendapat kebebasan dalam", semantic_occurrence["answer"])
+        self.assertIn(
+            "Dalam Undang-Undang Dasar Negara Republik Indonesia Tahun 1945 dalam Satu Naskah",
+            semantic_occurrence["answer"],
+        )
+
+        independence = service.ask(
+            "uud",
+            "pasal perihal kemerdekaan ada di naskah mana saja dan pasal berapa saja",
+            limit=30,
+        )
+        original_locations = {
+            tuple(row.get("hierarchy") or ())
+            for row in independence["evidence"]
+            if row.get("source_role") == "original_historical"
+        }
+        self.assertTrue(
+            {
+                ("ATURAN PERALIHAN", "Pasal I"),
+                ("ATURAN PERALIHAN", "Pasal III"),
+                ("BAB X", "Pasal 28"),
+                ("BAB XI", "Pasal 29", "(2)"),
+            }
+            <= original_locations
+        )
+        self.assertTrue(
+            all(any(str(part).startswith("Pasal ") for part in row.get("hierarchy") or ()) for row in independence["evidence"])
+        )
+        self.assertIn("Pasal 29 / (2)", independence["answer"])
+
+        summary = service.ask("uud", "berikan ringkasan uud", limit=30)
+        self.assertEqual(summary["status"], "answer_ready")
+        self.assertEqual(summary["operation"], "summarize")
+        self.assertEqual(
+            {row["source_role"] for row in summary["evidence"]},
+            {"current_consolidated"},
+        )
+        self.assertIn("BAB I — BENTUK DAN KEDAULATAN", summary["answer"])
+
+    def test_agentic_occurrence_plan_decomposes_historical_and_current_wording(self) -> None:
+        class Provider:
+            def propose(self, _request):
+                return {
+                    "variants": [
+                        {"query": "kemerdekaan berserikat berkumpul mengeluarkan pikiran"},
+                        {"query": "kebebasan berserikat berkumpul mengeluarkan pendapat"},
+                    ],
+                    "retrieval_lanes": ["sparse"],
+                    "task_kind": "multiple_supports",
+                    "information_needs": [
+                        {
+                            "description": "rumusan historis",
+                            "query": "kemerdekaan berserikat berkumpul mengeluarkan pikiran",
+                            "concepts": ["kemerdekaan berserikat", "mengeluarkan pikiran"],
+                            "kind": "concept",
+                            "relation_traversal": False,
+                        },
+                        {
+                            "description": "rumusan pasca perubahan",
+                            "query": "kebebasan berserikat berkumpul mengeluarkan pendapat",
+                            "concepts": ["kebebasan berserikat", "mengeluarkan pendapat"],
+                            "kind": "concept",
+                            "relation_traversal": False,
+                        },
+                    ],
+                    "status": "ready",
+                    "missing_dimensions": [],
+                    "clarification_question": None,
+                }
+
+        response = LegalRuntimeService(answer_provider=None, planning_provider=Provider()).ask(
+            "uud",
+            "pasal terkait kebebasan berpendapat ada dimana saja",
+            limit=30,
+        )
+        self.assertEqual(response["research_plan"].provider_status, "accepted")
+        self.assertEqual(
+            {row["source_role"] for row in response["evidence"]},
+            {"original_historical", "amendment_2_historical", "current_consolidated"},
+        )
+        self.assertTrue(
+            {"Pasal 28", "(3)"} <= {row["citation"] for row in response["evidence"]}
+        )
+
     def test_rrf_deduplicates_and_never_adds_raw_scores(self) -> None:
         sparse = (_hit("b", "bm25", 1, 100.0), _hit("a", "bm25", 2, 1.0))
         dense = (_hit("a", "dense", 1, 0.99), _hit("b", "dense", 2, 0.1))
@@ -312,6 +492,22 @@ class HybridResearchContractTest(unittest.TestCase):
             evidence = collect_evidence_set(SimpleNamespace(), rows, (requirement,))
         self.assertEqual(evidence.assignment_map(), {"authority": ("president",)})
 
+    def test_authority_support_term_belongs_to_requested_entity(self) -> None:
+        rows = (
+            {"evidence_id": "other", "quoted_text": "Presiden dapat diberhentikan setelah DPR menjalankan fungsi pengawasan.", "_requirement_ids": ("authority",)},
+            {"evidence_id": "president", "quoted_text": "Presiden memegang kekuasaan pemerintahan.", "_requirement_ids": ("authority",)},
+        )
+        requirement = EvidenceRequirement(
+            "authority",
+            required_entities=("Presiden",),
+            contrast_entities=("DPR",),
+            support_terms=("fungsi", "kekuasaan"),
+            entity_must_lead=True,
+        )
+        with patch("tjipto.retrieval.sufficiency.validate_answer_candidate", return_value=(True, "answer_evidence")):
+            evidence = collect_evidence_set(SimpleNamespace(), rows, (requirement,))
+        self.assertEqual(evidence.assignment_map(), {"authority": ("president",)})
+
     def test_requirement_retry_is_scoped_and_carries_forward_support(self) -> None:
         from tjipto.retrieval.research import QueryVariant, ResearchPlan, execute_research_rounds
 
@@ -341,7 +537,7 @@ class HybridResearchContractTest(unittest.TestCase):
                     requirements=(requirement,),
                 ),
             )
-        self.assertEqual(calls, [("original", None, "hybrid"), ("missing query", "missing", "sparse")])
+        self.assertEqual(calls, [("original", None, "sparse"), ("missing query", "missing", "hybrid")])
         self.assertEqual(result["stop_reason"], "complete")
 
     def test_requirement_marker_survives_carry_forward_deduplication(self) -> None:
@@ -397,7 +593,7 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(response["insufficient_reasons"], ("missing",))
 
     def test_ask_complex_query_publishes_only_when_requirements_are_complete(self) -> None:
-        service = LegalRuntimeService()
+        service = LegalRuntimeService(answer_provider=None, planning_provider=None)
         response = service.ask("uud", "lingkungan hidup dan pendidikan")
         self.assertEqual(response["status"], "answer_ready")
         self.assertEqual(response["sufficiency"]["status"], "complete")
@@ -495,10 +691,87 @@ class HybridResearchContractTest(unittest.TestCase):
             ("Apa ketentuan setelah Pasal 28?", "Pasal 28A"),
             ("Sebelum Pasal 27 apa?", "Pasal 26"),
             ("Setelah Pasal 31 ayat (3) apa?", "(4)"),
+            ("dalam uud pasal sebelum 28a apa?", "Pasal 28"),
         ):
             response = LegalRuntimeService().ask("uud", query)
             self.assertEqual(response["route"], "structural_navigation", query)
             self.assertEqual(response["citations"][0]["citation"], expected, query)
+
+    def test_source_grounded_structural_count_ignores_roman_transitional_articles(self) -> None:
+        service = LegalRuntimeService()
+        response = service.ask("uud", "ada berapa pasal di naskah uud sebelum amandemen")
+        self.assertEqual((response["status"], response["route"]), ("answer_ready", "structure_count"))
+        self.assertEqual(response["operation"], "quote_or_explain")
+        self.assertEqual(response["evidence"][0]["structural_count"], 37)
+        self.assertEqual(len(response["evidence"][0]["structural_support_ids"]), 37)
+        self.assertIn("Pasal 1 sampai Pasal 37", response["answer"])
+        self.assertEqual(service.ask("uud", "berapa jumlah bab dalam UUD sebelum amandemen")["evidence"][0]["structural_count"], 16)
+        self.assertEqual(service.ask("uud", "berapa jumlah ayat dalam UUD sebelum amandemen")["evidence"][0]["structural_count"], 51)
+        all_sources = service.ask("uud", "berapa jumlah bab, pasal, dan ayat dalam semua naskah")
+        self.assertEqual(all_sources["status"], "answer_ready")
+        self.assertEqual(all_sources["evidence"][0]["structural_counts"]["current_consolidated"], {"bab": 21, "pasal": 73, "ayat": 170})
+        self.assertEqual(all_sources["evidence"][0]["structural_counts"]["amendment_1_historical"]["bab"], 0)
+
+    def test_useful_analysis_plan_is_not_replaced_by_generic_clarification(self) -> None:
+        class Provider:
+            def propose(self, _request):
+                return {
+                    "variants": [{"query": "kebebasan mengeluarkan pendapat"}],
+                    "retrieval_lanes": ["sparse"],
+                    "task_kind": "decomposition",
+                    "information_needs": [{
+                        "description": "jaminan kebebasan berekspresi",
+                        "query": "kebebasan mengeluarkan pendapat",
+                        "concepts": ["kebebasan", "mengeluarkan pendapat"],
+                        "kind": "concept",
+                        "relation_traversal": False,
+                    }],
+                    "status": "clarification_required",
+                    "missing_dimensions": ["legal_target"],
+                    "clarification_question": "Pasal mana yang dimaksud?",
+                }
+
+        response = LegalRuntimeService(planning_provider=Provider()).ask(
+            "uud", "berikan saya legal opinion tentang kebebasan berekspresi menggunakan uud"
+        )
+        self.assertEqual(response["status"], "answer_ready")
+        self.assertEqual(response["sufficiency"]["status"], "complete")
+        self.assertEqual(
+            set(response["sufficiency"]["fulfilled_requirement_ids"]),
+            {
+                "analysis_issue_provisions",
+                "analysis_issue_provision_2",
+                "analysis_issue_provision_3",
+                "analysis_limitations_exceptions",
+            },
+        )
+        self.assertEqual(
+            {row["citation"] for row in response["citations"]},
+            {"Pasal 28", "(3)", "Pasal 28F", "Pasal 28J"},
+        )
+
+    def test_one_sided_comparison_requires_planner_clarification(self) -> None:
+        seen = {}
+
+        class Provider:
+            def propose(self, request):
+                seen.update(request)
+                return {
+                    "variants": [],
+                    "retrieval_lanes": ["sparse"],
+                    "task_kind": "comparison",
+                    "information_needs": [],
+                    "status": "clarification_required",
+                    "missing_dimensions": ["comparison_target"],
+                    "clarification_question": "Naskah pembanding mana yang dimaksud?",
+                }
+
+        response = LegalRuntimeService(planning_provider=Provider()).ask(
+            "uud", "apa perbedaan UUD setelah amandemen"
+        )
+        self.assertTrue(seen["constraints"]["comparison_target_required"])
+        self.assertEqual(response["status"], "clarification_required")
+        self.assertEqual(response["missing_dimensions"], ("comparison_target",))
 
     def test_lawmaking_relation_does_not_admit_impeachment_support(self) -> None:
         response = LegalRuntimeService().ask("uud", "Apa hubungan Presiden dan DPR dalam pembentukan undang-undang?")
@@ -618,6 +891,7 @@ class HybridResearchContractTest(unittest.TestCase):
             ).propose({"query": "hak pendidikan", "intent": {"max_variants": 4}})
 
         payload = json.loads(opener.call_args.args[0].data.decode("utf-8"))
+        self.assertEqual(opener.call_args.args[0].get_header("User-agent"), "Tjipto")
         content = payload["messages"][0]["content"]
         self.assertEqual(payload["response_format"]["type"], "json_schema")
         schema = payload["response_format"]["json_schema"]
@@ -654,6 +928,14 @@ class HybridResearchContractTest(unittest.TestCase):
 
         self.assertEqual(proposal, {})
         self.assertEqual(opener.call_count, 2)
+
+    def test_openai_compatible_planner_fails_fast_on_quota_exhaustion(self) -> None:
+        endpoint = "https://planner.example/v1/chat/completions"
+        quota = HTTPError(endpoint, 429, "quota exhausted", None, None)
+        with patch("tjipto.retrieval.research.urlopen", side_effect=quota) as opener:
+            with self.assertRaises(HTTPError):
+                OpenAICompatibleResearchPlanningProvider("secret", model="gemini-model", endpoint=endpoint).propose({})
+        self.assertEqual(opener.call_count, 1)
 
     def test_coordinated_ordinals_preserve_reordered_instrument_scope(self) -> None:
         from tjipto.corpora.source_arbitration import source_roles_for_query
@@ -712,6 +994,38 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertNotEqual(response["status"], "insufficient_evidence")
         self.assertTrue(response["citations"])
 
+    def test_chapter_content_bypasses_planner_and_keeps_direct_descendants(self) -> None:
+        class Provider:
+            def propose(self, _request):
+                raise AssertionError("structured chapter content must bypass planner")
+
+        response = LegalRuntimeService(planning_provider=Provider(), answer_provider=None).ask(
+            "uud", "Apa isi BAB XA?", limit=30
+        )
+        self.assertEqual(response["route"], "legal_reference")
+        self.assertEqual(len(response["citations"]), 10)
+        self.assertEqual(
+            {row["citation"] for row in response["evidence"]},
+            {"BAB XA", *(f"Pasal 28{suffix}" for suffix in "ABCDEFGHIJ")},
+        )
+
+    def test_explicit_comparison_and_anchored_analysis_bypass_planner(self) -> None:
+        class Provider:
+            calls = 0
+
+            def propose(self, _request):
+                self.calls += 1
+                raise AssertionError("deterministic operation scope must bypass planner")
+
+        for query in (
+            "apa perbedaan UUD amandemen pertama dan kedua",
+            "berikan legal opinion dari Pasal 28",
+        ):
+            provider = Provider()
+            response = LegalRuntimeService(planning_provider=provider, answer_provider=None).ask("uud", query)
+            self.assertEqual(provider.calls, 0, query)
+            self.assertEqual(response["sufficiency"]["status"], "complete", query)
+
     def test_service_binds_deployment_planner_when_no_test_provider_is_injected(self) -> None:
         provider = object()
         with patch("tjipto.runtime.service.research_planning_provider_from_environment", return_value=provider):
@@ -756,6 +1070,12 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertNotEqual(response["status"], "clarification_required")
         self.assertEqual(response["sufficiency"]["status"], "complete")
         self.assertTrue(response["evidence_set"]["support_ids"])
+
+        deterministic = LegalRuntimeService(planning_provider=None, answer_provider=None).ask(
+            "uud", "apa jaminan konstitusional untuk pendidikan?"
+        )
+        self.assertIn(deterministic["status"], {"answer_ready", "limited_answer"})
+        self.assertTrue(any("Pasal 31" in row.get("hierarchy", ()) for row in deterministic["evidence"]))
 
     def test_planner_clarification_resumes_with_the_original_query(self) -> None:
         class Provider:

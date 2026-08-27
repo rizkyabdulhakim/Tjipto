@@ -102,9 +102,15 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
     def test_exact_source_conflict_provenance_can_resolve_existing_viewer_policy(self) -> None:
         result = self.service.ask("uud", "Pasal 25E menjadi Pasal 25A")
         self.assertEqual(result["status"], "answer_ready")
-        self.assertTrue(result["historical_citations"])
+        self.assertTrue(result["citations"])
+        self.assertFalse(result["historical_citations"])
         self.assertFalse(result.get("source_conflict"))
-        self.assertIn("dinomori ulang", result["answer"].casefold())
+        self.assertEqual(
+            {row["relation_type"] for row in result["article_amendment_relations"]},
+            {"RENUMBERED_TO"},
+        )
+        self.assertIn("Pasal 25E", result["answer"])
+        self.assertIn("Pasal 25A", result["answer"])
         relation = next(row for row in result["article_amendment_relations"] if row.get("relation_type") == "RENUMBERED_TO")
         viewer = self.service.viewer("uud", relation["evidence_id"])
         self.assertEqual(viewer["status"], "viewer_payload_ready")
@@ -168,10 +174,16 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertIsNone(peralihan.get("source_conflict"))
         self.assertEqual(peralihan["citations"][0]["citation"], "Pasal III")
         unqualified = self.service.ask("uud", "Pasal III Perubahan Keempat UUD 1945")
-        self.assertEqual(unqualified["status"], "answer_ready")
-        self.assertEqual(unqualified["citations"][0]["citation"], "Pasal III")
-        self.assertIn("ATURAN PERALIHAN", unqualified["citations"][0]["hierarchy"])
+        self.assertEqual(unqualified["status"], "clarification_required")
+        self.assertIn("Aturan Peralihan", unqualified["answer"])
+        self.assertIn("Aturan Tambahan", unqualified["answer"])
+        self.assertFalse(unqualified["citations"])
+        self.assertFalse(unqualified["viewer_refs"])
         self.assertNotIn("clarification_options", unqualified)
+
+    def test_printed_numbering_trace_uses_public_legal_label(self) -> None:
+        result = self.service.ask("uud", "Pasal III Aturan Tambahan Perubahan Keempat")
+        self.assertEqual(result["trace_support"][0]["label"], "Typo penomoran tercetak")
 
     def test_inserted_bab_heading_queries_publish_the_heading_as_the_answer(self) -> None:
         for label in ("BAB IXA", "BAB XA", "BAB VIIA", "BAB VIIB", "BAB VIIIA"):

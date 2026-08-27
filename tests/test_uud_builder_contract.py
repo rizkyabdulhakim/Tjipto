@@ -12,7 +12,7 @@ import tempfile
 import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
-from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.intent_config import validation_intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.corpora.uud.bbox_builder import extract_pdf
@@ -415,7 +415,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
                 pdf_health_report=read_json(FINAL / "pdf_health_report.json"),
                 pages=read_jsonl(FINAL / "pages.jsonl"),
-                intent_config=intent_config_for("uud_1945", CorpusRegistry(ROOT).resolve("uud")),
+                intent_config=validation_intent_config_for("uud_1945", CorpusRegistry(ROOT).resolve("uud")),
             ),
             read_json(FINAL / "validation_report.json"),
         )

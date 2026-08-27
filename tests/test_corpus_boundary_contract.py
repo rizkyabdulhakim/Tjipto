@@ -39,12 +39,15 @@ class CorpusBoundaryContractTest(unittest.TestCase):
 
     def test_uud_parser_owns_legal_reference_helpers(self) -> None:
         self.assertEqual(uud_parser.parse_uud_bab_reference("BAB XA"), "BAB XA")
+        self.assertEqual(uud_parser.parse_uud_bab_reference("babxa"), "BAB XA")
         self.assertEqual(uud_parser.parse_uud_pasal_reference("ayat (1) Pasal 28"), "Pasal 28")
+        self.assertEqual(uud_parser.parse_uud_pasal_reference("Pasal dua puluh delapan"), "Pasal 28")
         self.assertEqual(uud_parser.parse_uud_ayat_reference("Pasal 28 ayat (1)"), "(1)")
         self.assertEqual(
             uud_parser.normalize_uud_query_reference("pasal 28 (1)"),
             "Pasal 28 ayat (1)",
         )
+        self.assertEqual(uud_parser.normalize_uud_query_reference("pasal dua puluh delapan"), "Pasal 28")
 
     def test_parser_dispatch_resolves_uud_and_fails_safely(self) -> None:
         strategy = parser_dispatch.get_strategy("uud")

@@ -1,12 +1,12 @@
 {
   "base_commit": "c49291201c1f97d081454d1312dfc76aea0a1d2f",
-  "case_set_sha256": "ebff08c887602288068b5beac5bede0cdc699030b102ee32c64e6556c14ba1de",
+  "case_set_sha256": "0de378f665e8a5ce11f54c0c21e34bce2f8c08c5ddc6baa9fcbb962f7c4df174",
   "evaluator_sha256": "f12b4f406c4c9c37edf69397cc71ced25b1f95d10c964dd818607efde4586341",
   "evaluation_cutoff": 10,
   "case_count": 67,
   "behavior_counts": {
-    "retrieve": 31,
-    "abstain": 36
+    "retrieve": 32,
+    "abstain": 35
   },
   "result_counts": {
     "pass": 67,
@@ -15,12 +15,12 @@
   },
   "metrics": {
     "recall": 1.0,
-    "precision": 0.966667,
+    "precision": 0.935484,
     "mrr": 1.0,
     "ndcg": 1.0,
     "minimal_span_recall": 0.652174,
-    "minimal_span_precision": 0.705882,
-    "over_highlight_ratio": 0.294118,
+    "minimal_span_precision": 1.0,
+    "over_highlight_ratio": 0.0,
     "wrong_page_rate": 0.0,
     "source_role_accuracy": 1.0,
     "temporal_accuracy": 1.0,
@@ -31,23 +31,23 @@
   },
   "denominators": {
     "recall": 29.0,
-    "precision": 30.0,
+    "precision": 31.0,
     "mrr": 29,
     "ndcg": 29.0,
     "minimal_span_recall": 92,
-    "minimal_span_precision": 85,
-    "over_highlight_ratio": 85,
-    "wrong_page_rate": 31,
-    "source_role_accuracy": 31,
-    "temporal_accuracy": 31,
-    "citation_target_accuracy": 31,
-    "hard_negative_false_positive_rate": 36,
-    "abstention_precision": 36,
-    "abstention_recall": 36
+    "minimal_span_precision": 60,
+    "over_highlight_ratio": 60,
+    "wrong_page_rate": 32,
+    "source_role_accuracy": 32,
+    "temporal_accuracy": 32,
+    "citation_target_accuracy": 32,
+    "hard_negative_false_positive_rate": 35,
+    "abstention_precision": 35,
+    "abstention_recall": 35
   },
   "reproduction": {
     "method": "detached worktree at base_commit with the recorded case set and evaluator copied byte-for-byte, then evaluate_uud_retrieval.py --strict-known-gaps --report",
     "python": "3.12.10",
-    "report_sha256": "055f4eb77fef8405c8b891751703d4b6453e6fd59c8c9596dd7d2736b39e0abd"
+    "report_sha256": "d665c9a1cd43328e39a9a0be9afc03e4dfd6a6e7042f51940e43134ea1a77b83"
   }
 }

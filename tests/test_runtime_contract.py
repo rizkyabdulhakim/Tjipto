@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from tjipto.corpora.registry import CorpusRegistry
-from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent
+from tjipto.corpora.intent_config import intent_config_for, resolve_instrument_intent, validation_intent_config_for
 from tjipto.corpora.provenance import validate_corpus_provenance
 from tjipto.core.manifest import read_jsonl
 from tjipto.evidence.store import EvidenceStore
@@ -23,9 +23,10 @@ from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.router import route_retrieval
 from tjipto.retrieval.structured import structured_lookup
 from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candidate
-from tjipto.runtime.api import _public_bbox, handle_request
+from tjipto.runtime.api import _answer_with_footnotes, _public_bbox, handle_request
 from tjipto.runtime.gemini import GeminiAnswerProvider
 from tjipto.runtime.openai_compatible import OpenAICompatibleWordingProvider
+from tjipto.runtime.research_control import semantic_support_context_terms
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.viewer import viewer_payload
@@ -101,12 +102,103 @@ class RuntimeContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.service = LegalRuntimeService(ROOT)
 
+    def test_runtime_vocabulary_projection_is_small_and_duplicate_free(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        intent = intent_config_for(config.query_strategy, config)
+        for validation_key in (
+            "instrument_scope_queries",
+            "instrument_intent_matrix",
+            "partial_signal_instrument_matrix",
+            "instrument_like_boundary_matrix",
+            "instrument_intent_invariant_matrix",
+        ):
+            self.assertNotIn(validation_key, intent)
+        validation_intent = validation_intent_config_for(config.query_strategy, config)
+        self.assertTrue(validation_intent["instrument_intent_matrix"])
+        raw_intent = config.setting("intent_config")
+        self.assertNotIn("instrument_scope_queries", raw_intent)
+        self.assertNotIn("instrument_change_signals", raw_intent)
+        self.assertNotIn("change_terms", raw_intent)
+        self.assertNotIn("change_relation_signals", config.setting("research")["operation_requirements"])
+        self.assertNotIn("instrument_scope_terms", config.setting("research"))
+        self.assertEqual(intent["document_relation"]["change_terms"], intent["change_terms"])
+        self.assertEqual(
+            intent["document_relation"]["change_terms"],
+            intent["document_relation"]["relation_families"]["MODIFY_PROVISION"]["terms"],
+        )
+        for validation_key in (
+            "instrument_intent_matrix",
+            "partial_signal_instrument_matrix",
+            "instrument_like_boundary_matrix",
+            "instrument_intent_invariant_matrix",
+        ):
+            self.assertEqual(set(raw_intent[validation_key]), {"word_orders"}, validation_key)
+        self.assertIn("perubahan Kedua", validation_intent["instrument_intent_matrix"]["amendment_terms"])
+        for key in (
+            "direct_relation_words",
+            "instrument_role_queries",
+            "instrument_source_signals",
+            "instrument_content_signals",
+            "instrument_effect_signals",
+            "instrument_analysis_signals",
+            "instrument_legal_object_signals",
+            "change_terms",
+        ):
+            values = intent[key]
+            if isinstance(values, dict):
+                values = tuple(term for terms in values.values() for term in terms)
+            self.assertEqual(len(values), len(set(values)), key)
+        excluded = config.setting("lexical_normalization")["semantic_support_excluded_terms"]
+        self.assertNotIn("jaminan", excluded)
+        self.assertNotIn("konstitusional", excluded)
+        context_terms = semantic_support_context_terms(self.service._store("uud"), {})
+        self.assertIn("jaminan", context_terms)
+        self.assertIn("konstitusional", context_terms)
+
+    def test_change_terms_have_one_runtime_owner(self) -> None:
+        config = CorpusRegistry(ROOT).resolve("uud")
+        intent = intent_config_for(config.query_strategy, config)
+        change_terms = set(intent["change_terms"])
+        scope_terms = {
+            term.casefold()
+            for terms in intent["instrument_role_queries"].values()
+            for term in terms
+        }
+        content_terms = {
+            term.casefold()
+            for key in (
+                "instrument_content_signals",
+                "instrument_effect_signals",
+                "instrument_analysis_signals",
+                "instrument_legal_object_signals",
+            )
+            for term in intent[key]
+        }
+        self.assertEqual(intent["direct_relation_words"], intent["change_terms"])
+        self.assertEqual(intent["document_relation"]["change_terms"], intent["change_terms"])
+        self.assertFalse(change_terms & scope_terms)
+        self.assertFalse(change_terms & content_terms)
     def assertPublicSearchHasNoEvidenceRows(self, search: dict, query: str) -> None:
         self.assertNotEqual(search["route"], "bm25", query)
         for row in search["results"]:
             self.assertEqual(row.get("status"), "document", query)
             self.assertNotIn("evidence_id", row, query)
             self.assertEqual(row.get("bbox_count"), 0, query)
+
+    def test_public_answer_places_clickable_footnotes_on_supported_sentences(self) -> None:
+        projected = (
+            ({"citation": {"number": 1}}, {"evidence_id": "pasal-28"}),
+            ({"citation": {"number": 2}}, {"evidence_id": "pasal-28a"}),
+        )
+        answer = "Pasal 28 mengatur kebebasan. [[support:pasal-28]]\n\nPasal 28A mengatur hak hidup. [[support:pasal-28a]]"
+        self.assertEqual(
+            _answer_with_footnotes(answer, projected),
+            "Pasal 28 mengatur kebebasan. [1]\n\nPasal 28A mengatur hak hidup. [2]",
+        )
+        self.assertEqual(
+            _answer_with_footnotes("Pasal 28 mengatur kebebasan. [[support:pasal-28]]", projected[:1]),
+            "Pasal 28 mengatur kebebasan. [1]",
+        )
 
     def test_search_citation_and_viewer_work(self) -> None:
         search = self.service.search("uud", "UUD 1945", limit=3)
@@ -335,6 +427,12 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertIn(field, row)
             self.assertEqual(row["corpus_id"], "uud")
             self.assertTrue(set(row["required_evidence_ids"]) <= evidence_ids)
+        stage0 = [row for row in cases if row.get("stage0_defect")]
+        self.assertEqual(len(stage0), 8)
+        for row in stage0:
+            current = row.get("stage0_current")
+            self.assertIsInstance(current, dict, row["eval_id"])
+            self.assertTrue(current.get("issue"), row["eval_id"])
 
     def test_bm25_prioritizes_term_frequency_without_breaking_exact_citation(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -346,6 +444,18 @@ class RuntimeContractTest(unittest.TestCase):
         results = route_retrieval("uud", "negara negara negara hukum", store, limit=3)
         self.assertEqual(results["status"], "found")
         self.assertTrue(any("negara" in row["quoted_text"].casefold() for row in results["matches"]))
+
+    def test_sparse_lane_and_complete_lexical_hit_do_not_start_dense(self) -> None:
+        store = EvidenceStore(CorpusRegistry(ROOT).resolve("uud"))
+        with patch("tjipto.retrieval.router.dense_runtime_available", return_value=True), patch(
+            "tjipto.retrieval.router.hybrid_search", side_effect=AssertionError("dense lane must not start")
+        ):
+            sparse = route_retrieval("uud", "negara hukum", store, route="sparse")
+            automatic = route_retrieval("uud", "masa jabatan presiden", store)
+        self.assertEqual(sparse["route"], "bm25")
+        self.assertEqual(automatic["route"], "bm25")
+        self.assertFalse(sparse["hybrid_active"])
+        self.assertFalse(automatic["hybrid_active"])
 
     def test_ask_contract_is_evidence_bounded(self) -> None:
         answer = self.service.ask("uud", "Pasal 1 ayat (3)")
@@ -483,6 +593,8 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(ambiguous["status"], "answer_ready")
         self.assertFalse(ambiguous["citations"])
         self.assertGreaterEqual(len(ambiguous["metadata_support"]), 2)
+        self.assertIn("tercantum sebagai Ketua", ambiguous["answer"])
+        self.assertIn("Perubahan Keempat", ambiguous["answer"])
         result = self.service.ask("uud", "Amien Rais Perubahan Pertama UUD")
         self.assertEqual(result["status"], "answer_ready")
         self.assertFalse(result["citations"])
@@ -511,6 +623,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertFalse(result["metadata_facts"], query)
 
     def test_ambiguous_queries_fail_closed_without_prompt_templates(self) -> None:
+        service = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None)
         cases = (
             ("Pasal 7 atau Pasal 7A", "legal_reference", "ambiguous_legal_target"),
             ("perubahan keempat mengubah atau menghapus Pasal 16", "document_relation", "ambiguous_target"),
@@ -520,12 +633,12 @@ class RuntimeContractTest(unittest.TestCase):
         )
         for query, route, reason in cases:
             with self.subTest(query=query):
-                result = self.service.ask("uud", query)
+                result = service.ask("uud", query)
                 self.assertEqual(result["status"], "insufficient_evidence")
                 self.assertEqual(result["route"], route)
                 self.assertEqual(result.get("reason_code") or result.get("reason"), reason)
                 self.assertNotIn("clarification_options", result)
-                public = handle_request("uud", "ask", {"query": query}, service=self.service)
+                public = handle_request("uud", "ask", {"query": query}, service=service)
                 self.assertEqual(public["status"], "insufficient_evidence")
                 self.assertFalse(public.get("supports"))
 
@@ -605,6 +718,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(payload["response_format"]["type"], "json_schema")
         self.assertTrue(payload["response_format"]["json_schema"]["strict"])
         self.assertEqual(http_request.get_header("Authorization"), "Bearer test-secret")
+        self.assertEqual(http_request.get_header("User-agent"), "Tjipto")
         self.assertNotIn("test-secret", http_request.data.decode("utf-8"))
 
     def test_wording_adapter_timeout_or_network_error_has_no_proposal(self) -> None:
@@ -659,33 +773,38 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_article_level_amendment_relations_use_exact_artifact_only(self) -> None:
         pasal = self.service.ask("uud", "amandemen keempat mengubah pasal apa saja")
-        self.assertEqual(pasal["status"], "limited_answer")
+        self.assertEqual(pasal["status"], "answer_ready")
         self.assertEqual(pasal["route"], "document_relation")
         self.assertEqual(pasal["answer_type"], "article_amendment_relation")
-        self.assertFalse(pasal["evidence"])
+        self.assertTrue(pasal["evidence"])
         self.assertFalse(pasal["historical_citations"])
-        self.assertFalse(pasal["citations"])
-        self.assertFalse(pasal["viewer_refs"])
+        self.assertTrue(pasal["citations"])
+        self.assertTrue(pasal["viewer_refs"])
         self.assertTrue(pasal["article_amendment_relations"])
-        self.assertTrue(pasal["trace_support"])
-        self.assertEqual({row["relation_type"] for row in pasal["article_amendment_relations"]}, {"AMBIGUOUS_OPERATION"})
-        self.assertEqual({row["support_class"] for row in pasal["article_amendment_relations"]}, {"trace_article_relation"})
-        self.assertEqual({tuple(row["operation_candidates"]) for row in pasal["article_amendment_relations"]}, {("MODIFIES", "ADDS")})
-        self.assertFalse(pasal["context_pack"]["viewer_refs"])
-        self.assertFalse(pasal["context_pack"]["citation_payloads"])
+        self.assertFalse(pasal["trace_support"])
+        self.assertEqual(
+            {row["relation_type"] for row in pasal["article_amendment_relations"]},
+            {"MODIFIES", "ADDS"},
+        )
+        self.assertEqual(
+            {row["support_class"] for row in pasal["article_amendment_relations"]},
+            {"exact_article_relation"},
+        )
+        self.assertTrue(pasal["context_pack"]["viewer_refs"])
+        self.assertTrue(pasal["context_pack"]["citation_payloads"])
         self.assertFalse(pasal["context_pack"]["historical_citations"])
 
         complete = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
-        self.assertEqual(complete["status"], "limited_answer")
+        self.assertEqual(complete["status"], "answer_ready")
         self.assertEqual(
             {row["relation_type"] for row in complete["article_amendment_relations"]},
-            {"AMBIGUOUS_OPERATION"},
+            {"MODIFIES"},
         )
-        self.assertFalse(complete["evidence"])
+        self.assertTrue(complete["evidence"])
         self.assertFalse(complete["historical_citations"])
-        self.assertFalse(complete["citations"])
-        self.assertFalse(complete["viewer_refs"])
-        self.assertTrue(complete["trace_support"])
+        self.assertTrue(complete["citations"])
+        self.assertTrue(complete["viewer_refs"])
+        self.assertFalse(complete["trace_support"])
 
         for query in (
             "perubahan keempat menghapus pasal 16?",
@@ -702,19 +821,20 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(result["answer_scope"], "exact_article_relation", query)
             self.assertEqual({row["relation_type"] for row in result["article_amendment_relations"]}, {"DELETES"}, query)
             self.assertEqual({row["target_citation"] for row in result["article_amendment_relations"]}, {"Pasal 16"}, query)
-            self.assertTrue(result["historical_citations"], query)
-            self.assertEqual(result["historical_citations"][0]["authority_kind"], "instrument_provenance", query)
-            self.assertFalse(result["historical_citations"][0]["citation_final"], query)
+            self.assertTrue(result["citations"], query)
+            self.assertFalse(result["historical_citations"], query)
+            self.assertTrue(result["citations"][0]["citation_final"], query)
+            self.assertEqual(result["citations"][0]["authority_kind"], "instrument_provenance", query)
 
         for query in ("perubahan keempat menambahkan apa", "perubahan keempat menambahkan lembaga apa"):
             result = self.service.ask("uud", query)
-            self.assertEqual(result["status"], "limited_answer", query)
+            self.assertEqual(result["status"], "answer_ready", query)
             self.assertEqual(result["route"], "document_relation", query)
-            self.assertEqual(result["reason"], "relation_trace_only", query)
-            self.assertFalse(result["evidence"], query)
-            self.assertFalse(result["citations"], query)
-            self.assertFalse(result["viewer_refs"], query)
-            self.assertEqual({row["relation_type"] for row in result["article_amendment_relations"]}, {"AMBIGUOUS_OPERATION"}, query)
+            self.assertEqual(result["answer_scope"], "exact_article_relation", query)
+            self.assertTrue(result["evidence"], query)
+            self.assertTrue(result["citations"], query)
+            self.assertTrue(result["viewer_refs"], query)
+            self.assertEqual({row["relation_type"] for row in result["article_amendment_relations"]}, {"ADDS"}, query)
 
     def test_stage7_semantic_sufficiency_is_operation_and_scope_aware(self) -> None:
         lawmaking = self.service.ask("uud", "Apa hubungan Presiden dan DPR dalam pembentukan undang-undang?")
@@ -737,14 +857,17 @@ class RuntimeContractTest(unittest.TestCase):
 
     def test_explicit_multi_reference_and_exhaustive_scope_are_not_false_complete(self) -> None:
         explicit = self.service.ask("uud", "Pasal 17 ayat (2) dan (3) diubah pada amandemen ke berapa?")
-        self.assertEqual(explicit["status"], "limited_answer")
-        self.assertEqual({row["target_citation"] for row in explicit["article_amendment_relations"]}, {"Pasal 17 ayat (2)"})
-        self.assertIn("Pasal 17 ayat (3)", {row.get("target_citation") for row in explicit["trace_support"]})
+        self.assertEqual(explicit["status"], "answer_ready")
+        self.assertEqual(
+            {row["target_citation"] for row in explicit["article_amendment_relations"]},
+            {"Pasal 17 ayat (2)", "Pasal 17 ayat (3)"},
+        )
+        self.assertFalse(explicit["trace_support"])
 
         exhaustive = self.service.ask("uud", "pasal apa saja yang diubah perubahan pertama")
         self.assertEqual(exhaustive["status"], "limited_answer")
         self.assertTrue(exhaustive["trace_support"])
-        self.assertIn("Pasal 17 ayat (3)", exhaustive["answer"])
+        self.assertIn("ayat (3)", exhaustive["answer"])
 
     def test_natural_sentence_proposals_remain_fact_bound(self) -> None:
         from tjipto.runtime.service import _render_wording
@@ -804,6 +927,13 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(plan.facts[1].source_role, "current_consolidated")
         self.assertEqual(plan.facts[1].temporal_scope, "current_consolidated")
         self.assertEqual(plan.public()[1]["object"], "Pasal 31 mengatur pendidikan.")
+        structural = build_answer_fact_plan(({
+            "evidence_id": "bab-i",
+            "authority_kind": "structural_context",
+            "citation": "BAB I",
+            "quoted_text": "BAB I\nBENTUK DAN KEDAULATAN\nPasal 1\nNegara Indonesia ialah Negara Kesatuan.",
+        },), "fallback")
+        self.assertEqual(structural.facts[1].object, "BAB I BENTUK DAN KEDAULATAN")
         claims = build_verified_claim_set((
             {
                 "evidence_id": "support-id",
@@ -812,14 +942,119 @@ class RuntimeContractTest(unittest.TestCase):
                 "source_role": "current_consolidated",
                 "temporal_context": "current_consolidated",
             },
-        ))
+        ), scope_terms={"historical": ("historis",)})
         self.assertEqual(
             _render_wording(
                 {"sentences": ({"text": "Pasal 31 mengatur pendidikan.", "claim_ids": ["support:support-id"]},)},
                 "fallback",
                 verified_claims=claims,
             ),
-            "Pasal 31 mengatur pendidikan.",
+            "Pasal 31 mengatur pendidikan. [[support:support-id]]",
+        )
+        self.assertEqual(
+            _render_wording(
+                {"sentences": ({"text": "Pasal 31 \ufffd mengatur pendidikan.", "claim_ids": ["support:support-id"]},)},
+                "fallback",
+                verified_claims=claims,
+            ),
+            "Pasal 31 \u2014 mengatur pendidikan. [[support:support-id]]",
+        )
+        shortened = build_verified_claim_set(({
+            "evidence_id": "long-support",
+            "quoted_text": "Pasal 31 mengatur pendidikan bagi warga negara.",
+            "citation": "Pasal 31",
+            "source_role": "current_consolidated",
+        },))
+        self.assertEqual(
+            _render_wording(
+                {"sentences": ({"text": "Pasal 31 mengatur pendidikan.", "claim_ids": ["support:long-support"]},)},
+                "fallback",
+                verified_claims=shortened,
+            ),
+            "Pasal 31 mengatur pendidikan. [[support:long-support]]",
+        )
+        natural = build_verified_claim_set(({
+            "evidence_id": "pasal-28",
+            "quoted_text": "Kemerdekaan berserikat dan berkumpul, mengeluarkan pikiran dengan lisan dan tulisan ditetapkan dengan undang-undang.",
+            "citation": "Pasal 28",
+            "source_role": "current_consolidated",
+        },))
+        self.assertEqual(
+            _render_wording(
+                {"sentences": ({
+                    "text": "Pasal 28 menjamin kebebasan berserikat, berkumpul, dan menyampaikan pikiran secara lisan maupun tulisan.",
+                    "claim_ids": ["support:pasal-28"],
+                },)},
+                "fallback",
+                verified_claims=natural,
+            ),
+            "Pasal 28 menjamin kebebasan berserikat, berkumpul, dan menyampaikan pikiran secara lisan maupun tulisan. [[support:pasal-28]]",
+        )
+        self.assertEqual(
+            _render_wording(
+                {"sentences": ({
+                    "text": "Ketentuan ini mencakup kebebasan berkumpul.",
+                    "claim_ids": ["support:pasal-28"],
+                },)},
+                "fallback",
+                verified_claims=natural,
+            ),
+            "Ketentuan ini mencakup kebebasan berkumpul. [[support:pasal-28]]",
+        )
+        self.assertEqual(
+            _render_wording(
+                {"sentences": (
+                    {"text": "Kemerdekaan berserikat dijamin.", "claim_ids": ["support:pasal-28"]},
+                    {"text": "Kemerdekaan berkumpul juga dijamin.", "claim_ids": ["support:pasal-28"]},
+                )},
+                "fallback",
+                verified_claims=natural,
+            ),
+            "Kemerdekaan berserikat dijamin. [[support:pasal-28]]\n\n"
+            "Kemerdekaan berkumpul juga dijamin. [[support:pasal-28]]",
+        )
+        self.assertEqual(
+            _render_wording(
+                {"sentences": ({
+                    "text": "Pendidikan merupakan kebijakan penting.",
+                    "claim_ids": ["support:pasal-28"],
+                },)},
+                "fallback",
+                verified_claims=natural,
+            ),
+            "fallback",
+        )
+        enumerated = build_verified_claim_set(({
+            "evidence_id": "scope-support",
+            "quoted_text": "Perubahan ini mengubah Pasal 5 dan Pasal 7.",
+            "citation": "Ruang lingkup perubahan",
+            "source_role": "amendment_1_historical",
+        },))
+        self.assertEqual(
+            _render_wording(
+                {"sentences": ({
+                    "text": "Perubahan ini mengubah Pasal 5.",
+                    "claim_ids": ["support:scope-support"],
+                },)},
+                "fallback",
+                verified_claims=enumerated,
+                require_complete_enumerations=True,
+            ),
+            "fallback",
+        )
+        self.assertEqual(
+            _render_wording(
+                {"sentences": (
+                    {"text": "Pasal 28 menetapkan pidana 99 tahun.", "claim_ids": ["support:pasal-28"]},
+                    {
+                        "text": "Pasal 28 menjamin kebebasan berserikat, berkumpul, dan menyampaikan pikiran secara lisan maupun tulisan.",
+                        "claim_ids": ["support:pasal-28"],
+                    },
+                )},
+                "fallback",
+                verified_claims=natural,
+            ),
+            "Pasal 28 menjamin kebebasan berserikat, berkumpul, dan menyampaikan pikiran secara lisan maupun tulisan. [[support:pasal-28]]",
         )
         for mutated in (
             "Pasal 32 mengatur pendidikan.",
@@ -855,27 +1090,36 @@ class RuntimeContractTest(unittest.TestCase):
                 "fallback",
                 verified_claims=structured,
             ),
-            "Konstitusi menjamin hak atas pendidikan menurut Pasal 31.",
+            "Konstitusi menjamin hak atas pendidikan menurut Pasal 31. [[support:structured-support]]",
         )
 
     def test_target_specific_article_amendment_relations_do_not_substitute_neighbors(self) -> None:
         unsupported = self.service.ask("uud", "amandemen keempat mengubah pasal 31?")
-        self.assertEqual(unsupported["status"], "insufficient_evidence")
+        self.assertEqual(unsupported["status"], "answer_ready")
         self.assertEqual(unsupported["route"], "document_relation")
-        self.assertFalse(unsupported["evidence"])
+        self.assertTrue(unsupported["evidence"])
         self.assertFalse(unsupported["historical_citations"])
-        self.assertFalse(unsupported["citations"])
-        self.assertFalse(unsupported["viewer_refs"])
-        self.assertFalse(unsupported["article_amendment_relations"])
+        self.assertTrue(unsupported["citations"])
+        self.assertTrue(unsupported["viewer_refs"])
+        self.assertEqual(
+            {row["target_citation"] for row in unsupported["article_amendment_relations"]},
+            {
+                "Pasal 31 ayat (1)",
+                "Pasal 31 ayat (2)",
+                "Pasal 31 ayat (3)",
+                "Pasal 31 ayat (4)",
+                "Pasal 31 ayat (5)",
+            },
+        )
         self.assertFalse(unsupported["trace_support"])
 
         exact = self.service.ask("uud", "perubahan keempat mengubah pasal 16?")
-        self.assertEqual(exact["status"], "limited_answer")
+        self.assertEqual(exact["status"], "answer_ready")
         self.assertEqual(
             {row["relation_type"] for row in exact["article_amendment_relations"]},
-            {"AMBIGUOUS_OPERATION"},
+            {"MODIFIES"},
         )
-        self.assertTrue(exact["trace_support"])
+        self.assertFalse(exact["trace_support"])
 
         partial = self.service.ask("uud", "pasal yang diubah perubahan keempat")
         self.assertIn(partial["status"], {"answer_ready", "limited_answer"})
@@ -886,15 +1130,28 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(partial["answer_scope"], "exact_article_relation")
             self.assertFalse(partial["trace_support"])
         self.assertFalse(partial["historical_citations"])
-        self.assertFalse(partial["citations"])
-        self.assertFalse(partial["viewer_refs"])
+        if partial["status"] == "limited_answer":
+            self.assertFalse(partial["citations"])
+            self.assertFalse(partial["viewer_refs"])
+        else:
+            self.assertTrue(partial["citations"])
+            self.assertTrue(partial["viewer_refs"])
         self.assertTrue(partial["article_amendment_relations"])
 
         reverse = self.service.ask("uud", "pasal 31 diubah oleh amandemen berapa?")
         self.assertNotEqual({row["target_citation"] for row in reverse.get("article_amendment_relations", ())}, {"Pasal 16"})
         self.assertNotIn("Pasal 16", reverse.get("answer", ""))
         if reverse["status"] == "answer_ready":
-            self.assertEqual({row["target_citation"] for row in reverse["article_amendment_relations"]}, {"Pasal 31 ayat (1)"})
+            self.assertEqual(
+                {row["target_citation"] for row in reverse["article_amendment_relations"]},
+                {
+                    "Pasal 31 ayat (1)",
+                    "Pasal 31 ayat (2)",
+                    "Pasal 31 ayat (3)",
+                    "Pasal 31 ayat (4)",
+                    "Pasal 31 ayat (5)",
+                },
+            )
         else:
             self.assertEqual(reverse["route"], "document_relation")
             self.assertFalse(reverse["citations"])
@@ -909,10 +1166,11 @@ class RuntimeContractTest(unittest.TestCase):
             [("Pasal 25E", "Pasal 25A")],
         )
         self.assertEqual(exact["article_amendment_relations"][0]["source_legal_unit_id"], "uud_legal_unit_00428")
-        self.assertEqual(len(exact["historical_citations"]), 1)
-        self.assertFalse(exact["citations"])
-        self.assertFalse(exact["viewer_refs"])
-        self.assertIn("secara terverifikasi", exact["answer"].casefold())
+        self.assertFalse(exact["historical_citations"])
+        self.assertEqual(len(exact["citations"]), 1)
+        self.assertTrue(exact["citations"][0]["citation_final"])
+        self.assertTrue(exact["viewer_refs"])
+        self.assertIn("dinomori ulang", exact["answer"].casefold())
 
         paragraph = self.service.ask("uud", "Pasal 3 ayat (3) menjadi Pasal 3 ayat (2)")
         self.assertEqual(paragraph["route"], "document_relation")
@@ -925,7 +1183,7 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(paragraph["article_amendment_relations"][0]["target_legal_unit_id"], "uud_legal_unit_00014")
         self.assertEqual(paragraph["article_amendment_relations"][0]["source_reference_range_kind"], "literal")
         self.assertTrue(all(row["viewer_highlightable"] for row in paragraph["article_amendment_relations"]))
-        self.assertIn("secara terverifikasi", paragraph["answer"].casefold())
+        self.assertIn("dinomori ulang", paragraph["answer"].casefold())
 
         paraphrase = self.service.ask("uud", "perubahan keempat mengubah penomoran pasal apa")
         self.assertEqual(paraphrase["route"], "document_relation")
@@ -944,7 +1202,7 @@ class RuntimeContractTest(unittest.TestCase):
         support = public["supports"][0]
         self.assertEqual(support["support_kind"], "article_relation")
         self.assertEqual(support["authority_kind"], "instrument_provenance")
-        self.assertFalse(support["citation_final"])
+        self.assertTrue(support["citation_final"])
         self.assertNotEqual(support["source_label"], "uud::amendment_4_historical")
         self.assertTrue(support["viewer_target"]["can_resolve"])
         self.assertNotIn("evidence_id", support["viewer_target"])
@@ -959,6 +1217,12 @@ class RuntimeContractTest(unittest.TestCase):
         historical = self.service.ask("uud", "Pasal 25E")
         self.assertEqual(historical["status"], "insufficient_evidence")
         self.assertFalse(historical["citations"])
+
+        typo = self.service.ask("uud", "Pasal III typo di UUD amandemen ke empat")
+        self.assertEqual(typo["status"], "answer_ready")
+        self.assertEqual(typo["citations"][0]["source_role"], "amendment_4_historical")
+        self.assertEqual(typo["citations"][0]["hierarchy"], ("ATURAN TAMBAHAN", "Pasal II"))
+        self.assertEqual(typo["trace_support"][0]["canonical_reference"], "Aturan Tambahan Pasal II")
 
     def test_ask_answers_grounded_legal_unit_relations(self) -> None:
         for case in _relation_cases():
@@ -1015,7 +1279,8 @@ class RuntimeContractTest(unittest.TestCase):
                 self.assertTrue(result["article_amendment_relations"], case["query"])
                 if result["evidence"]:
                     self.assertEqual(result["evidence"][0]["evidence_id"], case["evidence_id"], case["query"])
-                    self.assertEqual(result["historical_citations"][0]["citation"], case["citation"], case["query"])
+                    citations = result["citations"] or result["historical_citations"]
+                    self.assertEqual(citations[0]["citation"], case["citation"], case["query"])
                 else:
                     self.assertTrue(result["trace_support"], case["query"])
                 continue
@@ -1417,6 +1682,8 @@ class RuntimeContractTest(unittest.TestCase):
             ("tampilkan naskah perubahan keempat", "amendment_4_historical"),
             ("berikan saya naskah UUD original", "original_historical"),
             ("berikan saya naskah UUD konsolidasi", "current_consolidated"),
+            ("berikan UUD amandemen ke empat", "amendment_4_historical"),
+            ("berikan UUD naskah sebelum amandemen", "original_historical"),
         ):
             result = self.service.ask("uud", query)
             self.assertEqual(result["status"], "answer_ready", query)
@@ -1442,6 +1709,10 @@ class RuntimeContractTest(unittest.TestCase):
                 "Pasal 16 sebelum dihapus bunyinya apa",
                 "BAB setelah BAB IX",
                 "legal opinion tentang HAM dari Pasal 28",
+                "apa perbedaan Pasal 28 dan Pasal 28A",
+                "apa perbedaan UUD setelah amandemen",
+                "bandingkan Pasal 5 ayat (1) sebelum dan sesudah Perubahan Pertama",
+                "lakukan legal research tentang kewenangan MPR mengubah UUD",
             )
         }
         self.assertEqual(semantics["berikan naskah UUD original"].operation, "open_document")
@@ -1465,19 +1736,32 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(analysis_semantics.operation, "analyze")
         self.assertTrue(analysis_semantics.requires_multiple_supports)
         self.assertTrue(analysis_semantics.requires_decomposition)
+        self.assertEqual(semantics["apa perbedaan Pasal 28 dan Pasal 28A"].operation, "compare")
+        self.assertEqual(semantics["apa perbedaan UUD setelah amandemen"].operation, "compare")
+        temporal_comparison = semantics["bandingkan Pasal 5 ayat (1) sebelum dan sesudah Perubahan Pertama"]
+        self.assertEqual(temporal_comparison.operation, "compare")
+        self.assertEqual(temporal_comparison.source_scopes, ("original_historical", "amendment_1_historical"))
+        self.assertEqual(semantics["lakukan legal research tentang kewenangan MPR mengubah UUD"].operation, "analyze")
 
         collection = self.service.ask("uud", "berikan saya naskah UUD")
         self.assertEqual(collection["route"], "source_document_collection")
+        self.assertEqual(self.service.ask("uud", "berikan saya document")["route"], "source_document_collection")
         self.assertEqual(
             {row["source_role"] for row in collection["document_sources"]},
             {"original_historical", "amendment_1_historical", "amendment_2_historical", "amendment_3_historical", "amendment_4_historical", "current_consolidated"},
         )
-        self.assertEqual(self.service.ask("uud", "ringkas amandemen keempat")["route"], "instrument_resolved_answerable")
+        summary = self.service.ask("uud", "ringkas amandemen keempat")
+        self.assertEqual(summary["route"], "instrument_resolved_answerable")
+        self.assertEqual(summary["operation"], "summarize")
         compared = self.service.ask("uud", "amandemen pertama vs kedua", limit=30)
         self.assertEqual(compared["status"], "answer_ready")
         self.assertEqual(
             {row["source_role"] for row in compared["evidence"]},
             {"amendment_1_historical", "amendment_2_historical"},
+        )
+        self.assertEqual(
+            {row["display_label"] for row in compared["evidence"]},
+            {"Ruang lingkup Perubahan Pertama", "Ruang lingkup Perubahan Kedua"},
         )
         public_comparison = handle_request(
             "uud",
@@ -1495,17 +1779,38 @@ class RuntimeContractTest(unittest.TestCase):
             {row["source_role"] for row in metadata["metadata_support"]},
             {"amendment_1_historical", "amendment_2_historical"},
         )
+        self.assertIn("Drs. Kwik Kian Gie", metadata["answer"])
+        self.assertIn("Ir. Sutjipto", metadata["answer"])
+        provision_comparison = self.service.ask("uud", "apa perbedaan Pasal 28 dan Pasal 28A", limit=30)
+        self.assertEqual(provision_comparison["sufficiency"]["status"], "complete")
+        self.assertEqual(len(provision_comparison["citations"]), 2)
+        paragraph_comparison = self.service.ask(
+            "uud", "bandingkan Pasal 5 ayat (1) sebelum dan sesudah Perubahan Pertama", limit=30
+        )
+        self.assertEqual(paragraph_comparison["sufficiency"]["status"], "complete")
+        self.assertEqual(len(paragraph_comparison["citations"]), 2)
         historical_response = self.service.ask("uud", "Pasal 16 sebelum dihapus bunyinya apa")
-        self.assertEqual(historical_response["status"], "insufficient_evidence")
-        self.assertEqual(historical_response["reason"], "historical_normative_text_and_deletion_provenance_required")
-        self.assertEqual(historical_response["sufficiency"]["status"], "insufficient")
-        self.assertEqual(historical_response["sufficiency"]["missing_requirement_ids"], ("deletion_provenance",))
+        self.assertEqual(historical_response["status"], "answer_ready")
+        self.assertEqual(historical_response["sufficiency"]["status"], "complete")
+        self.assertEqual(
+            set(historical_response["sufficiency"]["fulfilled_requirement_ids"]),
+            {"historical_normative_text", "deletion_provenance"},
+        )
+        self.assertEqual(
+            {row["source_role"] for row in historical_response["citations"]},
+            {"original_historical", "amendment_4_historical"},
+        )
+        self.assertIn("Susunan Dewan Pertimbangan Agung", historical_response["answer"])
         navigation = self.service.ask("uud", "BAB setelah BAB IX")
         self.assertEqual(navigation["route"], "structural_navigation")
         self.assertIn("BAB IXA", navigation["answer"])
         analysis = self.service.ask("uud", "legal opinion tentang HAM dari Pasal 28")
         self.assertIsNotNone(analysis.get("research_plan"))
         self.assertTrue(analysis["citations"])
+        legal_research = self.service.ask("uud", "lakukan legal research tentang kewenangan MPR mengubah UUD")
+        self.assertEqual(legal_research["route"], "research")
+        self.assertEqual(legal_research["sufficiency"]["status"], "complete")
+        self.assertTrue(legal_research["citations"])
 
     def test_control_plane_resolves_source_roles_once_and_publication_reuses_semantics(self) -> None:
         store = self.service._store("uud")
@@ -1554,6 +1859,84 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertEqual(result["route"], "document_relation")
         self.assertEqual(result["intent"], "document_amendment_relation")
         self.assertFalse(result["citations"])
+
+    def test_explicit_compound_targets_preserve_each_grounded_subanswer(self) -> None:
+        service = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None)
+        provisions = service.ask("uud", "berikan Pasal 28A dan Pasal 28J")
+        self.assertEqual((provisions["status"], provisions["route"]), ("answer_ready", "compound"))
+        self.assertEqual({row["citation"] for row in provisions["citations"]}, {"Pasal 28A", "Pasal 28J"})
+
+        mixed = service.ask(
+            "uud",
+            "berikan Pasal 28A, Pasal 28J, ringkasan UUD amandemen pertama, dan ringkasan amandemen keempat",
+        )
+        self.assertEqual((mixed["status"], mixed["route"]), ("answer_ready", "compound"))
+        self.assertEqual({row["citation"] for row in mixed["citations"]}, {"Pasal 28A", "Pasal 28J"})
+        self.assertEqual(
+            {row["source_role"] for row in mixed["historical_citations"]},
+            {"amendment_1_historical", "amendment_4_historical"},
+        )
+        self.assertTrue(all(not row["citation_final"] for row in mixed["historical_citations"]))
+        self.assertEqual({row["source_role"] for row in mixed["evidence"]}, {
+            "current_consolidated",
+            "amendment_1_historical",
+            "amendment_4_historical",
+        })
+
+    def test_historical_summary_exposes_non_final_source_citation(self) -> None:
+        service = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None)
+        summary = service.ask("uud", "ringkas amandemen pertama")
+        self.assertEqual((summary["status"], summary["route"]), ("answer_ready", "instrument_resolved_answerable"))
+        self.assertFalse(summary["citations"])
+        self.assertEqual(len(summary["historical_citations"]), 1)
+        citation = summary["historical_citations"][0]
+        self.assertEqual(citation["authority_kind"], "instrument_provenance")
+        self.assertFalse(citation["citation_final"])
+        self.assertTrue(citation["viewer_ref"]["can_resolve"])
+        public = handle_request("uud", "ask", {"query": "ringkas amandemen pertama"}, service=service)
+        self.assertEqual(public["status"], "answer_ready")
+        self.assertIn("[1]", public["answer"])
+        self.assertEqual(public["supports"][0]["authority_kind"], "instrument_provenance")
+        self.assertFalse(public["supports"][0]["citation_final"])
+        self.assertTrue(public["supports"][0]["viewer_target"]["can_resolve"])
+
+    def test_source_less_article_change_query_uses_exact_relation_evidence(self) -> None:
+        result = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None).ask(
+            "uud", "Pasal 17 ayat (3) diubah oleh apa", limit=30
+        )
+        self.assertEqual((result["status"], result["route"]), ("answer_ready", "document_relation"))
+        self.assertIn("Perubahan Pertama", result["answer"])
+        self.assertEqual(result["article_amendment_relations"][0]["target_citation"], "Pasal 17 ayat (3)")
+        self.assertTrue(result["relation_support"][0]["viewer_ref"]["can_resolve"])
+
+    def test_source_document_count_is_corpus_derived(self) -> None:
+        service = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None)
+        for query in ("ada berapa kali perubahan UUD?", "berapa kali UUD diubah?", "berapa kali UUD diamandemen?"):
+            result = service.ask("uud", query)
+            self.assertEqual((result["status"], result["route"]), ("answer_ready", "structure_count"), query)
+            self.assertEqual(result["evidence"][0]["structural_count"], 4, query)
+            self.assertEqual(len(result["structural_support"]), 4, query)
+            self.assertIn("Korpus terverifikasi", result["answer"], query)
+
+        public = handle_request("uud", "ask", {"query": "berapa pasal di dokumen ini?"}, service=service)
+        support = public["supports"][0]
+        self.assertEqual(support["viewer_target"]["action"], "open_document")
+        self.assertTrue(support["viewer_target"]["can_resolve"])
+        viewer = handle_request(
+            "uud", "viewer", {"target": support["viewer_target"]["public_target_id"]}, service=service
+        )
+        self.assertEqual(viewer["status"], "viewer_payload_ready")
+        self.assertEqual(viewer["bbox_rectangles"], ())
+        self.assertFalse(viewer["viewer_highlightable"])
+
+    def test_original_historical_summary_uses_original_document_structure(self) -> None:
+        result = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None).ask(
+            "uud", "ringkas UUD sebelum amandemen", limit=30
+        )
+        self.assertEqual((result["status"], result["route"]), ("answer_ready", "structural_navigation"))
+        self.assertEqual({row["source_role"] for row in result["structural_support"]}, {"original_historical"})
+        self.assertIn("BAB I — BENTUK DAN KEDAULATAN", result["answer"])
+        self.assertNotIn("BAB XA", result["answer"])
 
     def test_filter_conflicts_and_api_temporal_context(self) -> None:
         temporal = self.service.search("uud", "UUD 1945", limit=1, filters={"temporal_context": "amendment_1_historical"})
@@ -2065,7 +2448,7 @@ class RuntimeContractTest(unittest.TestCase):
     def test_instrument_intent_matrix_blocks_neighbor_fallback(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
         intent = intent_config_for(config.query_strategy, config)
-        matrix = config.setting("intent_config")["instrument_intent_matrix"]
+        matrix = validation_intent_config_for(config.query_strategy, config)["instrument_intent_matrix"]
         queries = [
             template.format(role=role, amendment=amendment)
             for role in matrix["role_family_terms"]

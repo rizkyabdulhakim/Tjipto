@@ -113,6 +113,47 @@ class RuntimeIntentArbitrationContractTest(unittest.TestCase):
             with self.subTest(query=query):
                 self.assertNotEqual(self.service.ask("uud", query)["route"], "structural_navigation")
 
+    def test_corpus_routes_compact_and_article_scoped_queries(self) -> None:
+        self.assertIn("BAB XA", self.service.ask("uud", "isi babxa uud")["answer"])
+        previous = self.service.ask("uud", "bab sebelum BAB XA")
+        self.assertEqual(previous["route"], "structural_navigation")
+        # The source text orders BAB X immediately before BAB XA; BAB IXA is
+        # a separate inserted chapter that precedes BAB X.
+        self.assertIn("BAB X", previous["answer"])
+        ayat_count = self.service.ask("uud", "berapa ayat Pasal 29")
+        self.assertEqual(ayat_count["route"], "structure_count")
+        self.assertIn("Pasal 29 dengan 2 ayat", ayat_count["answer"])
+        natural_number = self.service.ask("uud", "pasal dua puluh delapan")
+        self.assertEqual(natural_number["route"], "legal_reference")
+        self.assertIn("Pasal 28", natural_number["answer"])
+
+    def test_document_and_relation_phrasing_uses_existing_corpus_routes(self) -> None:
+        collection = self.service.ask("uud", "berikan semua dokumen UUD")
+        self.assertEqual(collection["route"], "source_document_collection")
+        identity = self.service.ask("uud", "apa itu naskah konsolidasi")
+        self.assertEqual(identity["route"], "metadata_fact")
+        self.assertIn("DALAM SATU NASKAH", identity["answer"])
+        current = self.service.ask("uud", "naskah setelah semua amandemen")
+        self.assertEqual(current["route"], "source_document")
+        additions = self.service.ask("uud", "ketentuan apa yang ditambahkan Perubahan Kedua")
+        self.assertEqual(additions["route"], "document_relation")
+        self.assertIn("ditambahkan", additions["answer"])
+        deletion = self.service.ask("uud", "ketentuan apa yang dihapus Perubahan Keempat")
+        self.assertEqual(deletion["route"], "document_relation")
+        self.assertIn("Pasal 16", deletion["answer"])
+        renumbering = self.service.ask("uud", "Pasal 25E UUD")
+        self.assertEqual(renumbering["route"], "document_relation")
+        self.assertIn("Pasal 25A", renumbering["answer"])
+        occurrence = self.service.ask("uud", "kebebasan berbicara ada di naskah apa saja")
+        self.assertEqual(occurrence["route"], "lexical_fallback")
+        self.assertEqual(
+            {row["source_role"] for row in occurrence["evidence"]},
+            {"original_historical", "amendment_2_historical", "current_consolidated"},
+        )
+        conflict = self.service.ask("uud", "Pasal III PDF sama dengan Pasal II naskah satu")
+        self.assertEqual(conflict["route"], "source_anomaly_explanation")
+        self.assertIn("typo penomoran tercetak", conflict["answer"])
+
     def test_interpreted_query_is_immutable(self) -> None:
         semantics = interpret_query(self.store, "uud", "Pasal berikutnya setelah Pasal 7")
         with self.assertRaises(FrozenInstanceError):
