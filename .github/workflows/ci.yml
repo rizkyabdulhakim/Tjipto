@@ -130,6 +130,11 @@ jobs:
           TJIPTO_RESEARCH_PLANNING_MODEL: ${{ secrets.TJIPTO_RESEARCH_PLANNING_MODEL }}
           TJIPTO_RESEARCH_PLANNING_BASE_URL: ${{ secrets.TJIPTO_RESEARCH_PLANNING_BASE_URL }}
           TJIPTO_RESEARCH_PLANNING_TIMEOUT_SECONDS: "30"
+          TJIPTO_FALLBACK_LLM_PROVIDER: ${{ secrets.TJIPTO_FALLBACK_LLM_PROVIDER }}
+          TJIPTO_FALLBACK_LLM_API_KEY: ${{ secrets.TJIPTO_FALLBACK_LLM_API_KEY }}
+          TJIPTO_FALLBACK_LLM_MODEL: ${{ secrets.TJIPTO_FALLBACK_LLM_MODEL }}
+          TJIPTO_FALLBACK_LLM_BASE_URL: ${{ secrets.TJIPTO_FALLBACK_LLM_BASE_URL }}
+          TJIPTO_FALLBACK_LLM_TIMEOUT_SECONDS: ${{ secrets.TJIPTO_FALLBACK_LLM_TIMEOUT_SECONDS }}
         run: python scripts/measure_command.py --gate live_planner_integration --report reports/ci-gates.jsonl -- python scripts/verify_live_planner.py --report reports/live-planner-integration.json
       - name: Grounded-answer evaluation
         run: python scripts/measure_command.py --gate answer_evaluation --report reports/ci-gates.jsonl --result-report reports/answer-evaluation-command.json -- python scripts/evaluate_uud_answers.py --runtime-commit "$TJIPTO_EXACT_HEAD_SHA" --report reports/answer-evaluation.json

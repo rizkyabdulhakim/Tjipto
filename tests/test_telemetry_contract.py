@@ -97,6 +97,14 @@ class TelemetryContractTest(unittest.TestCase):
         self.assertEqual(workflow.count("ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}"), 4)
         self.assertNotIn('"$GITHUB_SHA"', workflow)
         self.assertIn('TJIPTO_RESEARCH_PLANNING_TIMEOUT_SECONDS: "30"', workflow)
+        for variable in (
+            "TJIPTO_FALLBACK_LLM_PROVIDER",
+            "TJIPTO_FALLBACK_LLM_API_KEY",
+            "TJIPTO_FALLBACK_LLM_MODEL",
+            "TJIPTO_FALLBACK_LLM_BASE_URL",
+            "TJIPTO_FALLBACK_LLM_TIMEOUT_SECONDS",
+        ):
+            self.assertIn(f"{variable}: ${{{{ secrets.{variable} }}}}", workflow)
         self.assertEqual(workflow.count('PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"'), 1)
         for gate in ("unittest", "pytest_run_1", "pytest_run_2"):
             self.assertEqual(workflow.count(f"--gate {gate}"), 1)
