@@ -858,6 +858,17 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertEqual(plan.provider_status, "degraded")
         self.assertIn("scope_invariant_violation", plan.rejection_reasons)
 
+    def test_planner_deduplicates_provider_echo_without_degrading_plan(self) -> None:
+        class Provider:
+            def propose(self, _request):
+                return {"variants": [{"query": "original"}]}
+
+        plan = plan_research("original", ResearchIntent(comparison=True), provider=Provider())
+
+        self.assertEqual(plan.provider_status, "accepted")
+        self.assertEqual(plan.rejection_reasons, ())
+        self.assertEqual(tuple(variant.query for variant in plan.variants), ("original",))
+
     def test_planner_rejects_requirement_scope_drift(self) -> None:
         class Provider:
             def propose(self, request):

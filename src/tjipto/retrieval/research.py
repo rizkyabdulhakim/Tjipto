@@ -464,8 +464,12 @@ def _validated_variants(
         if value.modality is not None and not isinstance(value.modality, str):
             rejected.append("variant_scope_type_invalid")
             continue
-        if not value.query.strip() or value.query.strip() in seen:
+        if not value.query.strip():
             rejected.append("duplicate_or_empty_variant")
+            continue
+        if value.query.strip() in seen:
+            # Providers may echo the original query; deduplication is a
+            # harmless normalization and does not change the bounded plan.
             continue
         if not _preserves_scope(value, original):
             rejected.append("scope_invariant_violation")
