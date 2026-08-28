@@ -722,7 +722,12 @@ def execute_research_rounds(
         requirement.source_role and requirement.requirement_id.startswith("source_occurrence_")
         for requirement in requirements
     )
-    if source_scoped or len(requirements) > 1:
+    # Semantic requirements may be constraints for provider-generated query
+    # variants rather than independent retrieval work.  Keep those variants
+    # when the planner supplied them; compile server-owned work items only
+    # for source-scoped requirements or when no provider variant exists.
+    use_requirement_variants = source_scoped or (len(requirements) > 1 and len(plan.variants) == 1)
+    if use_requirement_variants:
         current_variants = _bounded_variant_lanes(
             _requirement_variants(query, requirements, initial_lane),
             initial_lane,
