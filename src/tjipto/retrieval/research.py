@@ -718,21 +718,9 @@ def execute_research_rounds(
         requirement.source_role and requirement.requirement_id.startswith("source_occurrence_")
         for requirement in requirements
     )
-    if source_scoped:
+    if source_scoped or len(requirements) > 1:
         current_variants = _bounded_variant_lanes(
-            tuple(
-                QueryVariant(
-                    query=requirement.retrieval_query or query,
-                    origin=f"requirement:{requirement.requirement_id}",
-                    required_entities=tuple(dict.fromkeys((*requirement.required_entities, *requirement.relation_endpoints))),
-                    explicit_references=requirement.explicit_references,
-                    source_role=requirement.source_role,
-                    temporal_scope=requirement.temporal_context,
-                    requirement_id=requirement.requirement_id,
-                    retrieval_lane=initial_lane,
-                )
-                for requirement in requirements
-            ),
+            _requirement_variants(query, requirements, initial_lane),
             initial_lane,
         )
     else:
@@ -759,19 +747,11 @@ def execute_research_rounds(
                     row["_requirement_ids"] = (*tuple(row.get("_requirement_ids") or ()), variant.requirement_id)
                 current = rows.get(evidence_id)
                 if current is None:
+                    if not row.get("route_sources") and route.get("route"):
+                        row["route_sources"] = (str(route["route"]),)
                     rows[evidence_id] = row
-                elif variant.requirement_id:
-                    # Requirement-scoped rediscovery may carry fresher
-                    # lexical coverage and route provenance for the same
-                    # verified support.  Keep the canonical row state while
-                    # merging the requirement marker and lane trace.
-                    markers = tuple(current.get("_requirement_ids") or ())
-                    current_routes = tuple(current.get("route_sources") or ())
-                    discovered_routes = tuple(row.get("route_sources") or ())
-                    current.update(row)
-                    current["_requirement_ids"] = tuple(dict.fromkeys((*markers, variant.requirement_id)))
-                    if discovered_routes:
-                        current["route_sources"] = tuple(dict.fromkeys((*current_routes, *discovered_routes)))
+                else:
+                    _merge_candidate(current, row, route=route, requirement_id=variant.requirement_id)
         matches = tuple(rows.values())
         if requirements:
             evidence_set = collect_evidence_set(store, matches, requirements)
@@ -788,19 +768,7 @@ def execute_research_rounds(
                 stop_reason = "max_rounds"
                 break
             current_variants = _bounded_variant_lanes(
-                tuple(
-                    QueryVariant(
-                        query=requirement.retrieval_query or query,
-                        origin=f"requirement:{requirement.requirement_id}",
-                        required_entities=tuple(dict.fromkeys((*requirement.required_entities, *requirement.relation_endpoints))),
-                        explicit_references=requirement.explicit_references,
-                        source_role=requirement.source_role,
-                        temporal_scope=requirement.temporal_context,
-                        requirement_id=requirement.requirement_id,
-                        retrieval_lane=lane,
-                    )
-                    for requirement in unresolved
-                ),
+                _requirement_variants(query, unresolved, lane),
                 lane,
                 allow_expensive=not expensive_lane_used,
             )
@@ -833,6 +801,57 @@ def execute_research_rounds(
         "stop_reason": stop_reason,
         "rounds": len({route.get("research_round") for route in routes}),
     }
+
+
+def _requirement_variants(
+    query: str,
+    requirements: Sequence[EvidenceRequirement],
+    lane: str,
+) -> tuple[QueryVariant, ...]:
+    """Compile each server-owned requirement into one bounded retrieval work item."""
+    return tuple(
+        QueryVariant(
+            query=requirement.retrieval_query or query,
+            origin=f"requirement:{requirement.requirement_id}",
+            required_entities=tuple(dict.fromkeys((*requirement.required_entities, *requirement.relation_endpoints))),
+            explicit_references=requirement.explicit_references,
+            source_role=requirement.source_role,
+            temporal_scope=requirement.temporal_context,
+            requirement_id=requirement.requirement_id,
+            retrieval_lane=lane,
+        )
+        for requirement in requirements
+    )
+
+
+def _merge_candidate(
+    current: dict,
+    discovered: dict,
+    *,
+    route: Mapping[str, object],
+    requirement_id: str | None,
+) -> None:
+    """Merge a stable evidence identity without dropping lane or requirement traces."""
+    current_routes = tuple(current.get("route_sources") or ())
+    discovered_routes = tuple(discovered.get("route_sources") or ())
+    if not discovered_routes and route.get("route"):
+        discovered_routes = (str(route["route"]),)
+    markers = tuple(current.get("_requirement_ids") or ())
+    discovered_markers = tuple(discovered.get("_requirement_ids") or ())
+    previous_values = {field: current.get(field) for field in ("route_scores", "rank_reasons", "expansion_trace")}
+    current.update(discovered)
+    current["route_sources"] = tuple(dict.fromkeys((*current_routes, *discovered_routes)))
+    merged_markers = (*markers, *discovered_markers)
+    if requirement_id:
+        merged_markers += (requirement_id,)
+    current["_requirement_ids"] = tuple(dict.fromkeys(merged_markers))
+    for field in ("route_scores", "rank_reasons", "expansion_trace"):
+        previous = previous_values[field]
+        incoming = discovered.get(field)
+        if isinstance(previous, dict) and isinstance(incoming, Mapping):
+            current[field] = dict(previous) | dict(incoming)
+        elif isinstance(previous, (tuple, list)) or isinstance(incoming, (tuple, list)):
+            current[field] = tuple(dict.fromkeys((*tuple(previous or ()), *tuple(incoming or ()))))
 
 
 def _bounded_variant_lanes(

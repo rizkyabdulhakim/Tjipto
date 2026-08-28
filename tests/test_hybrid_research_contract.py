@@ -559,6 +559,55 @@ class HybridResearchContractTest(unittest.TestCase):
                 result = execute_research_rounds("original", retrieve, requirements=(requirement,), max_rounds=2)
         self.assertEqual(result["matches"][0]["_requirement_ids"], ("target",))
 
+    def test_plan_executes_multiple_requirement_work_items_and_keeps_lane_trace(self) -> None:
+        from tjipto.retrieval.research import QueryVariant, ResearchPlan, execute_research_rounds
+
+        requirements = (
+            EvidenceRequirement("structured_support", retrieval_query="Pasal 28", evidence_ids=("same",)),
+            EvidenceRequirement("metadata_support", retrieval_query="penandatangan", evidence_ids=("same",)),
+        )
+        calls = []
+
+        def retrieve(query, variant):
+            calls.append((query, variant.requirement_id, variant.retrieval_lane))
+            route = "structured" if variant.requirement_id == "structured_support" else "metadata"
+            return {
+                "route": route,
+                "matches": ({"evidence_id": "same", "route_sources": (route,), "route_scores": {route: 1.0}},),
+            }
+
+        evidence = EvidenceSet(
+            ({"evidence_id": "same"},),
+            (("structured_support", ("same",)), ("metadata_support", ("same",))),
+            (),
+        )
+        with patch("tjipto.retrieval.research.collect_evidence_set", return_value=evidence), patch(
+            "tjipto.retrieval.research.assess_sufficiency",
+            return_value=SufficiencyAssessment("complete", ("structured_support", "metadata_support"), (), (), False),
+        ):
+            result = execute_research_rounds(
+                "comparison query",
+                retrieve,
+                store=SimpleNamespace(),
+                requirements=requirements,
+                max_rounds=1,
+                plan=ResearchPlan(
+                    "comparison query",
+                    ResearchIntent(comparison=True, max_rounds=1),
+                    (QueryVariant("comparison query"),),
+                    retrieval_lanes=("hybrid",),
+                    requirements=requirements,
+                ),
+            )
+
+        self.assertEqual(
+            calls,
+            [("Pasal 28", "structured_support", "hybrid"), ("penandatangan", "metadata_support", "sparse")],
+        )
+        self.assertEqual(result["matches"][0]["route_sources"], ("structured", "metadata"))
+        self.assertEqual(result["matches"][0]["_requirement_ids"], ("structured_support", "metadata_support"))
+        self.assertEqual(result["matches"][0]["route_scores"], {"structured": 1.0, "metadata": 1.0})
+
     def test_requirement_rediscovery_refreshes_neutral_coverage(self) -> None:
         from tjipto.retrieval.research import execute_research_rounds
 
