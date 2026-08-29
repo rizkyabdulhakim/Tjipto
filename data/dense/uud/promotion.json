@@ -1,16 +1,16 @@
 {
   "ablations": {},
-  "artifact_set_digest": "5f274fb8d36202eae8689f69ba33c0740689632c607087d8e690f8da10fd15e0",
+  "artifact_set_digest": "4a5ca358b64c3b5da6b1df483bf274e5d98b034073b2a512cc120aae96c23f2b",
   "corpus_id": "uud",
-  "index_identity": "00bc5b878a68cb557f71b289111fa3fdf0236ef0baa1365c3c2860e224413e42",
+  "index_identity": "39e8311d08b5071c54b7ad0674da241f2c1723117e11256a78cc1c97e395efd7",
   "index_identity_record": {
-    "artifact_set_digest": "5f274fb8d36202eae8689f69ba33c0740689632c607087d8e690f8da10fd15e0",
+    "artifact_set_digest": "4a5ca358b64c3b5da6b1df483bf274e5d98b034073b2a512cc120aae96c23f2b",
     "batch_size": 8,
     "corpus_id": "uud",
     "embedding_text_digest": "4c055222ba7ad502633b17f9cb4f13570e0d79dc2d5610b40996f75031b51c91",
     "embedding_text_policy": "source_document+breadcrumb+label+legal_text",
-    "identity": "00bc5b878a68cb557f71b289111fa3fdf0236ef0baa1365c3c2860e224413e42",
-    "manifest_digest": "c774237055c7335f817ae2f496b054374c33c7a51a5074b2cabafbf9f9f6e286",
+    "identity": "39e8311d08b5071c54b7ad0674da241f2c1723117e11256a78cc1c97e395efd7",
+    "manifest_digest": "f25c7062ff82db8ee67eb5dbccb86cb2f157ffb3be4562c73d4445cf8b7d337f",
     "model": {
       "builder_identity": "tjipto.dense.index",
       "dimension": 1024,
@@ -27,7 +27,7 @@
     },
     "record_count": 647,
     "retrieval_units_digest": "426abc2dba5f5ccddd3588c6ca4d7ea8a0212b23bd89b492361869eb473ab12f",
-    "source_identity": "032bb0b681ba92b82c7c3c6dfd43c6e412d68d33ec8e693650fc4ed84768c4f8",
+    "source_identity": "b829117e917ce54b94d04e0ec87ff6859f6200a1cef4215c3b9fbb8eb22e93b2",
     "truncated_retrieval_unit_ids": [
       "uud_retrieval_unit::uud_current_consolidated_final_citation_evidence_00232",
       "uud_retrieval_unit::uud_current_consolidated_final_citation_evidence_00247",
@@ -55,8 +55,8 @@
     "worker_peak_rss_bytes": 5064413184,
     "worker_peak_rss_scope": "embedding_worker_peak_working_set"
   },
-  "index_sha256": "f70479734c83b7b0fac9fcd2cb76040ad251423f72027d87ad4e8e70ac0f1ee0",
-  "manifest_digest": "c774237055c7335f817ae2f496b054374c33c7a51a5074b2cabafbf9f9f6e286",
+  "index_sha256": "20c7ffeba2a3f7d503d9df3c3ba5314d93aea9bb2b13763fa82a1556f3213c88",
+  "manifest_digest": "f25c7062ff82db8ee67eb5dbccb86cb2f157ffb3be4562c73d4445cf8b7d337f",
   "model": {
     "builder_identity": "tjipto.dense.index",
     "dimension": 1024,
