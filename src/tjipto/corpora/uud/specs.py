@@ -367,7 +367,7 @@ SOURCE_CONFLICT_SPECS = (
         "anchor_terms": ["daitur"],
         "comparison_anchor_terms": ["diatur"],
         "comparison_source_document_id": "uud::current_consolidated",
-        "comparison_pages": [8],
+        "comparison_pages": [3],
         "classification": "printed_typographical_error",
         "discrepancy_type": "PRINTED_TYPO",
         "substantive_conflict": False,

@@ -1806,7 +1806,7 @@ def _validate_versioned_relation_lineage(
 ) -> tuple[str, ...]:
     """Validate cross-version evidence for an article operation relation."""
     relation_type = row.get("relation_type")
-    if relation_type not in {"ADDS", "MODIFIES", "DELETES"}:
+    if relation_type not in {"ADDS", "MODIFIES", "DELETES", "RENAMES", "RENUMBERED_TO"}:
         return ()
     fields = {
         "predecessor_legal_unit_id",
@@ -1842,11 +1842,21 @@ def _validate_versioned_relation_lineage(
             errors.append("article_relation_modifies_successor_target_mismatch")
         elif _normalized_normative_text(predecessor.get("text")) == _normalized_normative_text(successor.get("text")):
             errors.append("article_relation_modifies_text_unchanged")
-    else:
+    elif relation_type == "DELETES":
         if predecessor is None or row.get("predecessor_legal_unit_id") != row.get("target_legal_unit_id"):
             errors.append("article_relation_deletes_missing_predecessor")
         if successor_id or row.get("successor_pdf_sha256") or row.get("successor_text_span_ids") or row.get("successor_bbox_refs"):
             errors.append("article_relation_deletes_has_successor")
+    else:
+        if predecessor is None or successor is None:
+            errors.append("article_relation_rename_missing_version_pair")
+        else:
+            if row.get("predecessor_legal_unit_id") != row.get("source_legal_unit_id"):
+                errors.append("article_relation_rename_predecessor_source_mismatch")
+            if row.get("successor_legal_unit_id") != row.get("target_legal_unit_id"):
+                errors.append("article_relation_rename_successor_target_mismatch")
+            if _normalized_normative_text(predecessor.get("text")) != _normalized_normative_text(successor.get("text")):
+                errors.append("article_relation_rename_text_changed")
     if row.get("comparison_basis") != "versioned_normative_text":
         errors.append("article_relation_lineage_invalid_comparison_basis")
 

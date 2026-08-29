@@ -260,6 +260,13 @@ class RuntimeTrustBoundaryTest(unittest.TestCase):
         )
         self.assertEqual(openai_compatible_latency_options("other-model", endpoint), {})
 
+    def test_loopback_openai_compatible_endpoint_is_allowed(self) -> None:
+        from tjipto.core.external_llm import is_allowed_llm_endpoint
+
+        self.assertTrue(is_allowed_llm_endpoint("http://127.0.0.1:20128/v1/chat/completions"))
+        self.assertTrue(is_allowed_llm_endpoint("https://provider.example/v1/chat/completions"))
+        self.assertFalse(is_allowed_llm_endpoint("http://provider.example/v1/chat/completions"))
+
     def test_bookmark_read_write_is_concurrency_safe_and_sorted(self) -> None:
         service = LegalRuntimeService(ROOT)
         evidence_id = service._store("uud").evidence[0]["evidence_id"]

@@ -325,16 +325,35 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str, foo
     }.get(authority_kind, "source_trace")
     role_label = row.get("printed_role") if fact_kind == "person_role" else None
     target_source = dict(row.get("viewer_target") or row.get("viewer_ref") or {})
-    linkable = target_source.get("can_resolve") is True and bool(
-        row.get("source_document_id") and row.get("page_numbers")
-    )
+    source_document_id = row.get("source_document_id") or target_source.get("source_document_id")
+    page_numbers = tuple(row.get("page_numbers") or target_source.get("page_numbers") or ())
+    bbox_refs = tuple(row.get("bbox_refs") or target_source.get("bbox_refs") or ())
+    if not bbox_refs:
+        # Metadata supports carry their verified geometry on layout lines;
+        # project those existing refs instead of creating a second evidence
+        # shape or treating a grounded metadata fact as unclickable.
+        bbox_refs = tuple(
+            ref
+            for line in row.get("layout_lines") or ()
+            if isinstance(line, dict)
+            for ref in line.get("source_bbox_refs") or ()
+            if isinstance(ref, str) and ref
+        )
     target_action = "open_document" if target_source.get("action") == "open_document" else "viewer"
+    # Runtime rows carry verified page/BBox evidence but do not yet carry a
+    # public target. Materialize the opaque target here; requiring a
+    # pre-existing target made summary/comparison supports unclickable.
+    linkable = bool(
+        source_document_id
+        and page_numbers
+        and (bbox_refs or target_action == "open_document")
+    )
     target = service.register_public_target(corpus_id, {
         "evidence_id": None if target_action == "open_document" else row.get("evidence_id") or row.get("source_conflict_id") or row.get("relation_id"),
         "proposition_id": row.get("proposition_id"),
         "relation_id": row.get("relation_id") or target_source.get("relation_id"),
-        "source_document_id": row.get("source_document_id"),
-        "bbox_refs": tuple(row.get("bbox_refs") or ()),
+        "source_document_id": source_document_id,
+        "bbox_refs": bbox_refs,
         "quoted_text": row.get("display_text") or row.get("quoted_text") or "",
         "support_projection": {
             key: row[key]
@@ -375,8 +394,8 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str, foo
             if legal_document is not None
             else row.get("source_status_label") or service.public_source_status_label(corpus_id, row.get("source_role"))
         ),
-        "page_numbers": tuple(row.get("page_numbers") or ()),
-        "viewer_target": _public_target(target, target_action, row.get("page_numbers") or (), linkable),
+        "page_numbers": page_numbers,
+        "viewer_target": _public_target(target, target_action, page_numbers, linkable),
         "citation": citation,
     }
     if legal_document is not None:

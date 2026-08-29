@@ -449,7 +449,7 @@ function SupportFooter({
     <div className="mt-4 space-y-2">
       {grouped.map((group, groupIndex) => (
         <details
-          key={group.id}
+          key={`${group.id}-${groupIndex}`}
           data-support-kind={`${group.kind}-support`}
           open={groupIndex === 0}
           className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3.5 py-2.5"
@@ -460,9 +460,9 @@ function SupportFooter({
             </span>
           </summary>
           <ul className="mt-1 space-y-1">
-            {group.members.map((row) => (
+            {group.members.map((row, rowIndex) => (
               <li
-                key={row.id}
+                key={`${group.id}-${row.id}-${rowIndex}`}
                 data-support-clickable={row.clickable ? "true" : "false"}
                 style={{ fontSize: 12, color: "var(--tj-text-muted)" }}
               >

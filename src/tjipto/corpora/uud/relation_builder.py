@@ -206,6 +206,33 @@ def versioned_relation_lineage(
     return None
 
 
+def direct_rename_lineage(
+    source_unit: dict | None,
+    target_unit: dict | None,
+    mapping: dict,
+    units_by_id: dict[str, dict],
+) -> dict[str, object] | None:
+    """Prove a rename/renumber edge from its two normative legal units.
+
+    The amendment clause supplies the operation and mapping; the old and new
+    unit payloads prove that the same norm survived under a new label. A
+    clause-only edge stays trace-only when either side cannot be resolved.
+    """
+    if source_unit is None or target_unit is None:
+        return None
+    old_reference = str(mapping.get("old_reference") or "")
+    new_reference = str(mapping.get("new_reference") or "")
+    if not old_reference or not new_reference:
+        return None
+    if legal_unit_reference(source_unit, units_by_id) != old_reference:
+        return None
+    if legal_unit_reference(target_unit, units_by_id) != new_reference:
+        return None
+    if _normalized_normative_text(source_unit.get("text")) != _normalized_normative_text(target_unit.get("text")):
+        return None
+    return _lineage_payload(source_unit, target_unit)
+
+
 def _lineage_payload(predecessor: dict | None, successor: dict | None) -> dict[str, object]:
     """Return the closed, source-unit-owned comparison fields."""
     return {
@@ -420,7 +447,10 @@ def build_article_amendment_relations(
             str(evidence_row.get("source_role") or ""),
             target_citation,
             target,
-        ) or _empty_lineage()
+        )
+        if lineage is None and relation_type in {"RENAMES", "RENUMBERED_TO"}:
+            lineage = direct_rename_lineage(source_unit, target, mapping, units)
+        lineage = lineage or _empty_lineage()
         target_phrase = target_citation
         lineage_unit_id = lineage.get("successor_legal_unit_id") or lineage.get("predecessor_legal_unit_id")
         lineage_unit = units.get(str(lineage_unit_id or ""))

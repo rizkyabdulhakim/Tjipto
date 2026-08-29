@@ -6,7 +6,6 @@ from dataclasses import dataclass, replace
 import json
 from typing import Mapping, Protocol, Sequence
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from tjipto.core.external_llm import (
@@ -15,6 +14,7 @@ from tjipto.core.external_llm import (
     OPENAI_COMPATIBLE_USER_AGENT,
     external_llm_config,
     fallback_external_llm_config,
+    is_allowed_llm_endpoint,
     openai_compatible_latency_options,
 )
 from tjipto.retrieval.candidates import graph_expand
@@ -146,7 +146,9 @@ class OpenAICompatibleResearchPlanningProvider:
                     'Otherwise set "status" to "ready" with empty missing_dimensions and null clarification_question. '
                     f"Return at most {provider_variant_limit} provider variants; the server already retains the original query. "
                     "Return no other fields in those objects. Never return requirements, evidence, citations, "
-                    "authority, source role, temporal status, or evidence validity; those remain server-owned.\n"
+                    "authority, source role, temporal status, or evidence validity; those remain server-owned. "
+                    "The server also owns operation, retrieval lane, task kind, evidence, citation, and sufficiency; "
+                    "legacy retrieval_lanes and task_kind fields, when present, are ignored.\n"
                     + json.dumps(dict(request), ensure_ascii=False, sort_keys=True)
                 ),
             }],
@@ -244,8 +246,7 @@ def research_planning_provider_from_environment() -> ResearchPlanningProvider | 
 def _research_planning_provider(config: ExternalLLMConfig | None) -> ResearchPlanningProvider | None:
     if config is None or config.provider != "openai_compatible" or not config.base_url:
         return None
-    parsed = urlparse(config.base_url + "/chat/completions")
-    if parsed.scheme != "https" or not parsed.netloc:
+    if not is_allowed_llm_endpoint(config.base_url + "/chat/completions"):
         return None
     return OpenAICompatibleResearchPlanningProvider(
         config.api_key,
@@ -319,10 +320,12 @@ def plan_research(
     except Exception:
         return ResearchPlan(query, intent, (original,), "unavailable", ("provider_failure",), requirements=base_requirements)
     variants, rejected = _validated_variants(proposal, original, intent)
-    lanes = _validated_lanes(proposal)
-    if lanes is None:
+    proposed_lanes = _validated_lanes(proposal)
+    if proposed_lanes is None:
         rejected = (*rejected, "retrieval_lane_invalid")
-        lanes = ("sparse",)
+    # Keep the legacy fields parseable for deployed providers, but never let
+    # an untrusted proposal choose the retrieval lane.
+    lanes = ("sparse",)
     _, requirement_rejections = _validated_requirements(
         proposal,
         required_entities=required_entities,
@@ -333,10 +336,10 @@ def plan_research(
     rejected = (*rejected, *requirement_rejections)
     if isinstance(proposal, Mapping) and proposal.get("requirements"):
         rejected = (*rejected, "provider_requirements_forbidden")
-    task_kind = _validated_task_kind(proposal)
-    if task_kind is None:
+    proposed_task_kind = _validated_task_kind(proposal)
+    if proposed_task_kind is None:
         rejected = (*rejected, "task_kind_invalid")
-        task_kind = "retrieval"
+    task_kind = _server_task_kind(intent)
     information_needs, need_rejections = _validated_information_needs(proposal, intent)
     rejected = (*rejected, *need_rejections)
     clarification_question, missing_dimensions, clarification_rejections = _validated_clarification(proposal)
@@ -507,6 +510,19 @@ def _validated_task_kind(proposal: object) -> str | None:
     value = proposal.get("task_kind")
     allowed = {"retrieval", "multiple_supports", "comparison", "decomposition", "relation_traversal"}
     return value if isinstance(value, str) and value in allowed else None
+
+
+def _server_task_kind(intent: ResearchIntent) -> str:
+    """Derive task kind from trusted deterministic semantics."""
+    if intent.relation_traversal:
+        return "relation_traversal"
+    if intent.decomposition:
+        return "decomposition"
+    if intent.comparison:
+        return "comparison"
+    if intent.multiple_supports:
+        return "multiple_supports"
+    return "retrieval"
 
 
 def _validated_information_needs(
@@ -706,14 +722,14 @@ def execute_research_rounds(
     )
     rows: dict[str, dict] = {}
     routes: list[dict] = []
-    requested_lanes = set(plan.retrieval_lanes)
+    # Retrieval selection is server-owned. Provider lane fields remain a
+    # compatibility parse surface only; an explicitly supplied deterministic
+    # plan may carry its already-authorized lane for retry execution.
     lane = (
-        "hybrid"
-        if "hybrid" in requested_lanes
-        or {"sparse", "dense"} <= requested_lanes
-        or (plan.intent.complex and plan.provider_status == "deterministic")
-        else "dense"
-        if "dense" in requested_lanes
+        plan.retrieval_lanes[0]
+        if plan.provider_status == "deterministic" and plan.retrieval_lanes
+        else "hybrid"
+        if plan.intent.complex
         else "sparse"
     )
     plan = replace(plan, retrieval_lanes=(lane,))

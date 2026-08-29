@@ -83,6 +83,16 @@ def openai_compatible_latency_options(model: str, endpoint: str) -> dict[str, st
     return {}
 
 
+def is_allowed_llm_endpoint(endpoint: str) -> bool:
+    """Require HTTPS, except for explicitly local loopback development endpoints."""
+    parsed = urlparse(endpoint.format(model="model"))
+    if not parsed.netloc:
+        return False
+    if parsed.scheme == "https":
+        return True
+    return parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+
+
 __all__ = [
     "ExternalLLMConfig",
     "FallbackProposalProvider",
@@ -90,5 +100,6 @@ __all__ = [
     "ProposalProvider",
     "external_llm_config",
     "fallback_external_llm_config",
+    "is_allowed_llm_endpoint",
     "openai_compatible_latency_options",
 ]

@@ -6,13 +6,12 @@ import re
 from dataclasses import asdict, dataclass
 from builtins import object as builtin_object
 from typing import Protocol
-from urllib.parse import urlparse
-
 from tjipto.core.external_llm import (
     ExternalLLMConfig,
     FallbackProposalProvider,
     external_llm_config,
     fallback_external_llm_config,
+    is_allowed_llm_endpoint,
 )
 from tjipto.corpora.intent_config import normalize_intent_text
 
@@ -194,14 +193,14 @@ def _wording_provider(config: ExternalLLMConfig | None) -> WordingProvider | Non
         from tjipto.runtime.gemini import GeminiAnswerProvider
 
         endpoint = config.base_url or "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        if not _https(endpoint):
+        if not is_allowed_llm_endpoint(endpoint):
             return None
         return GeminiAnswerProvider(config.api_key, model=config.model, endpoint=endpoint, timeout=config.timeout)
     if config.provider == "openai_compatible":
         from tjipto.runtime.openai_compatible import OpenAICompatibleWordingProvider
 
         endpoint = config.base_url + "/chat/completions" if config.base_url else ""
-        if not _https(endpoint):
+        if not is_allowed_llm_endpoint(endpoint):
             return None
         return OpenAICompatibleWordingProvider(config.api_key, model=config.model, endpoint=endpoint, timeout=config.timeout)
     return None
@@ -443,7 +442,3 @@ def _reverses_subject_object(claims, text: str) -> bool:
             return True
     return False
 
-
-def _https(value: str) -> bool:
-    parsed = urlparse(value.format(model="model"))
-    return parsed.scheme == "https" and bool(parsed.netloc)

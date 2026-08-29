@@ -109,7 +109,6 @@ export default function App() {
         : response.kind === "documents"
           ? `${response.documents?.length ?? 0} dokumen sumber terverifikasi tersedia.`
         : answerTextOrFallback(response);
-      setActiveCitation(documentSource);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === asstId
