@@ -16,6 +16,7 @@ from tjipto.retrieval.metadata import metadata_lookup
 from tjipto.retrieval.relations import amendment_relation_lookup, amendment_relation_target, has_relation_target
 from tjipto.retrieval.research import ResearchIntent
 from tjipto.retrieval.sufficiency import EvidenceRequirement
+from tjipto.retrieval.structured import structured_occurrence_references
 from tjipto.runtime.query_semantics import QuerySemantics
 from tjipto.runtime.research_support import (
     research_entities,
@@ -47,6 +48,11 @@ _AUTHORITATIVE_RETRIEVAL_ROUTES = frozenset(
 def semantic_orchestration_required(store: EvidenceStore, query: str, semantics: QuerySemantics) -> bool:
     """Keep authoritative resolvers ahead of the bounded semantic planner."""
     if semantics.requested_function != "retrieval" and semantics.operation != "analyze":
+        return False
+    # Document summaries are assembled from the verified unit hierarchy. A
+    # planner round can only return an incidental structural hit and may
+    # reclassify the request as navigation, so keep summaries on their owner.
+    if semantics.operation == "summarize":
         return False
     if semantics.operation == "analyze":
         return not semantics.legal_references
@@ -217,8 +223,38 @@ def _source_occurrence_requirements(
     query: str,
 ) -> tuple[EvidenceRequirement, ...]:
     groups = research_semantic_term_groups(store, query)
-    legal_units_by_role = _source_occurrence_legal_units(store, query)
-    constrained = bool(legal_units_by_role)
+    structural_references = structured_occurrence_references(store, query)
+    structured_authority_kinds = ("normative_legal_text", "structural_context")
+    if structural_references:
+        legal_units_by_role = {
+            role: tuple(dict.fromkeys(
+                str(row.get("legal_unit_id"))
+                for row in store.evidence
+                if row.get("source_role") == role
+                and row.get("status") == "final"
+                and row.get("authority_kind") in structured_authority_kinds
+                and row.get("legal_unit_id")
+                and any(
+                    _normalise_reference(value) == _normalise_reference(row.get("citation"))
+                    or _normalise_reference(value) == _normalise_reference(" ".join(row.get("hierarchy") or ()))
+                    for value in structural_references
+                )
+            ))
+            for role in semantics.source_scopes
+        }
+        legal_units_by_role = {role: ids for role, ids in legal_units_by_role.items() if ids}
+        roles = tuple(legal_units_by_role)
+        constrained = bool(legal_units_by_role)
+        allow_partial = False
+    else:
+        legal_units_by_role = _source_occurrence_legal_units(store, query, semantics.legal_references)
+        constrained = bool(legal_units_by_role)
+        roles = (
+            tuple(legal_units_by_role)
+            if semantics.legal_references and constrained
+            else tuple(semantics.source_scopes)
+        )
+        allow_partial = not bool(semantics.legal_references)
     catalog = store.config.setting("document_catalog", {}) or {}
     titles = catalog.get("titles", {}) if isinstance(catalog, dict) else {}
     return tuple(
@@ -230,16 +266,24 @@ def _source_occurrence_requirements(
             temporal_context=role,
             legal_unit_ids=legal_units_by_role.get(role, ("__source_occurrence_unmatched__",)) if constrained else (),
             semantic_term_groups=groups,
-            authority_kinds=("normative_legal_text",),
+            authority_kinds=structured_authority_kinds if structural_references else ("normative_legal_text",),
             max_supports=8,
-            allow_partial=True,
+            allow_partial=allow_partial,
         )
-        for role in semantics.source_scopes
+        for role in roles
     )
 
 
-def _source_occurrence_legal_units(store: EvidenceStore, query: str) -> dict[str, tuple[str, ...]]:
+def _source_occurrence_legal_units(
+    store: EvidenceStore,
+    query: str,
+    references: tuple[str, ...] = (),
+) -> dict[str, tuple[str, ...]]:
     """Constrain issue-occurrence retrieval to corpus-declared reference units."""
+    if references:
+        exact = _reference_units_by_role(store, references)
+        if exact:
+            return exact
     research = _research_policy(store)
     policy = research.get("operation_requirements", {})
     analysis = policy.get("analyze", {}) if isinstance(policy, dict) else {}
@@ -345,6 +389,38 @@ def _source_occurrence_legal_units(store: EvidenceStore, query: str) -> dict[str
                 )
             result = {role: ids for role, ids in result.items() if ids}
     return result
+
+
+def _reference_units_by_role(store: EvidenceStore, references: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
+    requested = {_normalise_reference(value) for value in references if value}
+    if not requested:
+        return {}
+    result: dict[str, tuple[str, ...]] = {}
+    for role in getattr(store.config, "source_roles", ()):
+        ids = tuple(
+            dict.fromkeys(str(row.get("legal_unit_id")) for row in store.evidence if (
+                row.get("source_role") == role
+                and row.get("authority_kind") == "normative_legal_text"
+                and row.get("citation_final") is True
+                and _normalised_reference_labels(row).intersection(requested)
+            )
+        )
+        )
+        if ids:
+            result[str(role)] = ids
+    return result
+
+
+def _normalised_reference_labels(row: dict) -> set[str]:
+    hierarchy = tuple(str(value).strip() for value in row.get("hierarchy") or () if str(value).strip())
+    labels = {_normalise_reference(row.get("citation")), _normalise_reference(" ".join(hierarchy))}
+    if len(hierarchy) >= 2 and re.fullmatch(r"\(\d+\)", hierarchy[-1]):
+        labels.add(_normalise_reference(f"{hierarchy[-2]} ayat {hierarchy[-1]}"))
+    return {label for label in labels if label}
+
+
+def _normalise_reference(value: object) -> str:
+    return re.sub(r"\s+", " ", str(value or "").casefold().strip())
 
 
 def _metadata_comparison_requirements(instrument_roles: tuple[str, ...]) -> tuple[EvidenceRequirement, ...]:
@@ -562,12 +638,17 @@ def _configured_requirements(
     if len(instrument_roles) > 1:
         return _instrument_comparison_requirements(store, semantics, query, research, instrument_roles)
     if len(semantics.legal_references) > 1:
+        reference_role = semantics.source_role or (
+            semantics.source_scopes[0] if len(semantics.source_scopes) == 1 else None
+        )
         return tuple(
             EvidenceRequirement(
                 f"reference_{index}",
                 description=reference,
                 retrieval_query=reference,
                 explicit_references=(reference,),
+                source_role=reference_role,
+                temporal_context=reference_role,
             )
             for index, reference in enumerate(semantics.legal_references, 1)
         )

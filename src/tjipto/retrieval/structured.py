@@ -84,6 +84,204 @@ def structured_lookup(
     return tuple(fallback_rows[:limit])
 
 
+def document_summary_rows(
+    store: EvidenceStore,
+    source_roles: tuple[str, ...],
+    *,
+    per_role: int | None = None,
+) -> tuple[dict, ...]:
+    """Return verified document-level coverage for a summary request.
+
+    The selection is derived from the corpus unit hierarchy.  It keeps
+    instrument context for amendments and top-level structure for normative
+    documents, rather than treating one BM25 hit as a document summary.
+    """
+    units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
+    instrument_types, normative_types = _unit_type_sets(store)
+    top_level_normative_ids = {
+        unit_id
+        for unit_id, unit in units.items()
+        if unit.get("unit_type") in normative_types and not unit.get("parent_legal_unit_ids")
+    }
+    rows: list[dict] = []
+    for role in dict.fromkeys(str(value) for value in source_roles if value):
+        amendment = role.startswith("amendment_")
+        amendment_targets = _amendment_target_ids(store, role) if amendment else set()
+        candidates = []
+        for row in store.evidence:
+            if row.get("source_role") != role or row.get("status") != "final":
+                continue
+            if not store.bboxes_for(row.get("evidence_id")):
+                continue
+            unit_id = str(row.get("legal_unit_id") or "")
+            unit_type = units.get(unit_id, {}).get("unit_type")
+            if unit_id in top_level_normative_ids or (amendment and (unit_type in instrument_types or unit_id in amendment_targets)):
+                candidates.append(row)
+        if not candidates:
+            candidates = [
+                row
+                for row in store.evidence
+                if row.get("source_role") == role
+                and row.get("status") == "final"
+                and store.bboxes_for(row.get("evidence_id"))
+            ]
+        candidates.sort(key=lambda row: _summary_row_order(row, units))
+        rows.extend(candidates if per_role is None else candidates[: max(1, per_role)])
+    return tuple(rows)
+
+
+def version_comparison_rows(
+    store: EvidenceStore,
+    source_roles: tuple[str, ...],
+    *,
+    per_role: int | None = None,
+    references: tuple[str, ...] = (),
+) -> tuple[dict, ...]:
+    """Return source-backed normative propositions for version comparison."""
+    units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
+    requested = {str(value).casefold().strip() for value in references if value}
+    _, normative_types = _unit_type_sets(store)
+    rows: list[dict] = []
+    for role in dict.fromkeys(str(value) for value in source_roles if value):
+        candidates = [
+            row
+            for row in store.evidence
+            if row.get("source_role") == role
+            and (not requested or _row_matches_reference(row, requested))
+            and row.get("status") == "final"
+            and units.get(str(row.get("legal_unit_id")), {}).get("unit_type") in normative_types
+            and row.get("authority_kind") == "normative_legal_text"
+            and row.get("citation_eligibility") == "eligible"
+            and row.get("relevant_quote_eligible") is True
+            and store.bboxes_for(row.get("evidence_id"))
+        ]
+        candidates.sort(key=lambda row: _summary_row_order(row, units))
+        rows.extend(candidates if per_role is None else candidates[: max(1, per_role)])
+    return tuple(rows)
+
+
+def _unit_type_sets(store: EvidenceStore) -> tuple[set[str], set[str]]:
+    """Read corpus unit roles from the validated schema, not generic code."""
+    config = getattr(store, "config", None)
+    raw_schema = config.setting("schema", {}) if config is not None else {}
+    schema_values: dict[str, Any] = raw_schema if isinstance(raw_schema, dict) else {}
+    hierarchy = {str(value) for value in schema_values.get("unit_hierarchy", ()) if value}
+    instrument = {str(value) for value in schema_values.get("instrument_unit_types", ()) if value}
+    return instrument, hierarchy - instrument
+
+
+def _amendment_target_ids(store: EvidenceStore, source_role: str) -> set[str]:
+    """Collect same-version targets already proven by the corpus relation graph."""
+    target_ids: set[str] = set()
+    for edge in store.graph_edges:
+        relation = edge.get("relation_projection") or {}
+        if relation.get("source_role") == source_role and relation.get("target_source_role") == source_role:
+            target_id = relation.get("target_legal_unit_id")
+            if target_id:
+                target_ids.add(str(target_id))
+    return target_ids
+
+
+def _row_matches_reference(row: dict, requested: set[str]) -> bool:
+    """Match a full Pasal/ayat reference against its unit hierarchy."""
+    labels = {
+        _normalise_reference_label(row.get("citation")),
+        _normalise_reference_label(" ".join(str(value) for value in row.get("hierarchy") or ())),
+    }
+    hierarchy = tuple(str(value).strip() for value in row.get("hierarchy") or ())
+    if len(hierarchy) >= 2 and re.fullmatch(r"\(\d+\)", hierarchy[-1]):
+        labels.add(_normalise_reference_label(f"{hierarchy[-2]} ayat {hierarchy[-1]}"))
+    return bool(labels.intersection(requested))
+
+
+def _normalise_reference_label(value: object) -> str:
+    return re.sub(r"\s+", " ", str(value or "").casefold().strip())
+
+
+def source_occurrence_rows(
+    store: EvidenceStore,
+    references: tuple[str, ...],
+    source_roles: tuple[str, ...],
+    *,
+    per_role: int = 8,
+) -> tuple[dict, ...]:
+    """Return exact provision rows for every configured source role.
+
+    Occurrence requests are document-wide inventory queries. Resolve each
+    reference under each role instead of letting one global lexical ranking
+    supply unrelated provisions from another document.
+    """
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for role in dict.fromkeys(str(value) for value in source_roles if value):
+        for reference in dict.fromkeys(str(value) for value in references if value):
+            for row in structured_lookup(
+                store,
+                reference,
+                limit=per_role,
+                source_role=role,
+                allow_navigation=False,
+            ):
+                evidence_id = str(row.get("evidence_id") or "")
+                if evidence_id and evidence_id not in seen:
+                    rows.append(
+                        row
+                        | {
+                            "route_sources": ("structured",),
+                            "candidate_type": row.get("candidate_type") or "legal_unit_candidate",
+                            "_requirement_ids": (f"source_occurrence_{role}",),
+                        }
+                    )
+                    seen.add(evidence_id)
+    return tuple(rows)
+
+
+def source_occurrence_route(
+    store: EvidenceStore,
+    corpus_id: str,
+    query: str,
+    references: tuple[str, ...],
+    source_roles: tuple[str, ...],
+) -> dict:
+    """Build the typed route envelope for a document-occurrence request."""
+    resolved_references = tuple(references) or structured_occurrence_references(store, query)
+    matches = source_occurrence_rows(store, resolved_references, source_roles)
+    return {
+        "status": "found" if matches else "no_results",
+        "route": "structured",
+        "intent": "structured_lookup",
+        "corpus_id": corpus_id,
+        "original_query": query,
+        "normalized_query": query.strip(),
+        "matches": matches,
+        "reason": None if matches else "source_occurrence_not_found",
+    }
+
+
+def structured_occurrence_references(store: EvidenceStore, query: str) -> tuple[str, ...]:
+    """Resolve a configured structural section before lexical occurrence search."""
+    normalized = re.sub(r"\s+", " ", str(query or "").casefold()).strip()
+    config = getattr(store, "config", None)
+    strategy = getattr(config, "structured_strategy", "generic") if config is not None else "generic"
+    sections = intent_config_for(strategy, config).get("structured_sections", ()) if config is not None else ()
+    references: list[str] = []
+    for section in sections or ():
+        if not isinstance(section, dict):
+            continue
+        aliases = tuple(str(alias).casefold().strip() for alias in section.get("aliases") or () if str(alias).strip())
+        if any(re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", normalized) for alias in aliases):
+            target = str(section.get("target") or "").strip()
+            if target:
+                references.append(target)
+    return tuple(dict.fromkeys(references))
+
+
+def _summary_row_order(row: dict, units: dict[str, dict]) -> tuple[int, int, str]:
+    unit = units.get(str(row.get("legal_unit_id")), {})
+    page = unit.get("page_start") or row.get("page_number") or (row.get("page_numbers") or [0])[0]
+    return int(page or 0), int(unit.get("sibling_order") or 0), str(row.get("evidence_id") or "")
+
+
 def structural_count(store: EvidenceStore, query: str, *, strategy: str = "uud_1945") -> dict | None:
     """Return one source-derived aggregate only when every counted unit is grounded."""
     config = getattr(store, "config", None)

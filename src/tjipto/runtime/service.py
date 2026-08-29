@@ -29,7 +29,12 @@ from tjipto.corpora.source_arbitration import (
 )
 from tjipto.retrieval.relations import amendment_relation_target
 from tjipto.retrieval.router import route_retrieval
-from tjipto.retrieval.structured import structural_count
+from tjipto.retrieval.structured import (
+    document_summary_rows,
+    source_occurrence_route,
+    structural_count,
+    version_comparison_rows,
+)
 from tjipto.retrieval.bm25 import lexical_aliases, meaningful_tokens
 from tjipto.retrieval.research import (
     ResearchIntent,
@@ -1023,7 +1028,12 @@ class LegalRuntimeService:
         # wording intact instead of sending it through an untrusted rewriter.
         if response.get("route") == "structure_count":
             return response
+        if response.get("operation") == "summarize":
+            response = self._with_document_summary(response)
+        elif response.get("operation") == "compare" and response.get("route") not in {"metadata", "metadata_fact"}:
+            response = self._with_version_comparison(response)
         evidence = tuple(response.get("evidence") or response.get("metadata_support") or ())
+        answer_evidence = evidence + tuple(response.get("summary_support") or ()) + tuple(response.get("comparison_support") or ())
         answer = response.get("answer")
         if not evidence or not isinstance(answer, str) or not answer.strip():
             return response
@@ -1033,8 +1043,8 @@ class LegalRuntimeService:
         if response.get("route") == "document_relation" and response.get("article_amendment_relations"):
             self._agent_answer(response, evidence, answer)
             return response
-        rendered = self._agent_answer(response, evidence, answer)
-        if not _wording_preserves_evidence(rendered, evidence, response.get("claim_support", ())):
+        rendered = self._agent_answer(response, answer_evidence, answer)
+        if not _wording_preserves_evidence(rendered, answer_evidence, response.get("claim_support", ())):
             rendered = answer
         rendered = _restore_corpus_labels(rendered, evidence)
         if response.get("route") == "metadata_fact":
@@ -1079,6 +1089,9 @@ class LegalRuntimeService:
         if source_text is not None:
             return source_text
         semantics = interpret_query(store, corpus_id, query, available_corpora=self.registry.corpus_ids())
+        consolidated_definition = self._consolidated_definition_response(corpus_id, query, store, semantics)
+        if consolidated_definition is not None:
+            return consolidated_definition
         compound_parts = (
             compound_query_parts(query, semantics=semantics, config=store.config)
             if not evidence_requirements and clarification_id is None and clarification_answer is None
@@ -1135,7 +1148,12 @@ class LegalRuntimeService:
             config=store.config,
             semantics=semantics,
         )
-        if normalized_summary and normalized_summary != query:
+        instrument_summary = semantics.operation == "summarize" and any(
+            str(role).startswith("amendment_") for role in semantics.source_scopes
+        )
+        if normalized_summary and normalized_summary != query and (
+            semantics.operation != "summarize" or instrument_summary
+        ):
             result = self._ask(
                 corpus_id,
                 normalized_summary,
@@ -1193,6 +1211,18 @@ class LegalRuntimeService:
             and len(semantics.source_scopes) > 1
             and contains_intent_phrase(query, occurrence_terms)
         )
+        source_occurrence_exact = source_occurrence_query and bool(semantics.legal_references)
+        source_occurrence_routed = None
+        if source_occurrence_query:
+            occurrence_route = source_occurrence_route(
+                store,
+                corpus_id,
+                query,
+                semantics.legal_references,
+                semantics.source_scopes,
+            )
+            if semantics.legal_references or occurrence_route.get("matches"):
+                source_occurrence_routed = occurrence_route
         relation_config = intent_config.get("document_relation", {}) or {}
         explicit_change = contains_intent_phrase(
             query,
@@ -1214,11 +1244,17 @@ class LegalRuntimeService:
             or bool(semantics.legal_references)
             or semantics.operation == "compare"
         ) else instrument_intent_context(store, query)
-        instrument = (
+        relation_types = set(amendment_target.get("relation_types") or ())
+        partial_instrument = bool(
             instrument_candidate
-            if instrument_candidate and amendment_target.get("mode") in {None, "unsupported"}
-            else None
+            and instrument_candidate[0] is None
+            and instrument_candidate[1] == "instrument_unresolved"
+            and amendment_target.get("mode") == "article"
+            and not {"DELETES", "SUPPLEMENTS", "RENAMES", "RENUMBERED_TO"}.intersection(relation_types)
         )
+        instrument = instrument_candidate if instrument_candidate and (
+            amendment_target.get("mode") in {None, "unsupported"} or partial_instrument
+        ) else None
         if instrument:
             row, route, reason = instrument
             templates = _answer_templates(store)
@@ -1322,7 +1358,7 @@ class LegalRuntimeService:
                 "insufficient_reasons": (),
             }
         planner_request = clarification_round > 0 or semantic_orchestration_required(store, query, semantics)
-        research_request = not metadata_query and (
+        research_request = not metadata_query and not source_occurrence_exact and (
             planner_request
             or semantics.operation in {"analyze", "compare"}
             or semantics.operation == "trace"
@@ -1518,16 +1554,48 @@ class LegalRuntimeService:
                 allow_relation=True,
                 relation_family=relation_family,
             )
-        typed_routed = scoped_routed or relation_routed or research_routed or self._route_retrieval(
-            corpus_id,
-            query,
-            store,
-            limit=semantic_candidate_limit,
-            metadata_filters=semantic_filters,
-            allow_navigation=semantics.requested_function != "temporal_quotation",
-            allow_relation=semantics.requested_function != "temporal_quotation" and not metadata_query,
-            relation_family=relation_family,
-        )
+        typed_routed = scoped_routed or relation_routed or source_occurrence_routed
+        if typed_routed is None:
+            deterministic_routed = self._route_retrieval(
+                corpus_id,
+                query,
+                store,
+                limit=semantic_candidate_limit,
+                metadata_filters=semantic_filters,
+                allow_navigation=semantics.requested_function != "temporal_quotation",
+                allow_relation=semantics.requested_function != "temporal_quotation" and not metadata_query,
+                relation_family=relation_family,
+            )
+            typed_routed = (
+                deterministic_routed
+                if research_routed is None or authoritative_retrieval_route(deterministic_routed)
+                else research_routed
+            )
+        # A same-version comparison has one explicit requirement per
+        # reference.  The generic comparison query only resolves its first
+        # reference, while the research execution already retrieved each
+        # requirement independently.  Keep that complete, source-owned result
+        # instead of silently dropping the other proposition.
+        if (
+            semantics.operation == "compare"
+            and len(semantics.legal_references) > 1
+            and len(semantics.source_scopes) == 1
+            and research_routed is not None
+            and research_routed.get("matches")
+        ):
+            typed_routed = research_routed
+        # A cross-version comparison with one explicit reference has one
+        # requirement per source role.  The typed lookup is intentionally
+        # scoped to the most specific role and would drop the other side;
+        # use the already-validated research aggregate when it covers both.
+        if (
+            semantics.operation == "compare"
+            and semantics.legal_references
+            and len(semantics.source_scopes) > 1
+            and research_routed is not None
+            and research_routed.get("matches")
+        ):
+            typed_routed = research_routed
         # Research may improve normal free-form retrieval, but it cannot
         # replace a source-owned typed route (relations, structured lookup,
         # exact citation, or metadata/navigation).
@@ -1538,6 +1606,7 @@ class LegalRuntimeService:
             routed = research_routed
         routed["operation"] = semantics.operation
         routed["source_scopes"] = semantics.source_scopes
+        routed["legal_references"] = semantics.legal_references
         routed["temporal_scope"] = semantics.temporal_scope
         if semantic_scope_loss:
             routed["semantic_scope_loss"] = True
@@ -1565,10 +1634,13 @@ class LegalRuntimeService:
         templates = _answer_templates(store)
         routed["original_query"] = query
         if (
-            not active_requirements
-            and semantics.operation == "search"
+            semantics.operation == "search"
             and routed.get("route") in {"bm25", "hybrid", "hybrid_degraded_sparse"}
             and routed.get("matches")
+            and not any(
+                str(requirement.requirement_id).startswith("source_occurrence_")
+                for requirement in active_requirements
+            )
             and not any(_semantic_supports_query(store, query, row) for row in routed["matches"])
         ):
             return project_response(
@@ -1721,7 +1793,7 @@ class LegalRuntimeService:
             )
         status = (
             "limited_answer"
-            if _lexical_fallback_is_limited(store, query, evidence, semantic_plan, ask_route)
+            if _lexical_fallback_is_limited(store, query, evidence, semantic_plan, ask_route, semantics.operation)
             else "limited_answer"
             if assessment is not None and assessment.status == "partial"
             else "limited_answer"
@@ -1838,6 +1910,116 @@ class LegalRuntimeService:
             return _clarification_invalid_response(corpus_id)
         return f"{pending[1]}\n\nJawaban klarifikasi pengguna: {clarification_answer.strip()}", pending[2] + 1
 
+    def _with_document_summary(self, response: dict) -> dict:
+        store = self._store(str(response.get("corpus_id") or ""))
+        if store is None:
+            return response
+        roles = tuple(response.get("source_scopes") or ())
+        if not roles:
+            roles = (getattr(store.config, "preferred_source_role", None),)
+        rows = document_summary_rows(store, tuple(role for role in roles if role))
+        if not rows:
+            return response
+        support = tuple(_citation_with_authority(store, row) for row in rows)
+        answer = _document_summary_answer(store, rows)
+        if not answer.strip():
+            return response
+        return response | {
+            "answer": answer,
+            "summary_support": support,
+            "structural_support": tuple(response.get("structural_support") or support),
+        }
+
+    def _consolidated_definition_response(self, corpus_id: str, query: str, store, semantics):
+        """Explain a consolidated document from persisted document relations."""
+        normalized = normalize_intent_text(query)
+        if (
+            semantics.operation != "search"
+            or semantics.source_role != getattr(store.config, "preferred_source_role", None)
+            or semantics.legal_references
+            or not re.search(r"\bapa\s+itu\b|\byang\s+dimaksud\b|\bjelaskan\b", normalized)
+            or not contains_intent_phrase(query, tuple(store.config.setting("document_catalog", {}).get("document_terms", ())))
+        ):
+            return None
+        current_role = str(semantics.source_role)
+        relations = tuple(
+            edge.get("relation_projection") or {}
+            for edge in store.graph_edges
+            if (edge.get("relation_projection") or {}).get("source_role") == current_role
+            and (edge.get("relation_projection") or {}).get("target_source_role")
+            and (edge.get("relation_projection") or {}).get("article_level") is not True
+        )
+        target_roles = tuple(dict.fromkeys(str(row.get("target_source_role")) for row in relations))
+        if not relations or not target_roles:
+            return None
+        catalog = store.config.setting("document_catalog", {}) or {}
+        titles = catalog.get("titles", {}) if isinstance(catalog, dict) else {}
+        current_title = str(titles.get(current_role) or current_role)
+        original_role = next((role for role in target_roles if role.startswith("original_")), None)
+        amendment_roles = tuple(role for role in target_roles if role.startswith("amendment_"))
+        source_title = str(titles.get(original_role) or original_role) if original_role else None
+        amendment_titles = tuple(str(titles.get(role) or role) for role in amendment_roles)
+        clauses = [f"{current_title} merupakan naskah konsolidasi"]
+        if source_title:
+            clauses.append(f"yang diturunkan dari {source_title}")
+        if amendment_titles:
+            clauses.append(f"dan mencakup hubungan konsolidasi dengan {', '.join(amendment_titles)}")
+        answer = " ".join(clauses) + "."
+        public_relations = tuple(_public_document_relation(row) for row in relations)
+        return project_response(
+            {
+                "status": "found",
+                "route": "document_relation",
+                "intent": "document_relation_lookup",
+                "corpus_id": corpus_id,
+                "original_query": query,
+                "normalized_query": normalized,
+                "matches": relations,
+                "reason": None,
+            },
+            AnswerDecision(
+                "limited_answer",
+                "document_relation",
+                "document_relation",
+                answer,
+                empty_context_pack("consolidated_document_provenance"),
+                evidence=public_relations,
+                document_relations=public_relations,
+                trace_support=public_relations,
+                answer_scope="consolidated_document_provenance",
+                warnings=("document_relation_trace_only",),
+            ),
+        )
+
+    def _with_version_comparison(self, response: dict) -> dict:
+        store = self._store(str(response.get("corpus_id") or ""))
+        if store is None:
+            return response
+        roles = tuple(response.get("source_scopes") or ())
+        references = tuple(response.get("legal_references") or ())
+        if len(roles) < 2 and len(references) < 2:
+            return response
+        rows = version_comparison_rows(
+            store,
+            roles,
+            references=references,
+        )
+        if not rows:
+            return response
+        support = tuple(_citation_with_authority(store, row) for row in rows)
+        answer = _version_comparison_answer(
+            store,
+            roles,
+            rows,
+            references=references,
+        )
+        if not answer.strip():
+            return response
+        return response | {
+            "answer": answer,
+            "comparison_support": support,
+        }
+
     def _agent_answer(self, response: dict, evidence: tuple[dict, ...], fallback: str) -> str:
         if self._answer_provider is None:
             return fallback
@@ -1908,6 +2090,20 @@ def _compact_text(value: object) -> str:
     return " ".join(str(value or "").split())
 
 
+def _legal_reference_label(row: dict) -> str:
+    """Render a unit label without losing its parent Pasal for an ayat."""
+    citation = str(row.get("citation") or "").strip()
+    hierarchy = tuple(str(value).strip() for value in row.get("hierarchy") or () if str(value).strip())
+    article = next(
+        (value for value in reversed(hierarchy) if re.fullmatch(r"Pasal\s+[0-9]+[A-Z]?", value, re.IGNORECASE)),
+        None,
+    )
+    paragraph = next((value for value in reversed(hierarchy) if re.fullmatch(r"\(\d+\)", value)), None)
+    if article and paragraph:
+        return f"{article} ayat {paragraph}"
+    return citation or article or (hierarchy[-1] if hierarchy else "")
+
+
 def _restore_corpus_labels(answer: str, evidence: tuple[dict, ...]) -> str:
     """Keep corpus-provided legal labels stable after natural-language rewriting."""
     labels = {
@@ -1946,12 +2142,15 @@ def _lexical_fallback_is_limited(
     evidence: tuple[dict, ...],
     semantic_plan: ResearchPlan | None,
     route: str,
+    operation: str | None = None,
 ) -> bool:
     """Keep lexical-only or numerically unsupported claims explicitly limited."""
     if route != "lexical_fallback":
         return False
     if semantic_plan is None:
-        return True
+        # Summaries are grounded by the document-summary owner after lexical
+        # candidate routing; the absence of a planner round is intentional.
+        return operation != "summarize"
     # A validated planner proposal with complete typed requirements turns the
     # sparse lane into an intentional semantic route.  Keep the lexical-only
     # downgrade for unplanned or degraded responses, but do not label a
@@ -2010,6 +2209,138 @@ def _structure_outline_item(row: dict) -> str:
             break
         title.append(line)
     return f"{citation} \u2014 {' '.join(title)}" if title else citation
+
+
+def _document_summary_answer(store, rows: tuple[dict, ...]) -> str:
+    """Describe verified document coverage without inventing legal conclusions."""
+    units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
+    grouped: dict[str, list[str]] = {}
+    for row in rows:
+        role = str(row.get("source_role") or "")
+        citation = _legal_reference_label(row) or str(row.get("label") or "").strip()
+        text = _compact_text(row.get("quoted_text") or row.get("display_text"))
+        if citation and text.casefold().startswith(citation.casefold()):
+            text = text[len(citation):].lstrip(" :.-")
+        sentence = re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0].strip()
+        unit_type = units.get(str(row.get("legal_unit_id")), {}).get("unit_type")
+        if unit_type in {"bab_record", "pembukaan_record", "aturan_peralihan_record", "aturan_tambahan_record"}:
+            detail = _document_summary_outline_item(row, unit_type)
+        else:
+            detail = f"{citation}: {sentence[:240]}" if citation and sentence else citation
+        if detail:
+            grouped.setdefault(role, []).append(detail)
+    sections = []
+    for role, details in grouped.items():
+        source = next((row for row in rows if row.get("source_role") == role), {"source_role": role})
+        title = _document_title(store, source)
+        unique_details = tuple(dict.fromkeys(details))
+        bab_details = tuple(detail for detail in unique_details if detail.casefold().startswith("bab "))
+        if bab_details and not role.startswith("amendment_"):
+            sections.append(
+                f"{title} memuat Pembukaan dan {len(bab_details)} BAB. "
+                f"Pokok ketentuan yang terverifikasi: {'; '.join(unique_details)}."
+            )
+        else:
+            sections.append(f"{title}: {'; '.join(unique_details)}.")
+    return "\n\n".join(sections)
+
+
+def _document_summary_outline_item(row: dict, unit_type: str | None) -> str:
+    citation = str(row.get("citation") or row.get("label") or "").strip()
+    if unit_type == "pembukaan_record":
+        return f"{citation} — Pembukaan" if citation else "Pembukaan"
+    if unit_type in {"aturan_peralihan_record", "aturan_tambahan_record"}:
+        return citation
+    outline = _structure_outline_item(row)
+    if unit_type != "bab_record" or not outline:
+        return outline
+    # BAB rows contain the first normative provision in the same verified
+    # span. Include one compact proposition so an overview explains scope,
+    # rather than becoming a bare table of contents.
+    text = _compact_text(row.get("quoted_text") or row.get("display_text"))
+    match = re.search(
+        r"\bPasal\s+[0-9]+[A-Z]?\s*(?:\(\d+\))?\s+(.+?)(?=[.!?](?:\s|$))",
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return outline
+    proposition = match.group(1).strip(" :.-")
+    return f"{outline}; pokok: {proposition[:240]}"
+
+
+def _version_comparison_answer(
+    store,
+    roles: tuple[str, ...],
+    rows: tuple[dict, ...],
+    *,
+    references: tuple[str, ...] = (),
+) -> str:
+    """Compose a bounded comparison from exact normative propositions.
+
+    Parent article spans contain their child ayat as well.  Prefer the parent
+    only when the request is document-level; explicit references keep their
+    leaf span.  All rows remain in ``comparison_support`` for grounding, while
+    the answer uses one concise proposition per unit.
+    """
+    sections: list[str] = []
+    propositions: dict[str, dict[str, str]] = {role: {} for role in roles}
+    for role in roles:
+        role_rows = tuple(row for row in rows if row.get("source_role") == role)
+        parent_articles = {
+            str(row.get("citation") or "").strip().casefold()
+            for row in role_rows
+            if re.match(r"^Pasal\b", str(row.get("citation") or ""), re.IGNORECASE)
+        }
+        for row in role_rows:
+            citation = _legal_reference_label(row) or str(row.get("label") or "").strip()
+            if not citation:
+                continue
+            hierarchy = tuple(str(value).strip() for value in row.get("hierarchy") or ())
+            parent = next(
+                (value.casefold() for value in hierarchy if re.match(r"^Pasal\b", value, re.IGNORECASE)),
+                "",
+            )
+            is_leaf = not re.match(r"^Pasal\b", str(row.get("citation") or ""), re.IGNORECASE)
+            if not references and is_leaf and parent in parent_articles:
+                continue
+            text = _compact_text(row.get("quoted_text") or row.get("display_text"))
+            if text.casefold().startswith(citation.casefold()):
+                text = text[len(citation):].lstrip(" :.-")
+            sentence = re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0].strip().rstrip(".")
+            if sentence:
+                propositions[role].setdefault(citation, sentence[:240])
+        details = tuple(
+            f"{citation}: {text}"
+            for citation, text in sorted(
+                propositions[role].items(),
+                key=lambda item: _natural_label_sort_key(item[0]),
+            )
+        )
+        if details:
+            # Keep document-level answers reviewable; the complete row set is
+            # still exposed as citation/evidence support in the response.
+            sections.append(f"{_document_title(store, {'source_role': role})}: {'; '.join(details[:12])}.")
+    if len(roles) > 1:
+        labels = tuple(_document_title(store, {"source_role": role}) for role in roles)
+        if references:
+            common = set.intersection(*(set(propositions.get(role, {})) for role in roles)) if propositions else set()
+            changed = tuple(
+                citation
+                for citation in sorted(common, key=_natural_label_sort_key)
+                if len({propositions.get(role, {}).get(citation) for role in roles}) > 1
+            )
+            prefix = (
+                f"Perbandingan substantif antara {labels[0]} dan {labels[1]} menunjukkan redaksi berbeda pada {', '.join(changed)}."
+                if changed
+                else f"Perbandingan substantif antara {labels[0]} dan {labels[1]} didukung oleh ketentuan yang tercantum pada kedua sumber."
+            )
+        else:
+            prefix = (
+                f"Perbandingan substantif antara {labels[0]} dan {labels[1]} menunjukkan cakupan dan rumusan yang berbeda."
+            )
+        sections.insert(0, prefix)
+    return "\n\n".join(sections)
 
 
 def _public_evidence_row(store, row: dict) -> dict:
@@ -3089,7 +3420,7 @@ def _article_relation_evidence(store, relation: dict) -> dict | None:
         "relation_id": relation.get("relation_id"),
         "support_kind": "article_relation",
         "fact_kind": "article_relation",
-        "display_label": relation.get("target_label") or relation.get("target_citation") or relation.get("relation_type") or "Relasi hukum",
+        "display_label": relation.get("target_citation") or relation.get("target_label") or relation.get("relation_type") or "Relasi hukum",
         "display_text": source_quote or relation.get("quoted_text") or row.get("quoted_text"),
         "bbox_refs": proof_bbox_refs,
         "text_span_ids": proof_text_span_ids,
@@ -3168,6 +3499,7 @@ def _article_relation_target_evidence(store, relation: dict) -> dict | None:
         "fact_kind": "article_relation_target",
         "route_sources": ("article_relation_target",),
         "article_amendment_relation": relation,
+        "display_label": relation.get("target_citation") or relation.get("target_label") or candidate.get("citation"),
         "display_text": _source_quote_for_spans(store, tuple(target_spans)) or candidate.get("quoted_text"),
         "viewer_ref": target_viewer_ref,
     }
@@ -3283,6 +3615,8 @@ def _article_relation_citation(row: dict) -> dict:
         "evidence_id": row["evidence_id"],
         "relation_id": row.get("relation_id"),
         "legal_unit_id": row.get("legal_unit_id"),
+        "target_citation": row.get("target_citation"),
+        "target_label": row.get("target_label"),
         "source_document_id": row.get("source_document_id"),
         "citation": row.get("citation"),
         "label": row.get("citation"),

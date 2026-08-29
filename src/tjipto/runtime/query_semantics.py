@@ -11,6 +11,7 @@ from tjipto.corpora.parser_dispatch import (
     normalize_metadata_intent,
     parse_legal_reference,
     parse_legal_references,
+    parse_bab_reference,
     proposition_operator,
     resolve_navigation,
 )
@@ -80,6 +81,12 @@ def interpret_query(
     if contains_intent_phrase(query, intent.get("all_source_scope_terms", ())):
         named_roles = tuple(getattr(config, "source_roles", ()))
     preferred_role = getattr(config, "preferred_source_role", None)
+    # An explicit multi-reference comparison without a document qualifier is
+    # scoped to the corpus' preferred, verified version.  Leaving the scope
+    # empty makes each reference requirement impossible to satisfy even though
+    # both provisions exist in that version.
+    if len(references) > 1 and not named_roles and preferred_role:
+        named_roles = (str(preferred_role),)
     if (
         named_roles
         and preferred_role
@@ -103,11 +110,24 @@ def interpret_query(
             named_roles = (str(predecessor), str(comparison_role))
     # Multiple explicitly named instruments are a comparison scope, not a
     # single-source filter.  Requirement generation owns the per-role split.
-    source_role = scope.role if len(named_roles) <= 1 and (scope.temporal or scope.explicit) else None
+    source_role = (
+        scope.role
+        if len(named_roles) <= 1 and (scope.temporal or scope.explicit)
+        else named_roles[0]
+        if len(references) > 1 and len(named_roles) == 1
+        else None
+    )
     temporal_context = source_role if temporal else None
     # Navigation can be anchored to a division (for example, a BAB) as well as
     # a provision.  The corpus parser is the owner of both forms.
     navigation = _navigation(corpus_id, query, temporal=temporal, config=config)
+    try:
+        structure_reference = parse_bab_reference(corpus_id, query, config=config)
+    except (KeyError, ValueError):
+        # Custom registries may not expose the built-in legal parser.  Their
+        # normal routing remains valid; only the summary-vs-structural guard
+        # needs to know whether a BAB reference was parsed.
+        structure_reference = None
     proposition = _proposition(corpus_id, query, references, source_role, temporal_context, config=config)
     discrepancy = len(references) >= 2 and contains_intent_phrase(query, discrepancy_terms(config))
     metadata_target = _metadata_target_requested(query, config, references)
@@ -117,7 +137,17 @@ def interpret_query(
         else classify_relation_intent(store, query).relation_type
     )
     temporal_scope = "historical_pre_change" if _historical_pre_change(query) else temporal_context
-    operation = _operation(query, config, references, named_roles, navigation, relation_intent, proposition, temporal_scope)
+    operation = _operation(
+        query,
+        config,
+        references,
+        named_roles,
+        navigation,
+        relation_intent,
+        proposition,
+        temporal_scope,
+        structure_reference=structure_reference,
+    )
     if operation == "analyze" and source_role is None and not named_roles:
         source_role = getattr(config, "preferred_source_role", None)
         temporal_context = source_role
@@ -203,6 +233,8 @@ def _operation(
     relation_intent: str | None,
     proposition: PropositionClaim | None,
     temporal_scope: str | None,
+    *,
+    structure_reference: str | None = None,
 ) -> str:
     normalized = " ".join(re.findall(r"[a-z0-9]+", str(query or "").casefold()))
     if navigation:
@@ -222,6 +254,14 @@ def _operation(
         open_terms=open_terms or (),
     ):
         return "open_document"
+    if _document_summary_requested(
+        query,
+        config,
+        references=references,
+        source_scopes=source_scopes,
+        structure_reference=structure_reference,
+    ):
+        return "summarize"
     comparison = re.search(r"\b(vs|versus|perbandingan|perbedaan|bandingkan|beda)\b", normalized)
     if not comparison and len(source_scopes) > 1:
         comparison = re.search(r"\bsebelum\b.*\b(?:sesudah|setelah)\b|\b(?:sesudah|setelah)\b.*\bsebelum\b", normalized)
@@ -313,6 +353,27 @@ def _document_operation_requested(
         if re.search(r"\bsebelum\b.*\b(?:sesudah|setelah)\b|\b(?:sesudah|setelah)\b.*\bsebelum\b", normalized):
             return True
     return bool(normalized.split() and normalized.split()[0] in action_tokens)
+
+
+def _document_summary_requested(
+    query: str,
+    config,
+    *,
+    references: tuple[str, ...],
+    source_scopes: tuple[str, ...],
+    structure_reference: str | None = None,
+) -> bool:
+    """Recognize document-content requests without reclassifying provisions."""
+    if references or structure_reference or not source_scopes:
+        return False
+    setting = getattr(config, "setting", None)
+    policy = setting("document_summary", {}) if callable(setting) else {}
+    if not isinstance(policy, dict):
+        policy = {}
+    intent = intent_config_for(getattr(config, "query_strategy", "generic"), config)
+    content_terms = tuple(policy.get("content_terms", ()) or ()) or tuple(intent.get("instrument_content_signals", ()) or ())
+    document_terms = tuple(policy.get("document_terms", ()) or ())
+    return contains_intent_phrase(query, content_terms) and contains_intent_phrase(query, document_terms)
 
 
 def _metadata_target_requested(query: str, config, references: tuple[str, ...]) -> bool:

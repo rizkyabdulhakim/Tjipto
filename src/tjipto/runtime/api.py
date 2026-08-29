@@ -102,13 +102,17 @@ def _public_catalog_result(result: dict, service: LegalRuntimeService, *, kind: 
 def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> dict:
     if result.get("readiness") is False:
         return _public_integrity(result)
-    support_rows = (
-        *result.get("final_citations", result.get("citations", ())),
-        *(() if result.get("answer_type") == "article_amendment_relation" else result.get("historical_citations", ())),
-        *result.get("metadata_support", ()),
-        *result.get("structural_support", ()),
-        *result.get("relation_support", ()),
-        *result.get("trace_support", ()),
+    support_rows = _unique_support_rows(
+        (
+            *result.get("final_citations", result.get("citations", ())),
+            *(() if result.get("answer_type") == "article_amendment_relation" else result.get("historical_citations", ())),
+            *result.get("metadata_support", ()),
+            *result.get("structural_support", ()),
+            *result.get("relation_support", ()),
+            *result.get("trace_support", ()),
+            *result.get("summary_support", ()),
+            *result.get("comparison_support", ()),
+        )
     )
     footnotes = FootnoteBook()
     projected = tuple((_public_support(row, service, corpus_id, footnotes), row) for row in support_rows)
@@ -171,6 +175,28 @@ def _public_ask(result: dict, service: LegalRuntimeService, corpus_id: str) -> d
             "missing_requirement_ids": tuple(sufficiency.get("missing_requirement_ids") or ()),
         }
     return public
+
+
+def _unique_support_rows(rows: tuple[dict, ...]) -> tuple[dict, ...]:
+    output: list[dict] = []
+    seen: set[str] = set()
+    for row in rows or ():
+        if not isinstance(row, dict):
+            continue
+        # Relation claims sharing one instrument clause still represent
+        # distinct targets and viewer refs.  Keep relation identity primary;
+        # ordinary evidence remains deduplicated by its stable evidence id.
+        identity = (
+            str(row.get("relation_id") or row.get("evidence_id") or "")
+            if row.get("support_kind") == "article_relation"
+            else str(row.get("evidence_id") or row.get("relation_id") or "")
+        )
+        if identity and identity in seen:
+            continue
+        if identity:
+            seen.add(identity)
+        output.append(row)
+    return tuple(output)
 
 
 def _answer_with_footnotes(answer: object, projected: tuple[tuple[dict, dict], ...]) -> object:
@@ -330,6 +356,7 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str, foo
         }
     legal_document = service.catalog_document_for_source(row.get("source_role"))
     relation_claim = row.get("fact_kind") == "article_relation" or row.get("support_kind") == "article_relation"
+    relation_label = row.get("target_citation") or row.get("target_label") if relation_claim else None
     result = {
         "public_support_id": service.public_identifier(corpus_id, "support", target or (row.get("display_label"), row.get("source_role"), authority_kind)),
         "authority_kind": authority_kind,
@@ -339,7 +366,7 @@ def _public_support(row: dict, service: LegalRuntimeService, corpus_id: str, foo
         "citation_final": row.get("citation_final") is True and (authority_kind == "legal_citation" or relation_claim),
         "support_kind": row.get("support_kind") or "trace_support",
         "fact_kind": fact_kind,
-        "label": row.get("printed_name") or role_label or row.get("display_label") or row.get("label") or row.get("citation") or row.get("authority_label") or "Bukti sumber",
+        "label": relation_label or row.get("printed_name") or role_label or row.get("display_label") or row.get("label") or row.get("citation") or row.get("authority_label") or "Bukti sumber",
         "role_label": role_label,
         "text": row.get("display_text") or row.get("quoted_text") or row.get("answer") or "",
         "source_label": row.get("document_title") or row.get("source_label"),

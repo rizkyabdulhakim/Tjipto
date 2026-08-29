@@ -297,6 +297,59 @@ class HybridResearchContractTest(unittest.TestCase):
         )
         self.assertIn("BAB I — BENTUK DAN KEDAULATAN", summary["answer"])
 
+    def test_document_summary_and_version_comparison_use_material_support(self) -> None:
+        service = LegalRuntimeService(answer_provider=None, planning_provider=None)
+
+        original = service.ask("uud", "apa isi uud original", limit=30)
+        self.assertEqual(original["operation"], "summarize")
+        self.assertGreaterEqual(len(original["summary_support"]), 16)
+        self.assertIn("BAB I", original["answer"])
+        self.assertIn("BAB XVI", original["answer"])
+        self.assertIn("pokok:", original["answer"])
+        self.assertNotIn("Pasal 1:", original["answer"])
+
+        occurrence = service.ask("uud", "Pasal 28 ada di naskah mana saja", limit=30)
+        self.assertEqual(
+            {row.get("source_role") for row in occurrence["evidence"]},
+            {"original_historical", "current_consolidated"},
+        )
+        self.assertIn("Dalam", occurrence["answer"])
+
+        opening = service.ask("uud", "Pembukaan ada di naskah mana saja", limit=30)
+        self.assertEqual(opening["status"], "answer_ready")
+        self.assertEqual(
+            {row.get("source_role") for row in opening["evidence"]},
+            {"original_historical", "current_consolidated"},
+        )
+
+        consolidated = service.ask("uud", "apa itu naskah konsolidasi", limit=30)
+        self.assertEqual(consolidated["route"], "document_relation")
+        self.assertIn("naskah konsolidasi", consolidated["answer"])
+        self.assertIn("Perubahan Pertama", consolidated["answer"])
+
+        amendment = service.ask("uud", "ringkas amandemen pertama", limit=30)
+        amendment_citations = {row.get("citation") for row in amendment["summary_support"]}
+        self.assertIn("Pasal 5", amendment_citations)
+        self.assertIn("Pasal 20", amendment_citations)
+        self.assertIn("Pasal 5:", amendment["answer"])
+
+        comparison = service.ask("uud", "perbedaan amandemen pertama dan kedua", limit=30)
+        comparison_citations = {row.get("citation") for row in comparison["comparison_support"]}
+        self.assertIn("Pasal 5", comparison_citations)
+        self.assertIn("Pasal 18", comparison_citations)
+        self.assertIn("Pasal 5:", comparison["answer"])
+        self.assertIn("Pasal 18:", comparison["answer"])
+        self.assertIn("Perbandingan substantif", comparison["answer"])
+        self.assertIn("cakupan dan rumusan yang berbeda", comparison["answer"])
+        self.assertLess(len(comparison["answer"]), 5000)
+
+        reference_comparison = service.ask("uud", "perbedaan Pasal 28 dan Pasal 28A", limit=10)
+        self.assertEqual(reference_comparison["sufficiency"]["status"], "complete")
+        self.assertEqual(
+            {row.get("citation") for row in reference_comparison["evidence"]},
+            {"Pasal 28", "Pasal 28A"},
+        )
+
     def test_agentic_occurrence_plan_decomposes_historical_and_current_wording(self) -> None:
         class Provider:
             def propose(self, _request):

@@ -1789,6 +1789,12 @@ class RuntimeContractTest(unittest.TestCase):
         )
         self.assertEqual(paragraph_comparison["sufficiency"]["status"], "complete")
         self.assertEqual(len(paragraph_comparison["citations"]), 2)
+        self.assertEqual(
+            {row["source_role"] for row in paragraph_comparison["citations"]},
+            {"original_historical", "amendment_1_historical"},
+        )
+        self.assertIn("Pasal 5 ayat (1)", paragraph_comparison["answer"])
+        self.assertIn("redaksi berbeda", paragraph_comparison["answer"])
         historical_response = self.service.ask("uud", "Pasal 16 sebelum dihapus bunyinya apa")
         self.assertEqual(historical_response["status"], "answer_ready")
         self.assertEqual(historical_response["sufficiency"]["status"], "complete")
@@ -1933,7 +1939,7 @@ class RuntimeContractTest(unittest.TestCase):
         result = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None).ask(
             "uud", "ringkas UUD sebelum amandemen", limit=30
         )
-        self.assertEqual((result["status"], result["route"]), ("answer_ready", "structural_navigation"))
+        self.assertEqual((result["status"], result["route"]), ("answer_ready", "lexical_fallback"))
         self.assertEqual({row["source_role"] for row in result["structural_support"]}, {"original_historical"})
         self.assertIn("BAB I — BENTUK DAN KEDAULATAN", result["answer"])
         self.assertNotIn("BAB XA", result["answer"])
