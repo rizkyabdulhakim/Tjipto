@@ -31,4 +31,3 @@ apps/web/.vite/
 *.tsbuildinfo
 .env
 .env.*
-!.env.example

@@ -11,12 +11,11 @@ python -m tjipto.runtime.http
 Optional local LLM chain (9Router primary, Gemini then Groq fallback):
 
 ```powershell
-Copy-Item .env.example .env
-Get-Content .env | ForEach-Object {
-  if ($_ -match '^\s*([^#=\s][^=]*)=(.*)$') {
-    [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2], 'Process')
-  }
-}
+# Set the values in the current process (keep API keys out of Git).
+$env:TJIPTO_LLM_PROVIDER='openai_compatible'
+$env:TJIPTO_LLM_MODEL='ag/gemini-3.7-flash-high'
+$env:TJIPTO_LLM_BASE_URL='http://127.0.0.1:20128/v1'
+# Set TJIPTO_LLM_API_KEY, TJIPTO_WORDING_API_KEY, and TJIPTO_FALLBACK_LLM_API_KEY locally.
 python -m tjipto.runtime.http
 ```
 
