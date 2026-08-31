@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
-from typing import Generic, Protocol, TypeVar
+from typing import Any, Generic, Protocol, TypeVar
 from urllib.parse import urlparse
 
 
@@ -33,9 +33,28 @@ def external_llm_config(scope: str) -> ExternalLLMConfig | None:
     def value(name: str, default: str = "") -> str:
         return os.environ.get(prefix + name, "").strip() or os.environ.get(f"TJIPTO_LLM_{name}", default).strip()
 
-    provider = value("PROVIDER").casefold()
-    api_key = value("API_KEY")
-    model = value("MODEL")
+    return _parse_external_llm_config(value)
+
+
+def shared_external_llm_config() -> ExternalLLMConfig | None:
+    """Resolve the shared primary provider without capability overrides."""
+    return _external_llm_config_from_prefix("TJIPTO_LLM_")
+
+
+def scoped_external_llm_config(scope: str) -> ExternalLLMConfig | None:
+    """Resolve a capability provider without falling back to the shared owner."""
+    return _external_llm_config_from_prefix(f"TJIPTO_{scope}_")
+
+
+def _external_llm_config_from_prefix(prefix: str) -> ExternalLLMConfig | None:
+    def value(name: str, default: str = "") -> str:
+        return os.environ.get(prefix + name, default).strip()
+
+    return _parse_external_llm_config(value)
+
+
+def _parse_external_llm_config(value: Any) -> ExternalLLMConfig | None:
+    provider, api_key, model = value("PROVIDER").casefold(), value("API_KEY"), value("MODEL")
     if not provider or not api_key or not model:
         return None
     try:
@@ -75,6 +94,17 @@ class FallbackProposalProvider(Generic[RequestT, ResponseT]):
         return result if result is not None else self.fallback.propose(request)
 
 
+def provider_chain(*providers: Any) -> Any:
+    """Compose configured providers in order, skipping absent entries."""
+    configured = tuple(provider for provider in providers if provider is not None)
+    if not configured:
+        return None
+    result = configured[-1]
+    for primary in reversed(configured[:-1]):
+        result = FallbackProposalProvider(primary, result)
+    return result
+
+
 def openai_compatible_latency_options(model: str, endpoint: str) -> dict[str, str]:
     """Use Gemini's smallest supported thinking level for bounded JSON tasks."""
     host = urlparse(endpoint).hostname
@@ -102,4 +132,7 @@ __all__ = [
     "fallback_external_llm_config",
     "is_allowed_llm_endpoint",
     "openai_compatible_latency_options",
+    "provider_chain",
+    "scoped_external_llm_config",
+    "shared_external_llm_config",
 ]

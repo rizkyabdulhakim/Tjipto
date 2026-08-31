@@ -8,10 +8,11 @@ from builtins import object as builtin_object
 from typing import Protocol
 from tjipto.core.external_llm import (
     ExternalLLMConfig,
-    FallbackProposalProvider,
-    external_llm_config,
     fallback_external_llm_config,
     is_allowed_llm_endpoint,
+    provider_chain,
+    scoped_external_llm_config,
+    shared_external_llm_config,
 )
 from tjipto.corpora.intent_config import normalize_intent_text
 
@@ -178,12 +179,12 @@ def _string_values(value: object) -> tuple[str, ...]:
 
 
 def wording_provider_from_environment() -> WordingProvider | None:
-    """Build the configured answer provider."""
-    primary = _wording_provider(external_llm_config("WORDING"))
-    fallback = _wording_provider(fallback_external_llm_config())
-    if primary is not None and fallback is not None:
-        return FallbackProposalProvider(primary, fallback)
-    return primary or fallback
+    """Build the wording chain: shared primary, scoped fallback, then shared fallback."""
+    return provider_chain(
+        _wording_provider(shared_external_llm_config()),
+        _wording_provider(scoped_external_llm_config("WORDING")),
+        _wording_provider(fallback_external_llm_config()),
+    )
 
 
 def _wording_provider(config: ExternalLLMConfig | None) -> WordingProvider | None:
@@ -441,4 +442,3 @@ def _reverses_subject_object(claims, text: str) -> bool:
         if subject_pos >= 0 and object_pos >= 0 and subject_pos > object_pos:
             return True
     return False
-

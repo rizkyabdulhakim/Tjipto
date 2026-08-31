@@ -211,6 +211,22 @@ class RuntimeTrustBoundaryTest(unittest.TestCase):
         self.assertEqual(planner._timeout, 7)
         self.assertEqual(wording._timeout, 7)
 
+    def test_shared_provider_is_primary_over_capability_override(self) -> None:
+        values = {
+            "TJIPTO_LLM_PROVIDER": "openai_compatible",
+            "TJIPTO_LLM_API_KEY": "primary-secret",
+            "TJIPTO_LLM_MODEL": "primary-model",
+            "TJIPTO_LLM_BASE_URL": "http://127.0.0.1:20128/v1",
+            "TJIPTO_WORDING_PROVIDER": "openai_compatible",
+            "TJIPTO_WORDING_API_KEY": "fallback-secret",
+            "TJIPTO_WORDING_MODEL": "fallback-model",
+            "TJIPTO_WORDING_BASE_URL": "https://provider.example/v1",
+        }
+        with patch.dict(os.environ, values, clear=True):
+            wording = wording_provider_from_environment()
+        self.assertEqual(wording.primary._endpoint, "http://127.0.0.1:20128/v1/chat/completions")
+        self.assertEqual(wording.fallback._endpoint, "https://provider.example/v1/chat/completions")
+
     def test_shared_fallback_is_used_only_after_primary_failure(self) -> None:
         from tjipto.core.external_llm import FallbackProposalProvider
 

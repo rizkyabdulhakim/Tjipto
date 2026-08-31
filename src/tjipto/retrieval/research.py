@@ -10,12 +10,13 @@ from urllib.request import Request, urlopen
 
 from tjipto.core.external_llm import (
     ExternalLLMConfig,
-    FallbackProposalProvider,
     OPENAI_COMPATIBLE_USER_AGENT,
-    external_llm_config,
     fallback_external_llm_config,
     is_allowed_llm_endpoint,
     openai_compatible_latency_options,
+    provider_chain,
+    scoped_external_llm_config,
+    shared_external_llm_config,
 )
 from tjipto.retrieval.candidates import graph_expand
 from tjipto.retrieval.sufficiency import (
@@ -123,6 +124,7 @@ class OpenAICompatibleResearchPlanningProvider:
         payload = {
             "model": self._model,
             "temperature": 0,
+            "stream": False,
             **openai_compatible_latency_options(self._model, self._endpoint),
             "messages": [{
                 "role": "user",
@@ -235,12 +237,12 @@ def _planner_schema(provider_variant_limit: int) -> dict[str, object]:
 
 
 def research_planning_provider_from_environment() -> ResearchPlanningProvider | None:
-    """Create the configured planner; capability flags do not disable it."""
-    primary = _research_planning_provider(external_llm_config("RESEARCH_PLANNING"))
-    fallback = _research_planning_provider(fallback_external_llm_config())
-    if primary is not None and fallback is not None:
-        return FallbackProposalProvider(primary, fallback)
-    return primary or fallback
+    """Create the planner chain: shared primary, scoped fallback, then shared fallback."""
+    return provider_chain(
+        _research_planning_provider(shared_external_llm_config()),
+        _research_planning_provider(scoped_external_llm_config("RESEARCH_PLANNING")),
+        _research_planning_provider(fallback_external_llm_config()),
+    )
 
 
 def _research_planning_provider(config: ExternalLLMConfig | None) -> ResearchPlanningProvider | None:

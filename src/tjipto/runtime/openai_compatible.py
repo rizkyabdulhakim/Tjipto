@@ -17,6 +17,7 @@ class OpenAICompatibleWordingProvider:
         payload = {
             "model": self._model,
             "temperature": 0,
+            "stream": False,
             **openai_compatible_latency_options(self._model, self._endpoint),
             "messages": [{"role": "user", "content": answer_prompt(verified_context)}],
             "response_format": {
