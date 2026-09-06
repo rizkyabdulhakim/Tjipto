@@ -8,9 +8,61 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  TJIPTO_EXACT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
-  backend:
+  dense:
     runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}/src
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+          ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12.10"
+      - name: Install dense promotion environment
+        run: |
+          python -m pip install --require-hashes --upgrade -r requirements.lock
+          python -m pip install --require-hashes --no-deps --upgrade --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-dense.lock
+          python -m pip install --no-deps --no-build-isolation -e .
+      - name: Validate current-checkout package origin
+        run: python scripts/validate_toolchain.py --package-origin
+      - name: Acquire pinned BGE-M3 snapshot
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from huggingface_hub import snapshot_download
+
+          revision = "5617a9f61b028005a4858fdac845db406aefb181"
+          path = snapshot_download("BAAI/bge-m3", revision=revision)
+          Path(os.environ["GITHUB_ENV"]).write_text(f"TJIPTO_DENSE_MODEL_DIR={path}\n", encoding="utf-8")
+          PY
+      - name: Produce exact dense runtime attestation
+        run: |
+          mkdir -p reports
+          python scripts/attest_dense_runtime.py --report reports/dense-promotion-attestation.json
+      - name: Upload dense promotion evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dense-promotion-evidence
+          path: reports/dense-promotion-attestation.json
+          if-no-files-found: error
+
+  backend:
+    needs: [dense]
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONPATH: ${{ github.workspace }}/src
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
     outputs:
       artifact_id: ${{ steps.upload_backend.outputs.artifact-id }}
       artifact_digest: ${{ steps.upload_backend.outputs.artifact-digest }}
@@ -18,6 +70,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 2
+          ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12.10"
@@ -41,6 +94,19 @@ jobs:
         run: |
           rm -rf reports
           mkdir reports
+      - name: Download exact dense attestation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dense-promotion-evidence
+          path: reports
+      - name: Validate dense promotion attestation
+        run: python scripts/measure_command.py --gate dense_promotion_attestation --report reports/ci-gates.jsonl -- python scripts/attest_dense_runtime.py --check-only --report reports/dense-promotion-attestation.json
+      - name: Validate true hybrid activation
+        run: python scripts/measure_command.py --gate true_hybrid_activation --report reports/ci-gates.jsonl -- python scripts/attest_dense_runtime.py --check-only --report reports/dense-promotion-attestation.json
+      - name: Validate current-checkout package origin
+        run: python scripts/measure_command.py --gate package_origin --report reports/ci-gates.jsonl -- python scripts/validate_toolchain.py --package-origin
+      - name: Audit hash-pinned dense dependency closure
+        run: python scripts/measure_command.py --gate pip_audit --report reports/ci-gates.jsonl -- python -m pip_audit --disable-pip --no-deps --strict -r requirements.lock -r requirements-dense.lock -f json -o reports/pip-audit.json
       - name: Validate canonical toolchain
         run: python scripts/measure_command.py --gate toolchain --report reports/ci-gates.jsonl -- python scripts/validate_toolchain.py
       - name: Record environment identity
@@ -49,41 +115,29 @@ jobs:
         run: python scripts/measure_command.py --gate compileall --report reports/ci-gates.jsonl -- python -m compileall -q src tests scripts
       - name: Unit tests
         run: python scripts/measure_command.py --gate unittest --report reports/ci-gates.jsonl --result-report reports/unittest.json -- python -m unittest discover -s tests -v
-      - name: Profile suspected memory owners
-        run: |
-          for file in \
-            tests/test_verified_corpus_contract.py \
-            tests/test_uud_builder_contract.py \
-            tests/test_raw_source_geometry_contract.py \
-            tests/test_pdf_text_span_coverage.py \
-            tests/test_runtime_contract.py \
-            tests/test_runtime_http_contract.py \
-            tests/test_graph_contract.py
-          do
-            name="$(basename "$file" .py)"
-            python scripts/measure_command.py \
-              --result-report "reports/memory-${name}.json" \
-              -- python -m pytest -q "$file" -p no:cacheprovider
-          done
-      - name: Profile per-test RSS
-        env:
-          TJIPTO_MEMORY_REPORT: reports/memory-per-test.json
-        run: python -m pytest -q -p no:cacheprovider -p scripts.pytest_memory_profile
-      - name: Profile Python allocations
-        env:
-          TJIPTO_MEMORY_REPORT: reports/memory-python-allocations.json
-          TJIPTO_MEMORY_TRACEMALLOC: "1"
-        run: |
-          python -m pytest -q -p no:cacheprovider -p scripts.pytest_memory_profile \
-            tests/test_uud_builder_contract.py::UudBuilderContractTest::test_evidence_rebuild_identity_from_rebuilt_chunks_without_seed \
-            tests/test_uud_builder_contract.py::UudBuilderContractTest::test_word_bbox_registry_exists_and_is_deterministic \
-            tests/test_source_text_reachability_contract.py::SourceTextReachabilityContractTests::test_evaluator_streams_raw_rows_without_retaining_the_input_owner
       - name: Pytest run 1
         run: python scripts/measure_command.py --gate pytest_run_1 --report reports/ci-gates.jsonl --result-report reports/pytest-run-1.json -- python -m pytest -q -p no:cacheprovider
       - name: Retrieval evaluation
         run: python scripts/measure_command.py --gate retrieval_evaluation --report reports/ci-gates.jsonl --result-report reports/retrieval-evaluation-command.json -- python scripts/evaluate_uud_retrieval.py --strict-known-gaps --report reports/retrieval-evaluation.json
+      - name: Research retrieval evaluation
+        run: python scripts/measure_command.py --gate research_retrieval_evaluation --report reports/ci-gates.jsonl --result-report reports/research-retrieval-command.json -- python scripts/evaluate_uud_research_retrieval.py --report reports/research-retrieval.json
+      - name: Semantic generalization evaluation
+        run: python scripts/measure_command.py --gate semantic_generalization_evaluation --report reports/ci-gates.jsonl --result-report reports/semantic-generalization-command.json -- python scripts/evaluate_semantic_generalization.py --report reports/semantic-generalization.json
+      - name: Live deployment planner integration
+        env:
+          TJIPTO_RESEARCH_PLANNING_PROVIDER: openai_compatible
+          TJIPTO_RESEARCH_PLANNING_API_KEY: ${{ secrets.TJIPTO_RESEARCH_PLANNING_API_KEY }}
+          TJIPTO_RESEARCH_PLANNING_MODEL: ${{ secrets.TJIPTO_RESEARCH_PLANNING_MODEL }}
+          TJIPTO_RESEARCH_PLANNING_BASE_URL: ${{ secrets.TJIPTO_RESEARCH_PLANNING_BASE_URL }}
+          TJIPTO_RESEARCH_PLANNING_TIMEOUT_SECONDS: "30"
+          TJIPTO_FALLBACK_LLM_PROVIDER: ${{ secrets.TJIPTO_FALLBACK_LLM_PROVIDER }}
+          TJIPTO_FALLBACK_LLM_API_KEY: ${{ secrets.TJIPTO_FALLBACK_LLM_API_KEY }}
+          TJIPTO_FALLBACK_LLM_MODEL: ${{ secrets.TJIPTO_FALLBACK_LLM_MODEL }}
+          TJIPTO_FALLBACK_LLM_BASE_URL: ${{ secrets.TJIPTO_FALLBACK_LLM_BASE_URL }}
+          TJIPTO_FALLBACK_LLM_TIMEOUT_SECONDS: ${{ secrets.TJIPTO_FALLBACK_LLM_TIMEOUT_SECONDS }}
+        run: python scripts/measure_command.py --gate live_planner_integration --report reports/ci-gates.jsonl -- python scripts/verify_live_planner.py --report reports/live-planner-integration.json
       - name: Grounded-answer evaluation
-        run: python scripts/measure_command.py --gate answer_evaluation --report reports/ci-gates.jsonl --result-report reports/answer-evaluation-command.json -- python scripts/evaluate_uud_answers.py --runtime-commit "$GITHUB_SHA" --report reports/answer-evaluation.json
+        run: python scripts/measure_command.py --gate answer_evaluation --report reports/ci-gates.jsonl --result-report reports/answer-evaluation-command.json -- python scripts/evaluate_uud_answers.py --runtime-commit "$TJIPTO_EXACT_HEAD_SHA" --report reports/answer-evaluation.json
       - name: Source-text reachability evaluation
         run: python scripts/measure_command.py --gate source_text_evaluation --report reports/ci-gates.jsonl -- python scripts/evaluate_source_text_reachability.py --report reports/source-text-evaluation.json
       - name: Meaningful-support evaluation
@@ -104,8 +158,6 @@ jobs:
         run: python scripts/measure_command.py --gate bandit --report reports/ci-gates.jsonl -- bandit -q -r src
       - name: pip check
         run: python scripts/measure_command.py --gate pip_check --report reports/ci-gates.jsonl -- python -m pip check
-      - name: pip audit
-        run: python scripts/measure_command.py --gate pip_audit --report reports/ci-gates.jsonl -- python -m pip_audit --strict -r requirements.lock -f json -o reports/pip-audit.json
       - name: Dependency inspection
         run: python -m pip inspect > reports/pip-inspect.json
       - name: Clean tree after rebuild
@@ -132,7 +184,7 @@ jobs:
       - name: Verify exact archive (first build)
         run: |
           set -euo pipefail
-          python scripts/measure_command.py --gate release_a --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" | tee "$RUNNER_TEMP/tjipto-release-one.json"'
+          python scripts/measure_command.py --gate release_a --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$TJIPTO_EXACT_HEAD_SHA" "$RUNNER_TEMP/tjipto-release-one.zip" --dense-attestation reports/dense-promotion-attestation.json | tee "$RUNNER_TEMP/tjipto-release-one.json"'
           test -s "$RUNNER_TEMP/tjipto-release-one.json"
           test -s "$RUNNER_TEMP/tjipto-release-one.zip.sidecar.json"
           cp "$RUNNER_TEMP/tjipto-release-one.json" reports/release-one.json
@@ -140,7 +192,7 @@ jobs:
       - name: Verify exact archive (second build)
         run: |
           set -euo pipefail
-          python scripts/measure_command.py --gate release_b --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$GITHUB_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" | tee "$RUNNER_TEMP/tjipto-release-two.json"'
+          python scripts/measure_command.py --gate release_b --report reports/ci-gates.jsonl -- bash -o pipefail -c 'python scripts/verify_clean_handoff.py release "$TJIPTO_EXACT_HEAD_SHA" "$RUNNER_TEMP/tjipto-release-two.zip" --dense-attestation reports/dense-promotion-attestation.json | tee "$RUNNER_TEMP/tjipto-release-two.json"'
           test -s "$RUNNER_TEMP/tjipto-release-two.json"
           test -s "$RUNNER_TEMP/tjipto-release-two.zip.sidecar.json"
           cp "$RUNNER_TEMP/tjipto-release-two.json" reports/release-two.json
@@ -200,6 +252,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 2
+          ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12.10"
@@ -270,6 +323,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 2
+          ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12.10"
@@ -302,18 +356,36 @@ jobs:
           path: closure-evidence/web
       - name: Assemble closure provenance
         if: always()
-        run: >-
-          python scripts/assemble_closure_provenance.py
-          --backend-dir closure-evidence/backend
-          --web-dir closure-evidence/web
-          --closure-identity closure-evidence/closure-run-identity.json
-          --backend-result '${{ needs.backend.result }}'
-          --web-result '${{ needs.web.result }}'
-          --backend-artifact-id '${{ needs.backend.outputs.artifact_id }}'
-          --backend-artifact-digest '${{ needs.backend.outputs.artifact_digest }}'
-          --web-artifact-id '${{ needs.web.outputs.artifact_id }}'
-          --web-artifact-digest '${{ needs.web.outputs.artifact_digest }}'
-          --output closure-evidence/closure-provenance.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TJIPTO_GH_REPOSITORY: ${{ github.repository }}
+          TJIPTO_BACKEND_ARTIFACT_ID: ${{ needs.backend.outputs.artifact_id }}
+          TJIPTO_WEB_ARTIFACT_ID: ${{ needs.web.outputs.artifact_id }}
+        run: |
+          set -euo pipefail
+
+          artifact_digest() {
+            local artifact_id="$1"
+            if [[ "$artifact_id" =~ ^[0-9]+$ ]]; then
+              local digest
+              digest="$(gh api "repos/$TJIPTO_GH_REPOSITORY/actions/artifacts/$artifact_id" --jq '.digest')"
+              printf '%s\n' "${digest#sha256:}"
+            fi
+          }
+
+          backend_artifact_digest="$(artifact_digest "$TJIPTO_BACKEND_ARTIFACT_ID")"
+          web_artifact_digest="$(artifact_digest "$TJIPTO_WEB_ARTIFACT_ID")"
+          python scripts/assemble_closure_provenance.py \
+            --backend-dir closure-evidence/backend \
+            --web-dir closure-evidence/web \
+            --closure-identity closure-evidence/closure-run-identity.json \
+            --backend-result '${{ needs.backend.result }}' \
+            --web-result '${{ needs.web.result }}' \
+            --backend-artifact-id "$TJIPTO_BACKEND_ARTIFACT_ID" \
+            --backend-artifact-digest "$backend_artifact_digest" \
+            --web-artifact-id "$TJIPTO_WEB_ARTIFACT_ID" \
+            --web-artifact-digest "$web_artifact_digest" \
+            --output closure-evidence/closure-provenance.json
       - name: Upload closure provenance
         id: upload_closure
         if: always()

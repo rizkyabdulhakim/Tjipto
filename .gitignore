@@ -9,6 +9,7 @@ reports-local/
 .coverage
 coverage/
 .playwright-cli/
+.codex-live-preview/
 playwright-report/
 test-results/
 build/

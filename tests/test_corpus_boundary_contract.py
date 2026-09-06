@@ -39,12 +39,15 @@ class CorpusBoundaryContractTest(unittest.TestCase):
 
     def test_uud_parser_owns_legal_reference_helpers(self) -> None:
         self.assertEqual(uud_parser.parse_uud_bab_reference("BAB XA"), "BAB XA")
+        self.assertEqual(uud_parser.parse_uud_bab_reference("babxa"), "BAB XA")
         self.assertEqual(uud_parser.parse_uud_pasal_reference("ayat (1) Pasal 28"), "Pasal 28")
+        self.assertEqual(uud_parser.parse_uud_pasal_reference("Pasal dua puluh delapan"), "Pasal 28")
         self.assertEqual(uud_parser.parse_uud_ayat_reference("Pasal 28 ayat (1)"), "(1)")
         self.assertEqual(
             uud_parser.normalize_uud_query_reference("pasal 28 (1)"),
             "Pasal 28 ayat (1)",
         )
+        self.assertEqual(uud_parser.normalize_uud_query_reference("pasal dua puluh delapan"), "Pasal 28")
 
     def test_parser_dispatch_resolves_uud_and_fails_safely(self) -> None:
         strategy = parser_dispatch.get_strategy("uud")
@@ -171,6 +174,10 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         self.assertEqual([row["reference"] for row in rows], ["Pasal 3 ayat (3)", "Pasal 3 ayat (2)"])
         self.assertEqual([text[int(row["start"]) : int(row["end"])] for row in rows], ["Pasal 3 ayat (3)", "Pasal 3 ayat (2)"])
 
+    def test_parser_dispatch_preserves_comma_separated_inherited_paragraphs(self) -> None:
+        rows = parser_dispatch.parse_legal_references("uud", "Pasal 3 Ayat (1), (3) dan (4)")
+        self.assertEqual([row["reference"] for row in rows], ["Pasal 3 ayat (1)", "Pasal 3 ayat (3)", "Pasal 3 ayat (4)"])
+
     def test_renumbering_parser_preserves_paragraph_level_pairs(self) -> None:
         text = (
             "Pengubahan penomoran Pasal 3 ayat (3) dan ayat (4) Perubahan Ketiga "
@@ -191,6 +198,23 @@ class CorpusBoundaryContractTest(unittest.TestCase):
         self.assertEqual(text[rows[1]["old_range"][0] : rows[1]["old_range"][1]], "Pasal 3 ayat (3) dan ayat (4)")
         self.assertEqual(rows[1]["old_range_kind"], "contextual")
         self.assertEqual(rows[2]["new_range_kind"], "literal")
+
+    def test_coordinated_article_scope_inherits_parent_for_bare_paragraphs(self) -> None:
+        text = (
+            "Perubahan Pertama mengubah Pasal 13 ayat (2) dan (3), "
+            "Pasal 17 ayat (2) dan (3) menjadi Pasal 13 ayat (2) dan (3), "
+            "Pasal 17 ayat (2) dan (3);"
+        )
+        rows = parse_renumbering_mappings(text)
+        self.assertEqual(
+            [(row["old_reference"], row["new_reference"]) for row in rows],
+            [
+                ("Pasal 13 ayat (2)", "Pasal 13 ayat (2)"),
+                ("Pasal 13 ayat (3)", "Pasal 13 ayat (3)"),
+                ("Pasal 17 ayat (2)", "Pasal 17 ayat (2)"),
+                ("Pasal 17 ayat (3)", "Pasal 17 ayat (3)"),
+            ],
+        )
 
     def test_generic_layers_use_parser_dispatch_not_uud_parser(self) -> None:
         for rel_path in (

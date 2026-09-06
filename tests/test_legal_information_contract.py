@@ -8,12 +8,14 @@ from tjipto.contracts.legal_information import (
     ConflictResolution,
     DocumentRelation,
     FieldState,
+    LegalDocumentIdentity,
     OfficialValue,
     ProvisionEffect,
     RelationKind,
     ResolutionState,
     SourceKind,
     SourceProvenance,
+    StatusAssertion,
     VerifiedValue,
 )
 
@@ -31,6 +33,29 @@ PDF = SourceProvenance(
 
 
 class LegalInformationContractTest(unittest.TestCase):
+    def test_source_designation_can_identify_a_document_when_issuer_is_absent_from_source(self) -> None:
+        def value(text: str) -> VerifiedValue:
+            return VerifiedValue(text, text.casefold(), text, FieldState.VERIFIED, PDF)
+
+        missing = VerifiedValue(None, None, None, FieldState.NOT_FOUND_IN_SOURCE)
+        identity = LegalDocumentIdentity(
+            value("Undang-Undang Dasar"),
+            VerifiedValue(None, None, None, FieldState.NOT_APPLICABLE),
+            value("1945"),
+            value("Undang-Undang Dasar Negara Republik Indonesia Tahun 1945"),
+            missing,
+            value("Naskah Asli"),
+        )
+        self.assertTrue(identity.stable_id.startswith("legal-document-"))
+        with self.assertRaisesRegex(ValueError, "identity_not_verified"):
+            LegalDocumentIdentity(
+                identity.document_type,
+                identity.number,
+                identity.year,
+                identity.official_title,
+                missing,
+            ).stable_id
+
     def test_verified_values_preserve_source_normalized_display_and_provenance(self) -> None:
         value = VerifiedValue("Berlaku ", "applicable", "Berlaku", FieldState.VERIFIED, CATALOG)
         self.assertEqual((value.source_value, value.normalized_value, value.display_value), ("Berlaku ", "applicable", "Berlaku"))
@@ -103,6 +128,12 @@ class LegalInformationContractTest(unittest.TestCase):
         relation = DocumentRelation(RelationKind.AMENDS, "modifier", "base", CATALOG)
         self.assertEqual(relation.inverse(), DocumentRelation(RelationKind.AMENDED_BY, "base", "modifier", CATALOG))
 
+    def test_status_scope_is_explicit_and_closed(self) -> None:
+        status = StatusAssertion(VerifiedValue("Berlaku", "berlaku", "Berlaku", FieldState.VERIFIED, CATALOG), NOW, "parent_record")
+        self.assertEqual(status.scope, "parent_record")
+        with self.assertRaisesRegex(ValueError, "invalid_status_scope"):
+            StatusAssertion(status.status, NOW, "unknown")
+
     def test_provision_effect_requires_exact_pdf_target_and_selector(self) -> None:
         effect = ProvisionEffect(RelationKind.AMENDS, "modifier", "base", "Pasal 1", "Mengubah Pasal 1.", PDF)
         self.assertEqual(effect.exact_target, "Pasal 1")
@@ -110,6 +141,8 @@ class LegalInformationContractTest(unittest.TestCase):
             ProvisionEffect(RelationKind.AMENDS, "modifier", "base", "Pasal 1", "Mengubah Pasal 1.", CATALOG)
         with self.assertRaisesRegex(ValueError, "provision_effect_selector_mismatch"):
             ProvisionEffect(RelationKind.AMENDS, "modifier", "base", "Pasal 1", "Teks lain.", PDF)
+        with self.assertRaisesRegex(ValueError, "invalid_provision_effect_operation"):
+            ProvisionEffect(RelationKind.AMENDS, "modifier", "base", "Pasal 1", "Mengubah Pasal 1.", PDF, "UNKNOWN")
 
 
 if __name__ == "__main__":

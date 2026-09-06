@@ -5,6 +5,7 @@ import {
   answerTextOrFallback,
   mapAskResponseToCitations,
   mapAskResponseToDocumentSource,
+  mapAskResponseToDocumentSources,
   mapAskResponseToSupportGroups,
   mapSearchResultToCitation,
 } from "../src/lib/api.ts";
@@ -53,6 +54,22 @@ test("keeps grouped members independently targetable", () => {
   assert.deepEqual(groups[0].members.map((member) => member.publicTargetId), ["target_1", "target_3"]);
 });
 
+test("keeps grouped amendment relations typed as provenance", () => {
+  const relation = {
+    ...legalSupport,
+    public_support_id: "relation_1",
+    authority_kind: "instrument_provenance",
+    citation_final: false,
+    support_kind: "article_relation",
+    fact_kind: "article_relation",
+  };
+  const groups = mapAskResponseToSupportGroups({
+    kind: "answer", status: "answer_ready",
+    support_groups: [{ public_group_id: "relations", group_kind: "article_relation_members", label: "Perubahan Pertama", summary: "8 ketentuan", member_count: 1, members: [relation] }],
+  });
+  assert.equal(groups[0].kind, "trace");
+});
+
 test("maps support categories only from typed authority", () => {
   const supports = [
     { ...legalSupport, public_support_id: "meta", authority_kind: "metadata_source", citation_final: false },
@@ -81,6 +98,19 @@ test("maps search and document source through public targets only", () => {
   const document = mapAskResponseToDocumentSource({ kind: "document", status: "answer_ready", document: { label: "Dokumen", viewer_target: { public_target_id: "document_1" } } });
   assert.equal(document?.publicTargetId, "document_1");
   assert.equal(document?.viewerMode, "document");
+});
+
+test("maps a verified document collection to independently openable cards", () => {
+  const documents = mapAskResponseToDocumentSources({
+    kind: "documents",
+    status: "answer_ready",
+    documents: [
+      { title: "Naskah Asli", document_role: "Naskah Asli", viewer_target: { public_target_id: "original" } },
+      { title: "Perubahan Pertama", document_role: "Amandemen", viewer_target: { public_target_id: "amendment-1" } },
+    ],
+  });
+  assert.deepEqual(documents.map((document) => document.publicTargetId), ["original", "amendment-1"]);
+  assert.ok(documents.every((document) => document.viewerMode === "document"));
 });
 
 test("uses a safe answer fallback only when the public answer is empty", () => {

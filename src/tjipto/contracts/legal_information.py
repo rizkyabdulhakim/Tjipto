@@ -43,6 +43,10 @@ class LifecycleKind(StrEnum):
 class RelationKind(StrEnum):
     AMENDS = "amends"
     AMENDED_BY = "amended_by"
+    CONSOLIDATES = "consolidates"
+    CONSOLIDATED_BY = "consolidated_by"
+    DERIVED_FROM = "derived_from"
+    DERIVES = "derives"
     REVOKES = "revokes"
     REVOKED_BY = "revoked_by"
 
@@ -51,9 +55,18 @@ class RelationKind(StrEnum):
         return {
             self.AMENDS: self.AMENDED_BY,
             self.AMENDED_BY: self.AMENDS,
+            self.CONSOLIDATES: self.CONSOLIDATED_BY,
+            self.CONSOLIDATED_BY: self.CONSOLIDATES,
+            self.DERIVED_FROM: self.DERIVES,
+            self.DERIVES: self.DERIVED_FROM,
             self.REVOKES: self.REVOKED_BY,
             self.REVOKED_BY: self.REVOKES,
         }[self]
+
+
+PROVISION_EFFECT_OPERATIONS = frozenset(
+    {"ADDS", "AMBIGUOUS_OPERATION", "DELETES", "MODIFIES", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}
+)
 
 
 @dataclass(frozen=True)
@@ -156,8 +169,10 @@ class LegalDocumentIdentity:
 
     @property
     def stable_id(self) -> str:
-        required = (self.document_type, self.year, self.issuer)
-        if any(value.normalized_value is None for value in required):
+        required = (self.document_type, self.year)
+        has_issuer = self.issuer.normalized_value is not None
+        has_source_designation = self.source_designation is not None and self.source_designation.normalized_value is not None
+        if any(value.normalized_value is None for value in required) or not (has_issuer or has_source_designation):
             raise ValueError("identity_not_verified")
         fields = (self.document_type, self.number, self.year, self.issuer, self.source_designation)
         values = tuple(
@@ -177,10 +192,13 @@ class LifecycleEvent:
 class StatusAssertion:
     status: VerifiedValue
     as_of: datetime
+    scope: str = "document_record"
 
     def __post_init__(self) -> None:
         if self.as_of.tzinfo is None:
             raise ValueError("status_requires_timezone")
+        if self.scope not in {"document_record", "parent_record"}:
+            raise ValueError("invalid_status_scope")
 
 
 @dataclass(frozen=True)
@@ -206,6 +224,7 @@ class ProvisionEffect:
     exact_target: str
     exact_source_text: str
     provenance: SourceProvenance
+    operation: str = "MODIFIES"
 
     def __post_init__(self) -> None:
         if self.provenance.kind is not SourceKind.OFFICIAL_PDF:
@@ -214,6 +233,8 @@ class ProvisionEffect:
             raise ValueError("provision_effect_requires_exact_target")
         if self.provenance.selector != self.exact_source_text:
             raise ValueError("provision_effect_selector_mismatch")
+        if self.operation not in PROVISION_EFFECT_OPERATIONS:
+            raise ValueError("invalid_provision_effect_operation")
 
 
 @dataclass(frozen=True)

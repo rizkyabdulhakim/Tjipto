@@ -54,7 +54,8 @@ def graph_expand(store, seeds: tuple[dict, ...], filters: dict, per_seed: int = 
     out = []
     seen = {row["evidence_id"] for row in seeds}
     for seed in seeds[:5]:
-        if "bm25" in set(seed.get("route_sources") or ()) and seed.get("lexical_relevance_ok") is False:
+        seed_routes = set(seed.get("route_sources") or ())
+        if seed_routes == {"bm25"} and not seed.get("lexical_complete_coverage", True):
             continue
         seed_node = f"legal_unit::{seed.get('legal_unit_id')}"
         if seed.get("legal_unit_id") is None:
@@ -138,7 +139,7 @@ def _add(rows_by_id: dict[str, dict], store, row: dict, route: str, order: int, 
         existing["candidate_type"] = row.get("candidate_type") or CANDIDATE_TYPE.get(
             route, existing.get("candidate_type", "legal_unit_candidate")
         )
-    score = 0.0 if route == "bm25" and row.get("lexical_relevance_ok") is False else ROUTE_WEIGHT[route] - order
+    score = ROUTE_WEIGHT[route] - order
     existing["route_scores"][route] = max(existing["route_scores"].get(route, 0.0), score)
     if trace:
         existing["expansion_trace"] = (*existing["expansion_trace"], trace)

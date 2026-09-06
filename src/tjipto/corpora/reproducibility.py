@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-import hashlib
 import re
 import unicodedata
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from tjipto.corpora.registry import CorpusRegistry
-from tjipto.core.manifest import read_json, validate_manifest
+from tjipto.core.config import CorpusConfig
+from tjipto.core.manifest import file_sha256, read_json, validate_manifest
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+JsonRow = Mapping[str, Any]
+PageKey = tuple[str, int]
 
 
 def _compact_text(text: str) -> str:
@@ -22,189 +20,255 @@ def _compact_text(text: str) -> str:
     return "".join(re.findall(r"\w+", text.casefold()))
 
 
-def _count_jsonl(config, key: str) -> int:
-    try:
-        return len(config.jsonl(key))
-    except (KeyError, FileNotFoundError, ValueError):
-        return -1
-
-
-def validate_corpus_ingestion_artifacts(corpus_id: str, repo_root: Path) -> dict:
-    config = CorpusRegistry(repo_root).resolve(corpus_id)
-    errors: list[str] = []
-    if config is None:
-        return {"status": "invalid", "errors": ("missing_corpus",), "counts": {}}
-
-    final_dir = config.manifest_path.parent
-    errors.extend(validate_manifest(final_dir))
-    manifest = read_json(config.manifest_path)
-
-    for rel, expected in manifest.get("files", {}).items():
-        path = final_dir / rel
+def _manifest_errors(final_dir: Path, manifest: Mapping[str, object]) -> list[str]:
+    errors = list(validate_manifest(final_dir))
+    files = manifest.get("files") or {}
+    if not isinstance(files, Mapping):
+        return [*errors, "invalid_manifest_files"]
+    for rel, expected in files.items():
+        path = final_dir / str(rel)
         if not path.exists():
             errors.append(f"missing_file:{rel}")
             continue
+        if not isinstance(expected, Mapping):
+            errors.append(f"invalid_file_manifest:{rel}")
+            continue
         if path.stat().st_size != expected.get("bytes"):
             errors.append(f"bytes_mismatch:{rel}")
-        if _sha256(path) != expected.get("sha256"):
+        if file_sha256(path) != expected.get("sha256"):
             errors.append(f"sha256_mismatch:{rel}")
+    return errors
 
-    expected_counts = manifest.get("counts", {})
-    count_keys = {
-        "source_documents": "source_documents",
-        "pages": "pages",
-        "legal_units": "legal_units",
-        "chunks": "chunks",
-        "evidence_records": "evidence",
-        "bbox_records": "bbox",
-        "metadata_grounding": "metadata_grounding",
-        "word_bboxes": "word_bboxes",
-        "graph_nodes": "graph_nodes",
-        "graph_edges": "graph_edges",
-        "retrieval_units": "retrieval_units",
+
+def _jsonl_keys(manifest: Mapping[str, object]) -> set[str]:
+    files = manifest.get("files") or {}
+    if not isinstance(files, Mapping):
+        return set()
+    return {
+        str(record["logical_key"])
+        for record in files.values()
+        if isinstance(record, Mapping) and record.get("format") == "jsonl" and record.get("logical_key")
     }
-    counts = {}
-    for count_name, artifact_key in count_keys.items():
-        actual = _count_jsonl(config, artifact_key)
-        counts[count_name] = actual
-        if count_name in expected_counts and actual != expected_counts[count_name]:
-            errors.append(f"count_mismatch:{count_name}:{actual}!={expected_counts[count_name]}")
 
-    try:
-        import fitz
-    except ImportError:
-        return {"status": "invalid", "errors": ("missing_test_dependency:PyMuPDF",), "counts": counts}
 
-    source_docs = {row["source_document_id"]: row for row in config.jsonl("source_documents")}
-    pdfs = {}
-    page_text = {}
+def _artifact_key(count_name: str, jsonl_keys: set[str]) -> str | None:
+    if count_name in jsonl_keys:
+        return count_name
+    if count_name.endswith("_records"):
+        base = count_name.removesuffix("_records")
+        for candidate in (f"{base}_registry", base):
+            if candidate in jsonl_keys:
+                return candidate
+    return None
+
+
+def _artifact_counts(config: CorpusConfig, manifest: Mapping[str, object]) -> tuple[dict[str, int], list[str]]:
+    expected = manifest.get("counts") or {}
+    if not isinstance(expected, Mapping):
+        return {}, ["invalid_manifest_counts"]
+    keys = _jsonl_keys(manifest)
+    counts: dict[str, int] = {}
+    errors: list[str] = []
+    for count_name, expected_count in expected.items():
+        artifact_key = _artifact_key(str(count_name), keys)
+        if artifact_key is None:
+            continue
+        try:
+            actual = len(config.jsonl(artifact_key))
+        except (KeyError, FileNotFoundError, ValueError):
+            actual = -1
+        counts[str(count_name)] = actual
+        if actual != expected_count:
+            errors.append(f"count_mismatch:{count_name}:{actual}!={expected_count}")
+    return counts, errors
+
+
+def _load_pdf_sources(
+    config: CorpusConfig,
+    manifest: Mapping[str, object],
+    errors: list[str],
+) -> tuple[dict[str, JsonRow], dict[PageKey, str], dict[PageKey, tuple[float, float]]]:
+    import fitz
+
+    source_docs = {str(row["source_document_id"]): row for row in config.jsonl("source_documents")}
+    source_files = manifest.get("source_files") or {}
+    page_text: dict[PageKey, str] = {}
+    page_sizes: dict[PageKey, tuple[float, float]] = {}
     for source_id, row in source_docs.items():
-        path = repo_root / row["path"]
+        path = config.source_path(str(row["path"]))
         if not path.exists():
             errors.append(f"missing_pdf:{source_id}")
             continue
-        if _sha256(path) != row["sha256"]:
+        if file_sha256(path) != row["sha256"]:
             errors.append(f"source_sha256_mismatch:{source_id}")
-        if manifest.get("source_files", {}).get(row["path"]) != row["sha256"]:
+        if not isinstance(source_files, Mapping) or source_files.get(row["path"]) != row["sha256"]:
             errors.append(f"manifest_source_sha256_mismatch:{source_id}")
-        pdf = fitz.open(path)
-        pdfs[source_id] = pdf
-        if row.get("page_count") and pdf.page_count != row["page_count"]:
-            errors.append(f"page_count_mismatch:{source_id}")
-        page_text[source_id] = {i: _compact_text(pdf[i - 1].get_text()) for i in range(1, pdf.page_count + 1)}
+        with fitz.open(path) as pdf:
+            if row.get("page_count") and pdf.page_count != row["page_count"]:
+                errors.append(f"page_count_mismatch:{source_id}")
+            for page_number, page in enumerate(pdf, start=1):
+                key = source_id, page_number
+                page_text[key] = _compact_text(page.get_text())
+                page_sizes[key] = page.rect.width, page.rect.height
+    return source_docs, page_text, page_sizes
 
+
+def _validate_pages(
+    config: CorpusConfig, source_docs: Mapping[str, JsonRow], pdf_text: Mapping[PageKey, str], errors: list[str]
+) -> set[PageKey]:
     pages = config.jsonl("pages")
-    page_keys = {(row["source_document_id"], row["page_number"]) for row in pages}
-    pages_by_key = {(row["source_document_id"], row["page_number"]): _compact_text(row["text"]) for row in pages}
-    for source_id, page_number in page_keys:
-        if source_id not in source_docs:
-            errors.append(f"page_unknown_source:{source_id}:{page_number}")
-        elif page_number not in page_text.get(source_id, {}):
-            errors.append(f"page_out_of_range:{source_id}:{page_number}")
-        elif pages_by_key[(source_id, page_number)] not in page_text[source_id][page_number]:
-            errors.append(f"page_text_mismatch:{source_id}:{page_number}")
+    page_keys = {(str(row["source_document_id"]), int(row["page_number"])) for row in pages}
+    for row in pages:
+        key = str(row["source_document_id"]), int(row["page_number"])
+        if key[0] not in source_docs:
+            errors.append(f"page_unknown_source:{key[0]}:{key[1]}")
+        elif key not in pdf_text:
+            errors.append(f"page_out_of_range:{key[0]}:{key[1]}")
+        elif _compact_text(str(row["text"])) not in pdf_text[key]:
+            errors.append(f"page_text_mismatch:{key[0]}:{key[1]}")
+    return page_keys
 
-    legal_units = {row["legal_unit_id"]: row for row in config.jsonl("legal_units")}
-    for row in legal_units.values():
+
+def _validate_structure(config: CorpusConfig, source_docs: Mapping[str, JsonRow], errors: list[str]) -> dict[str, JsonRow]:
+    legal_units = {str(row["legal_unit_id"]): row for row in config.jsonl("legal_units")}
+    for unit_id, row in legal_units.items():
         if row["source_document_id"] not in source_docs:
-            errors.append(f"legal_unit_unknown_source:{row['legal_unit_id']}")
+            errors.append(f"legal_unit_unknown_source:{unit_id}")
         for parent_id in row.get("parent_legal_unit_ids") or []:
             if parent_id not in legal_units:
-                errors.append(f"legal_unit_unknown_parent:{row['legal_unit_id']}:{parent_id}")
-
-    chunks = {row["chunk_id"]: row for row in config.jsonl("chunks")}
-    for row in chunks.values():
+                errors.append(f"legal_unit_unknown_parent:{unit_id}:{parent_id}")
+    for row in config.jsonl("chunks"):
         if row["legal_unit_id"] not in legal_units:
             errors.append(f"chunk_unknown_legal_unit:{row['chunk_id']}")
+    return legal_units
 
-    evidence = {row["evidence_id"]: row for row in config.jsonl("evidence")}
-    bboxes = {row["bbox_id"]: row for row in config.jsonl("bbox")}
-    for row in evidence.values():
+
+def _validate_evidence(
+    config: CorpusConfig,
+    source_docs: Mapping[str, JsonRow],
+    legal_units: Mapping[str, JsonRow],
+    page_keys: set[PageKey],
+    page_sizes: Mapping[PageKey, tuple[float, float]],
+    errors: list[str],
+) -> dict[str, JsonRow]:
+    evidence = {str(row["evidence_id"]): row for row in config.jsonl("evidence")}
+    bboxes = {str(row["bbox_id"]): row for row in config.jsonl("bbox")}
+    for evidence_id, row in evidence.items():
         if row["legal_unit_id"] not in legal_units:
-            errors.append(f"evidence_unknown_legal_unit:{row['evidence_id']}")
+            errors.append(f"evidence_unknown_legal_unit:{evidence_id}")
         if row["source_document_id"] not in source_docs:
-            errors.append(f"evidence_unknown_source:{row['evidence_id']}")
+            errors.append(f"evidence_unknown_source:{evidence_id}")
         for page_number in row.get("page_numbers") or []:
-            if (row["source_document_id"], page_number) not in page_keys:
-                errors.append(f"evidence_unknown_page:{row['evidence_id']}:{page_number}")
+            if (str(row["source_document_id"]), int(page_number)) not in page_keys:
+                errors.append(f"evidence_unknown_page:{evidence_id}:{page_number}")
         for bbox_id in row.get("bbox_refs") or []:
             if bbox_id not in bboxes:
-                errors.append(f"evidence_unknown_bbox:{row['evidence_id']}:{bbox_id}")
-    referenced_bbox_ids = {ref for item in evidence.values() for ref in item.get("bbox_refs") or ()}
-    for row in bboxes.values():
-        source_id = row.get("source_document_id")
-        page_number = row.get("page_number")
-        if row.get("bbox_id") not in referenced_bbox_ids:
-            errors.append(f"bbox_orphan_geometry:{row.get('bbox_id')}")
+                errors.append(f"evidence_unknown_bbox:{evidence_id}:{bbox_id}")
+    _validate_bboxes(bboxes, evidence, page_keys, page_sizes, errors)
+    return evidence
+
+
+def _validate_bboxes(
+    bboxes: Mapping[str, JsonRow],
+    evidence: Mapping[str, JsonRow],
+    page_keys: set[PageKey],
+    page_sizes: Mapping[PageKey, tuple[float, float]],
+    errors: list[str],
+) -> None:
+    referenced = {str(ref) for row in evidence.values() for ref in row.get("bbox_refs") or ()}
+    for bbox_id, row in bboxes.items():
+        key = str(row["source_document_id"]), int(row["page_number"])
+        if bbox_id not in referenced:
+            errors.append(f"bbox_orphan_geometry:{bbox_id}")
         if "evidence_id" in row and row.get("evidence_id") not in evidence:
-            errors.append(f"bbox_unknown_evidence:{row.get('bbox_id')}")
-        if (source_id, page_number) not in page_keys:
-            errors.append(f"bbox_unknown_page:{row.get('bbox_id')}")
-        elif source_id in pdfs:
-            rect = pdfs[source_id][page_number - 1].rect
-            if not (0 <= row["x0"] <= row["x1"] <= rect.width and 0 <= row["y0"] <= row["y1"] <= rect.height):
-                errors.append(f"bbox_out_of_bounds:{row.get('bbox_id')}")
+            errors.append(f"bbox_unknown_evidence:{bbox_id}")
+        if key not in page_keys:
+            errors.append(f"bbox_unknown_page:{bbox_id}")
+        elif key in page_sizes:
+            width, height = page_sizes[key]
+            if not (0 <= row["x0"] <= row["x1"] <= width and 0 <= row["y0"] <= row["y1"] <= height):
+                errors.append(f"bbox_out_of_bounds:{bbox_id}")
 
-    metadata_bbox_ids = {row["bbox_id"] for row in config.jsonl("metadata_grounding_registry")}
+
+def _validate_metadata(config: CorpusConfig, source_docs: Mapping[str, JsonRow], errors: list[str]) -> None:
+    bbox_ids = {row["bbox_id"] for row in config.jsonl("metadata_grounding_registry")}
     for row in config.jsonl("metadata_grounding"):
+        grounding_id = row["metadata_grounding_id"]
         if row["source_document_id"] not in source_docs:
-            errors.append(f"metadata_grounding_unknown_source:{row['metadata_grounding_id']}")
+            errors.append(f"metadata_grounding_unknown_source:{grounding_id}")
         for bbox_id in row.get("bbox_refs") or []:
-            if bbox_id not in metadata_bbox_ids:
-                errors.append(f"metadata_grounding_unknown_bbox:{row['metadata_grounding_id']}:{bbox_id}")
+            if bbox_id not in bbox_ids:
+                errors.append(f"metadata_grounding_unknown_bbox:{grounding_id}:{bbox_id}")
 
-    graph_nodes = {row["node_id"]: row for row in config.jsonl("graph_nodes")}
-    for node_id, row in graph_nodes.items():
-        if row.get("source_pdf_path"):
-            path = repo_root / row["source_pdf_path"]
-            if not path.exists():
-                errors.append(f"graph_node_missing_pdf:{node_id}")
-            elif row.get("source_sha256") and _sha256(path) != row["source_sha256"]:
-                errors.append(f"graph_node_source_sha256_mismatch:{node_id}")
-    legal_edge_types = {
-        "CONTAINS",
-        "PART_OF",
-        "AMENDS",
-        "AMENDED_BY",
-        "ADDS",
-        "MODIFIES",
-        "DELETES",
-        "RENAMES",
-        "RENUMBERED_TO",
-        "SUPPLEMENTS",
-        "HAS_EFFECTIVE_RULE",
-        "HAS_SIGNATORY",
-        "HAS_DECISION_SESSION",
-        "HAS_SOURCE_ANOMALY",
-    }
-    evidence_ids = set(evidence)
+
+def _validate_graph(config: CorpusConfig, evidence: Mapping[str, JsonRow], errors: list[str]) -> None:
+    nodes = {str(row["node_id"]): row for row in config.jsonl("graph_nodes")}
+    for node_id, row in nodes.items():
+        if not row.get("source_pdf_path"):
+            continue
+        path = config.source_path(str(row["source_pdf_path"]))
+        if not path.exists():
+            errors.append(f"graph_node_missing_pdf:{node_id}")
+        elif row.get("source_sha256") and file_sha256(path) != row["source_sha256"]:
+            errors.append(f"graph_node_source_sha256_mismatch:{node_id}")
+
     for edge in config.jsonl("graph_edges"):
-        if edge["source_id"] not in graph_nodes or edge["target_id"] not in graph_nodes:
-            errors.append(f"graph_edge_unknown_endpoint:{edge['edge_id']}")
-        if edge.get("edge_type") in legal_edge_types:
-            if edge.get("relation_id"):
-                # Relation proof belongs to article_amendment_relations; the
-                # corpus validator checks that dereference independently.
-                continue
-            if not edge.get("source_document_id"):
-                errors.append(f"graph_legal_edge_missing_source_document:{edge['edge_id']}")
-            if edge.get("runtime_loadable") is True:
-                if not edge.get("validation_status"):
-                    errors.append(f"graph_runtime_edge_missing_validation:{edge['edge_id']}")
-                if not edge.get("confidence_policy"):
-                    errors.append(f"graph_runtime_edge_missing_confidence:{edge['edge_id']}")
-            if "evidence_ref" in edge:
-                errors.append(f"graph_legacy_evidence_contract:{edge['edge_id']}")
-            for ref in edge.get("supporting_evidence_ids") or ():
-                if ref not in evidence_ids:
-                    errors.append(f"graph_legal_edge_unknown_evidence_ref:{edge['edge_id']}:{ref}")
-            if edge.get("support_kind") == "exact_source_relation" and not edge.get("supporting_evidence_ids"):
-                errors.append(f"graph_exact_relation_missing_evidence:{edge['edge_id']}")
-            if edge.get("edge_type") in {"AMENDS", "AMENDED_BY"} and str(edge["source_id"]).startswith("source_role::"):
-                errors.append(f"graph_source_role_amends_promoted:{edge['edge_id']}")
+        _validate_graph_edge(edge, nodes, evidence, errors)
 
+
+def _validate_graph_edge(
+    edge: JsonRow,
+    nodes: Mapping[str, JsonRow],
+    evidence: Mapping[str, JsonRow],
+    errors: list[str],
+) -> None:
+    edge_id = edge["edge_id"]
+    if edge["source_id"] not in nodes or edge["target_id"] not in nodes:
+        errors.append(f"graph_edge_unknown_endpoint:{edge_id}")
+    if edge.get("relation_id") or edge.get("runtime_loadable") is None:
+        return
+    required = {
+        "source_document_id": "graph_legal_edge_missing_source_document",
+        "validation_status": "graph_runtime_edge_missing_validation",
+        "confidence_policy": "graph_runtime_edge_missing_confidence",
+    }
+    for field, error_code in required.items():
+        if not edge.get(field):
+            errors.append(f"{error_code}:{edge_id}")
+    if "evidence_ref" in edge:
+        errors.append(f"graph_legacy_evidence_contract:{edge_id}")
+    support_ids = edge.get("support_evidence_ids") or ()
+    for evidence_id in support_ids:
+        if evidence_id not in evidence:
+            errors.append(f"graph_legal_edge_unknown_evidence_ref:{edge_id}:{evidence_id}")
+    if edge.get("support_kind") == "exact_source_relation" and not support_ids:
+        errors.append(f"graph_exact_relation_missing_evidence:{edge_id}")
+
+
+def _validate_retrieval_units(config: CorpusConfig, evidence: Mapping[str, JsonRow], errors: list[str]) -> None:
     for row in config.jsonl("retrieval_units"):
         if row["evidence_id"] not in evidence:
             errors.append(f"retrieval_unit_unknown_evidence:{row['retrieval_unit_id']}")
 
+
+def validate_corpus_ingestion_artifacts(corpus_id: str, repo_root: Path) -> dict:
+    config = CorpusRegistry(repo_root).resolve(corpus_id)
+    if config is None:
+        return {"status": "invalid", "errors": ("missing_corpus",), "counts": {}}
+
+    manifest = read_json(config.manifest_path)
+    errors = _manifest_errors(config.manifest_path.parent, manifest)
+    counts, count_errors = _artifact_counts(config, manifest)
+    errors.extend(count_errors)
+    try:
+        source_docs, pdf_text, page_sizes = _load_pdf_sources(config, manifest, errors)
+    except ImportError:
+        return {"status": "invalid", "errors": ("missing_test_dependency:PyMuPDF",), "counts": counts}
+
+    page_keys = _validate_pages(config, source_docs, pdf_text, errors)
+    legal_units = _validate_structure(config, source_docs, errors)
+    evidence = _validate_evidence(config, source_docs, legal_units, page_keys, page_sizes, errors)
+    _validate_metadata(config, source_docs, errors)
+    _validate_graph(config, evidence, errors)
+    _validate_retrieval_units(config, evidence, errors)
     return {"status": "valid" if not errors else "invalid", "errors": tuple(errors), "counts": counts}

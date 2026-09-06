@@ -3,9 +3,11 @@ from __future__ import annotations
 from collections import defaultdict
 
 from tjipto.contracts.authority import authority_state_error
-from tjipto.contracts.coordinates import COORDINATE_SPACE, TRANSFORM_VERSION
+from tjipto.contracts.coordinates import COORDINATE_SPACE, TRANSFORM_VERSION, bbox_record_key
 from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage_reason
 from tjipto.contracts.violations import Violation
+from tjipto.corpora.disposition import SPAN_DISPOSITION_FIELDS
+from tjipto.evidence.bbox import positive_area_intersection
 
 
 AUTHORITY_FIELDS = (
@@ -687,7 +689,7 @@ def _validate_evidence_closure(
                         "context bbox provenance mismatch",
                     )
                 )
-            elif (not _intersects(span, bbox) and not str(bbox_id).startswith("uud_unified_bbox::")) or any(
+            elif (not positive_area_intersection(span, bbox) and not str(bbox_id).startswith("uud_unified_bbox::")) or any(
                 span.get(field) != bbox.get(field) for field in ("source_document_id", "page_number")
             ):
                 violations.append(
@@ -703,9 +705,72 @@ def _validate_evidence_closure(
                 )
 
 
-def _intersects(left: dict, right: dict) -> bool:
-    return min(left["x1"], right["x1"]) > max(left["x0"], right["x0"]) and min(left["y1"], right["y1"]) > max(left["y0"], right["y0"])
-
-
 def _violation(code: str, artifact: str, row_id: str, field: str, expected: object, actual: object, reason: str) -> Violation:
     return Violation(code, "error", artifact, row_id, field, expected, actual, reason)
+
+
+def viewer_provenance_coverage_health(*, page_text_spans: list[dict], bbox_rows: list[dict]) -> dict:
+    """Summarize whether every text span has an auditable viewer disposition."""
+    bbox_registry_keys = {bbox_record_key(row) for row in bbox_rows}
+    absent_rows = [row for row in page_text_spans if bbox_record_key(row) not in bbox_registry_keys]
+    allowed_buckets = {
+        "legal_citation_candidate",
+        "metadata_provenance_candidate",
+        "source_anomaly_provenance_candidate",
+        "structural_provenance_only",
+        "nonlegal_excluded_provenance",
+        "raw_span_only_with_reason",
+    }
+    allowed_reasons = {
+        "already_covered_by_final_evidence_bbox",
+        "exact_word_bbox_available",
+        "structural_provenance_only",
+        "nonlegal_excluded_from_public_highlight",
+        "source_anomaly_anchor_only_until_exact_span_available",
+        "metadata_page_grounded_only_by_policy",
+        "blocked_by_text_mismatch",
+        "blocked_by_layout",
+        "blocked_by_missing_exact_bbox",
+        "blocked_by_no_word_level_bbox_artifact",
+    }
+    counts = {
+        "page_text_span_count": len(page_text_spans),
+        "bbox_registry_row_count": len(bbox_rows),
+        "bbox_key_present_span_count": len(page_text_spans) - len(absent_rows),
+        "bbox_key_absent_span_count": len(absent_rows),
+        **{
+            f"{bucket}_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_bucket") == bucket)
+            for bucket in sorted(allowed_buckets)
+        },
+        **{
+            f"{reason}_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") == reason)
+            for reason in sorted(allowed_reasons)
+        },
+        "missing_bucket_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_bucket") not in allowed_buckets),
+        "missing_reason_count": sum(1 for row in absent_rows if row.get("bbox_registry_coverage_reason") not in allowed_reasons),
+        "incomplete_disposition_count": sum(1 for row in page_text_spans if any(field not in row for field in SPAN_DISPOSITION_FIELDS)),
+        "highlight_without_span_bbox_count": sum(1 for row in page_text_spans if row.get("highlightable") and not row.get("span_bbox_ids")),
+        "final_without_exact_span_bbox_count": sum(
+            1 for row in page_text_spans if row.get("citation_final") and (row.get("exactness") != "exact" or not row.get("span_bbox_ids"))
+        ),
+        "invalid_present_status_count": sum(
+            1 for row in page_text_spans if row.get("bbox_registry_coverage_status") not in {"bbox_key_present", "bbox_key_absent"}
+        ),
+    }
+    return {
+        **counts,
+        "status": "complete"
+        if counts["bbox_key_absent_span_count"] == sum(counts[f"{bucket}_count"] for bucket in sorted(allowed_buckets))
+        and not any(
+            counts[key]
+            for key in (
+                "missing_bucket_count",
+                "missing_reason_count",
+                "incomplete_disposition_count",
+                "highlight_without_span_bbox_count",
+                "final_without_exact_span_bbox_count",
+                "invalid_present_status_count",
+            )
+        )
+        else "incomplete",
+    }

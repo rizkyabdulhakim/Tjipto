@@ -7,9 +7,11 @@ from tjipto.corpora.capabilities import resolve_capability
 from tjipto.corpora.strategy import CorpusContract, CorpusStrategy
 from tjipto.corpora.uud import parser as uud_parser
 from tjipto.corpora.uud import provenance as uud_provenance
+from tjipto.corpora.uud import source_conflicts as uud_source_conflicts
 from tjipto.corpora.uud.citation import citation_unit
 from tjipto.corpora.uud.contract import CONTRACT_FINGERPRINT, CONTRACT_ID, CONTRACT_VERSION
 from tjipto.corpora.uud.source_annotations import annotation_health, query_source_annotations
+from tjipto.corpora.uud.source_policy import normalize_retrieval_text
 from tjipto.corpora.uud.validation import validate_uud_artifacts
 
 
@@ -23,9 +25,11 @@ BUILTIN_STRATEGIES = {
         capability_resolver=resolve_capability,
         contract=CorpusContract(CURRENT_ARTIFACT_SCHEMA, CONTRACT_ID, CONTRACT_VERSION, CONTRACT_FINGERPRINT),
         provenance_adapter=uud_provenance,
+        source_conflict_adapter=uud_source_conflicts,
         semantic_validator=validate_uud_artifacts,
         citation_unit_factory=citation_unit,
         source_text_query=query_source_annotations,
         source_text_health=annotation_health,
+        embedding_text_normalizer=normalize_retrieval_text,
     ),
 }

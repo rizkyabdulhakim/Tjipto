@@ -17,6 +17,11 @@ where = ["src"]
 test = [
   "pytest>=9.1,<10",
 ]
+dense = [
+  "torch==2.13.0",
+  "transformers==5.15.0",
+  "sentencepiece==0.2.1",
+]
 static = [
   "mypy>=1.19,<2",
   "ruff>=0.8,<1",

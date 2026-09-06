@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 
-def apply_structural_contract(units: list[dict], *, role_by_unit_type: dict[str, str]) -> None:
+def apply_structural_contract(
+    units: list[dict],
+    *,
+    role_by_unit_type: dict[str, str],
+    current_source_role: str | None = None,
+) -> None:
     """Attach a deterministic, single-parent structural view to source-derived units."""
     by_id = {row["legal_unit_id"]: row for row in units}
     for row in units:
         row["stable_unit_id"] = row["legal_unit_id"]
         row["structural_role"] = role_by_unit_type.get(str(row.get("unit_type")), "metadata")
         row["canonical_label"] = row.get("unit_label")
-        row["historical_label"] = row.get("unit_label") if row.get("source_role") != "current_consolidated" else None
+        row["historical_label"] = row.get("unit_label") if row.get("source_role") != current_source_role else None
     for row in units:
         parents = [parent for parent in row.get("parent_legal_unit_ids") or () if parent in by_id]
         parent_id = _canonical_parent(row, parents, by_id)

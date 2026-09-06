@@ -16,7 +16,6 @@ import { Composer } from "./Composer";
 interface ChatViewProps {
   messages: ChatMessage[];
   onSubmit: (value: string) => void;
-  onClarify: (query: string, contextTarget: string, label: string) => void;
   isStreaming: boolean;
   onStop: () => void;
   onCitationClick: (citation: Citation) => void;
@@ -189,12 +188,10 @@ function UserMessage({ content }: { content: string }) {
 
 function AssistantMessage({
   message,
-  onClarify,
   onCitationClick,
   activeCitationId,
 }: {
   message: ChatMessage;
-  onClarify: (query: string, contextTarget: string, label: string) => void;
   onCitationClick: (c: Citation) => void;
   activeCitationId?: number;
 }) {
@@ -223,6 +220,9 @@ function AssistantMessage({
           JAWABAN TJIPTO
         </div>
         <div className="flex-1 min-w-0">
+          {message.status !== "streaming" && message.researchContext && (
+            <ResearchContext context={message.researchContext} />
+          )}
           <div className="tj-assistant-content">
             {renderContent(
               message.content,
@@ -238,38 +238,18 @@ function AssistantMessage({
             )}
           </div>
 
+            {message.status !== "streaming" && message.documentCollection?.length ? (
+              <DocumentCollection documents={message.documentCollection} onClick={onCitationClick} />
+            ) : null}
+
             {message.status !== "streaming" && message.citations && (
             <CitationFooter
               citations={message.citations}
               onClick={onCitationClick}
               activeId={activeCitationId}
+              includeDocuments={!message.documentCollection?.length}
             />
             )}
-
-            {message.status !== "streaming" && message.clarificationOptions?.length ? (
-              <div
-                data-clarification-options="true"
-                className="mt-4 rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3.5 py-2.5"
-              >
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", color: "var(--tj-text-secondary)" }}>
-                  PILIH KONTEKS SUMBER
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {message.clarificationOptions.map((option) => (
-                    <button
-                      key={option.contextTarget ?? option.label}
-                      type="button"
-                      data-clarification-option={option.contextTarget ?? option.label}
-                      disabled={!option.contextTarget || !message.clarificationQuery}
-                      onClick={() => option.contextTarget && message.clarificationQuery && onClarify(message.clarificationQuery, option.contextTarget, option.label)}
-                      className="rounded-lg border border-[var(--tj-border-subtle)] px-2.5 py-1.5 text-xs hover:bg-[var(--tj-surface-hover)]"
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
 
           {message.status !== "streaming" && (
             <SupportFooter
@@ -291,6 +271,54 @@ function AssistantMessage({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ResearchContext({ context }: { context: NonNullable<ChatMessage["researchContext"]> }) {
+  const scopes = context.sourceScopes;
+  const status = context.sufficiency === "complete"
+    ? "Bukti lengkap"
+    : context.sufficiency === "partial"
+      ? "Bukti parsial"
+      : context.sufficiency === "insufficient"
+        ? "Bukti belum cukup"
+        : null;
+  return (
+    <div data-research-context="true" className="mb-3 flex flex-wrap items-center gap-2">
+      {context.operation && (
+        <span className="rounded-full border border-[var(--tj-border-subtle)] px-2.5 py-1 text-xs text-[var(--tj-text-secondary)]">
+          {context.operation.replace(/_/g, " ")}
+        </span>
+      )}
+      {scopes.length > 0 && (
+        <span data-source-scopes="true" className="rounded-full bg-[var(--tj-accent-soft)] px-2.5 py-1 text-xs text-[var(--tj-accent)]">
+          {scopes.map((scope) => scope.label).join(scopes.length === 2 ? " ↔ " : " · ")}
+        </span>
+      )}
+      {status && (
+        <span data-sufficiency={context.sufficiency} className="rounded-full border border-[var(--tj-border-subtle)] px-2.5 py-1 text-xs text-[var(--tj-text-secondary)]">
+          {status}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DocumentCollection({ documents, onClick }: { documents: Citation[]; onClick: (citation: Citation) => void }) {
+  return (
+    <div data-document-collection="true" className="mt-4 grid gap-2 sm:grid-cols-2">
+      {documents.map((document) => (
+        <button
+          key={document.publicTargetId}
+          type="button"
+          onClick={() => onClick(document)}
+          className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] p-3 text-left hover:bg-[var(--tj-surface-hover)]"
+        >
+          <span className="block text-sm font-semibold text-[var(--tj-text-primary)]">{document.documentTitle}</span>
+          <span className="mt-1 block text-xs text-[var(--tj-text-muted)]">{document.authorityLabel ?? "Sumber dokumen"}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -320,13 +348,15 @@ function CitationFooter({
   citations,
   onClick,
   activeId,
+  includeDocuments,
 }: {
   citations: Citation[];
   onClick: (c: Citation) => void;
   activeId?: number;
+  includeDocuments: boolean;
 }) {
   const relevantCitations = citations.filter(
-    (citation) => citation.authorityKind === "legal_citation",
+    (citation) => citation.authorityKind === "legal_citation" || (includeDocuments && citation.viewerMode === "document"),
   );
   if (!relevantCitations.length) return null;
   const hasProvenance = relevantCitations.some((c) => c.citationFinal === false);
@@ -335,7 +365,7 @@ function CitationFooter({
       <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[var(--tj-border-subtle)]">
         <FileText size={13} className="text-[var(--tj-text-secondary)]" />
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.02em", color: "var(--tj-text-secondary)" }}>
-          {hasProvenance ? "PROVENANSI SUMBER" : "SUMBER"} · {relevantCitations.length} sitasi
+          {hasProvenance ? "PROVENANSI SUMBER" : relevantCitations.some((citation) => citation.viewerMode === "document") ? "DOKUMEN SUMBER" : "SUMBER"} · {relevantCitations.length} sitasi
         </span>
       </div>
       {hasProvenance && (
@@ -419,7 +449,7 @@ function SupportFooter({
     <div className="mt-4 space-y-2">
       {grouped.map((group, groupIndex) => (
         <details
-          key={group.id}
+          key={`${group.id}-${groupIndex}`}
           data-support-kind={`${group.kind}-support`}
           open={groupIndex === 0}
           className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)] px-3.5 py-2.5"
@@ -430,9 +460,9 @@ function SupportFooter({
             </span>
           </summary>
           <ul className="mt-1 space-y-1">
-            {group.members.map((row) => (
+            {group.members.map((row, rowIndex) => (
               <li
-                key={row.id}
+                key={`${group.id}-${row.id}-${rowIndex}`}
                 data-support-clickable={row.clickable ? "true" : "false"}
                 style={{ fontSize: 12, color: "var(--tj-text-muted)" }}
               >
@@ -462,7 +492,6 @@ function SupportFooter({
 export function ChatView({
   messages,
   onSubmit,
-  onClarify,
   isStreaming,
   onStop,
   onCitationClick,
@@ -500,7 +529,6 @@ export function ChatView({
               >
                 <AssistantMessage
                   message={m}
-                  onClarify={onClarify}
                   onCitationClick={onCitationClick}
                   activeCitationId={activeCitationId}
                 />

@@ -12,8 +12,9 @@ import tempfile
 import unittest
 
 from tjipto.core.manifest import read_json, read_jsonl
-from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.intent_config import validation_intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.corpora.uud.bbox_builder import extract_pdf
 from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
 from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
@@ -38,7 +39,9 @@ from tjipto.corpora.uud.validation import (
     build_validation_report,
 )
 from tjipto.corpora.uud_artifact_baseline import rebuild_uud_artifact_baseline
+from tjipto.evidence.store import EvidenceStore
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
+from tjipto.runtime.api import _service_for
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,8 +49,11 @@ FINAL = ROOT / "data/final/uud"
 
 
 class UudBuilderContractTest(unittest.TestCase):
+    _cached_word_bboxes: list[dict] | None = None
+
     @classmethod
     def setUpClass(cls) -> None:
+        cls._release_word_bboxes()
         source_documents = build_source_documents(ROOT)
         cls._source_documents = {row["source_document_id"]: row for row in source_documents}
         cls._pages = build_pages(ROOT, cls._source_documents)
@@ -55,7 +61,6 @@ class UudBuilderContractTest(unittest.TestCase):
             (row["source_document_id"], row["page_number"]): row["text"]
             for row in cls._pages
         }
-        cls._cached_word_bboxes: list[dict] | None = None
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -64,6 +69,9 @@ class UudBuilderContractTest(unittest.TestCase):
     @classmethod
     def _release_word_bboxes(cls) -> None:
         cls._cached_word_bboxes = None
+        _service_for.cache_clear()
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
         gc.collect()
         try:
             ctypes.CDLL(None).malloc_trim(0)
@@ -407,7 +415,7 @@ class UudBuilderContractTest(unittest.TestCase):
                 page_text_spans=read_jsonl(FINAL / "page_text_spans.jsonl"),
                 pdf_health_report=read_json(FINAL / "pdf_health_report.json"),
                 pages=read_jsonl(FINAL / "pages.jsonl"),
-                intent_config=intent_config_for("uud_1945", CorpusRegistry(ROOT).resolve("uud")),
+                intent_config=validation_intent_config_for("uud_1945", CorpusRegistry(ROOT).resolve("uud")),
             ),
             read_json(FINAL / "validation_report.json"),
         )

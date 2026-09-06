@@ -6,7 +6,7 @@ import inspect
 import unittest
 
 from tjipto.catalog import CatalogService
-from tjipto.contracts.legal_information import FieldState, ResolutionState
+from tjipto.contracts.legal_information import FieldState, RelationKind, ResolutionState
 from tjipto.corpora.uud.catalog import citation_identity, documents as constitutional_documents
 from tjipto.corpora.regulations.catalog import documents as regulation_documents
 from tjipto.runtime.api import BadRequest, handle_catalog_request
@@ -49,10 +49,18 @@ class RegulationCatalogContractTest(unittest.TestCase):
         self.assertEqual(by_role["current_consolidated"].identity.year.display_value, "1945")
         self.assertEqual(by_role["current_consolidated"].document_role_label, "Naskah Konsolidasi")
         self.assertEqual(by_role["original_historical"].document_role_label, "Naskah Asli")
-        self.assertEqual(by_role["amendment_1_historical"].document_role_label, "Amandemen")
-        self.assertTrue(
-            all(document.legal_status.status.state is FieldState.NOT_YET_VERIFIED for document in documents)
+        self.assertEqual(by_role["original_historical"].identity.issuer.state, FieldState.NOT_FOUND_IN_SOURCE)
+        self.assertEqual(
+            by_role["current_consolidated"].identity.issuer.display_value,
+            "Sekretariat Jenderal Majelis Permusyawaratan Rakyat Republik Indonesia",
         )
+        self.assertIn("dalam Satu Naskah", by_role["current_consolidated"].identity.official_title.display_value)
+        self.assertIsNotNone(by_role["current_consolidated"].publication.display_value)
+        self.assertEqual(by_role["amendment_1_historical"].document_role_label, "Amandemen")
+        self.assertTrue(all(document.legal_status.status.display_value == "Berlaku" for document in documents))
+        self.assertTrue(all(document.official_url.endswith(".pdf") for document in documents))
+        consolidated_relations = {relation.relation for relation in by_role["current_consolidated"].relations}
+        self.assertEqual(consolidated_relations, {RelationKind.CONSOLIDATES, RelationKind.DERIVED_FROM})
         with self.assertRaisesRegex(ValueError, "unknown_uud_source_role"):
             citation_identity("unknown")
 
@@ -60,6 +68,7 @@ class RegulationCatalogContractTest(unittest.TestCase):
         pilot = regulation_documents(ROOT)
         self.assertEqual(len(pilot), 2)
         self.assertTrue(all(document.permissions == frozenset({"catalog", "view"}) for document in pilot))
+        self.assertTrue(all(document.official_url.endswith(".pdf") for document in pilot))
         relations = {relation for document in pilot for relation in document.relations}
         descriptors = {(relation.relation, relation.source_document_id, relation.target_document_id) for relation in relations}
         self.assertTrue(relations)
@@ -78,7 +87,7 @@ class RegulationCatalogContractTest(unittest.TestCase):
         self.assertEqual(len({option["value"] for option in roles}), len(roles))
         uud = handle_catalog_request("search", {"query": "UUD 1945"}, service=self.service)
         periods = next(facet for facet in uud["facets"] if facet["name"] == "establishment_period")
-        self.assertEqual(periods["options"], ())
+        self.assertEqual({option["value"] for option in periods["options"]}, {"1990-1999", "2000-2009"})
         with self.assertRaises(BadRequest):
             handle_catalog_request("search", {"query": "", "filters": {"corpus": "uud"}}, service=self.service)
 

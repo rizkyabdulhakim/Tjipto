@@ -18,7 +18,7 @@ export function PanelToolbar({
   onBookmark: () => void;
 }) {
   return (
-    <div className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--tj-border-subtle)] bg-[var(--tj-surface-subtle)]/40 px-4 sm:px-6" data-panel-toolbar>
+    <div className="flex h-12 shrink-0 items-center gap-3 border-b border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] px-4 sm:px-6" data-panel-toolbar>
       <div className="flex items-center">
         <Control label="Perkecil tampilan" onClick={() => onZoom(-25)} disabled={zoom <= 50}><Minus size={14} /></Control>
         <span className="flex min-w-11 select-none items-center justify-center px-2 text-[12px] font-semibold tabular-nums text-[var(--tj-text-secondary)]">{zoom}%</span>
@@ -50,7 +50,7 @@ function Control({ label, children, onClick, disabled = false }: {
       disabled={disabled}
       aria-label={label}
       title={label}
-      className="flex h-10 min-w-10 items-center justify-center rounded-lg text-[var(--tj-text-secondary)] transition-colors hover:bg-[var(--tj-surface-hover)] hover:text-[var(--tj-text-primary)] disabled:opacity-30"
+      className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--tj-text-secondary)] transition-all hover:text-[var(--tj-text-primary)] hover:brightness-125 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tj-accent-ring)] disabled:opacity-30 md:h-11 md:w-11"
     >
       {children}
     </button>

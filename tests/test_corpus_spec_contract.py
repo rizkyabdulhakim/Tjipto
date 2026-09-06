@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from tjipto.corpora.registry import CorpusRegistry
+from tjipto.corpora.intent_config import validation_intent_config_for
 from tjipto.corpora.uud.specs import SOURCE_CONFLICT_SPECS
 from tjipto.corpora.uud.validation import validate_uud_artifact_dir
 
@@ -64,6 +65,7 @@ class CorpusSpecContractTest(unittest.TestCase):
     def test_uud_registry_owns_runtime_intent_terms(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
         intent = config.setting("intent_config")
+        validation_intent = validation_intent_config_for(config.query_strategy, config)
         expected = _expectations()["intent_config"]
         for field in (
             "document_target_words",
@@ -71,7 +73,6 @@ class CorpusSpecContractTest(unittest.TestCase):
             "pasal_parent_words",
             "relation_child_words",
             "relation_routes",
-            "instrument_scope_queries",
             "instrument_deletion_words",
             "instrument_deletion_evidence_words",
             "instrument_change_context_words",
@@ -80,6 +81,8 @@ class CorpusSpecContractTest(unittest.TestCase):
         ):
             for value in expected[field]:
                 self.assertIn(value, intent[field])
+        for value in expected["instrument_scope_queries"]:
+            self.assertIn(value, validation_intent["instrument_scope_queries"])
         for key, value in expected["source_role_labels"].items():
             self.assertEqual(intent["source_role_labels"][key], value)
         for key, value in expected["instrument_citation_templates"].items():

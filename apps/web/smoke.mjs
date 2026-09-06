@@ -169,6 +169,10 @@ async function run() {
       const node = document.querySelector("[data-evidence-panel='expanded'] canvas");
       return node?.dataset.rendered === "true" && node.clientWidth >= 800 && node.clientWidth <= 960;
     });
+    const expandedHighlight = page.locator('[data-evidence-panel="expanded"] [data-bbox-highlight="active"]');
+    await expandedHighlight.first().waitFor();
+    const expandedTargetPage = Number(await expandedHighlight.first().locator("xpath=ancestor::*[@data-pdf-page][1]").getAttribute("data-pdf-page"));
+    assert(expandedTargetPage === targetPage, "Expanded document lost the active grounded page or BBox highlight.");
     const expandedAt100 = await page.locator("[data-evidence-panel='expanded'] canvas").first().evaluate((node) => ({
       pageWidth: node.clientWidth,
       workspaceWidth: node.closest("[data-evidence-pdf-area]")?.clientWidth ?? 0,
@@ -235,6 +239,25 @@ async function run() {
 
     await ask(page, "Apa isi BAB XA?");
     assert(await page.locator('[data-citation-footer="true"] button').count() === 10, "BAB content did not publish every direct Pasal descendant.");
+
+    await ask(page, "pasal apa saja yang diubah perubahan pertama");
+    const amendmentGroup = page.locator('[data-message-role="assistant"]').last().locator('[data-support-kind="trace-support"]').first();
+    await amendmentGroup.waitFor();
+    if (!await amendmentGroup.evaluate((node) => node.open)) await amendmentGroup.locator("summary").click();
+    const amendmentTargets = amendmentGroup.getByRole("button");
+    const amendmentTargetCount = await amendmentTargets.count();
+    assert(amendmentTargetCount > 1, "Amendment relation did not publish its independently targetable supports.");
+    for (let index = 0; index < amendmentTargetCount; index += 1) {
+      const pdfResponse = page.waitForResponse((response) =>
+        response.url().includes("/pdf") && response.request().method() === "GET",
+      );
+      await amendmentTargets.nth(index).click();
+      assert((await pdfResponse).ok(), `Amendment support ${index + 1} PDF request failed.`);
+      await page.locator('[data-evidence-panel="normal"]').waitFor();
+      await page.locator("[data-pdf-document]").waitFor();
+      await page.locator('[data-bbox-highlight="active"]').first().waitFor();
+      await page.getByLabel("Tutup panel").click();
+    }
 
     await ask(page, "kapan perubahan pertama ditetapkan");
     assert((await page.locator('[data-citation-footer="true"]').count()) === 0, "Metadata rendered as a legal quotation.");

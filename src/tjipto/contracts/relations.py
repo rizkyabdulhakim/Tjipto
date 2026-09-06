@@ -36,6 +36,10 @@ RELATIONS: dict[str, RelationDescriptor] = {
     "DELETED_BY": RelationDescriptor("DELETES", _LEGAL_UNIT, _LEGAL_UNIT, True, True, True, True),
     "ADDS": RelationDescriptor("INSERTED_BY", _LEGAL_UNIT, _LEGAL_UNIT, True, True, True, True),
     "INSERTED_BY": RelationDescriptor("ADDS", _LEGAL_UNIT, _LEGAL_UNIT, True, True, True, True),
+    # Source wording such as "pengubahan dan/atau penambahan" names a
+    # target without selecting one authoritative operation.  Keep that
+    # provenance visible, but it must never be query- or authority-eligible.
+    "AMBIGUOUS_OPERATION": RelationDescriptor(None, _LEGAL_UNIT, _LEGAL_UNIT, False, False, True, False),
     "AMENDS": RelationDescriptor("AMENDED_BY", _SOURCE_ROLE, _SOURCE_ROLE, False, False, True, True),
     "AMENDED_BY": RelationDescriptor("AMENDS", _SOURCE_ROLE, _SOURCE_ROLE, False, False, True, True),
     "DERIVED_FROM": RelationDescriptor("DERIVES", _SOURCE_ROLE, _SOURCE_ROLE, False, False, True, True),

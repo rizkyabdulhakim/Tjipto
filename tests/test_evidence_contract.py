@@ -145,8 +145,8 @@ class EvidenceContractTest(unittest.TestCase):
                 self.assertIn("decision_session", row["grounded_fields"])
                 self.assertIn("effective_rule", row["grounded_fields"])
             if row["source_role"] == "amendment_2_historical":
-                self.assertNotIn("source_anomaly_status", row)
-                self.assertEqual(row["field_statuses"]["source_anomaly_status"], "not_found_in_source")
+                self.assertEqual(row["source_anomaly_status"], "printed_numbering_typo")
+                self.assertEqual(row["field_statuses"]["source_anomaly_status"], "artifact_recorded")
             if row["source_role"] == "original_historical":
                 self.assertEqual(row["status"], "not_found_in_source")
                 self.assertIsNone(row["official_title"])

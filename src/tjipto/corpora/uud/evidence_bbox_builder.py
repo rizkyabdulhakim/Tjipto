@@ -300,7 +300,7 @@ def _recover_aggregate_word_bboxes(
         key=lambda word: (word["page_number"], word.get("y0", 0), word.get("x0", 0), word.get("word_index", 0)),
     )
     rows: list[dict] = []
-    for index, page_number in enumerate(dict.fromkeys(word["page_number"] for word in matches)):
+    for page_number in dict.fromkeys(word["page_number"] for word in matches):
         words = [word for word in matches if word["word_bbox_id"] in matched and word["page_number"] == page_number]
         if not words:
             continue

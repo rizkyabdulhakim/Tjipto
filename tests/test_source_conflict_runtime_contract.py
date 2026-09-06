@@ -102,9 +102,15 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
     def test_exact_source_conflict_provenance_can_resolve_existing_viewer_policy(self) -> None:
         result = self.service.ask("uud", "Pasal 25E menjadi Pasal 25A")
         self.assertEqual(result["status"], "answer_ready")
-        self.assertTrue(result["historical_citations"])
+        self.assertTrue(result["citations"])
+        self.assertFalse(result["historical_citations"])
         self.assertFalse(result.get("source_conflict"))
-        self.assertIn("dinomori ulang", result["answer"].casefold())
+        self.assertEqual(
+            {row["relation_type"] for row in result["article_amendment_relations"]},
+            {"RENUMBERED_TO"},
+        )
+        self.assertIn("Pasal 25E", result["answer"])
+        self.assertIn("Pasal 25A", result["answer"])
         relation = next(row for row in result["article_amendment_relations"] if row.get("relation_type") == "RENUMBERED_TO")
         viewer = self.service.viewer("uud", relation["evidence_id"])
         self.assertEqual(viewer["status"], "viewer_payload_ready")
@@ -132,6 +138,14 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
                 self.assertFalse(result[field], case["query"])
 
     def test_pasali_and_pasal_ii_source_routing_preserves_historical_provenance(self) -> None:
+        config = self.service._store("uud").config
+        self.assertFalse(any("Pasal III" in str(row) for row in config.setting("normalization_aliases", ())))
+        mappings = config.setting("source_reference_mappings", ())
+        self.assertEqual(len(mappings), 1)
+        self.assertEqual(
+            set(mappings[0]),
+            {"raw_reference", "canonical_target", "source_role", "mapping_kind", "provenance", "context_terms"},
+        )
         pasal_i = self.service.ask("uud", "Aturan Tambahan Pasal I Perubahan Keempat")
         self.assertEqual(pasal_i["status"], "answer_ready")
         self.assertTrue(pasal_i["citations"])
@@ -147,12 +161,29 @@ class SourceConflictRuntimeContractTest(unittest.TestCase):
         self.assertTrue(pasal_iii["citations"])
         self.assertEqual(pasal_ii["citations"][0]["citation"], "Pasal II")
         self.assertEqual(pasal_iii["citations"][0]["citation"], "Pasal II")
+        self.assertEqual(pasal_iii["trace_support"][0]["printed_reference"], "Pasal III")
+        self.assertEqual(pasal_iii["trace_support"][0]["canonical_reference"], "Pasal II")
+        self.assertEqual(pasal_iii["trace_support"][0]["source_role"], "amendment_4_historical")
+        self.assertEqual(pasal_iii["trace_support"][0]["bbox_count"], 2)
+        self.assertFalse(pasal_iii["trace_support"][0]["citation_final"])
+        self.assertTrue(pasal_iii["viewer_refs"])
         self.assertFalse(pasal_ii.get("source_conflict"))
         self.assertFalse(pasal_iii.get("source_conflict"))
         peralihan = self.service.ask("uud", "Pasal III Aturan Peralihan Perubahan Keempat")
         self.assertEqual(peralihan["route"], "legal_reference")
         self.assertIsNone(peralihan.get("source_conflict"))
         self.assertEqual(peralihan["citations"][0]["citation"], "Pasal III")
+        unqualified = self.service.ask("uud", "Pasal III Perubahan Keempat UUD 1945")
+        self.assertEqual(unqualified["status"], "clarification_required")
+        self.assertIn("Aturan Peralihan", unqualified["answer"])
+        self.assertIn("Aturan Tambahan", unqualified["answer"])
+        self.assertFalse(unqualified["citations"])
+        self.assertFalse(unqualified["viewer_refs"])
+        self.assertNotIn("clarification_options", unqualified)
+
+    def test_printed_numbering_trace_uses_public_legal_label(self) -> None:
+        result = self.service.ask("uud", "Pasal III Aturan Tambahan Perubahan Keempat")
+        self.assertEqual(result["trace_support"][0]["label"], "Typo penomoran tercetak")
 
     def test_inserted_bab_heading_queries_publish_the_heading_as_the_answer(self) -> None:
         for label in ("BAB IXA", "BAB XA", "BAB VIIA", "BAB VIIB", "BAB VIIIA"):

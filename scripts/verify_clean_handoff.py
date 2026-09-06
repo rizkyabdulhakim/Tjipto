@@ -162,7 +162,13 @@ def run_candidate_checks(path: Path) -> dict[str, int]:
     return {"compileall": 0, "unittest": 0}
 
 
-def release_candidate(repo_root: Path, commit_sha: str, archive_path: Path, corpus_ids: list[str] | None = None) -> dict:
+def release_candidate(
+    repo_root: Path,
+    commit_sha: str,
+    archive_path: Path,
+    corpus_ids: list[str] | None = None,
+    dense_attestation: Path | None = None,
+) -> dict:
     identity = create_archive(repo_root, commit_sha, archive_path)
     archive_forbidden = verify_candidate(archive_path)
     inventory = archive_inventory(repo_root, identity["commit_sha"], archive_path)
@@ -182,17 +188,27 @@ def release_candidate(repo_root: Path, commit_sha: str, archive_path: Path, corp
         archive_sha256=identity["archive_sha256"],
     )
     sidecar = archive_path.with_suffix(archive_path.suffix + ".sidecar.json")
-    sidecar.write_text(json.dumps(_release_sidecar(repo_root, archive_path, result, corpus_ids), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    sidecar.write_text(
+        json.dumps(_release_sidecar(repo_root, archive_path, result, corpus_ids, dense_attestation), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     result["sidecar_path"] = str(sidecar)
     result["sidecar_sha256"] = _sha256(sidecar)
     return result
 
 
-def _release_sidecar(repo_root: Path, archive_path: Path, result: dict, corpus_ids: list[str] | None = None) -> dict:
+def _release_sidecar(
+    repo_root: Path,
+    archive_path: Path,
+    result: dict,
+    corpus_ids: list[str] | None = None,
+    dense_attestation: Path | None = None,
+) -> dict:
     """Describe immutable archive bytes; this deliberately remains outside the archive."""
     with zipfile.ZipFile(archive_path) as archive:
         files = {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist() if not name.endswith("/")}
         corpora = _archive_corpora(archive, corpus_ids)
+        dense_promotions = _archive_dense_promotions(archive, result["commit_sha"], result["tree_sha"], dense_attestation)
     sys.path.insert(0, str(repo_root / "src"))
     return {
         "archive_byte_representation": "git archive ZIP entry bytes",
@@ -201,10 +217,111 @@ def _release_sidecar(repo_root: Path, archive_path: Path, result: dict, corpus_i
         "candidate_checks": result["candidate_checks"],
         "commit_sha": result["commit_sha"],
         "corpora": corpora,
+        "dense_promotions": dense_promotions,
+        "dense_promotion_attestation": _attestation_sidecar(dense_attestation, result),
         "source_file_digests": files,
         "tree_sha": result["tree_sha"],
         "worktree_status": _git(repo_root, "status", "--porcelain").splitlines(),
         "python_version": sys.version,
+    }
+
+
+def _archive_dense_promotions(
+    archive: zipfile.ZipFile,
+    commit_sha: str,
+    tree_sha: str,
+    dense_attestation: Path | None = None,
+) -> dict[str, dict]:
+    registry = json.loads(archive.read("data/corpus_registry.json"))
+    promotions: dict[str, dict] = {}
+    for corpus_id, entry in sorted(registry.items()):
+        if not isinstance(entry, dict) or not entry.get("dense_index_path") or not entry.get("dense_promotion_path"):
+            continue
+        index_name = PurePosixPath(str(entry["dense_index_path"])).as_posix()
+        promotion_name = PurePosixPath(str(entry["dense_promotion_path"])).as_posix()
+        if (
+            PurePosixPath(index_name).is_absolute()
+            or ".." in PurePosixPath(index_name).parts
+            or PurePosixPath(promotion_name).is_absolute()
+            or ".." in PurePosixPath(promotion_name).parts
+        ):
+            raise ValueError("archive dense promotion has an unsafe path")
+        try:
+            promotion_bytes = archive.read(promotion_name)
+            index_bytes = archive.read(index_name)
+            promotion = json.loads(promotion_bytes)
+        except (KeyError, json.JSONDecodeError) as error:
+            raise ValueError("archive dense promotion is incomplete") from error
+        if (
+            not isinstance(promotion, dict)
+            or promotion.get("status") != "promoted"
+            or promotion.get("index_sha256") != hashlib.sha256(index_bytes).hexdigest()
+        ):
+            raise ValueError("archive dense promotion identity mismatch")
+        promotions[corpus_id] = {
+            "index_path": index_name,
+            "index_sha256": promotion["index_sha256"],
+            "promotion_path": promotion_name,
+            "promotion_sha256": hashlib.sha256(promotion_bytes).hexdigest(),
+            "index_identity": promotion.get("index_identity"),
+            "recorded_runtime_commit": promotion.get("runtime_commit"),
+            "recorded_runtime_tree_sha": promotion.get("runtime_tree_sha"),
+            "runtime_commit": commit_sha,
+            "runtime_tree_sha": tree_sha,
+        }
+    if dense_attestation is not None:
+        attestation = json.loads(dense_attestation.read_text(encoding="utf-8"))
+        runtime = attestation.get("runtime_identity") or {}
+        if (
+            attestation.get("status") != "valid"
+            or runtime.get("commit") != commit_sha
+            or runtime.get("tree") != tree_sha
+        ):
+            raise ValueError("dense runtime attestation identity mismatch")
+        activation = attestation.get("activation") or {}
+        fusion = activation.get("fusion") or {}
+        if not (
+            activation.get("dense_configured") is True
+            and activation.get("dense_runtime_available") is True
+            and activation.get("hybrid_active") is True
+            and activation.get("route") == "hybrid"
+            and fusion.get("algorithm") == "rrf_rank_only"
+            and fusion.get("lane_candidate_counts", {}).get("bm25", 0) > 0
+            and fusion.get("lane_candidate_counts", {}).get("dense", 0) > 0
+            and {"bm25", "dense"} <= set(activation.get("contributing_lanes") or ())
+        ):
+            raise ValueError("dense runtime attestation activation invalid")
+        for corpus_id, promotion in promotions.items():
+            attested = attestation if corpus_id == "uud" else {}
+            spec = attested.get("promotion_spec") or {}
+            index = attested.get("index") or {}
+            if (
+                spec.get("sha256") != promotion["promotion_sha256"]
+                or index.get("sha256") != promotion["index_sha256"]
+                or index.get("identity") != promotion["index_identity"]
+            ):
+                raise ValueError("dense runtime attestation artifact mismatch")
+            promotion["promotion_spec_sha256"] = promotion["promotion_sha256"]
+            promotion["attestation_sha256"] = _sha256(dense_attestation)
+    return promotions
+
+
+def _attestation_sidecar(path: Path | None, result: dict) -> dict | None:
+    if path is None:
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    runtime = payload.get("runtime_identity") or {}
+    if payload.get("status") != "valid" or runtime != {"commit": result["commit_sha"], "tree": result["tree_sha"]}:
+        raise ValueError("dense runtime attestation identity mismatch")
+    return {
+        "path": str(path),
+        "sha256": _sha256(path),
+        "status": payload.get("status"),
+        "runtime_identity": runtime,
+        "promotion_spec": payload.get("promotion_spec"),
+        "index": payload.get("index"),
+        "model": payload.get("model"),
+        "activation": payload.get("activation"),
     }
 
 
@@ -291,6 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     release.add_argument("commit_sha")
     release.add_argument("archive", type=Path)
     release.add_argument("--corpus", action="append", default=[])
+    release.add_argument("--dense-attestation", type=Path)
 
     args = parser.parse_args(argv)
     if args.command == "create-archive":
@@ -307,7 +425,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "check-candidate":
         print(json.dumps(run_candidate_checks(args.path), sort_keys=True))
         return 0
-    result = release_candidate(Path.cwd(), args.commit_sha, args.archive, args.corpus)
+    result = release_candidate(Path.cwd(), args.commit_sha, args.archive, args.corpus, args.dense_attestation)
     print(json.dumps(result, sort_keys=True))
     return 0 if not result["archive_forbidden_entries"] and result["archive_inventory"]["status"] == "passed" and all(value == 0 for value in result["candidate_checks"].values()) else 1
 

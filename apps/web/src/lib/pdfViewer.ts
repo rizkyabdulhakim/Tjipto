@@ -2,6 +2,10 @@ export function fitWidthScale(pageWidth: number, availableWidth: number, zoom: n
   return pageWidth > 0 && availableWidth > 0 ? (availableWidth / pageWidth) * zoom : 1;
 }
 
+export function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
 export function canvasBackingStore(width: number, height: number, devicePixelRatio: number) {
   const ratio = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
   return {

@@ -54,16 +54,18 @@ export interface SupportGroupPayload {
 }
 
 export interface TjiptoAskResponse {
-  kind: "answer" | "document" | "clarification" | "unavailable";
+  kind: "answer" | "document" | "documents" | "unavailable";
   status: string;
   answer?: string;
-  clarification_kind?: "legal_target" | "source_scope" | "temporal_scope" | "relation_operation" | "entity" | "concept_facet";
-  question?: string;
+  operation?: string;
+  source_scopes?: { label: string }[];
+  sufficiency?: { status: "complete" | "partial" | "insufficient"; missing_requirement_ids?: string[] };
   original_query?: string;
-  document?: { label?: string; source_status_label?: string; viewer_target?: ViewerTargetPayload };
-  clarification_options?: { context_target?: string; label?: string }[];
+  document?: LegalDocumentPayload & { label?: string; source_status_label?: string };
+  documents?: LegalDocumentPayload[];
   supports?: SupportPayload[];
   support_groups?: SupportGroupPayload[];
+  clarification?: { id: string; missing_dimensions: string[] };
 }
 
 export interface LegalDocumentPayload {
@@ -72,6 +74,8 @@ export interface LegalDocumentPayload {
   legal_status?: string;
   document_role?: string;
   issuer?: string;
+  establishment_place?: string | null;
+  signatories?: string | null;
   establishment_date?: string | null;
   promulgation_date?: string | null;
   effective_date?: string | null;
@@ -166,8 +170,10 @@ export interface BookmarkPointer {
   document?: LegalDocumentPayload;
 }
 
-export async function askLegal(query: string, clarificationContext?: string): Promise<TjiptoAskResponse> {
-  return request("ask", { query, ...(clarificationContext ? { clarification_context: clarificationContext } : {}) });
+export async function askLegal(query: string, clarification?: { id: string }): Promise<TjiptoAskResponse> {
+  return request("ask", clarification
+    ? { query, clarification_id: clarification.id, clarification_answer: query }
+    : { query });
 }
 
 export async function searchLegal(query: string, filters: Record<string, string> = {}): Promise<CatalogResponse> {
@@ -249,22 +255,45 @@ export function mapAskResponseToCitations(response: TjiptoAskResponse): Citation
 
 export function mapAskResponseToDocumentSource(response: TjiptoAskResponse): Citation | null {
   const source = response.document;
-  const target = source?.viewer_target?.public_target_id;
+  return source ? mapDocumentToCitation(source, 1, source.label, false) : null;
+}
+
+export function mapAskResponseToDocumentSources(response: TjiptoAskResponse): Citation[] {
+  return (response.documents ?? []).flatMap((source, index) => {
+    const citation = mapDocumentToCitation(source, index + 1, undefined, true);
+    return citation ? [citation] : [];
+  });
+}
+
+function mapDocumentToCitation(
+  source: LegalDocumentPayload,
+  id: number,
+  preferredTitle?: string,
+  includeRole = false,
+): Citation | null {
+  const target = source.viewer_target?.public_target_id;
   if (!target) return null;
   return {
-    id: 1,
+    id,
     publicTargetId: target,
-    documentTitle: source.label ?? "Dokumen sumber",
+    documentTitle: preferredTitle ?? source.title ?? source.legal_identity ?? "Dokumen sumber",
     regulationType: "legal",
+    authorityKind: "document_source",
+    authorityLabel: includeRole ? source.document_role ?? "Sumber dokumen" : "Sumber dokumen",
+    citationText: "Buka PDF sumber",
     viewerMode: "document",
     pageNumber: Number(source.viewer_target?.page_numbers?.[0] ?? 1),
-    excerpt: "",
+    excerpt: includeRole ? source.title ?? "" : "",
+    sourceStatusLabel: includeRole ? source.document_role : undefined,
   };
 }
 
 export function mapAskResponseToSupportGroups(response: TjiptoAskResponse): SupportGroup[] {
   const grouped = (response.support_groups ?? []).flatMap((group) => {
-    const kind: SupportGroup["kind"] = "metadata";
+    const first = group.members[0];
+    if (!first) return [];
+    const kind = supportGroupKind(first.authority_kind);
+    if (!kind) return [];
     return [{
       id: group.public_group_id,
       title: group.label,

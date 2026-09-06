@@ -72,7 +72,7 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
         self.assertIn("current_fact_unsupported", families)
         self.assertIn("criminal_law_sanksi_korupsi_pasal_7a", ids)
         self.assertIn("article_relation_exact_pasal_16_delete_no_source", ids)
-        behaviors = {behavior: sum(row["expected_behavior"] == behavior for row in rows) for behavior in ("retrieve", "abstain", "clarify")}
+        behaviors = {behavior: sum(row["expected_behavior"] == behavior for row in rows) for behavior in ("retrieve", "abstain")}
         self.assertTrue(all(behaviors.values()), behaviors)
         self.assertTrue(any(row["category"] == "source_annotation" for row in rows))
 
@@ -80,9 +80,9 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
         metrics = runner._retrieval_metrics([], [])
         self.assertIsNone(metrics["precision"])
         self.assertIsNone(metrics["ndcg"])
-        self.assertIsNone(metrics["clarification_accuracy"])
+        self.assertNotIn("clarification_accuracy", metrics)
 
-    def test_missed_ranking_has_zero_ndcg_and_missed_clarification_is_not_perfect(self) -> None:
+    def test_missed_ranking_has_zero_ndcg(self) -> None:
         cases = [
             {
                 "id": "missed",
@@ -94,18 +94,12 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
                 "expected_temporal_scopes": [],
                 "expected_public_targets": [],
             },
-            {
-                "id": "ambiguous",
-                "expected_behavior": "clarify",
-            },
         ]
         results = [
             {"id": "missed", "actual": {"support_ids": [], "text_span_ids": [], "source_roles": [], "temporal_scopes": [], "public_targets": [], "status": "no_results"}},
-            {"id": "ambiguous", "actual": {"support_ids": [], "status": "answer_ready"}},
         ]
         metrics = runner._retrieval_metrics(cases, results)
         self.assertEqual(metrics["ndcg"], 0.0)
-        self.assertEqual(metrics["clarification_accuracy"], 0.0)
 
     def test_runner_reports_no_known_gaps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -129,7 +123,7 @@ class RetrievalEvaluationGateTest(unittest.TestCase):
         self.assertEqual(baseline["case_count"], len(rows))
         self.assertEqual(
             baseline["behavior_counts"],
-            {behavior: sum(row["expected_behavior"] == behavior for row in rows) for behavior in ("retrieve", "abstain", "clarify")},
+            {behavior: sum(row["expected_behavior"] == behavior for row in rows) for behavior in ("retrieve", "abstain")},
         )
         self.assertTrue(all(value > 0 for value in baseline["denominators"].values()))
 

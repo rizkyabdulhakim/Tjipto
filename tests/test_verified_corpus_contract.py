@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import ctypes
+import gc
 import json
 from hashlib import sha256
 from pathlib import Path
@@ -23,6 +25,14 @@ FINAL = ROOT / "data/final/uud"
 
 
 class VerifiedCorpusContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._release_runtime_memory()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._release_runtime_memory()
+
     def setUp(self) -> None:
         EvidenceStore.clear_shared_cache()
         VerifiedCorpusRepository.clear_shared_cache()
@@ -30,6 +40,16 @@ class VerifiedCorpusContractTest(unittest.TestCase):
     def tearDown(self) -> None:
         EvidenceStore.clear_shared_cache()
         VerifiedCorpusRepository.clear_shared_cache()
+
+    @staticmethod
+    def _release_runtime_memory() -> None:
+        EvidenceStore.clear_shared_cache()
+        VerifiedCorpusRepository.clear_shared_cache()
+        gc.collect()
+        try:
+            ctypes.CDLL(None).malloc_trim(0)
+        except (AttributeError, OSError, TypeError):
+            pass
 
     def test_cached_snapshot_rejects_integrity_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

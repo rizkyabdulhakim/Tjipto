@@ -92,7 +92,7 @@ def documents(repo_root: Path) -> tuple[CatalogDocument, ...]:
                 relations,
                 effects,
                 _value(publication["source_value"], publication["normalized"], publication["display"], publication_source),
-                record["catalog_provenance"]["reference"],
+                pdf_source.reference,
                 source_path,
                 digest,
                 record["acquisition"]["page_count"],
