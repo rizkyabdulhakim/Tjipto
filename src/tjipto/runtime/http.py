@@ -13,6 +13,7 @@ from uuid import uuid4
 from tjipto.runtime.api import BadRequest, handle_catalog_pdf_request, handle_catalog_request, handle_pdf_request, handle_request
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.retrieval.research import research_planning_provider_from_environment
+from tjipto.runtime.wording import wording_provider_from_environment
 from tjipto.telemetry import DEFAULT_TELEMETRY, Telemetry
 
 
@@ -30,8 +31,15 @@ def make_server(
     host: str = "127.0.0.1",
     port: int = 8000,
     repo_root: Path | None = None,
+    *,
+    answer_provider=None,
+    planning_provider=None,
 ) -> ThreadingHTTPServer:
-    service = LegalRuntimeService(repo_root, planning_provider=research_planning_provider_from_environment())
+    service = LegalRuntimeService(
+        repo_root,
+        answer_provider=answer_provider,
+        planning_provider=planning_provider,
+    )
 
     class Handler(TjiptoHttpHandler):
         root = repo_root
@@ -253,7 +261,12 @@ def _max_request_bytes() -> int:
 
 
 def main() -> None:
-    server = make_server(host=os.environ.get("TJIPTO_HOST", "127.0.0.1"), port=int(os.environ.get("TJIPTO_PORT", "8000")))
+    server = make_server(
+        host=os.environ.get("TJIPTO_HOST", "127.0.0.1"),
+        port=int(os.environ.get("TJIPTO_PORT", "8000")),
+        answer_provider=wording_provider_from_environment(),
+        planning_provider=research_planning_provider_from_environment(),
+    )
     try:
         server.serve_forever()
     finally:

@@ -169,6 +169,10 @@ async function run() {
       const node = document.querySelector("[data-evidence-panel='expanded'] canvas");
       return node?.dataset.rendered === "true" && node.clientWidth >= 800 && node.clientWidth <= 960;
     });
+    const expandedHighlight = page.locator('[data-evidence-panel="expanded"] [data-bbox-highlight="active"]');
+    await expandedHighlight.first().waitFor();
+    const expandedTargetPage = Number(await expandedHighlight.first().locator("xpath=ancestor::*[@data-pdf-page][1]").getAttribute("data-pdf-page"));
+    assert(expandedTargetPage === targetPage, "Expanded document lost the active grounded page or BBox highlight.");
     const expandedAt100 = await page.locator("[data-evidence-panel='expanded'] canvas").first().evaluate((node) => ({
       pageWidth: node.clientWidth,
       workspaceWidth: node.closest("[data-evidence-pdf-area]")?.clientWidth ?? 0,

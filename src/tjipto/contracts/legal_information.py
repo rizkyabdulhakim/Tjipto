@@ -64,6 +64,11 @@ class RelationKind(StrEnum):
         }[self]
 
 
+PROVISION_EFFECT_OPERATIONS = frozenset(
+    {"ADDS", "AMBIGUOUS_OPERATION", "DELETES", "MODIFIES", "RENAMES", "RENUMBERED_TO", "SUPPLEMENTS"}
+)
+
+
 @dataclass(frozen=True)
 class SourceProvenance:
     kind: SourceKind
@@ -228,6 +233,8 @@ class ProvisionEffect:
             raise ValueError("provision_effect_requires_exact_target")
         if self.provenance.selector != self.exact_source_text:
             raise ValueError("provision_effect_selector_mismatch")
+        if self.operation not in PROVISION_EFFECT_OPERATIONS:
+            raise ValueError("invalid_provision_effect_operation")
 
 
 @dataclass(frozen=True)

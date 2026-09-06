@@ -132,6 +132,18 @@ def source_role_for_query(query: str, *, strategy: str = "generic", config=None)
     return decision.role if decision.explicit else None
 
 
+def initial_source_role(config) -> str | None:
+    """Return the root role of the configured source-version chain."""
+    intent = intent_config_for(getattr(config, "query_strategy", "generic"), config)
+    predecessors = intent.get("source_role_predecessors", {}) or {}
+    if not isinstance(predecessors, dict):
+        return None
+    roles = tuple(str(role) for role in getattr(config, "source_roles", ()) or () if role)
+    referenced = {str(role) for role in predecessors.values() if role}
+    candidates = tuple(role for role in roles if role in referenced and role not in predecessors)
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def source_reference_mappings_for_query(query: str, config=None) -> tuple[dict, ...]:
     """Return configured printed-to-canonical mappings explicitly in *query*.
 
@@ -159,6 +171,49 @@ def source_reference_mappings_for_query(query: str, config=None) -> tuple[dict, 
         and present(mapping.get("raw_reference"))
         and all(present(term) for term in mapping.get("context_terms") or ())
     )
+
+
+def _source_conflict_adapter(store):
+    strategy = getattr(getattr(store, "config", None), "strategy", None)
+    return getattr(strategy, "source_conflict_adapter", None)
+
+
+def source_document_by_id(store, source_document_id: object) -> dict | None:
+    return next(
+        (
+            row
+            for row in getattr(store, "source_documents", ())
+            if row.get("source_document_id") == source_document_id
+        ),
+        None,
+    )
+
+
+def source_conflict_viewer_evidence(store, evidence_id: str | None) -> tuple[dict | None, list[dict] | None]:
+    adapter = _source_conflict_adapter(store)
+    if adapter is None:
+        return None, None
+    return adapter._source_conflict_viewer_evidence(store, evidence_id)
+
+
+def source_anomaly_clarification(store, query: str):
+    adapter = _source_conflict_adapter(store)
+    return adapter._source_anomaly_clarification(store, query) if adapter is not None else None
+
+
+def source_anomaly_comparison_query(store, query: str) -> bool:
+    adapter = _source_conflict_adapter(store)
+    return bool(adapter and adapter._source_anomaly_comparison_query(store, query))
+
+
+def source_anomaly_response(store, corpus_id: str, query: str) -> dict | None:
+    adapter = _source_conflict_adapter(store)
+    return adapter._source_anomaly_response(store, corpus_id, query) if adapter is not None else None
+
+
+def attach_source_reference_provenance(store, query: str, response: dict) -> dict:
+    adapter = _source_conflict_adapter(store)
+    return adapter._attach_source_reference_provenance(store, query, response) if adapter is not None else response
 
 
 def _near_source_scope_match(query: str, intent: dict) -> bool:

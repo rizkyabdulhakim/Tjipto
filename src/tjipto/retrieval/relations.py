@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tjipto.corpora.intent_config import contains_intent_phrase, intent_config_for, normalize_intent_text
-from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
+from tjipto.corpora.source_arbitration import initial_source_role, resolve_source_scope, source_roles_for_query
 from tjipto.corpora.parser_dispatch import (
     parse_bab_reference,
     parse_pasal_reference,
@@ -71,13 +71,14 @@ def relation_lookup(store, query: str, limit: int = 10) -> tuple[dict, ...]:
 
 def amendment_relation_lookup(store, query: str, *, relation_family: str | None = None) -> tuple[dict, tuple[dict, ...]]:
     """Select amendment relations from persisted graph edges, never a sidecar scan."""
+    config = getattr(store, "config", None)
     target = amendment_relation_target(store, query, relation_family=relation_family)
     mode = target.get("mode")
     if mode is None or mode == "unsupported":
         return target, ()
     if mode == "document":
         role = target["role"]
-        edge_type = "AMENDED_BY" if role == "original_historical" else "AMENDS"
+        edge_type = "AMENDED_BY" if role == initial_source_role(config) else "AMENDS"
         source_id = f"source_role::{role}"
         return target, tuple(
             row | {"route_sources": ("document_relation_graph",)}
@@ -165,7 +166,8 @@ def amendment_relation_target(store, query: str, *, relation_family: str | None 
     source_less_delete = relation_type == "DELETE_OR_REMOVE_PROVISION" and (article_detail or amendment_signal)
     if relation_type == "DELETE_OR_REMOVE_PROVISION" and not source_less_delete:
         return {"mode": None}
-    if not references and amendment_role and "original_historical" in mentioned_roles:
+    origin_role = initial_source_role(config)
+    if not references and amendment_role and origin_role in mentioned_roles:
         return {"mode": "document", "role": amendment_role}
     source_less_article_relation = bool(article_detail and relation_signal)
     if not (relation_signal or add_signal) or (
@@ -241,7 +243,7 @@ def amendment_relation_target(store, query: str, *, relation_family: str | None 
     if amendment_role and amendment_role.startswith("amendment_"):
         return {"mode": "document", "role": amendment_role}
     if target_original:
-        return {"mode": "document", "role": "original_historical"}
+        return {"mode": "document", "role": origin_role}
     return {"mode": None}
 
 
@@ -403,17 +405,27 @@ def _parent_unit(store, query: str, route: dict) -> dict | None:
 
 def _unit(store, query: str, unit_type: str) -> dict | None:
     corpus_id = _corpus_id(getattr(store, "config", None))
-    if unit_type == "pasal_record":
-        label = parse_pasal_reference(corpus_id, query)
-    else:
-        label = parse_bab_reference(corpus_id, query)
-    if label is None:
+    labels = tuple(
+        dict.fromkeys(
+            label
+            for label in (
+                parse_pasal_reference(corpus_id, query),
+                parse_bab_reference(corpus_id, query),
+            )
+            if label is not None
+        )
+    )
+    if not labels:
         return None
     scope = resolve_source_scope(query, strategy=getattr(store.config, "query_strategy", "generic"), config=store.config)
     if scope.unresolved:
         return None
     preferred = scope.role
-    matches = [row for row in store.legal_units if row.get("unit_label") == label and row.get("unit_type") == unit_type]
+    matches = [
+        row
+        for row in store.legal_units
+        if row.get("unit_label") in labels and row.get("unit_type") == unit_type
+    ]
     if scope.explicit:
         return next((row for row in matches if _source_role(row) == preferred), None)
     return next((row for row in matches if _source_role(row) == preferred), None) or (matches[0] if matches else None)

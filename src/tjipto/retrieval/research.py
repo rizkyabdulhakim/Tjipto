@@ -132,9 +132,6 @@ class OpenAICompatibleResearchPlanningProvider:
                     "Return exactly one JSON object and no markdown or prose. "
                     "Use only these top-level keys and exact shapes: "
                     '"variants": an array of objects with a non-empty string "query" (never strings); '
-                    '"retrieval_lanes": a non-empty array containing only "sparse", "dense", or "hybrid"; '
-                    '"task_kind": exactly one of "retrieval", "multiple_supports", "comparison", '
-                    '"decomposition", or "relation_traversal"; '
                     '"information_needs": an array of objects whose allowed fields are '
                     '"description" (non-empty string), "query" (string or null), "concepts" '
                     '(array of strings), "kind" ("concept", "comparison", "procedure", or "relation"), '
@@ -149,8 +146,7 @@ class OpenAICompatibleResearchPlanningProvider:
                     f"Return at most {provider_variant_limit} provider variants; the server already retains the original query. "
                     "Return no other fields in those objects. Never return requirements, evidence, citations, "
                     "authority, source role, temporal status, or evidence validity; those remain server-owned. "
-                    "The server also owns operation, retrieval lane, task kind, evidence, citation, and sufficiency; "
-                    "legacy retrieval_lanes and task_kind fields, when present, are ignored.\n"
+                    "The server also owns operation, retrieval lane, task kind, evidence, citation, and sufficiency.\n"
                     + json.dumps(dict(request), ensure_ascii=False, sort_keys=True)
                 ),
             }],
@@ -214,15 +210,6 @@ def _planner_schema(provider_variant_limit: int) -> dict[str, object]:
                     "required": ["query"],
                 },
             },
-            "retrieval_lanes": {
-                "type": "array",
-                "minItems": 1,
-                "items": {"type": "string", "enum": ["sparse", "dense", "hybrid"]},
-            },
-            "task_kind": {
-                "type": "string",
-                "enum": ["retrieval", "multiple_supports", "comparison", "decomposition", "relation_traversal"],
-            },
             "information_needs": {"type": "array", "maxItems": 3, "items": need},
             "status": {"type": "string", "enum": ["ready", "clarification_required"]},
             "missing_dimensions": {
@@ -232,7 +219,7 @@ def _planner_schema(provider_variant_limit: int) -> dict[str, object]:
             },
             "clarification_question": {"type": ["string", "null"], "maxLength": 240},
         },
-        "required": ["variants", "retrieval_lanes", "task_kind", "information_needs", "status", "missing_dimensions", "clarification_question"],
+        "required": ["variants", "information_needs", "status", "missing_dimensions", "clarification_question"],
     }
 
 
@@ -322,11 +309,6 @@ def plan_research(
     except Exception:
         return ResearchPlan(query, intent, (original,), "unavailable", ("provider_failure",), requirements=base_requirements)
     variants, rejected = _validated_variants(proposal, original, intent)
-    proposed_lanes = _validated_lanes(proposal)
-    if proposed_lanes is None:
-        rejected = (*rejected, "retrieval_lane_invalid")
-    # Keep the legacy fields parseable for deployed providers, but never let
-    # an untrusted proposal choose the retrieval lane.
     lanes = ("sparse",)
     _, requirement_rejections = _validated_requirements(
         proposal,
@@ -338,9 +320,6 @@ def plan_research(
     rejected = (*rejected, *requirement_rejections)
     if isinstance(proposal, Mapping) and proposal.get("requirements"):
         rejected = (*rejected, "provider_requirements_forbidden")
-    proposed_task_kind = _validated_task_kind(proposal)
-    if proposed_task_kind is None:
-        rejected = (*rejected, "task_kind_invalid")
     task_kind = _server_task_kind(intent)
     information_needs, need_rejections = _validated_information_needs(proposal, intent)
     rejected = (*rejected, *need_rejections)
@@ -396,8 +375,7 @@ def _planner_request(
             ),
         },
         "allowed_proposals": (
-            "task_kind", "variants", "information_needs", "retrieval_lanes",
-            "status", "missing_dimensions", "clarification_question",
+            "variants", "information_needs", "status", "missing_dimensions", "clarification_question",
         ),
     }
 
@@ -493,25 +471,6 @@ def _preserves_scope(value: QueryVariant, original: QueryVariant) -> bool:
         and value.polarity == original.polarity
         and value.modality == original.modality
     )
-
-
-def _validated_lanes(proposal: object) -> tuple[str, ...] | None:
-    if not isinstance(proposal, Mapping):
-        return ("sparse",)
-    raw = proposal.get("retrieval_lanes", ("sparse",))
-    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
-        return None
-    lanes = tuple(str(item) for item in raw)
-    allowed = {"sparse", "dense", "hybrid"}
-    return lanes if lanes and set(lanes) <= allowed else None
-
-
-def _validated_task_kind(proposal: object) -> str | None:
-    if not isinstance(proposal, Mapping) or "task_kind" not in proposal:
-        return "retrieval"
-    value = proposal.get("task_kind")
-    allowed = {"retrieval", "multiple_supports", "comparison", "decomposition", "relation_traversal"}
-    return value if isinstance(value, str) and value in allowed else None
 
 
 def _server_task_kind(intent: ResearchIntent) -> str:

@@ -69,7 +69,9 @@ def _evaluate_runtime(args: argparse.Namespace) -> int:
     from tjipto.runtime.service import LegalRuntimeService
 
     cases = _read_jsonl(args.cases)
-    service = LegalRuntimeService(runtime_root)
+    # Keep the permanent corpus evaluation deterministic; the live planner is
+    # verified separately by verify_live_planner.py.
+    service = LegalRuntimeService(runtime_root, answer_provider=None, planning_provider=None)
     results = [_evaluate(case, service) for case in cases]
     invalid = sum(row["execution_status"] == "invalid" for row in results)
     gaps = sum(row["capability_status"] == "gap" for row in results)

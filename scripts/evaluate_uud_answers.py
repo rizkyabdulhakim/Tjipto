@@ -21,7 +21,9 @@ def main(argv: list[str] | None = None) -> int:
     cases = _read_jsonl(args.cases)
     repo_root = args.repo_root.resolve()
     service_type, request_handler = _runtime(repo_root)
-    service = service_type(repo_root)
+    # Evaluate evidence-bounded publication independently of external wording
+    # and planning providers. Their live contract is covered separately.
+    service = service_type(repo_root, answer_provider=None, planning_provider=None)
     results = [_evaluate(case, service, request_handler) for case in cases]
     report = {
         "status": "pass" if all(row["passed"] for row in results) else "fail",

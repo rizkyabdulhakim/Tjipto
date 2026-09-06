@@ -17,7 +17,7 @@ from tjipto.retrieval.research import (
 from tjipto.retrieval.sufficiency import EvidenceRequirement, EvidenceSet, SufficiencyAssessment, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.query_semantics import interpret_query
-from tjipto.runtime.research_control import research_requirements_for_ask
+from tjipto.retrieval.requirements import research_requirements_for_ask
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1013,14 +1013,14 @@ class HybridResearchContractTest(unittest.TestCase):
         self.assertFalse(schema["schema"]["additionalProperties"])
         for fragment in (
             '"variants":',
-            '"retrieval_lanes":',
-            '"task_kind":',
             '"information_needs":',
             '"relation_traversal"',
             "at most 3 provider variants",
             "Never return requirements",
         ):
             self.assertIn(fragment, content)
+        self.assertNotIn('"retrieval_lanes":', content)
+        self.assertNotIn('"task_kind":', content)
         self.assertEqual(proposal["retrieval_lanes"], ["hybrid"])
 
     def test_openai_compatible_planner_retries_one_transient_http_failure(self) -> None:
@@ -1077,7 +1077,7 @@ class HybridResearchContractTest(unittest.TestCase):
 
         plan = plan_research("original", ResearchIntent(comparison=True), provider=Provider())
         self.assertFalse(plan.requirements)
-        self.assertIn("task_kind_invalid", plan.rejection_reasons)
+        self.assertNotIn("task_kind_invalid", plan.rejection_reasons)
         self.assertIn("requirement_text_field_invalid", plan.rejection_reasons)
         self.assertIn("requirement_field_type_invalid", plan.rejection_reasons)
 

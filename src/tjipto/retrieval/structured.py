@@ -20,7 +20,6 @@ from tjipto.corpora.source_arbitration import resolve_source_scope
 @dataclass(frozen=True)
 class StructuralRequest:
     operation: str
-    unit: str
     inclusion: str
     bab: str | None
     pasal: str | None
@@ -33,11 +32,12 @@ def structured_lookup(
     query: str,
     limit: int = 10,
     *,
-    strategy: str = "uud_1945",
+    strategy: str | None = None,
     source_role: str | None = None,
     allow_navigation: bool = True,
 ) -> tuple[dict, ...]:
     config = getattr(store, "config", None)
+    strategy = str(strategy or getattr(config, "structured_strategy", "generic"))
     intent = intent_config_for(strategy, config)
     corpus_id = _corpus_id(config)
     if not intent["structured_lookup_enabled"]:
@@ -82,120 +82,6 @@ def structured_lookup(
         )
     ]
     return tuple(fallback_rows[:limit])
-
-
-def document_summary_rows(
-    store: EvidenceStore,
-    source_roles: tuple[str, ...],
-    *,
-    per_role: int | None = None,
-) -> tuple[dict, ...]:
-    """Return verified document-level coverage for a summary request.
-
-    The selection is derived from the corpus unit hierarchy.  It keeps
-    instrument context for amendments and top-level structure for normative
-    documents, rather than treating one BM25 hit as a document summary.
-    """
-    units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
-    instrument_types, normative_types = _unit_type_sets(store)
-    top_level_normative_ids = {
-        unit_id
-        for unit_id, unit in units.items()
-        if unit.get("unit_type") in normative_types and not unit.get("parent_legal_unit_ids")
-    }
-    rows: list[dict] = []
-    for role in dict.fromkeys(str(value) for value in source_roles if value):
-        amendment = role.startswith("amendment_")
-        amendment_targets = _amendment_target_ids(store, role) if amendment else set()
-        candidates = []
-        for row in store.evidence:
-            if row.get("source_role") != role or row.get("status") != "final":
-                continue
-            if not store.bboxes_for(row.get("evidence_id")):
-                continue
-            unit_id = str(row.get("legal_unit_id") or "")
-            unit_type = units.get(unit_id, {}).get("unit_type")
-            if unit_id in top_level_normative_ids or (amendment and (unit_type in instrument_types or unit_id in amendment_targets)):
-                candidates.append(row)
-        if not candidates:
-            candidates = [
-                row
-                for row in store.evidence
-                if row.get("source_role") == role
-                and row.get("status") == "final"
-                and store.bboxes_for(row.get("evidence_id"))
-            ]
-        candidates.sort(key=lambda row: _summary_row_order(row, units))
-        rows.extend(candidates if per_role is None else candidates[: max(1, per_role)])
-    return tuple(rows)
-
-
-def version_comparison_rows(
-    store: EvidenceStore,
-    source_roles: tuple[str, ...],
-    *,
-    per_role: int | None = None,
-    references: tuple[str, ...] = (),
-) -> tuple[dict, ...]:
-    """Return source-backed normative propositions for version comparison."""
-    units = {str(unit.get("legal_unit_id")): unit for unit in store.legal_units}
-    requested = {str(value).casefold().strip() for value in references if value}
-    _, normative_types = _unit_type_sets(store)
-    rows: list[dict] = []
-    for role in dict.fromkeys(str(value) for value in source_roles if value):
-        candidates = [
-            row
-            for row in store.evidence
-            if row.get("source_role") == role
-            and (not requested or _row_matches_reference(row, requested))
-            and row.get("status") == "final"
-            and units.get(str(row.get("legal_unit_id")), {}).get("unit_type") in normative_types
-            and row.get("authority_kind") == "normative_legal_text"
-            and row.get("citation_eligibility") == "eligible"
-            and row.get("relevant_quote_eligible") is True
-            and store.bboxes_for(row.get("evidence_id"))
-        ]
-        candidates.sort(key=lambda row: _summary_row_order(row, units))
-        rows.extend(candidates if per_role is None else candidates[: max(1, per_role)])
-    return tuple(rows)
-
-
-def _unit_type_sets(store: EvidenceStore) -> tuple[set[str], set[str]]:
-    """Read corpus unit roles from the validated schema, not generic code."""
-    config = getattr(store, "config", None)
-    raw_schema = config.setting("schema", {}) if config is not None else {}
-    schema_values: dict[str, Any] = raw_schema if isinstance(raw_schema, dict) else {}
-    hierarchy = {str(value) for value in schema_values.get("unit_hierarchy", ()) if value}
-    instrument = {str(value) for value in schema_values.get("instrument_unit_types", ()) if value}
-    return instrument, hierarchy - instrument
-
-
-def _amendment_target_ids(store: EvidenceStore, source_role: str) -> set[str]:
-    """Collect same-version targets already proven by the corpus relation graph."""
-    target_ids: set[str] = set()
-    for edge in store.graph_edges:
-        relation = edge.get("relation_projection") or {}
-        if relation.get("source_role") == source_role and relation.get("target_source_role") == source_role:
-            target_id = relation.get("target_legal_unit_id")
-            if target_id:
-                target_ids.add(str(target_id))
-    return target_ids
-
-
-def _row_matches_reference(row: dict, requested: set[str]) -> bool:
-    """Match a full Pasal/ayat reference against its unit hierarchy."""
-    labels = {
-        _normalise_reference_label(row.get("citation")),
-        _normalise_reference_label(" ".join(str(value) for value in row.get("hierarchy") or ())),
-    }
-    hierarchy = tuple(str(value).strip() for value in row.get("hierarchy") or ())
-    if len(hierarchy) >= 2 and re.fullmatch(r"\(\d+\)", hierarchy[-1]):
-        labels.add(_normalise_reference_label(f"{hierarchy[-2]} ayat {hierarchy[-1]}"))
-    return bool(labels.intersection(requested))
-
-
-def _normalise_reference_label(value: object) -> str:
-    return re.sub(r"\s+", " ", str(value or "").casefold().strip())
 
 
 def source_occurrence_rows(
@@ -276,15 +162,10 @@ def structured_occurrence_references(store: EvidenceStore, query: str) -> tuple[
     return tuple(dict.fromkeys(references))
 
 
-def _summary_row_order(row: dict, units: dict[str, dict]) -> tuple[int, int, str]:
-    unit = units.get(str(row.get("legal_unit_id")), {})
-    page = unit.get("page_start") or row.get("page_number") or (row.get("page_numbers") or [0])[0]
-    return int(page or 0), int(unit.get("sibling_order") or 0), str(row.get("evidence_id") or "")
-
-
-def structural_count(store: EvidenceStore, query: str, *, strategy: str = "uud_1945") -> dict | None:
+def structural_count(store: EvidenceStore, query: str, *, strategy: str | None = None) -> dict | None:
     """Return one source-derived aggregate only when every counted unit is grounded."""
     config = getattr(store, "config", None)
+    strategy = str(strategy or getattr(config, "structured_strategy", "generic"))
     intent = intent_config_for(strategy, config)
     folded = (query or "").casefold()
     page_count = _document_page_count(store, query, folded, strategy=strategy, config=config)
@@ -295,10 +176,7 @@ def structural_count(store: EvidenceStore, query: str, *, strategy: str = "uud_1
         return None
     count_intent = bool(re.search(r"\b(?:berapa|jumlah)\b", folded))
     has_count_unit_phrase = any(
-        str(term).casefold() in folded
-        for rule in configured_units.values()
-        if isinstance(rule, dict)
-        for term in rule.get("terms") or ()
+        str(term).casefold() in folded for rule in configured_units.values() if isinstance(rule, dict) for term in rule.get("terms") or ()
     )
     requested = tuple(
         (name, rule)
@@ -306,23 +184,11 @@ def structural_count(store: EvidenceStore, query: str, *, strategy: str = "uud_1
         if isinstance(rule, dict)
         and (
             any(str(term).casefold() in folded for term in rule.get("terms") or ())
-            or (
-                count_intent
-                and has_count_unit_phrase
-                and re.search(rf"\b{re.escape(str(name).casefold())}\b", folded)
-            )
+            or (count_intent and has_count_unit_phrase and re.search(rf"\b{re.escape(str(name).casefold())}\b", folded))
         )
     )
     if not requested:
-        terms = tuple(str(term).casefold() for term in intent.get("structure_count_terms") or ())
-        if not terms or not any(term in folded for term in terms):
-            return None
-        requested = (("pasal", {
-            "unit_type": intent.get("structure_count_unit_type") or "pasal_record",
-            "label_pattern": r"Pasal\s+\d+[A-Z]?",
-            "authority_kinds": ("normative_legal_text",),
-            "label": "Pasal",
-        }),)
+        return None
     article_count = _article_ayat_count(store, query, strategy=strategy, requested=requested)
     if article_count is not None:
         return article_count
@@ -353,7 +219,8 @@ def structural_count(store: EvidenceStore, query: str, *, strategy: str = "uud_1
         for name, rule in requested:
             pattern = str(rule.get("label_pattern") or ".+")
             units = tuple(
-                row for row in store.legal_units
+                row
+                for row in store.legal_units
                 if row.get("source_role") == role
                 and row.get("unit_type") == rule.get("unit_type")
                 and re.fullmatch(pattern, str(row.get("unit_label") or ""), re.IGNORECASE)
@@ -364,10 +231,7 @@ def structural_count(store: EvidenceStore, query: str, *, strategy: str = "uud_1
                 for row in store.evidence
                 if row.get("status") == "final"
                 and row.get("authority_kind") in authority_kinds
-                and (
-                    row.get("citation_eligibility") == "eligible"
-                    or row.get("authority_kind") == "structural_context"
-                )
+                and (row.get("citation_eligibility") == "eligible" or row.get("authority_kind") == "structural_context")
             }
             if any(unit.get("legal_unit_id") not in evidence_by_unit for unit in units):
                 return None
@@ -387,12 +251,19 @@ def structural_count(store: EvidenceStore, query: str, *, strategy: str = "uud_1
     source_role = roles[0] if len(roles) == 1 else None
     source = sources[roles[0]] if len(roles) == 1 else {}
     unit_type = str(requested[0][1].get("unit_type") or "document_structure")
-    if len(roles) == 1 and len(requested) == 1 and requested[0][0] == "pasal":
-        ordered = tuple(sorted(units_by_key[(roles[0], "pasal")], key=lambda row: _pasal_number(str(row.get("unit_label") or ""))))
+    if len(roles) == 1 and len(requested) == 1:
+        unit_name = requested[0][0]
+        ordered = tuple(
+            sorted(
+                units_by_key[(roles[0], unit_name)],
+                key=lambda row: _natural_unit_label_key(row.get("unit_label")),
+            )
+        )
         if ordered:
             first, last = str(ordered[0]["unit_label"]), str(ordered[-1]["unit_label"])
             title = str(titles.get(roles[0]) or source.get("document_title") or source.get("title") or "Dokumen sumber")
-            answer = f"{title} memuat {len(ordered)} ketentuan berlabel Pasal, dari {first} sampai {last}."
+            label = str(requested[0][1].get("label") or unit_name)
+            answer = f"{title} memuat {len(ordered)} ketentuan berlabel {label}, dari {first} sampai {last}."
     source_supports = _document_level_supports(sources, roles, titles)
     return {
         "evidence_id": f"structural_count::{source_role or 'all'}::{unit_type}",
@@ -428,8 +299,8 @@ def _document_page_count(store, query: str, folded: str, *, strategy: str, confi
         return None
     intent = intent_config_for(strategy, config)
     all_sources = any(str(term).casefold() in folded for term in intent.get("structure_count_all_source_terms") or ())
-    roles = tuple(getattr(config, "source_roles", ()) or ()) if all_sources else (
-        scope.role or getattr(config, "preferred_source_role", None),
+    roles = (
+        tuple(getattr(config, "source_roles", ()) or ()) if all_sources else (scope.role or getattr(config, "preferred_source_role", None),)
     )
     roles = tuple(role for role in roles if role)
     sources = {str(row.get("source_role")): row for row in store.source_documents}
@@ -475,8 +346,20 @@ def _article_ayat_count(
     strategy: str,
     requested: tuple[tuple[str, dict], ...],
 ) -> dict | None:
-    """Count ayat belonging to an explicitly referenced Pasal."""
-    if not any(name == "ayat" for name, _ in requested):
+    """Count subprovisions belonging to an explicitly referenced provision."""
+    subprovision_request = next(
+        (
+            (name, rule)
+            for name, rule in requested
+            if any(
+                unit.get("structural_role") == "subprovision" and unit.get("unit_type") == rule.get("unit_type")
+                for unit in store.legal_units
+            )
+        ),
+        None,
+    )
+    requested_subprovision = bool(subprovision_request)
+    if not requested_subprovision:
         return None
     config = getattr(store, "config", None)
     corpus_id = _corpus_id(config)
@@ -491,7 +374,7 @@ def _article_ayat_count(
         (
             unit
             for unit in store.legal_units
-            if unit.get("unit_type") == "pasal_record"
+            if unit.get("structural_role") == "provision"
             and str(unit.get("unit_label") or "").casefold() == pasal.casefold()
             and (role is None or unit.get("source_role") == role)
         ),
@@ -502,7 +385,7 @@ def _article_ayat_count(
     children = tuple(
         unit
         for unit in store.legal_units
-        if unit.get("unit_type") == "ayat_record"
+        if unit.get("structural_role") == "subprovision"
         and parent.get("legal_unit_id") in (unit.get("parent_legal_unit_ids") or ())
     )
     evidence_by_unit = {
@@ -535,18 +418,23 @@ def _article_ayat_count(
         or "Dokumen sumber"
     )
     count = len(children)
+    subprovision_name, subprovision_rule = subprovision_request or ("subprovision", {})
+    subprovision_label = str(subprovision_rule.get("label") or subprovision_name)
     answer = (
-        f"{title} memuat {pasal} dengan {count} ayat bernomor."
+        f"{title} memuat {pasal} dengan {count} {subprovision_label} bernomor."
         if count
-        else f"{title} memuat {pasal} tanpa ayat bernomor."
+        else f"{title} memuat {pasal} tanpa {subprovision_label} bernomor."
     )
     support_ids = tuple(
         dict.fromkeys(
-            [str(parent_evidence.get("evidence_id")), *(str(evidence_by_unit[child["legal_unit_id"]].get("evidence_id")) for child in children)]
+            [
+                str(parent_evidence.get("evidence_id")),
+                *(str(evidence_by_unit[child["legal_unit_id"]].get("evidence_id")) for child in children),
+            ]
         )
     )
     return {
-        "evidence_id": f"structural_count::{role or 'preferred'}::ayat::{pasal.casefold()}",
+        "evidence_id": f"structural_count::{role or 'preferred'}::{subprovision_name}::{pasal.casefold()}",
         "status": "final",
         "authority_kind": "structural_context",
         "citation_final": False,
@@ -645,18 +533,21 @@ def _document_level_supports(sources: dict[str, dict], roles: tuple[str, ...], t
     )
 
 
-def _pasal_number(label: str) -> tuple[int, str]:
-    match = re.fullmatch(r"Pasal\s+(\d+)([A-Z]?)", label, re.IGNORECASE)
-    return (int(match.group(1)), match.group(2).upper()) if match else (10**9, label)
-
-
-def has_structured_target(query: str, *, strategy: str = "uud_1945", config=None) -> bool:
+def has_structured_target(query: str, *, strategy: str = "generic", config=None) -> bool:
     intent = intent_config_for(strategy, config)
     if not intent["structured_lookup_enabled"]:
         return False
     if _instrument_target(query, strategy=strategy, config=config):
         return True
-    return bool(_targets(query, intent, _corpus_id(config))) or _has_incomplete_pasal(query)
+    return bool(_targets(query, intent, _corpus_id(config))) or _has_incomplete_reference(query, intent)
+
+
+def _natural_unit_label_key(value: object) -> tuple[tuple[int, object], ...]:
+    return tuple(
+        (0, int(part)) if part.isdigit() else (1, part)
+        for part in re.split(r"(\d+)", str(value or "").casefold())
+        if part
+    )
 
 
 def _structural_request(query: str, intent: dict, corpus_id: str) -> StructuralRequest:
@@ -666,16 +557,17 @@ def _structural_request(query: str, intent: dict, corpus_id: str) -> StructuralR
     ayat = parse_ayat_reference(corpus_id, query)
     terms = intent.get("structure_request_terms") or {}
     operation = (
-        "title" if _contains_any(query, terms.get("title", ()))
-        else "enumerate" if _contains_any(query, terms.get("enumerate", ()))
-        else "content" if _contains_any(query, terms.get("content", ()))
+        "title"
+        if _contains_any(query, terms.get("title", ()))
+        else "enumerate"
+        if _contains_any(query, terms.get("enumerate", ()))
+        else "content"
+        if _contains_any(query, terms.get("content", ()))
         else "reference"
     )
-    unit = "ayat" if ayat else "pasal" if pasal else "bab" if bab else ""
     inclusion = "descendants" if bab and not pasal and operation in {"content", "enumerate"} else "exact"
     return StructuralRequest(
         operation=operation,
-        unit=unit,
         inclusion=inclusion,
         bab=bab,
         pasal=pasal,
@@ -692,8 +584,9 @@ def _contains_any(query: str, terms: tuple[str, ...] | list[str]) -> bool:
 def _bab_request_rows(store: EvidenceStore, request: StructuralRequest, requested_role: str | None) -> tuple[dict, ...]:
     units = tuple(store.legal_units)
     headings = tuple(
-        unit for unit in units
-        if unit.get("unit_type") == "bab_record"
+        unit
+        for unit in units
+        if unit.get("structural_role") == "division"
         and str(unit.get("unit_label") or "").casefold() == str(request.bab).casefold()
         and (requested_role is None or unit.get("source_role") == requested_role)
     )
@@ -721,7 +614,8 @@ def _bab_request_rows(store: EvidenceStore, request: StructuralRequest, requeste
 def _heading_projection(store: EvidenceStore, heading: dict) -> dict | None:
     evidence = next(
         (
-            row for row in store.evidence
+            row
+            for row in store.evidence
             if row.get("legal_unit_id") == heading.get("legal_unit_id")
             and row.get("status") == "final"
             and store.bboxes_for(row.get("evidence_id"))
@@ -731,25 +625,18 @@ def _heading_projection(store: EvidenceStore, heading: dict) -> dict | None:
     if evidence is None:
         return None
     child_ids = {
-        unit.get("legal_unit_id")
-        for unit in store.legal_units
-        if unit.get("parent_legal_unit_id") == heading.get("legal_unit_id")
+        unit.get("legal_unit_id") for unit in store.legal_units if unit.get("parent_legal_unit_id") == heading.get("legal_unit_id")
     }
     child_span_ids = {
-        span_id
-        for unit in store.legal_units
-        if unit.get("legal_unit_id") in child_ids
-        for span_id in unit.get("text_span_ids") or ()
+        span_id for unit in store.legal_units if unit.get("legal_unit_id") in child_ids for span_id in unit.get("text_span_ids") or ()
     }
     span_ids = tuple(span_id for span_id in heading.get("text_span_ids") or () if span_id not in child_span_ids)
-    bbox_refs = tuple(evidence.get("bbox_refs") or ())[:len(span_ids)]
+    bbox_refs = tuple(evidence.get("bbox_refs") or ())[: len(span_ids)]
     if not span_ids or len(span_ids) != len(bbox_refs):
         return None
     spans = {span.get("text_span_id"): span for span in store.page_text_spans}
     heading_text = "\n".join(
-        str(spans[span_id].get("exact_quote") or spans[span_id].get("text") or "").rstrip()
-        for span_id in span_ids
-        if span_id in spans
+        str(spans[span_id].get("exact_quote") or spans[span_id].get("text") or "").rstrip() for span_id in span_ids if span_id in spans
     )
     if not heading_text:
         return None
@@ -759,11 +646,13 @@ def _heading_projection(store: EvidenceStore, heading: dict) -> dict | None:
         "copy_text": heading_text,
         "text_span_ids": span_ids,
         "bbox_refs": bbox_refs,
-        "page_numbers": tuple(dict.fromkeys(
-            span.get("page_number")
-            for span in store.page_text_spans
-            if span.get("text_span_id") in set(span_ids) and span.get("page_number") is not None
-        )),
+        "page_numbers": tuple(
+            dict.fromkeys(
+                span.get("page_number")
+                for span in store.page_text_spans
+                if span.get("text_span_id") in set(span_ids) and span.get("page_number") is not None
+            )
+        ),
         "route_sources": ("structured",),
         "candidate_type": "structural_heading_candidate",
     }
@@ -800,26 +689,29 @@ def _requested_units(children: tuple[dict, ...], request: StructuralRequest, par
         if request.ayat:
             matched_ids = {unit.get("legal_unit_id") for unit in matched}
             return tuple(
-                unit for unit in children
+                unit
+                for unit in children
                 if unit.get("parent_legal_unit_id") in matched_ids
                 and str(unit.get("unit_label") or "").casefold() == request.ayat.casefold()
             )
-        return tuple(unit for unit in matched if unit.get("unit_type") == "pasal_record")
+        return tuple(unit for unit in matched if unit.get("structural_role") == "provision")
     direct_children = tuple(unit for unit in children if unit.get("parent_legal_unit_id") == parent_id)
-    direct = tuple(unit for unit in direct_children if unit.get("unit_type") == "pasal_record") or direct_children
+    direct = tuple(unit for unit in direct_children if unit.get("structural_role") == "provision") or direct_children
     if not request.include_hierarchy:
         return direct
     parent_ids = {unit.get("parent_legal_unit_id") for unit in children}
     return tuple(
-        unit for unit in children
-        if unit.get("unit_type") == "ayat_record" or unit.get("legal_unit_id") not in parent_ids
+        unit
+        for unit in children
+        if unit.get("structural_role") == "subprovision" or unit.get("legal_unit_id") not in parent_ids
     )
 
 
 def _normative_rows(store: EvidenceStore, units: tuple[dict, ...], source_role: object) -> tuple[dict, ...]:
     unit_ids = {unit.get("legal_unit_id") for unit in units}
     rows = [
-        row for row in store.evidence
+        row
+        for row in store.evidence
         if row.get("legal_unit_id") in unit_ids
         and row.get("source_role") == source_role
         and row.get("status") == "final"
@@ -836,12 +728,14 @@ def _unit_order(unit: dict) -> tuple[int, str]:
     return int(unit.get("sibling_order") or 0), str(unit.get("legal_unit_id") or "")
 
 
-def has_instrument_target(query: str, *, strategy: str = "uud_1945", config=None) -> bool:
+def has_instrument_target(query: str, *, strategy: str = "generic", config=None) -> bool:
     """Whether a corpus-configured instrument operation owns this query."""
     return _instrument_target(query, strategy=strategy, config=config)
 
 
-def _structure_list_rows(store: EvidenceStore, query: str, limit: int, intent: dict, corpus_id: str, source_role: str | None) -> tuple[dict, ...]:
+def _structure_list_rows(
+    store: EvidenceStore, query: str, limit: int, intent: dict, corpus_id: str, source_role: str | None
+) -> tuple[dict, ...]:
     folded = (query or "").casefold()
     terms = tuple(str(term).casefold() for term in intent.get("structure_list_terms") or ())
     if not terms or not any(term in folded for term in terms):
@@ -851,9 +745,9 @@ def _structure_list_rows(store: EvidenceStore, query: str, limit: int, intent: d
     unit_type = intent.get("structure_unit_type")
     requested_role = source_role or getattr(store.config, "preferred_source_role", None)
     units = [
-        row for row in store.legal_units
-        if row.get("unit_type") == unit_type
-        and (requested_role is None or row.get("source_role") == requested_role)
+        row
+        for row in store.legal_units
+        if row.get("unit_type") == unit_type and (requested_role is None or row.get("source_role") == requested_role)
     ]
     evidence_by_unit = {row.get("legal_unit_id"): row for row in store.evidence if row.get("status") == "final"}
     return tuple(
@@ -863,9 +757,11 @@ def _structure_list_rows(store: EvidenceStore, query: str, limit: int, intent: d
     )[:limit]
 
 
-def structured_failure_reason(store: EvidenceStore, query: str, *, strategy: str = "uud_1945") -> str | None:
+def structured_failure_reason(store: EvidenceStore, query: str, *, strategy: str | None = None) -> str | None:
+    strategy = str(strategy or getattr(getattr(store, "config", None), "structured_strategy", "generic"))
     corpus_id = _corpus_id(getattr(store, "config", None))
-    if _has_incomplete_pasal(query):
+    intent = intent_config_for(strategy, getattr(store, "config", None))
+    if _has_incomplete_reference(query, intent):
         return "incomplete_legal_reference"
     if not _is_parent_reference(query, corpus_id):
         return None
@@ -875,7 +771,7 @@ def structured_failure_reason(store: EvidenceStore, query: str, *, strategy: str
     parents = [
         row
         for row in store.legal_units
-        if row.get("unit_type") == "pasal_record"
+        if row.get("structural_role") == "provision"
         and row.get("unit_label", "").casefold() == str(pasal).casefold()
         and (role is None or row.get("source_role") == role)
     ]
@@ -909,8 +805,10 @@ def _instrument_rows(
     intent = intent_config_for(strategy, config)
     corpus_id = _corpus_id(config)
     bab = parse_bab_reference(corpus_id, query)
-    if bab and any(pattern in folded for pattern in intent["instrument_deletion_words"]) and not any(
-        pattern in folded for pattern in intent["instrument_change_context_words"]
+    if (
+        bab
+        and any(pattern in folded for pattern in intent["instrument_deletion_words"])
+        and not any(pattern in folded for pattern in intent["instrument_change_context_words"])
     ):
         if probe_only:
             return ({"probe": True},)
@@ -987,8 +885,14 @@ def _is_parent_reference(query: str, corpus_id: str) -> bool:
     )
 
 
-def _has_incomplete_pasal(query: str) -> bool:
-    return bool(re.fullmatch(r"\s*pasal(?:\s*[?!.]+)?\s*", query or "", flags=re.IGNORECASE))
+def _has_incomplete_reference(query: str, intent: dict) -> bool:
+    normalized = re.sub(r"[?!.]+$", "", str(query or "").strip().casefold()).strip()
+    legal_objects = tuple(
+        str(value).casefold()
+        for value in intent.get("instrument_legal_object_signals", ())
+        if isinstance(value, str)
+    )
+    return bool(normalized and normalized in legal_objects)
 
 
 def _chunk_for_unit(store: EvidenceStore, legal_unit_id: str | None) -> dict | None:
@@ -1018,9 +922,8 @@ def _navigation_rows(
         None,
     )
     references = parse_legal_references(corpus_id, query)
-    referenced = str(references[0].get("reference") or "") if references else ""
-    _, separator, ayat_label = referenced.partition(" ayat ")
-    if source is not None and separator:
+    ayat_label = parse_ayat_reference(corpus_id, query, config=store.config) if references else None
+    if source is not None and ayat_label:
         source = next(
             (
                 row
@@ -1037,7 +940,9 @@ def _navigation_rows(
         rows = [
             row | {"candidate_type": "structural_navigation_candidate", "navigation_direction": direction}
             for row in store.evidence
-            if row.get("legal_unit_id") == source.get("legal_unit_id") and row.get("status") == "final" and store.bboxes_for(row["evidence_id"])
+            if row.get("legal_unit_id") == source.get("legal_unit_id")
+            and row.get("status") == "final"
+            and store.bboxes_for(row["evidence_id"])
         ]
         return tuple(rows[:limit])
     # Article sequence may cross a chapter boundary, while paragraph sequence
@@ -1066,8 +971,7 @@ def _navigation_rows(
         ordered = [
             row
             for row in store.legal_units
-            if row.get("source_document_id") == source.get("source_document_id")
-            and row.get("structural_role") == "provision"
+            if row.get("source_document_id") == source.get("source_document_id") and row.get("structural_role") == "provision"
         ]
     try:
         source_index = next(index for index, row in enumerate(ordered) if row.get("legal_unit_id") == source.get("legal_unit_id"))
@@ -1075,11 +979,8 @@ def _navigation_rows(
         return ()
     target = None
     if direction == "previous" and source.get("structural_role") == "division":
-        # Inserted BAB labels (for example ``BAB XA``) are ordered after the
-        # unsuffixed chapter they extend.  Prefer that corpus-derived base
-        # label over sibling order, which can place another inserted chapter
-        # first when page/sibling metadata is shared.
-        match = re.fullmatch(r"(BAB\s+[IVXLCDM]+)[A-Z]", str(source.get("unit_label") or ""), re.IGNORECASE)
+        pattern = str(store.config.setting("inserted_structural_predecessor_pattern", "") or "")
+        match = re.fullmatch(pattern, str(source.get("unit_label") or ""), re.IGNORECASE) if pattern else None
         if match:
             predecessor_label = match.group(1).casefold()
             target = next(
@@ -1094,7 +995,10 @@ def _navigation_rows(
     rows = [
         row | {"candidate_type": "structural_navigation_candidate", "navigation_direction": direction}
         for row in store.evidence
-        if target is not None and row.get("legal_unit_id") == target.get("legal_unit_id") and row.get("status") == "final" and store.bboxes_for(row["evidence_id"])
+        if target is not None
+        and row.get("legal_unit_id") == target.get("legal_unit_id")
+        and row.get("status") == "final"
+        and store.bboxes_for(row["evidence_id"])
     ]
     return tuple(rows[:limit])
 

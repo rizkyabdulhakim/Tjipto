@@ -71,6 +71,13 @@ class GraphContractTest(unittest.TestCase):
         self.assertGreaterEqual(len(rows), 1)
         conflict_ids = {row["source_conflict_id"] for row in rows}
         self.assertNotIn("uud_1945_amendment_2_pasal_25e_current_pasal_25a_renumbering_conflict", conflict_ids)
+        self.assertLessEqual(
+            {
+                "uud_1945_amendment_1_pasal_13_ayat_2_3_numbering",
+                "uud_1945_amendment_2_pasal_27_ayat_1_3_numbering",
+            },
+            conflict_ids,
+        )
         for row in rows:
             self.assertIn(row["source_document_id"], source_ids)
             self.assertNotEqual(row["status"], "unresolved_review_required_required")
@@ -426,7 +433,7 @@ class GraphContractTest(unittest.TestCase):
         exact_rows = [row for row in rows if row["support_class"] == "exact_article_relation"]
         trace_rows = [row for row in rows if row["support_class"] == "trace_article_relation"]
         self.assertGreater(len(exact_rows), 3)
-        self.assertGreater(len(trace_rows), 0)
+        self.assertEqual(len(trace_rows), 0)
         self.assertEqual(health["article_relation_total_count"], len(rows))
         self.assertEqual(health["article_relation_exact_support_count"], len(exact_rows))
         self.assertEqual(health["article_relation_trace_only_count"], len(trace_rows))
@@ -458,6 +465,7 @@ class GraphContractTest(unittest.TestCase):
                 self.assertTrue(row["text_span_ids"])
             self.assertTrue(row["runtime_loadable"])
             self.assertTrue(row["bbox_refs"])
+            self.assertEqual(row["target_geometry_method"], "character_geometry")
             for bbox_id in row["bbox_refs"]:
                 self.assertIn(bbox_id, bbox_ids)
 
@@ -520,6 +528,26 @@ class GraphContractTest(unittest.TestCase):
         self.assertEqual(character_targets["Pasal 22E ayat (6)"]["relation_type"], "ADDS")
         self.assertEqual(character_targets["Pasal 23 ayat (1)"]["relation_type"], "MODIFIES")
         self.assertTrue(all(row["target_geometry_method"] == "character_geometry" for row in character_targets.values()))
+        promoted = {
+            row["target_citation"]: row
+            for row in scope_rows
+            if row["target_citation"] in {"Pasal 13 ayat (2)", "Pasal 27 ayat (3)"}
+        }
+        self.assertEqual(promoted["Pasal 13 ayat (2)"]["relation_type"], "MODIFIES")
+        self.assertEqual(promoted["Pasal 13 ayat (2)"]["predecessor_legal_unit_id"], "uud_legal_unit_00297")
+        self.assertEqual(promoted["Pasal 13 ayat (2)"]["successor_legal_unit_id"], "uud_legal_unit_00386")
+        self.assertEqual(promoted["Pasal 13 ayat (2)"]["old_reference"], "Pasal 13 ayat (3)")
+        self.assertEqual(promoted["Pasal 13 ayat (2)"]["new_reference"], "Pasal 13 ayat (2)")
+        self.assertTrue(promoted["Pasal 13 ayat (2)"]["source_conflict"])
+        self.assertTrue(promoted["Pasal 13 ayat (2)"]["anomaly"])
+        self.assertEqual(promoted["Pasal 27 ayat (3)"]["relation_type"], "ADDS")
+        self.assertIsNone(promoted["Pasal 27 ayat (3)"]["predecessor_legal_unit_id"])
+        self.assertEqual(promoted["Pasal 27 ayat (3)"]["successor_legal_unit_id"], "uud_legal_unit_00434")
+        self.assertEqual(promoted["Pasal 27 ayat (3)"]["old_reference"], "Pasal 27 ayat (1)")
+        self.assertEqual(promoted["Pasal 27 ayat (3)"]["new_reference"], "Pasal 27 ayat (3)")
+        self.assertTrue(promoted["Pasal 27 ayat (3)"]["source_conflict"])
+        self.assertTrue(promoted["Pasal 27 ayat (3)"]["anomaly"])
+        self.assertTrue(all(promoted[ref]["citation_final"] for ref in promoted))
 
     def test_article_relations_have_one_source_operation_per_target(self) -> None:
         rows = read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")
@@ -548,14 +576,7 @@ class GraphContractTest(unittest.TestCase):
             if row["source_role"] == "amendment_4_historical" and row["relation_type"] == "AMBIGUOUS_OPERATION"
         }
         self.assertNotIn("Pasal 16", ambiguous)
-        self.assertEqual(
-            {
-                tuple(row.get("operation_candidates") or ())
-                for row in rows
-                if row["relation_type"] == "AMBIGUOUS_OPERATION"
-            },
-            {("MODIFIES", "ADDS")},
-        )
+        self.assertFalse([row for row in rows if row["relation_type"] == "AMBIGUOUS_OPERATION"])
 
     def test_versioned_relations_persist_normative_lineage(self) -> None:
         rows = read_jsonl(ROOT / "data/final/uud/article_amendment_relations.jsonl")
@@ -571,11 +592,11 @@ class GraphContractTest(unittest.TestCase):
             "comparison_basis",
         }
         versioned = [row for row in rows if row["relation_type"] in {"ADDS", "MODIFIES", "DELETES"}]
-        self.assertEqual(len(versioned), 125)
+        self.assertEqual(len(versioned), 127)
         self.assertTrue(all(lineage_fields <= row.keys() for row in versioned))
-        self.assertEqual(sum(row["support_class"] == "exact_article_relation" for row in versioned), 125)
-        self.assertEqual(sum(row["relation_type"] == "ADDS" and row["predecessor_legal_unit_id"] is None for row in versioned), 93)
-        self.assertEqual(sum(row["relation_type"] == "MODIFIES" and row["predecessor_legal_unit_id"] is not None for row in versioned), 31)
+        self.assertEqual(sum(row["support_class"] == "exact_article_relation" for row in versioned), 127)
+        self.assertEqual(sum(row["relation_type"] == "ADDS" and row["predecessor_legal_unit_id"] is None for row in versioned), 94)
+        self.assertEqual(sum(row["relation_type"] == "MODIFIES" and row["predecessor_legal_unit_id"] is not None for row in versioned), 32)
         deleted = next(row for row in versioned if row["relation_type"] == "DELETES")
         self.assertIsNotNone(deleted["predecessor_legal_unit_id"])
         self.assertIsNone(deleted["successor_legal_unit_id"])
@@ -599,7 +620,7 @@ class GraphContractTest(unittest.TestCase):
         self.assertFalse([row for row in edges if any(key in row for key in ("evidence_ref", "bbox_refs", "text_span_ids", "support_refs"))])
         self.assertTrue(all({"support_relation_ids", "support_evidence_ids", "support_exception_ids", "support_kind"} <= set(row) for row in edges))
         self.assertNotIn("legal_edge_types", report)
-        self.assertEqual(set(report["not_promoted_edge_types"]), {"SUPPLEMENTS"})
+        self.assertEqual(set(report["not_promoted_edge_types"]), {"AMBIGUOUS_OPERATION", "SUPPLEMENTS"})
         for edge_type in report["not_promoted_edge_types"]:
             self.assertNotIn(edge_type, report["actual_edge_type_counts"])
         for edge_type in {"SUPPLEMENTS"}:

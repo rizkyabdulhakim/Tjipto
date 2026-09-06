@@ -240,7 +240,12 @@ class DenseIndex:
             raise DenseError("truncation_metadata_invalid")
         documents = tuple(
             DenseDocument(retrieval_id, evidence_id, _row_bytes(evidence))
-            for retrieval_id, evidence_id, (_, evidence, _) in zip(retrieval_ids, evidence_ids, records)
+            for retrieval_id, evidence_id, (_, evidence, _) in zip(
+                retrieval_ids,
+                evidence_ids,
+                records,
+                strict=True,
+            )
         )
         vector_bytes = b"".join(struct.pack("<" + "f" * model.dimension, *vector) for vector in vectors)
         identity = _digest({"source": source_identity, "model": model.as_dict(), "mapping": mapping_digest, "count": len(records)})
@@ -414,7 +419,7 @@ class DenseIndex:
         width = self.dimension * 4
         for index, evidence_id in enumerate(self.evidence_ids):
             values = struct.unpack_from("<" + "f" * self.dimension, self.vector_bytes, index * width)
-            score = math.fsum(left * right for left, right in zip(values, query_vector))
+            score = math.fsum(left * right for left, right in zip(values, query_vector, strict=True))
             scored.append((score, evidence_id, index))
         results = []
         for rank, (score, _, index) in enumerate(sorted(scored, key=lambda item: (-item[0], item[1]))[: max(0, limit)], 1):

@@ -66,19 +66,7 @@ def _parse_external_llm_config(value: Any) -> ExternalLLMConfig | None:
 
 def fallback_external_llm_config() -> ExternalLLMConfig | None:
     """Resolve one shared fallback for both planner and answer wording."""
-    prefix = "TJIPTO_FALLBACK_LLM_"
-
-    def value(name: str, default: str = "") -> str:
-        return os.environ.get(prefix + name, default).strip()
-
-    provider, api_key, model = value("PROVIDER").casefold(), value("API_KEY"), value("MODEL")
-    if not provider or not api_key or not model:
-        return None
-    try:
-        timeout = max(1.0, float(value("TIMEOUT_SECONDS", "12")))
-    except ValueError:
-        return None
-    return ExternalLLMConfig(provider, api_key, model, value("BASE_URL").rstrip("/"), timeout)
+    return _external_llm_config_from_prefix("TJIPTO_FALLBACK_LLM_")
 
 
 @dataclass(frozen=True)

@@ -15,7 +15,7 @@ from tjipto.corpora.parser_dispatch import (
     proposition_operator,
     resolve_navigation,
 )
-from tjipto.corpora.source_arbitration import resolve_source_scope
+from tjipto.corpora.source_arbitration import initial_source_role, resolve_source_scope
 from tjipto.runtime.intent import classify_relation_intent
 
 
@@ -81,6 +81,7 @@ def interpret_query(
     if contains_intent_phrase(query, intent.get("all_source_scope_terms", ())):
         named_roles = tuple(getattr(config, "source_roles", ()))
     preferred_role = getattr(config, "preferred_source_role", None)
+    origin_role = initial_source_role(config)
     # An explicit multi-reference comparison without a document qualifier is
     # scoped to the corpus' preferred, verified version.  Leaving the scope
     # empty makes each reference requirement impossible to satisfy even though
@@ -101,7 +102,7 @@ def interpret_query(
     )
     if before_after:
         explicit_change_role = next(
-            (role for role in named_roles if role not in {preferred_role, "original_historical"}),
+            (role for role in named_roles if role not in {preferred_role, origin_role}),
             None,
         )
         comparison_role = explicit_change_role or (named_roles[0] if len(named_roles) == 1 else preferred_role)
@@ -132,9 +133,7 @@ def interpret_query(
     discrepancy = len(references) >= 2 and contains_intent_phrase(query, discrepancy_terms(config))
     metadata_target = _metadata_target_requested(query, config, references)
     relation_intent = (
-        None
-        if scope.state == "generic_post_amendment" or metadata_target
-        else classify_relation_intent(store, query).relation_type
+        None if scope.state == "generic_post_amendment" or metadata_target else classify_relation_intent(store, query).relation_type
     )
     temporal_scope = "historical_pre_change" if _historical_pre_change(query) else temporal_context
     operation = _operation(
@@ -152,7 +151,7 @@ def interpret_query(
         source_role = getattr(config, "preferred_source_role", None)
         temporal_context = source_role
     operation_query = _operation_query(query, config, operation, scope)
-    navigation_anchor = _navigation_anchor(query) if navigation else None
+    navigation_anchor = (references[0] if references else structure_reference) if navigation else None
     comparison = operation == "compare"
     multiple_scopes = len(named_roles) > 1
     requires_multiple_supports = comparison or multiple_scopes or temporal_scope == "historical_pre_change" or operation == "analyze"
@@ -162,9 +161,7 @@ def interpret_query(
     # saja") is a retrieval problem over every named source, even when the
     # parser also finds a legal reference.  Keep direct citation ownership for
     # the ordinary single-source form.
-    source_occurrence = operation == "search" and contains_intent_phrase(
-        query, intent.get("all_source_scope_terms", ())
-    )
+    source_occurrence = operation == "search" and contains_intent_phrase(query, intent.get("all_source_scope_terms", ()))
     requested_function = (
         "source_discrepancy"
         if discrepancy
@@ -242,6 +239,7 @@ def _operation(
     setting = getattr(config, "setting", None)
     summary = setting("document_summary", {}) if callable(setting) else {}
     summary_terms = summary.get("query_terms", ()) if isinstance(summary, dict) else ()
+    intent = intent_config_for(getattr(config, "query_strategy", "generic"), config)
     if contains_intent_phrase(query, summary_terms):
         return "summarize"
     open_terms = setting("document_open_terms", ()) if callable(setting) else ()
@@ -267,7 +265,13 @@ def _operation(
         comparison = re.search(r"\bsebelum\b.*\b(?:sesudah|setelah)\b|\b(?:sesudah|setelah)\b.*\bsebelum\b", normalized)
     if comparison:
         return "compare"
-    intent = intent_config_for(getattr(config, "query_strategy", "generic"), config)
+    count_rules = intent.get("structure_count_units", {}) or {}
+    if any(
+        contains_intent_phrase(query, tuple(str(term) for term in rule.get("terms", ()) if isinstance(term, str)))
+        for rule in count_rules.values()
+        if isinstance(rule, dict)
+    ):
+        return "quote_or_explain"
     if contains_intent_phrase(query, intent.get("all_source_scope_terms", ())):
         return "search"
     trace_terms = tuple(
@@ -277,27 +281,11 @@ def _operation(
     )
     if len(source_scopes) > 1 and trace_terms and contains_intent_phrase(query, trace_terms):
         return "trace"
-    # A configured issue phrase with at least two matching terms is an
-    # analysis request even when the user omits the words "legal opinion".
-    # The threshold keeps a single broad concept (for example, "kebebasan
-    # beragama") on the ordinary lexical path instead of applying the speech
-    # issue policy to an unrelated topic.
-    research = setting("research", {}) if callable(setting) else {}
-    analysis_policy = research.get("operation_requirements", {}).get("analyze", {}) if isinstance(research, dict) else {}
-    issue_terms = analysis_policy.get("issue_reference_terms", ()) if isinstance(analysis_policy, dict) else ()
-    if (
-        len(
-            tuple(
-                term
-                for term in issue_terms
-                if isinstance(term, str) and contains_intent_phrase(query, (term,))
-            )
-        ) >= 2
-    ):
-        return "analyze"
     if len(references) > 1 and contains_intent_phrase(query, intent.get("relation_words", ())):
         return "compare"
-    if re.search(r"\b(analisis|analisa|legal opinion|legal research|riset hukum|penelitian hukum|kajian hukum|pendapat hukum)\b", normalized):
+    if re.search(
+        r"\b(analisis|analisa|legal opinion|legal research|riset hukum|penelitian hukum|kajian hukum|pendapat hukum)\b", normalized
+    ):
         return "analyze"
     if relation_intent:
         return "quote_or_explain" if temporal_scope == "historical_pre_change" else "trace"
@@ -327,7 +315,9 @@ def _document_operation_requested(
     normalized = " ".join(re.findall(r"[a-z0-9]+", str(query or "").casefold()))
     if (
         re.search(r"\b(vs|versus|perbandingan|perbedaan|bandingkan|beda)\b", normalized)
-        or re.search(r"\b(analisis|analisa|legal opinion|legal research|riset hukum|penelitian hukum|kajian hukum|pendapat hukum)\b", normalized)
+        or re.search(
+            r"\b(analisis|analisa|legal opinion|legal research|riset hukum|penelitian hukum|kajian hukum|pendapat hukum)\b", normalized
+        )
         or contains_intent_phrase(query, intent.get("all_source_scope_terms", ()))
         or contains_intent_phrase(query, intent.get("metadata_candidate_signals", ()))
         or contains_intent_phrase(query, intent.get("relation_words", ()))
@@ -342,11 +332,7 @@ def _document_operation_requested(
     has_document_target = contains_intent_phrase(query, target_words)
     if not has_document_target:
         return False
-    action_tokens = {
-        str(term).casefold().split()[0]
-        for term in open_terms
-        if isinstance(term, str) and term.strip()
-    }
+    action_tokens = {str(term).casefold().split()[0] for term in open_terms if isinstance(term, str) and term.strip()}
     if len(source_scopes) == 1 and normalized.split() and normalized.split()[0] in {"naskah", "dokumen"}:
         return True
     if len(source_scopes) > 1 and normalized.split() and normalized.split()[0] in {"naskah", "dokumen"}:
@@ -458,26 +444,6 @@ def _historical_pre_change(query: str) -> bool:
     return bool(re.search(r"\b(sebelum|pra)\b.*\b(dihapus|hapus|dicabut)\b", normalized))
 
 
-def _navigation_anchor(query: str) -> str | None:
-    reference = r"(?:BAB\s+[IVXLCDM]+[A-Z]?|Pasal\s+\d+[A-Z]?)"
-    patterns = (
-        rf"\b({reference})\s+(?:setelah|sesudah|sebelum|sebelumnya)\b",
-        rf"\b(?:setelah|sesudah|sebelum|sebelumnya)\s+({reference})\b",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, query or "", re.IGNORECASE)
-        if match:
-            return " ".join(match.group(1).split())
-    shorthand = re.search(
-        r"\b(?:pasal|ketentuan)\s+(?:setelah|sesudah|sebelum|sebelumnya)\s+(\d+[a-z]?)\b",
-        query or "",
-        re.IGNORECASE,
-    )
-    if shorthand:
-        return f"Pasal {shorthand.group(1).upper()}"
-    return None
-
-
 def _navigation(corpus_id: str, query: str, *, temporal: bool, config) -> tuple[str, str] | None:
     if temporal:
         return None
@@ -509,11 +475,9 @@ def _references(corpus_id: str, query: str, *, config=None) -> tuple[str, ...]:
         if reference:
             labels.append(str(reference))
             continue
-        pasal = row.get("pasal")
-        ayat = row.get("ayat")
-        if not pasal:
-            continue
-        labels.append(f"{pasal} ayat {ayat}" if ayat else str(pasal))
+        values = tuple(str(value) for value in row.values() if isinstance(value, str) and value)
+        if values:
+            labels.append(" ".join(values))
     return tuple(dict.fromkeys(labels))
 
 

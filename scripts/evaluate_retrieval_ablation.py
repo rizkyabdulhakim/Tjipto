@@ -43,7 +43,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     sys.path.insert(0, str(runtime_root / "src"))
     from tjipto.runtime.service import LegalRuntimeService
     from tjipto.runtime.query_semantics import interpret_query
-    from tjipto.runtime.research_control import research_intent_for_ask, research_requirements_for_ask
+    from tjipto.retrieval.requirements import research_intent_for_ask, research_requirements_for_ask
 
     service = LegalRuntimeService(runtime_root)
     lanes: dict[str, dict[str, Any]] = {}

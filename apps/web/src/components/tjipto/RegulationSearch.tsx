@@ -43,7 +43,7 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
       setHasSubmitted(true);
       setAppliedFilters(response.applied_filters);
       setResults(response.results);
-      setFacets(response.facets);
+      setFacets((current) => current.length ? current : response.facets);
       setTotal(response.total);
       setStatus(response.results.length ? "ready" : "empty");
     } catch {
@@ -136,6 +136,7 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
           <ul className="mt-3 space-y-2">
             {results.map((row, index) => {
               const citation = mapSearchResultToCitation(row, index);
+              const role = documentRole(row.document_role);
               return (
                 <li key={row.viewer_target?.public_target_id ?? row.legal_identity ?? row.title} className="rounded-xl border border-[var(--tj-border-subtle)] bg-[var(--tj-surface)] p-4">
                   <button
@@ -144,8 +145,8 @@ export function RegulationSearch({ onOpenDocument }: { onOpenDocument?: (citatio
                     onClick={() => citation && onOpenDocument?.(citation)}
                     aria-label={`Buka naskah ${row.legal_identity ?? row.title ?? "resmi"}`}
                   >
-                    {documentRole(row.document_role) && <span className="mt-0.5 inline-flex h-6 shrink-0 items-center rounded-md bg-[var(--tj-accent-soft)] px-2 text-[11px] font-semibold text-[var(--tj-accent)]">
-                      {documentRole(row.document_role)}
+                    {role && <span className="mt-0.5 inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-md bg-[var(--tj-accent-soft)] px-2 text-[11px] font-semibold text-[var(--tj-accent)]">
+                      {role === "Naskah Konsolidasi" ? "Konsolidasi" : role}
                     </span>}
                     <span className="min-w-0">
                       <span className="block text-[15px] font-semibold text-[var(--tj-text-primary)]">{row.legal_identity ?? legalIdentity({ official_title: row.title })}</span>

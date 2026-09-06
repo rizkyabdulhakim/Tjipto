@@ -4,6 +4,11 @@ COORDINATE_SPACE = "pdf_user_space"
 TRANSFORM_VERSION = "pymupdf_top_left_v1"
 
 
+def bbox_record_key(row: dict) -> tuple[object, ...]:
+    """Return the source-and-geometry identity shared by span and BBox records."""
+    return tuple(row.get(field) for field in ("source_document_id", "source_sha256", "page_number", "text", "x0", "y0", "x1", "y1"))
+
+
 def coordinate_metadata(page: dict, *, highlightable: bool) -> dict:
     if not highlightable:
         return {"coordinate_space": COORDINATE_SPACE, "coordinate_origin": "top_left", "transform_version": TRANSFORM_VERSION}

@@ -96,10 +96,25 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
     relation_families["MODIFY_PROVISION"] = modify_family
     document_relation["relation_families"] = relation_families
     document_relation["change_terms"] = relation_change_terms
+    metadata_fields = {key: tuple(value) for key, value in (raw.get("metadata_fields") or {}).items()}
+    metadata_rules = dict(metadata_fields)
+    metadata_rules.update({key: tuple(value) for key, value in (raw.get("metadata_rules") or {}).items()})
+    structure_count_units = {
+        key: dict(value) for key, value in (raw.get("structure_count_units") or {}).items()
+    }
+    default_count_type = str(raw.get("structure_count_unit_type") or "")
+    default_count_terms = next(
+        (
+            tuple(unit.get("terms") or ())
+            for unit in structure_count_units.values()
+            if unit.get("unit_type") == default_count_type
+        ),
+        tuple(raw.get("structure_count_terms") or ()),
+    )
     return {
         "document_target_words": tuple(raw.get("document_target_words") or ()),
-        "metadata_fields": {key: tuple(value) for key, value in (raw.get("metadata_fields") or {}).items()},
-        "metadata_rules": {key: tuple(value) for key, value in (raw.get("metadata_rules") or {}).items()},
+        "metadata_fields": metadata_fields,
+        "metadata_rules": metadata_rules,
         "metadata_roles": tuple((row["role"], re.compile(row["pattern"], re.IGNORECASE)) for row in raw.get("metadata_roles", ())),
         "relation_words": _unique_terms(raw.get("relation_words")),
         "direct_relation_words": direct_relation_words,
@@ -139,11 +154,9 @@ def intent_config_for(strategy: str | None, config=None) -> dict:
         "structural_navigation": {key: tuple(value) for key, value in (raw.get("structural_navigation") or {}).items()},
         "structured_lookup_enabled": bool(raw.get("structured_lookup_enabled")),
         "structure_list_terms": tuple(raw.get("structure_list_terms") or ()),
-        "structure_count_terms": tuple(raw.get("structure_count_terms") or ()),
-        "structure_count_unit_type": str(raw.get("structure_count_unit_type") or ""),
-        "structure_count_units": {
-            key: dict(value) for key, value in (raw.get("structure_count_units") or {}).items()
-        },
+        "structure_count_terms": default_count_terms,
+        "structure_count_unit_type": default_count_type,
+        "structure_count_units": structure_count_units,
         "structure_count_all_source_terms": tuple(raw.get("structure_count_all_source_terms") or ()),
         "structure_unit_type": str(raw.get("structure_unit_type") or ""),
         "structure_detail_terms": tuple(raw.get("structure_detail_terms") or ()),
@@ -251,6 +264,14 @@ def wording_scope_terms_for(config=None) -> dict[str, tuple[str, ...]]:
     current = list(intent.get("temporal_current_terms", ()) or ())
     current.extend(config.setting("explicit_current_source_terms", ()) if config is not None else ())
     historical = list(_source_role_phrases(intent))
+    preferred_role = getattr(config, "preferred_source_role", None)
+    if preferred_role:
+        current.append(str(preferred_role))
+    historical.extend(
+        str(role)
+        for role in getattr(config, "source_roles", ()) or ()
+        if role and role != preferred_role
+    )
     labels = config.setting("viewer_source_status_labels", {}) if config is not None else {}
     for role, label in (labels or {}).items():
         raw_label = str(label or "")
@@ -259,7 +280,7 @@ def wording_scope_terms_for(config=None) -> dict[str, tuple[str, ...]]:
         if re.search(r"\bhistor\w*\b", normalized_label):
             historical.extend(parentheticals)
             historical.extend(re.findall(r"\bhistor\w*\b", normalized_label))
-        if role == getattr(config, "preferred_source_role", None):
+        if role == preferred_role:
             current.extend(parentheticals)
     return {
         "historical": _unique_terms(historical),

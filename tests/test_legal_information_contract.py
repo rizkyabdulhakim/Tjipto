@@ -141,6 +141,8 @@ class LegalInformationContractTest(unittest.TestCase):
             ProvisionEffect(RelationKind.AMENDS, "modifier", "base", "Pasal 1", "Mengubah Pasal 1.", CATALOG)
         with self.assertRaisesRegex(ValueError, "provision_effect_selector_mismatch"):
             ProvisionEffect(RelationKind.AMENDS, "modifier", "base", "Pasal 1", "Teks lain.", PDF)
+        with self.assertRaisesRegex(ValueError, "invalid_provision_effect_operation"):
+            ProvisionEffect(RelationKind.AMENDS, "modifier", "base", "Pasal 1", "Mengubah Pasal 1.", PDF, "UNKNOWN")
 
 
 if __name__ == "__main__":

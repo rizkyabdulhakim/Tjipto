@@ -33,7 +33,7 @@ def segment_source_line(raw_text: str) -> list[dict]:
     matches = list(SOURCE_MARKER_RE.finditer(raw_text))
     boundaries = [0] + [point for match in matches for point in (match.start(), match.end())] + [len(raw_text)]
     segments = []
-    for start, end in zip(boundaries, boundaries[1:]):
+    for start, end in zip(boundaries, boundaries[1:], strict=False):
         if start == end:
             continue
         marker = bool(SOURCE_MARKER_RE.fullmatch(raw_text[start:end]))

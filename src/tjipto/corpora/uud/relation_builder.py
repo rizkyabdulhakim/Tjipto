@@ -3,6 +3,7 @@ from __future__ import annotations
 from hashlib import sha256
 import re
 
+from tjipto.contracts.evidence import valid_text_range
 from tjipto.contracts.relations import descriptor_for
 from tjipto.corpora.parser_dispatch import parse_legal_references
 from tjipto.corpora.uud.parser import matches_uud_contextual_reference
@@ -35,7 +36,7 @@ def parse_renumbering_mappings(text: str) -> list[dict]:
         source_role = _source_role_for_ordinal(role_match.group(1)) if role_match else None
         if not source_role:
             continue
-        for old, new in zip(left_refs, right_refs):
+        for old, new in zip(left_refs, right_refs, strict=True):
             mappings.append(
                 {
                     "old_reference": old["reference"],
@@ -118,7 +119,11 @@ def legal_unit_reference(unit: dict | None, units_by_id: dict[str, dict]) -> str
 
 
 def classify_scope_operation(
-    legal_units: list[dict], source_role: str, target_citation: str
+    legal_units: list[dict],
+    source_role: str,
+    target_citation: str,
+    *,
+    canonical_target: dict | None = None,
 ) -> dict[str, object]:
     """Classify an ambiguous amendment scope only from adjacent source units.
 
@@ -140,6 +145,21 @@ def classify_scope_operation(
         (row for row in by_reference.get(target_citation, ()) if row.get("source_role") == source_role),
         None,
     )
+    if successor is None:
+        canonical_target = canonical_target or next(
+            (
+                row
+                for row in by_reference.get(target_citation, ())
+                if row.get("source_role") == "current_consolidated"
+            ),
+            None,
+        )
+        successor = _successor_by_normative_text(
+            legal_units,
+            source_role,
+            canonical_target,
+            units_by_id,
+        )
     if successor is None:
         return {
             "relation_type": "AMBIGUOUS_OPERATION",
@@ -171,6 +191,38 @@ def classify_scope_operation(
         "operation_candidates": ("MODIFIES", "ADDS"),
         **comparison,
     }
+
+
+def _successor_by_normative_text(
+    legal_units: list[dict],
+    source_role: str,
+    canonical_target: dict | None,
+    units_by_id: dict[str, dict],
+) -> dict | None:
+    """Resolve a printed-numbering mismatch only when the norm is unique.
+
+    Historical amendment PDFs can print a replacement paragraph under a
+    different local number than the canonical consolidated text.  Matching
+    the complete normalized text within the same article is deterministic;
+    zero or multiple candidates remain trace-only.
+    """
+    if canonical_target is None:
+        return None
+    parent = units_by_id.get(str(canonical_target.get("parent_legal_unit_id") or ""))
+    article_label = str(parent.get("unit_label") or "") if parent else str(canonical_target.get("unit_label") or "")
+    normalized = _normalized_normative_text(canonical_target.get("text"))
+    if not article_label or not normalized:
+        return None
+    candidates = []
+    for unit in legal_units:
+        if unit.get("source_role") != source_role:
+            continue
+        unit_parent = units_by_id.get(str(unit.get("parent_legal_unit_id") or ""))
+        if (str(unit_parent.get("unit_label") or "") if unit_parent else "") != article_label:
+            continue
+        if _normalized_normative_text(unit.get("text")) == normalized:
+            candidates.append(unit)
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def versioned_relation_lineage(
@@ -436,7 +488,12 @@ def build_article_amendment_relations(
         source_unit = units.get(source_unit_id or "")
         target = units.get(target_unit_id or "")
         mapping = edge.get("reference_mapping") or {}
-        target_citation = str(mapping.get("new_reference") or legal_unit_reference(target, units) or "")
+        target_citation = str(
+            mapping.get("new_reference")
+            or edge.get("target_citation")
+            or legal_unit_reference(target, units)
+            or ""
+        )
         if not target_citation.startswith("Pasal "):
             continue
         if not evidence_row or not target or not all(ref in bbox_ids for ref in evidence_row.get("bbox_refs") or ()):
@@ -452,6 +509,7 @@ def build_article_amendment_relations(
             lineage = direct_rename_lineage(source_unit, target, mapping, units)
         lineage = lineage or _empty_lineage()
         target_phrase = target_citation
+        old_reference = str(mapping.get("old_reference") or "")
         lineage_unit_id = lineage.get("successor_legal_unit_id") or lineage.get("predecessor_legal_unit_id")
         lineage_unit = units.get(str(lineage_unit_id or ""))
         # A child ayat's source span normally contains only ``(n)`` rather
@@ -487,32 +545,49 @@ def build_article_amendment_relations(
         # be on a different page; using them first makes an otherwise exact
         # target look unrecoverable.
         target_context_bbox_refs = target_lineage_bbox_refs or relation_bbox_refs
-        target_source_text = _target_page_quote(target_span_ids, spans_by_id) or (
-            _target_quote(target_span_ids, spans_by_id) if target_span_ids else str(evidence_row.get("quoted_text") or "")
-        )
+        target_source_text = _target_quote(target_span_ids, spans_by_id)
+        target_source_texts = [
+            str(spans_by_id[span_id].get("text") or "").strip()
+            for span_id in target_span_ids
+            if str(spans_by_id.get(span_id, {}).get("text") or "").strip()
+        ]
+        if target_source_text:
+            target_source_texts.append(target_source_text)
+        page_context = _target_page_quote(target_span_ids, spans_by_id)
+        if page_context and page_context not in target_source_texts:
+            target_source_texts.append(page_context)
+        if not target_source_texts and target_span_ids:
+            target_source_texts.append(str(evidence_row.get("quoted_text") or ""))
         # Character geometry is the most precise grounding available.  Try
         # it first and retain word geometry only as a deterministic fallback
         # for sources without a unique character match.
-        target_character_bbox_refs = _recover_target_character_bbox_refs(
-            target_phrase,
-            target_document_id,
-            target_context_bbox_refs,
-            bboxes_by_id,
-            word_bboxes,
-            target_source_text,
-        )
-        target_word_bbox_refs = (
-            []
-            if target_character_bbox_refs
-            else _recover_target_word_bbox_refs(
-                target_phrase,
-                target_document_id,
-                target_context_bbox_refs,
-                bboxes_by_id,
-                word_bboxes,
-                target_source_text,
-            )
-        )
+        target_character_bbox_refs: list[str] = []
+        target_word_bbox_refs: list[str] = []
+        printed_target_reference = legal_unit_reference(target, units)
+        for geometry_citation in filter(None, (target_phrase, old_reference, printed_target_reference)):
+            for target_source_text in target_source_texts:
+                target_character_bbox_refs = _recover_target_character_bbox_refs(
+                    geometry_citation,
+                    target_document_id,
+                    target_context_bbox_refs,
+                    bboxes_by_id,
+                    word_bboxes,
+                    target_source_text,
+                )
+                if target_character_bbox_refs:
+                    break
+                target_word_bbox_refs = _recover_target_word_bbox_refs(
+                    geometry_citation,
+                    target_document_id,
+                    target_context_bbox_refs,
+                    bboxes_by_id,
+                    word_bboxes,
+                    target_source_text,
+                )
+                if target_word_bbox_refs:
+                    break
+            if target_character_bbox_refs or target_word_bbox_refs:
+                break
         lineage_bbox_refs = target_lineage_bbox_refs
         target_bbox_refs = target_word_bbox_refs or target_character_bbox_refs or lineage_bbox_refs
         if not target_bbox_refs:
@@ -546,7 +621,6 @@ def build_article_amendment_relations(
                 )
         )
         target_reference = target_phrase
-        old_reference = str(mapping.get("old_reference") or "")
         if old_reference.startswith("Pasal 25E") and target_reference.startswith("Pasal 25A"):
             relation_type = "RENUMBERED_TO"
         rows.append(
@@ -564,6 +638,8 @@ def build_article_amendment_relations(
                 **(
                     {"substantive_change": False, "source_conflict": False, "anomaly": False}
                     if relation_type == "RENUMBERED_TO"
+                    else {"source_conflict": True, "anomaly": True}
+                    if edge.get("provenance_ref_kind") == "source_conflict"
                     else {}
                 ),
                 "target_legal_unit_id": target_unit_id,
@@ -575,7 +651,11 @@ def build_article_amendment_relations(
                 "target_document_id": target.get("source_document_id") if target else None,
                 "target_label": target.get("unit_label"),
                 "target_source_role": target.get("source_role") if target else None,
-                "old_reference": old_reference,
+                "old_reference": (
+                    legal_unit_reference(target, units)
+                    if edge.get("provenance_ref_kind") == "source_conflict"
+                    else old_reference
+                ),
                 "new_reference": target_reference,
                 "old_reference_range": mapping.get("old_range"),
                 "new_reference_range": mapping.get("new_range"),
@@ -648,11 +728,18 @@ def _lineage_target_span_ids(unit: dict | None, citation: str, spans_by_id: dict
     """Select the printed citation span from the normative versioned unit."""
     if unit is None:
         return []
-    return _target_span_ids(
-        {"text_span_ids": list(unit.get("source_text_span_ids") or unit.get("text_span_ids") or ())},
-        citation,
-        spans_by_id,
-    )
+    source_span_ids = list(unit.get("source_text_span_ids") or unit.get("text_span_ids") or ())
+    matched = _target_span_ids({"text_span_ids": source_span_ids}, citation, spans_by_id)
+    if matched:
+        return matched
+    # Ayat units often store only ``(n)`` in their span.  Once the lineage
+    # resolver has selected the normative unit, those spans are already the
+    # isolated target even when the canonical article label is not repeated.
+    article_label = str(citation).partition(" ayat ")[0]
+    unit_articles = [str(value) for value in unit.get("hierarchy") or () if str(value).startswith("Pasal ")]
+    if source_span_ids and article_label and article_label in unit_articles:
+        return source_span_ids
+    return []
 
 
 def _relation_support_refs(
@@ -663,8 +750,8 @@ def _relation_support_refs(
 ) -> tuple[list[str], list[str]]:
     if not mapping:
         return list(evidence.get("text_span_ids") or ()), list(evidence.get("bbox_refs") or ())
-    old_range = _valid_range(mapping.get("old_range"), len(str(evidence.get("quoted_text") or "")))
-    new_range = _valid_range(mapping.get("new_range"), len(str(evidence.get("quoted_text") or "")))
+    old_range = valid_text_range(mapping.get("old_range"), len(str(evidence.get("quoted_text") or "")))
+    new_range = valid_text_range(mapping.get("new_range"), len(str(evidence.get("quoted_text") or "")))
     if old_range is None or new_range is None:
         return [], []
     start, end = old_range[0], new_range[1]
@@ -844,14 +931,18 @@ def _target_fragments(source_text: str, citation: str) -> tuple[tuple[str, int],
     if match is None:
         return ()
     number, suffix, ayat = match.groups()
+    article = re.compile(rf"(?i)\bpasal\s*{number}\s*{re.escape(suffix)}(?!\w)")
     # A PDF page may start with an ayat continuation while the article header
     # is on the preceding page.  The legal-unit span already binds the
     # continuation to its article, so the leading ayat marker is an exact
     # local target even when the header is not repeated on this page.
     leading = re.match(rf"\s*\(\s*{re.escape(ayat)}\s*\)", source_text)
-    if leading:
+    # Page context can begin with an ayat marker belonging to a different
+    # article.  Prefer the target article segment whenever its header is
+    # present; use the leading marker only for a continuation page that does
+    # not repeat that header.
+    if leading and not article.search(source_text):
         return ((_compact(leading.group(0)), len(_compact(source_text[: leading.start()]))),)
-    article = re.compile(rf"(?i)\bpasal\s*{number}\s*{re.escape(suffix)}(?!\w)")
     boundary = re.compile(r"(?i)\b(?:pasal|bab)\s*[0-9ivxlcdm]")
     candidates: list[tuple[str, int]] = []
     for article_match in article.finditer(source_text):
@@ -864,10 +955,6 @@ def _target_fragments(source_text: str, citation: str) -> tuple[tuple[str, int],
             start = article_match.end() + target_match.start()
             candidates.append((_compact(target_match.group(0)), len(_compact(source_text[:start]))))
     return tuple(candidates) if len(candidates) == 1 else ()
-
-
-def _word_phrase(value: object) -> str:
-    return " ".join(re.sub(r"[^\w]+", " ", str(value or "").casefold()).split())
 
 
 def _isolates_reference(text: str, citation: str) -> bool:
@@ -934,8 +1021,8 @@ def _complete_mapping_support(evidence: dict, mapping: dict) -> bool:
     if not mapping:
         return evidence.get("bbox_precision") == "exact" and evidence.get("viewer_highlightable") is True
     quoted = str(evidence.get("quoted_text") or "")
-    old_range = _valid_range(mapping.get("old_range"), len(quoted))
-    new_range = _valid_range(mapping.get("new_range"), len(quoted))
+    old_range = valid_text_range(mapping.get("old_range"), len(quoted))
+    new_range = valid_text_range(mapping.get("new_range"), len(quoted))
     if old_range is None or new_range is None or old_range[1] > new_range[0]:
         return False
     if not _range_matches_reference(quoted[old_range[0] : old_range[1]], mapping.get("old_reference"), mapping.get("old_range_kind")):
@@ -945,16 +1032,6 @@ def _complete_mapping_support(evidence: dict, mapping: dict) -> bool:
     if "menjadi" not in _normalize_reference(quoted[old_range[1] : new_range[0]]):
         return False
     return bool(evidence.get("text_span_ids")) and bool(evidence.get("bbox_refs"))
-
-
-def _valid_range(value: object, length: int) -> tuple[int, int] | None:
-    if not isinstance(value, (list, tuple)) or len(value) != 2:
-        return None
-    try:
-        start, end = int(value[0]), int(value[1])
-    except (TypeError, ValueError):
-        return None
-    return (start, end) if 0 <= start < end <= length else None
 
 
 def _normalize_reference(value: object) -> str:

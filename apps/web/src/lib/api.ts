@@ -74,6 +74,8 @@ export interface LegalDocumentPayload {
   legal_status?: string;
   document_role?: string;
   issuer?: string;
+  establishment_place?: string | null;
+  signatories?: string | null;
   establishment_date?: string | null;
   promulgation_date?: string | null;
   effective_date?: string | null;

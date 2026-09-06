@@ -90,7 +90,7 @@ def _grounded_propositions(store, evidence: tuple[dict, ...]) -> tuple[dict, ...
     children = {
         row["legal_unit_id"]
         for row in store.legal_units
-        if row.get("parent_legal_unit_id") in units and row.get("unit_type") == "ayat_record"
+        if row.get("parent_legal_unit_id") in units and row.get("structural_role") == "subprovision"
     }
     target_units = children or units
     return tuple(

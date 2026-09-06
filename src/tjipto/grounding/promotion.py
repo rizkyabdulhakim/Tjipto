@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-import unicodedata
+
+from tjipto.contracts.evidence import normalize_source_text
 
 
 def build_promotion_decisions(
@@ -223,11 +224,11 @@ def _reason(record: dict, record_type: str | None = None) -> str:
 
 
 def _quote_match_status(record: dict, page_text: dict[tuple[str, int], str], page_numbers: list[int]) -> str:
-    quote = _normalize(record.get("quoted_text") or record.get("quote") or record.get("text"))
+    quote = normalize_source_text(record.get("quoted_text") or record.get("quote") or record.get("text"))
     source_document_id = record.get("source_document_id")
     if not quote or not source_document_id:
         return "missing_quote"
-    haystack = " ".join(_normalize(page_text.get((source_document_id, page_number), "")) for page_number in page_numbers)
+    haystack = " ".join(normalize_source_text(page_text.get((source_document_id, page_number), "")) for page_number in page_numbers)
     return "exact_full_quote_match" if quote in haystack else "no_full_quote_match"
 
 
@@ -241,7 +242,7 @@ def _span_match(
 ) -> tuple[str, list[str], str]:
     if explicit_span_ids:
         return "normalized_span_sequence_match", list(explicit_span_ids), _excerpt(text)
-    target = _normalize(text)
+    target = normalize_source_text(text)
     if not target or not source_document_id:
         return "no_span_match", [], ""
     spans = [span for page in page_numbers for span in spans_by_page.get((source_document_id, page), [])]
@@ -249,14 +250,14 @@ def _span_match(
         joined = ""
         matched: list[str] = []
         for span in spans[start:]:
-            joined = _normalize(f"{joined} {span.get('text', '')}")
+            joined = normalize_source_text(f"{joined} {span.get('text', '')}")
             matched.append(span["text_span_id"])
             if joined == target:
                 return "normalized_span_sequence_match", matched, _excerpt(text)
             if len(joined) > len(target) + 80 or not target.startswith(joined):
                 break
     for span in spans:
-        span_text = _normalize(span.get("text"))
+        span_text = normalize_source_text(span.get("text"))
         if target and target in span_text:
             return "subspan_inside_larger_span", [span["text_span_id"]], _excerpt(span.get("text"))
     return "page_level_text_match_only", [], _excerpt(text)
@@ -342,10 +343,3 @@ def _field_bbox_feasibility(*, reason: str, exact_bbox: bool, can_be_exact: bool
 
 def _excerpt(text: str | None) -> str:
     return re.sub(r"\s+", " ", text or "").strip()[:240]
-
-
-def _normalize(text: str | None) -> str:
-    normalized = unicodedata.normalize("NFKC", text or "").replace("\xad", "").replace("\xa0", " ")
-    normalized = re.sub(r"\s+", " ", normalized)
-    normalized = re.sub(r"\s+([,.;:])", r"\1", normalized)
-    return normalized.strip().casefold()

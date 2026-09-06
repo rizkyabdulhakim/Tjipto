@@ -9,7 +9,6 @@ from threading import RLock
 from collections import OrderedDict
 
 from tjipto.contracts.artifacts import ARTIFACT_ALLOWED_FIELDS, ARTIFACT_OPTIONAL_FIELDS, COMMON_ARTIFACT_FIELDS, CURRENT_ARTIFACT_SCHEMA, FORBIDDEN_ARTIFACT_FIELDS, MINIMUM_ARTIFACT_FIELDS
-from tjipto.contracts.evidence import exact_quote_support_reason, source_lineage_reason
 from tjipto.core.manifest import ALLOWED_ARTIFACT_ORIGINS, verified_file_bytes
 from tjipto.core.manifest import artifact_set_digest as compute_artifact_set_digest
 from tjipto.ingestion.pdf.fingerprint import extractor_fingerprint
@@ -225,26 +224,6 @@ def require_canonical_build_environment(config) -> None:
         raise CorpusIntegrityError("extractor_fingerprint_mismatch")
 
 
-def _manifest_digest(config) -> str:
-    return _read_trusted_manifest(config)[1]
-
-
-def _run_semantic_validator(config, manifest: dict, artifacts: dict[str, object]) -> CorpusSemanticAttestation:
-    validator = getattr(config.strategy, "semantic_validator", None)
-    if validator is None:
-        return CorpusSemanticAttestation("not_configured")
-    try:
-        logical_artifacts = {
-            record["logical_key"]: artifacts[rel]
-            for rel, record in manifest["files"].items()
-            if rel in artifacts
-        }
-        violations = tuple(validator(config.manifest_path.parent.resolve(), logical_artifacts))
-    except (KeyError, TypeError, ValueError) as error:
-        raise CorpusIntegrityError("semantic_validator_unavailable") from error
-    return CorpusSemanticAttestation("passed" if not violations else "failed", violations)
-
-
 def _verify_artifacts(final_dir: Path, manifest: dict, required_value: object) -> dict[str, object]:
     files = manifest.get("files")
     if not isinstance(files, dict):
@@ -314,40 +293,6 @@ def _validate_record_identity(logical_key: str, rel: str, record: dict, *, expec
         raise CorpusIntegrityError("artifact_provenance_invalid")
 
 
-def _validate_cross_artifact_references(manifest: dict, artifacts: dict[str, object]) -> None:
-    def rows(logical_key: str) -> list[dict]:
-        value = artifacts.get(manifest.get(logical_key, ""), ())
-        return value if isinstance(value, list) else []
-
-    evidence_ids = {row["evidence_id"] for row in rows("evidence_registry")}
-    unit_ids = {row["legal_unit_id"] for row in rows("legal_units")}
-    chunk_ids = {row["chunk_id"] for row in rows("chunks")}
-    node_ids = {row["node_id"] for row in rows("graph_nodes")}
-    source_ids = {row["source_document_id"] for row in rows("source_documents")}
-    span_ids = {row["text_span_id"] for row in rows("page_text_spans")}
-    bbox_ids = {row["bbox_id"] for row in rows("bbox_registry")} | {row["word_bbox_id"] for row in rows("word_bboxes")}
-    bbox_ids |= {character["character_bbox_id"] for word in rows("word_bboxes") for character in word.get("characters") or ()}
-    relation_ids = {row["relation_id"] for row in rows("article_amendment_relations")}
-    for row in rows("retrieval_units"):
-        if row["evidence_id"] not in evidence_ids or row["legal_unit_id"] not in unit_ids or row["chunk_id"] not in chunk_ids:
-            raise CorpusIntegrityError("semantic_cross_reference_unresolved")
-    for row in rows("graph_edges"):
-        if row["source_id"] not in node_ids or row["target_id"] not in node_ids:
-            raise CorpusIntegrityError("semantic_cross_reference_unresolved")
-        if row.get("edge_type") in {"MODIFIES", "DELETES", "ADDS", "RENAMES", "RENUMBERED_TO"} and row.get("relation_id") not in relation_ids:
-            raise CorpusIntegrityError("semantic_cross_reference_unresolved")
-    for row in rows("evidence_registry"):
-        if (
-            row["legal_unit_id"] not in unit_ids
-            or row["source_document_id"] not in source_ids
-            or any(span_id not in span_ids for span_id in row["text_span_ids"])
-            or any(bbox_id not in bbox_ids for bbox_id in row["bbox_refs"])
-            or not isinstance(row.get("runtime_loadable"), bool)
-            or not isinstance(row.get("evidence_owner_kind"), str)
-        ):
-            raise CorpusIntegrityError("semantic_cross_reference_unresolved")
-
-
 def _parse_and_validate(data: bytes, record: dict, logical_key: str) -> object:
     try:
         text = data.decode("utf-8")
@@ -389,61 +334,6 @@ def _parse_and_validate(data: bytes, record: dict, logical_key: str) -> object:
     elif not isinstance(value, dict):
         raise CorpusIntegrityError("artifact_shape_invalid")
     return value
-
-
-def _validate_exact_evidence(manifest: dict, artifacts: dict[str, object]) -> None:
-    evidence = _rows_for(manifest, artifacts, "evidence_registry")
-    spans = {row["text_span_id"]: row for row in _rows_for(manifest, artifacts, "page_text_spans")}
-    bboxes = {row["bbox_id"]: row for row in _rows_for(manifest, artifacts, "bbox_registry")}
-    sources = {row["source_document_id"]: row for row in _rows_for(manifest, artifacts, "source_documents")}
-    for bbox in bboxes.values():
-        if bbox.get("viewer_highlightable") is not True:
-            continue
-        fields = (
-            "coordinate_space",
-            "coordinate_origin",
-            "page_width",
-            "page_height",
-            "page_rotation",
-            "page_box_basis",
-            "transform_version",
-        )
-        if any(bbox.get(field) is None for field in fields):
-            raise CorpusIntegrityError("coordinate_metadata_missing")
-        if bbox.get("page_rotation") != 0 or bbox.get("coordinate_origin") != "top_left" or bbox.get("page_box_basis") != "media_box":
-            raise CorpusIntegrityError("coordinate_metadata_invalid")
-    for row in evidence:
-        if (
-            row.get("exactness") != "exact"
-            and row.get("citable") is not True
-            and row.get("citation_final") is not True
-            and row.get("viewer_highlightable") is not True
-        ):
-            continue
-        reason = exact_quote_support_reason(
-            quoted_text=row.get("quoted_text"),
-            source_document_id=row.get("source_document_id"),
-            page_numbers=row.get("page_numbers") or (),
-            text_span_ids=row.get("text_span_ids") or (),
-            bbox_refs=row.get("bbox_refs") or (),
-            spans_by_id=spans,
-            bboxes_by_id=bboxes,
-        )
-        if reason:
-            raise CorpusIntegrityError("evidence_quote_source_mismatch")
-        lineage = source_lineage_reason(
-            evidence=row,
-            source_documents_by_id=sources,
-            spans_by_id=spans,
-            bboxes_by_id=bboxes,
-        )
-        if lineage:
-            raise CorpusIntegrityError("evidence_source_lineage_invalid")
-
-
-def _rows_for(manifest: dict, artifacts: dict[str, object], logical_key: str) -> list[dict]:
-    value = artifacts.get(manifest.get(logical_key, ""), ())
-    return value if isinstance(value, list) else []
 
 
 def _freeze(value):

@@ -25,8 +25,8 @@
     "document_relations": 13,
     "evidence_records": 650,
     "excluded_records": 0,
-    "graph_edges": 8122,
-    "graph_nodes": 3209,
+    "graph_edges": 8126,
+    "graph_nodes": 3211,
     "legal_units": 653,
     "metadata_assertions": 1877,
     "metadata_graph_edges": 635,
@@ -38,7 +38,7 @@
     "promotion_decisions": 135,
     "propositions": 877,
     "retrieval_units": 647,
-    "source_conflicts": 4,
+    "source_conflicts": 6,
     "source_documents": 6,
     "source_objects": 705,
     "validation_alignment_results": 610,
@@ -84,8 +84,8 @@
         "source_support_exact",
         "viewer_highlightable"
       ],
-      "bytes": 836349,
-      "sha256": "763a3898216f4896d7bf7d9b0af26546dec1c019447dd8c50ae42c33ae2df58f"
+      "bytes": 833161,
+      "sha256": "ac51a648e4d689a53f1bd72f0dd5031e75583e244b0b015aa1b40bb00e32cff8"
     },
     "article_versions.jsonl": {
       "origin": "carried_forward",
@@ -158,8 +158,8 @@
       "format": "jsonl",
       "artifact_schema": 7,
       "primary_id": "document_metadata_id",
-      "bytes": 27307,
-      "sha256": "4fe62c850cfa3660140d110dff282bb9c8bbd35718b86c2fde9d2cc5203a392c"
+      "bytes": 27405,
+      "sha256": "e5101442f2472be0b346d0bccb9f9ed29d73c16ecda670777aed4c5d9cbc1df5"
     },
     "document_relations.jsonl": {
       "origin": "generated",
@@ -259,8 +259,8 @@
         "support_exception_ids",
         "support_kind"
       ],
-      "bytes": 8124251,
-      "sha256": "486af838c1c2605f8c81641fcedc042d6b6f479aeda8a00dbc13e93837f1c22d"
+      "bytes": 8129272,
+      "sha256": "e50bf205fd85804f6711ab0aaa016827aa1f4a66a6cb4d17f7f509493f2948b3"
     },
     "graph_nodes.jsonl": {
       "origin": "generated",
@@ -277,8 +277,8 @@
         "node_type",
         "object_role"
       ],
-      "bytes": 1924959,
-      "sha256": "bde5b5d675255d9d13cabc41f2ff5001fa258ebbb824f3e0039930fa763cbe71"
+      "bytes": 1926047,
+      "sha256": "9eb8eea1fbfd88b2716ffbbec6d4b73b48228328fa36671a33147b6de414a20d"
     },
     "legal_units.jsonl": {
       "origin": "generated",
@@ -385,8 +385,8 @@
       "format": "jsonl",
       "artifact_schema": 7,
       "primary_id": "support_unit_id",
-      "bytes": 5855891,
-      "sha256": "6540330664afe68c25e44faf83daf6084b872b77aabe0cd683496805a74d7d40"
+      "bytes": 5855868,
+      "sha256": "5784eb2df9cdb04d3996715675c5ca2b57b5f1d4e9304c66a30c3d4dc2d05e04"
     },
     "pages.jsonl": {
       "origin": "generated",
@@ -441,8 +441,8 @@
         "promotion_outcome",
         "failure_reason"
       ],
-      "bytes": 272831,
-      "sha256": "b0865b04ce68e8e70b5bace9ce993d6d52a00b9342462f6fe824b43f7e20b3d4"
+      "bytes": 270748,
+      "sha256": "2854e4fad19dffb4345b6f22c6862c11692ea1bd223c56272124c181b1021a45"
     },
     "propositions.jsonl": {
       "origin": "generated",
@@ -503,8 +503,8 @@
       "artifact_kind": "runtime_projection",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 26593573,
-      "sha256": "5b882bc0a9170590899d3411e5fb2bd1928b07a091a337492645e41aa6a91c02"
+      "bytes": 26650597,
+      "sha256": "4d649375583c2f224f07840dec59d6017615b16c511c9a49c33b8a2771a78132"
     },
     "source_conflicts.jsonl": {
       "origin": "generated",
@@ -528,8 +528,8 @@
         "recovery_capability",
         "recovery_status"
       ],
-      "bytes": 14656,
-      "sha256": "89b7d040fd33b47759ba6a611d3415e2bc0d223db6f530a09800d06f3dbdcc78"
+      "bytes": 22405,
+      "sha256": "23199fdf628b521dcfecff12a5c00cd23151052816257c2680359527833cd659"
     },
     "source_documents.jsonl": {
       "origin": "generated",
@@ -651,8 +651,8 @@
       "artifact_kind": "validation_report",
       "format": "json",
       "artifact_schema": 7,
-      "bytes": 25584,
-      "sha256": "ef5d78f53393cad7aaf4f9bb507813bfa03aa6c1a647a1b1410f3d3c5ac163ad"
+      "bytes": 25474,
+      "sha256": "7063eb569fdbc2a9d829a8343b3d99556aa8681c2182728be278751bc3af52d9"
     },
     "page_text_spans.jsonl": {
       "origin": "generated",

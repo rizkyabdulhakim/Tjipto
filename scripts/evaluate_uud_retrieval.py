@@ -26,7 +26,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cases = _read_jsonl(args.cases)
-    service = LegalRuntimeService(ROOT)
+    # Permanent evaluation must not depend on live provider availability or
+    # wording. Live planning has its own integration gate.
+    service = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None)
     results = [_evaluate(row, service) for row in cases]
     counts = {
         "pass": sum(row["outcome"] == "PASS" for row in results),

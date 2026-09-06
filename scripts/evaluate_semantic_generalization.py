@@ -70,8 +70,8 @@ def _runtime_identity() -> dict[str, str]:
 
 
 def _measure(cases: list[dict]) -> dict:
-    v0 = LegalRuntimeService(ROOT)
-    planned = LegalRuntimeService(ROOT)
+    v0 = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None)
+    planned = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None)
     rows = []
     for case in cases:
         expected = tuple(str(value) for value in case.get("expected_citations", ()))

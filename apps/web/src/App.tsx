@@ -77,7 +77,7 @@ export default function App() {
   const submit = async (value: string) => {
     if (!hasChat) setHasChat(true);
     setRoute("chat");
-    setActiveCitation(null);
+    if (window.innerWidth < 768) setActiveCitation(null);
     const userMsg: TMessage = {
       id: "u_" + Date.now(),
       role: "user",

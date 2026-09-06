@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import json
 from dataclasses import asdict, dataclass
 from builtins import object as builtin_object
 from typing import Protocol
@@ -14,11 +15,48 @@ from tjipto.core.external_llm import (
     scoped_external_llm_config,
     shared_external_llm_config,
 )
-from tjipto.corpora.intent_config import normalize_intent_text
+from tjipto.corpora.intent_config import normalize_intent_text, wording_scope_terms_for
 
 
 class WordingProvider(Protocol):
     def propose(self, deterministic_answer: str) -> dict[str, object] | None: ...
+
+
+def rewrite_answer(provider, store, response: dict, evidence: tuple[dict, ...], fallback: str) -> str:
+    """Apply an optional wording provider without transferring factual authority."""
+    if provider is None or store is None:
+        return fallback
+    verified_claims = build_verified_claim_set(evidence, scope_terms=wording_scope_terms_for(store.config))
+    if not verified_claims.claims:
+        return fallback
+    request = {
+        key: response[key]
+        for key in (
+            "original_query",
+            "operation",
+            "answer_type",
+            "source_scopes",
+            "temporal_scope",
+            "answer_scope",
+        )
+        if response.get(key) is not None
+    } | {"verified_draft": fallback}
+    try:
+        proposal = provider.propose(
+            json.dumps(
+                {"answer_request": request, "verified_claims": verified_claims.public()},
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+    except Exception:
+        return fallback
+    return render_wording(
+        proposal,
+        fallback,
+        verified_claims=verified_claims,
+        require_complete_enumerations=response.get("operation") in {"compare", "summarize"},
+    )
 
 
 def answer_prompt(verified_context: str) -> str:
@@ -407,9 +445,13 @@ def _scope_drift(
     current_markers = tuple(normalize_intent_text(marker) for marker in current_markers)
     for claim in claims:
         role = normalize_intent_text(claim.source_role or claim.temporal_scope or "")
-        if role == "current consolidated" and any(marker in normalized for marker in historical_markers):
+        historical_role = any(marker and marker in role for marker in historical_markers)
+        current_role = any(marker and marker in role for marker in current_markers)
+        if role and not current_markers:
+            current_role = not historical_role
+        if current_role and any(marker in normalized for marker in historical_markers):
             return True
-        if role and role != "current consolidated" and any(marker in normalized for marker in current_markers):
+        if role and not current_role and any(marker in normalized for marker in current_markers):
             return True
     return False
 

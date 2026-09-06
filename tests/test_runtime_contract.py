@@ -26,7 +26,7 @@ from tjipto.retrieval.answer import assemble_context_pack, validate_answer_candi
 from tjipto.runtime.api import _answer_with_footnotes, _public_bbox, handle_request
 from tjipto.runtime.gemini import GeminiAnswerProvider
 from tjipto.runtime.openai_compatible import OpenAICompatibleWordingProvider
-from tjipto.runtime.research_control import semantic_support_context_terms
+from tjipto.retrieval.requirements import semantic_support_context_terms
 from tjipto.runtime.service import LegalRuntimeService
 from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.viewer import viewer_payload
@@ -100,7 +100,7 @@ def _retrieval_router_cases() -> tuple[dict, ...]:
 
 class RuntimeContractTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.service = LegalRuntimeService(ROOT)
+        self.service = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None)
 
     def test_runtime_vocabulary_projection_is_small_and_duplicate_free(self) -> None:
         config = CorpusRegistry(ROOT).resolve("uud")
@@ -428,7 +428,7 @@ class RuntimeContractTest(unittest.TestCase):
             self.assertEqual(row["corpus_id"], "uud")
             self.assertTrue(set(row["required_evidence_ids"]) <= evidence_ids)
         stage0 = [row for row in cases if row.get("stage0_defect")]
-        self.assertEqual(len(stage0), 8)
+        self.assertEqual(len(stage0), 10)
         for row in stage0:
             current = row.get("stage0_current")
             self.assertIsInstance(current, dict, row["eval_id"])
@@ -865,13 +865,14 @@ class RuntimeContractTest(unittest.TestCase):
         self.assertFalse(explicit["trace_support"])
 
         exhaustive = self.service.ask("uud", "pasal apa saja yang diubah perubahan pertama")
-        self.assertEqual(exhaustive["status"], "limited_answer")
-        self.assertTrue(exhaustive["trace_support"])
+        self.assertEqual(exhaustive["status"], "answer_ready")
+        self.assertFalse(exhaustive["trace_support"])
         self.assertIn("ayat (3)", exhaustive["answer"])
 
     def test_natural_sentence_proposals_remain_fact_bound(self) -> None:
-        from tjipto.runtime.service import _render_wording
-        from tjipto.runtime.wording import build_answer_fact_plan, build_verified_claim_set
+        from tjipto.runtime.wording import build_answer_fact_plan, build_verified_claim_set, render_wording
+
+        _render_wording = render_wording
 
         facts = {"fact": "Pasal 31: Hak atas pendidikan."}
         accepted = _render_wording(
