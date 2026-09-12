@@ -90,7 +90,7 @@ class InformationNeed:
 
 
 @dataclass(frozen=True)
-class ResearchPlan:
+class TaskPlan:
     original_query: str
     intent: ResearchIntent
     variants: tuple[QueryVariant, ...]
@@ -102,6 +102,9 @@ class ResearchPlan:
     information_needs: tuple[InformationNeed, ...] = ()
     clarification_question: str | None = None
     missing_dimensions: tuple[str, ...] = ()
+
+
+ResearchPlan = TaskPlan
 
 
 class ResearchPlanningProvider(Protocol):
@@ -257,7 +260,7 @@ def plan_research(
     polarity: str | None = None,
     modality: str | None = None,
     requirements: Sequence[EvidenceRequirement] = (),
-) -> ResearchPlan:
+) -> TaskPlan:
     """Create a validated plan. The original query is always variant zero."""
     intent = intent or ResearchIntent()
     requirement_rows = tuple(requirements)
@@ -292,7 +295,7 @@ def plan_research(
     )
     base_requirements = requirement_rows
     if provider is None or not (intent.complex or intent.orchestrate):
-        return ResearchPlan(query, intent, (original,), "deterministic", requirements=base_requirements)
+        return TaskPlan(query, intent, (original,), "deterministic", requirements=base_requirements)
     try:
         proposal = provider.propose(
             _planner_request(
@@ -307,7 +310,7 @@ def plan_research(
             )
         )
     except Exception:
-        return ResearchPlan(query, intent, (original,), "unavailable", ("provider_failure",), requirements=base_requirements)
+        return TaskPlan(query, intent, (original,), "unavailable", ("provider_failure",), requirements=base_requirements)
     variants, rejected = _validated_variants(proposal, original, intent)
     lanes = ("sparse",)
     _, requirement_rejections = _validated_requirements(
@@ -325,7 +328,7 @@ def plan_research(
     rejected = (*rejected, *need_rejections)
     clarification_question, missing_dimensions, clarification_rejections = _validated_clarification(proposal)
     rejected = (*rejected, *clarification_rejections)
-    return ResearchPlan(
+    return TaskPlan(
         query,
         intent,
         variants,
@@ -659,7 +662,7 @@ def execute_research_rounds(
     temporal_scope: str | None = None,
     polarity: str | None = None,
     modality: str | None = None,
-    plan: ResearchPlan | None = None,
+    plan: TaskPlan | None = None,
 ) -> dict:
     """Run retrieval rounds, retrying only requirements still missing."""
     plan = plan or plan_research(
@@ -860,7 +863,7 @@ def execute_research(
     intent: ResearchIntent | None = None,
     provider: ResearchPlanningProvider | None = None,
     max_rounds: int | None = None,
-) -> tuple[ResearchPlan, tuple[dict, ...]]:
+) -> tuple[TaskPlan, tuple[dict, ...]]:
     """Compatibility projection for callers that only need plan and rows."""
     result = execute_research_rounds(query, retrieve, intent=intent, provider=provider, max_rounds=max_rounds)
     return result["plan"], result["matches"]
@@ -870,6 +873,7 @@ __all__ = [
     "QueryVariant",
     "InformationNeed",
     "ResearchIntent",
+    "TaskPlan",
     "ResearchPlan",
     "ResearchPlanningProvider",
     "OpenAICompatibleResearchPlanningProvider",

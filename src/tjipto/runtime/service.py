@@ -11,45 +11,32 @@ from uuid import uuid4
 
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.strategy import StrategyRegistry
-from tjipto.corpora.verified import CorpusIntegrityError, VerifiedCorpusRepository
+from tjipto.corpora.verified import VerifiedCorpusRepository
 from tjipto.evidence.store import EvidenceStore
-from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack
-from tjipto.retrieval.dense import dense_configured
+from tjipto.retrieval.answer import assemble_context_pack
 from tjipto.retrieval.metadata import (
     normalize_filters,
     public_filters,
 )
-from tjipto.retrieval.router import route_retrieval
 from tjipto.retrieval.research import (
     ResearchIntent,
-    ResearchPlan,
     ResearchPlanningProvider,
-    expand_research_candidates,
-    execute_research_rounds,
+    TaskPlan,
     research_planning_provider_from_environment,
 )
 from tjipto.retrieval.sufficiency import EvidenceRequirement
 from tjipto.runtime.answer_arbitration import (
     _empty_citation_fields,
-    _metadata_page_suffix,
-    _restore_corpus_labels,
-    _wording_preserves_evidence,
 )
 from tjipto.runtime.bookmarks import BookmarkRepository
 from tjipto.runtime.public_document import (
     _catalog_search,
     _catalog_search_response,
-    enrich_document_summary,
-    enrich_version_comparison,
 )
 from tjipto.runtime.query_semantics import interpret_query
-from tjipto.runtime.orchestration import execute_ask
-from tjipto.runtime.response import (
-    _clarification_exhausted_response,
-    _clarification_invalid_response,
-    _integrity_failure,
-)
-from tjipto.runtime.wording import rewrite_answer, wording_provider_from_environment
+from tjipto.runtime.orchestration import OrchestrationController
+from tjipto.runtime.response import _integrity_failure
+from tjipto.runtime.wording import wording_provider_from_environment
 from tjipto.runtime.scope_guard import scope_guard_context
 from tjipto.telemetry import Telemetry
 from tjipto.runtime.viewer import (
@@ -76,58 +63,51 @@ class LegalRuntimeService:
     ):
         self.registry = CorpusRegistry(repo_root, strategies=strategy_registry)
         self.repository = VerifiedCorpusRepository(self.registry)
-        self.telemetry = telemetry or Telemetry.from_environment(self.registry)
-        self.telemetry.bind_registry(self.registry)
-        self._integrity_error: str | None = None
-        self._store_cache: OrderedDict[str, EvidenceStore] = OrderedDict()
-        self._store_cache_limit = max(1, len(self.registry.corpus_ids()))
+        resolved_telemetry = telemetry or Telemetry.from_environment(self.registry)
+        resolved_telemetry.bind_registry(self.registry)
         self._public_targets: OrderedDict[str, tuple[str, dict]] = OrderedDict()
         self._public_target_limit = 1024
         self._public_target_lock = RLock()
-        self._clarifications: OrderedDict[str, tuple[str, str, int]] = OrderedDict()
-        self._clarification_limit = 128
-        self._clarification_lock = RLock()
         self._catalog_service = None
         self._bookmarks = BookmarkRepository()
         self._answer_provider = wording_provider_from_environment() if answer_provider is _PROVIDER_FROM_ENVIRONMENT else answer_provider
-        self._planning_provider = (
+        resolved_planning_provider = (
             research_planning_provider_from_environment() if planning_provider is _PROVIDER_FROM_ENVIRONMENT else planning_provider
+        )
+        self._orchestrator = OrchestrationController(
+            self.registry,
+            self.repository,
+            resolved_telemetry,
+            answer_provider=self._answer_provider,
+            planning_provider=resolved_planning_provider,
         )
 
     def _store(self, corpus_id: str):
-        cached = self._store_cache.get(corpus_id)
-        if cached is not None:
-            self._store_cache.move_to_end(corpus_id)
-            self._integrity_error = None
-            return cached
-        try:
-            config = self.repository.load(corpus_id).config
-            self._integrity_error = None
-        except CorpusIntegrityError as error:
-            self._integrity_error = error.code
-            self.telemetry.emit("integrity_failure", corpus_id=self._telemetry_corpus_id(corpus_id), reason_code=error.code)
-            return None
-        self.telemetry.emit("corpus_load", corpus_id=config.corpus_id, status="loaded")
-        store = EvidenceStore.shared(config)
-        self._store_cache[corpus_id] = store
-        while len(self._store_cache) > self._store_cache_limit:
-            self._store_cache.popitem(last=False)
-        return store
+        return self._orchestrator.store(corpus_id)
+
+    @property
+    def _integrity_error(self) -> str | None:
+        return self._orchestrator.integrity_error
+
+    @property
+    def telemetry(self) -> Telemetry:
+        return self._orchestrator.telemetry
+
+    @telemetry.setter
+    def telemetry(self, telemetry: Telemetry) -> None:
+        telemetry.bind_registry(self.registry)
+        self._orchestrator.telemetry = telemetry
+
+    @property
+    def _planning_provider(self):
+        return self._orchestrator.planning_provider
+
+    @_planning_provider.setter
+    def _planning_provider(self, provider) -> None:
+        self._orchestrator.planning_provider = provider
 
     def _route_retrieval(self, corpus_id: str, query: str, store: EvidenceStore, **kwargs: Any) -> dict:
-        result = route_retrieval(corpus_id, query, store, **kwargs)
-        configured = result.get("dense_configured")
-        if configured is None:
-            configured = dense_configured(store) if store is not None else False
-        self.telemetry.emit(
-            "retrieval_route",
-            corpus_id=self._telemetry_corpus_id(corpus_id),
-            route=result["route"],
-            status=result["status"],
-            dense_configured=bool(configured),
-            hybrid_active=bool(result.get("hybrid_active", False)),
-        )
-        return result
+        return self._orchestrator.route_retrieval(corpus_id, query, store, **kwargs)
 
     def research(
         self,
@@ -145,46 +125,15 @@ class LegalRuntimeService:
         temporal_scope: str | None = None,
         polarity: str | None = None,
         modality: str | None = None,
-        plan: ResearchPlan | None = None,
+        plan: TaskPlan | None = None,
     ) -> dict:
-        """Run bounded retrieval variants and assess verified requirements."""
-        store = self._store(corpus_id)
-        if store is None:
-            return {"status": "insufficient", "reason": self._integrity_error or "corpus_unavailable", "matches": (), "plan": None}
-
-        def retrieve(variant_query, variant):
-            route = variant.retrieval_lane
-            variant_filters = {}
-            if variant.source_role:
-                variant_filters["source_role"] = variant.source_role
-            if variant.temporal_scope:
-                variant_filters["temporal_context"] = variant.temporal_scope
-            result = self._route_retrieval(
-                corpus_id,
-                variant_query,
-                store,
-                limit=limit,
-                route=route,
-                metadata_filters=variant_filters or None,
-                allow_structured_fallback=bool(variant.source_role),
-            )
-            if route == "dense" and result.get("status") == "dense_unavailable":
-                fallback = self._route_retrieval(corpus_id, variant_query, store, limit=limit, route="auto")
-                result = dict(fallback) | {"retrieval_degraded_reason": result.get("reason", "dense_unavailable")}
-            return expand_research_candidates(
-                store,
-                result,
-                decomposition=bool(getattr(intent, "decomposition", False)),
-                limit=limit,
-            )
-
-        result = execute_research_rounds(
+        return self._orchestrator.research(
+            corpus_id,
             query,
-            retrieve,
-            store=store,
             intent=intent,
-            provider=planning_provider,
             requirements=requirements,
+            planning_provider=planning_provider,
+            limit=limit,
             max_rounds=max_rounds,
             required_entities=required_entities,
             explicit_references=explicit_references,
@@ -194,16 +143,9 @@ class LegalRuntimeService:
             modality=modality,
             plan=plan,
         )
-        assessment = result["sufficiency"]
-        return {
-            "status": assessment.status if assessment is not None else ("found" if result["matches"] else "insufficient"),
-            "original_query": query,
-            **result,
-        }
 
     def _telemetry_corpus_id(self, corpus_id: str) -> str:
-        config = self.registry.resolve(corpus_id)
-        return config.corpus_id if config is not None else "unknown"
+        return self._orchestrator.telemetry_corpus_id(corpus_id)
 
     def register_public_target(self, corpus_id: str, request: dict) -> str:
         """Return a stable opaque handle; persistence identifiers never leave this boundary."""
@@ -592,7 +534,7 @@ class LegalRuntimeService:
         clarification_id: str | None = None,
         clarification_answer: str | None = None,
     ) -> dict:
-        response = self._ask(
+        return self._orchestrator.ask(
             corpus_id,
             query,
             limit,
@@ -601,38 +543,6 @@ class LegalRuntimeService:
             clarification_id,
             clarification_answer,
         )
-        if response.get("status") not in {"answer_ready", "limited_answer"}:
-            return response
-        # Structural aggregates are already composed from the verified
-        # manifest and member units.  Keep that deterministic range/count
-        # wording intact instead of sending it through an untrusted rewriter.
-        if response.get("route") == "structure_count":
-            return response
-        store = self._store(corpus_id)
-        if store is not None and response.get("operation") == "summarize":
-            response = enrich_document_summary(store, response)
-        elif store is not None and response.get("operation") == "compare" and response.get("route") not in {"metadata", "metadata_fact"}:
-            response = enrich_version_comparison(store, response)
-        evidence = tuple(response.get("evidence") or response.get("metadata_support") or ())
-        answer_evidence = evidence + tuple(response.get("summary_support") or ()) + tuple(response.get("comparison_support") or ())
-        answer = response.get("answer")
-        if not evidence or not isinstance(answer, str) or not answer.strip():
-            return response
-        # Relation wording is corpus-owned and already constrained by the
-        # persisted relation type.  Keep it deterministic so an untrusted
-        # rewriter cannot turn a renumbering into a generic modification.
-        if response.get("route") == "document_relation" and response.get("article_amendment_relations"):
-            rewrite_answer(self._answer_provider, store, response, evidence, answer)
-            return response
-        rendered = rewrite_answer(self._answer_provider, store, response, answer_evidence, answer)
-        if not _wording_preserves_evidence(rendered, answer_evidence, response.get("claim_support", ())):
-            rendered = answer
-        rendered = _restore_corpus_labels(rendered, evidence)
-        if response.get("route") == "metadata_fact":
-            page_suffix = _metadata_page_suffix(evidence)
-            if page_suffix and "Halaman sumber:" not in rendered:
-                rendered = rendered.rstrip() + page_suffix
-        return response | {"answer": rendered}
 
     def _ask(
         self,
@@ -645,8 +555,7 @@ class LegalRuntimeService:
         clarification_answer: str | None = None,
         summary_mode: bool = False,
     ) -> dict:
-        return execute_ask(
-            self,
+        return self._orchestrator.ask_raw(
             corpus_id,
             query,
             limit,
@@ -657,38 +566,8 @@ class LegalRuntimeService:
             summary_mode,
         )
 
-    def _clarification_response(self, corpus_id: str, query: str, plan: ResearchPlan, round_number: int) -> dict:
-        if round_number >= 1:
-            return _clarification_exhausted_response(corpus_id)
-        token = uuid4().hex
-        with self._clarification_lock:
-            self._clarifications[token] = (corpus_id, query, round_number)
-            self._clarifications.move_to_end(token)
-            while len(self._clarifications) > self._clarification_limit:
-                self._clarifications.popitem(last=False)
-        return {
-            "status": "clarification_required",
-            "route": "planner_clarification",
-            "intent": "clarification",
-            "corpus_id": corpus_id,
-            "original_query": query,
-            "answer": plan.clarification_question,
-            "clarification_id": token,
-            "missing_dimensions": plan.missing_dimensions,
-            "evidence": (),
-            "citations": (),
-            "final_citations": (),
-            "historical_citations": (),
-            "metadata_support": (),
-            "structural_support": (),
-            "trace_support": (),
-            "viewer_refs": (),
-            "context_pack": empty_context_pack("clarification_required"),
-            "answer_scope": "clarification_required",
-            "answer_type": "none",
-            "warnings": (),
-            "insufficient_reasons": (),
-        }
+    def _clarification_response(self, corpus_id: str, query: str, plan: TaskPlan, round_number: int) -> dict:
+        return self._orchestrator.clarification_response(corpus_id, query, plan, round_number)
 
     def _resume_clarification(
         self,
@@ -696,12 +575,4 @@ class LegalRuntimeService:
         clarification_id: str | None,
         clarification_answer: str | None,
     ) -> tuple[str, int] | dict | None:
-        if clarification_id is None and clarification_answer is None:
-            return None
-        if not isinstance(clarification_id, str) or not isinstance(clarification_answer, str) or not clarification_answer.strip():
-            return _clarification_invalid_response(corpus_id)
-        with self._clarification_lock:
-            pending = self._clarifications.pop(clarification_id, None)
-        if pending is None or pending[0] != corpus_id:
-            return _clarification_invalid_response(corpus_id)
-        return f"{pending[1]}\n\nJawaban klarifikasi pengguna: {clarification_answer.strip()}", pending[2] + 1
+        return self._orchestrator.resume_clarification(corpus_id, clarification_id, clarification_answer)

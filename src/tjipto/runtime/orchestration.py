@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from threading import RLock
+from typing import Any
+from uuid import uuid4
 
 from tjipto.corpora.intent_config import contains_intent_phrase, normalize_intent_text
 from tjipto.corpora.source_arbitration import (
@@ -10,7 +13,10 @@ from tjipto.corpora.source_arbitration import (
     source_anomaly_response,
     source_reference_mappings_for_query,
 )
+from tjipto.corpora.verified import CorpusIntegrityError
 from tjipto.evidence.store import EvidenceStore
+from tjipto.retrieval.answer import empty_context_pack
+from tjipto.retrieval.dense import dense_configured
 from tjipto.retrieval.requirements import (
     _research_candidate_limit,
     authoritative_retrieval_route,
@@ -21,10 +27,20 @@ from tjipto.retrieval.requirements import (
     semantic_scope_covered,
 )
 from tjipto.retrieval.relations import amendment_relation_target
-from tjipto.retrieval.research import ResearchPlan, plan_research
+from tjipto.retrieval.research import (
+    ResearchIntent,
+    ResearchPlanningProvider,
+    TaskPlan,
+    expand_research_candidates,
+    execute_research_rounds,
+    plan_research,
+)
 from tjipto.retrieval.structured import source_occurrence_route, structural_count
 from tjipto.retrieval.sufficiency import EvidenceRequirement, assess_sufficiency, collect_evidence_set
 from tjipto.runtime.answer_arbitration import (
+    _metadata_page_suffix,
+    _restore_corpus_labels,
+    _wording_preserves_evidence,
     _answer_templates,
     _document_title,
     compound_query_parts,
@@ -35,10 +51,14 @@ from tjipto.runtime.answer_arbitration import (
 from tjipto.runtime.evidence_answer import answer_text, evidence_answer
 from tjipto.runtime.public_document import (
     consolidated_definition_response,
+    enrich_document_summary,
+    enrich_version_comparison,
     historical_pre_change_response,
 )
 from tjipto.runtime.query_semantics import QuerySemantics, interpret_query
 from tjipto.runtime.response import (
+    _clarification_exhausted_response,
+    _clarification_invalid_response,
     _compound_response,
     _empty_query_response,
     _integrity_failure,
@@ -47,19 +67,278 @@ from tjipto.runtime.response import (
 )
 from tjipto.runtime.scope_guard import scope_failure_response, scope_guard_context
 from tjipto.runtime.source_text import source_text_response
+from tjipto.runtime.taxonomy import reason_for_status
+from tjipto.runtime.tools import ToolRegistry
 from tjipto.runtime.viewer import _scope_has_verified_support
-
-if TYPE_CHECKING:
-    from tjipto.runtime.service import LegalRuntimeService
+from tjipto.runtime.wording import rewrite_answer
 
 
 _MAPPING_RELATION_TYPES = frozenset({"RENAMES", "RENUMBERED_TO"})
 _DIRECT_INSTRUMENT_RELATION_TYPES = frozenset({"DELETES", "SUPPLEMENTS", *_MAPPING_RELATION_TYPES})
 
 
+class OrchestrationController:
+    """Own the bounded turn lifecycle and its control-plane state."""
+
+    def __init__(self, registry, repository, telemetry, *, answer_provider, planning_provider):
+        self.registry = registry
+        self.repository = repository
+        self.telemetry = telemetry
+        self._integrity_error: str | None = None
+        self._store_cache: OrderedDict[str, EvidenceStore] = OrderedDict()
+        self._store_cache_limit = max(1, len(self.registry.corpus_ids()))
+        self._clarifications: OrderedDict[str, tuple[str, str, int]] = OrderedDict()
+        self._clarification_limit = 128
+        self._clarification_lock = RLock()
+        self._answer_provider = answer_provider
+        self._planning_provider = planning_provider
+        self.tool_registry = ToolRegistry.default()
+
+    @property
+    def planning_provider(self):
+        return self._planning_provider
+
+    @planning_provider.setter
+    def planning_provider(self, provider) -> None:
+        self._planning_provider = provider
+
+    @property
+    def integrity_error(self) -> str | None:
+        return self._integrity_error
+
+    def store(self, corpus_id: str) -> EvidenceStore | None:
+        cached = self._store_cache.get(corpus_id)
+        if cached is not None:
+            self._store_cache.move_to_end(corpus_id)
+            self._integrity_error = None
+            return cached
+        try:
+            config = self.repository.load(corpus_id).config
+            self._integrity_error = None
+        except CorpusIntegrityError as error:
+            self._integrity_error = error.code
+            self.telemetry.emit("integrity_failure", corpus_id=self.telemetry_corpus_id(corpus_id), reason_code=error.code)
+            return None
+        self.telemetry.emit("corpus_load", corpus_id=config.corpus_id, status="loaded")
+        store = EvidenceStore.shared(config)
+        self._store_cache[corpus_id] = store
+        while len(self._store_cache) > self._store_cache_limit:
+            self._store_cache.popitem(last=False)
+        return store
+
+    def telemetry_corpus_id(self, corpus_id: str) -> str:
+        config = self.registry.resolve(corpus_id)
+        return config.corpus_id if config is not None else "unknown"
+
+    def route_retrieval(self, corpus_id: str, query: str, store: EvidenceStore, **kwargs: Any) -> dict:
+        result = self.tool_registry.invoke("retrieval_dispatch", corpus_id, query, store, **kwargs)
+        configured = result.get("dense_configured")
+        if configured is None:
+            configured = dense_configured(store) if store is not None else False
+        self.telemetry.emit(
+            "retrieval_route",
+            corpus_id=self.telemetry_corpus_id(corpus_id),
+            route=result["route"],
+            status=result["status"],
+            dense_configured=bool(configured),
+            hybrid_active=bool(result.get("hybrid_active", False)),
+        )
+        return result
+
+    def research(
+        self,
+        corpus_id: str,
+        query: str,
+        *,
+        intent: ResearchIntent | None = None,
+        requirements: tuple[EvidenceRequirement, ...] = (),
+        planning_provider: ResearchPlanningProvider | None = None,
+        limit: int = 10,
+        max_rounds: int | None = None,
+        required_entities: tuple[str, ...] = (),
+        explicit_references: tuple[str, ...] = (),
+        source_role: str | None = None,
+        temporal_scope: str | None = None,
+        polarity: str | None = None,
+        modality: str | None = None,
+        plan: TaskPlan | None = None,
+    ) -> dict:
+        store = self.store(corpus_id)
+        if store is None:
+            return {"status": "insufficient", "reason": self._integrity_error or "corpus_unavailable", "matches": (), "plan": None}
+
+        def retrieve(variant_query, variant):
+            route = variant.retrieval_lane
+            variant_filters = {}
+            if variant.source_role:
+                variant_filters["source_role"] = variant.source_role
+            if variant.temporal_scope:
+                variant_filters["temporal_context"] = variant.temporal_scope
+            result = self.route_retrieval(
+                corpus_id,
+                variant_query,
+                store,
+                limit=limit,
+                route=route,
+                metadata_filters=variant_filters or None,
+                allow_structured_fallback=bool(variant.source_role),
+            )
+            if route == "dense" and result.get("status") == "dense_unavailable":
+                fallback = self.route_retrieval(corpus_id, variant_query, store, limit=limit, route="auto")
+                result = dict(fallback) | {"retrieval_degraded_reason": result.get("reason", "dense_unavailable")}
+            return expand_research_candidates(
+                store,
+                result,
+                decomposition=bool(getattr(intent, "decomposition", False)),
+                limit=limit,
+            )
+
+        result = execute_research_rounds(
+            query,
+            retrieve,
+            store=store,
+            intent=intent,
+            provider=planning_provider,
+            requirements=requirements,
+            max_rounds=max_rounds,
+            required_entities=required_entities,
+            explicit_references=explicit_references,
+            source_role=source_role,
+            temporal_scope=temporal_scope,
+            polarity=polarity,
+            modality=modality,
+            plan=plan,
+        )
+        assessment = result["sufficiency"]
+        return {
+            "status": assessment.status if assessment is not None else ("found" if result["matches"] else "insufficient"),
+            "original_query": query,
+            **result,
+        }
+
+    def ask_raw(
+        self,
+        corpus_id: str,
+        query: str,
+        limit: int = 3,
+        filters: dict | None = None,
+        evidence_requirements: tuple[EvidenceRequirement, ...] = (),
+        clarification_id: str | None = None,
+        clarification_answer: str | None = None,
+        summary_mode: bool = False,
+    ) -> dict:
+        return execute_ask(
+            self,
+            corpus_id,
+            query,
+            limit,
+            filters,
+            evidence_requirements,
+            clarification_id,
+            clarification_answer,
+            summary_mode,
+        )
+
+    def ask(
+        self,
+        corpus_id: str,
+        query: str,
+        limit: int = 3,
+        filters: dict | None = None,
+        evidence_requirements: tuple[EvidenceRequirement, ...] = (),
+        clarification_id: str | None = None,
+        clarification_answer: str | None = None,
+    ) -> dict:
+        response = self.ask_raw(
+            corpus_id,
+            query,
+            limit,
+            filters,
+            evidence_requirements,
+            clarification_id,
+            clarification_answer,
+        )
+        result_reason = reason_for_status(response.get("status", ""), response.get("reason_code"))
+        if result_reason not in {"answer_ready", "partial_answer"}:
+            return response
+        if response.get("route") == "structure_count":
+            return response
+        store = self.store(corpus_id)
+        if store is not None and response.get("operation") == "summarize":
+            response = enrich_document_summary(store, response)
+        elif store is not None and response.get("operation") == "compare" and response.get("route") not in {"metadata", "metadata_fact"}:
+            response = enrich_version_comparison(store, response)
+        evidence = tuple(response.get("evidence") or response.get("metadata_support") or ())
+        answer_evidence = evidence + tuple(response.get("summary_support") or ()) + tuple(response.get("comparison_support") or ())
+        answer = response.get("answer")
+        if not evidence or not isinstance(answer, str) or not answer.strip():
+            return response
+        if response.get("route") == "document_relation" and response.get("article_amendment_relations"):
+            rewrite_answer(self._answer_provider, store, response, evidence, answer)
+            return response
+        rendered = rewrite_answer(self._answer_provider, store, response, answer_evidence, answer)
+        if not _wording_preserves_evidence(rendered, answer_evidence, response.get("claim_support", ())):
+            rendered = answer
+        rendered = _restore_corpus_labels(rendered, evidence)
+        if response.get("route") == "metadata_fact":
+            page_suffix = _metadata_page_suffix(evidence)
+            if page_suffix and "Halaman sumber:" not in rendered:
+                rendered = rendered.rstrip() + page_suffix
+        return response | {"answer": rendered}
+
+    def clarification_response(self, corpus_id: str, query: str, plan: TaskPlan, round_number: int) -> dict:
+        if round_number >= 1:
+            return _clarification_exhausted_response(corpus_id)
+        token = uuid4().hex
+        with self._clarification_lock:
+            self._clarifications[token] = (corpus_id, query, round_number)
+            self._clarifications.move_to_end(token)
+            while len(self._clarifications) > self._clarification_limit:
+                self._clarifications.popitem(last=False)
+        return {
+            "status": "clarification_required",
+            "route": "planner_clarification",
+            "intent": "clarification",
+            "corpus_id": corpus_id,
+            "original_query": query,
+            "answer": plan.clarification_question,
+            "clarification_id": token,
+            "missing_dimensions": plan.missing_dimensions,
+            "evidence": (),
+            "citations": (),
+            "final_citations": (),
+            "historical_citations": (),
+            "metadata_support": (),
+            "structural_support": (),
+            "trace_support": (),
+            "viewer_refs": (),
+            "context_pack": empty_context_pack("clarification_required"),
+            "answer_scope": "clarification_required",
+            "answer_type": "none",
+            "warnings": (),
+            "insufficient_reasons": (),
+        }
+
+    def resume_clarification(
+        self,
+        corpus_id: str,
+        clarification_id: str | None,
+        clarification_answer: str | None,
+    ) -> tuple[str, int] | dict | None:
+        if clarification_id is None and clarification_answer is None:
+            return None
+        if not isinstance(clarification_id, str) or not isinstance(clarification_answer, str) or not clarification_answer.strip():
+            return _clarification_invalid_response(corpus_id)
+        with self._clarification_lock:
+            pending = self._clarifications.pop(clarification_id, None)
+        if pending is None or pending[0] != corpus_id:
+            return _clarification_invalid_response(corpus_id)
+        return f"{pending[1]}\n\nJawaban klarifikasi pengguna: {clarification_answer.strip()}", pending[2] + 1
+
+
 @dataclass(frozen=True)
 class _AskContext:
-    service: "LegalRuntimeService"
+    control: OrchestrationController
     corpus_id: str
     query: str
     limit: int
@@ -85,13 +364,13 @@ class _RoutePolicy:
 @dataclass(frozen=True)
 class _ResearchState:
     active_requirements: tuple[EvidenceRequirement, ...]
-    semantic_plan: ResearchPlan | None
+    semantic_plan: TaskPlan | None
     semantic_scope_loss: bool
     research_routed: dict | None
 
 
 def execute_ask(
-    service: "LegalRuntimeService",
+    control: OrchestrationController,
     corpus_id: str,
     query: str,
     limit: int = 3,
@@ -101,7 +380,7 @@ def execute_ask(
     clarification_answer: str | None = None,
     summary_mode: bool = False,
 ) -> dict:
-    resumed = service._resume_clarification(corpus_id, clarification_id, clarification_answer)
+    resumed = control.resume_clarification(corpus_id, clarification_id, clarification_answer)
     if isinstance(resumed, dict):
         return resumed
     clarification_round = 0
@@ -109,14 +388,14 @@ def execute_ask(
         query, clarification_round = resumed
     if not query.strip():
         return _empty_query_response(corpus_id)
-    store = service._store(corpus_id)
+    store = control.store(corpus_id)
     if store is None:
-        return _integrity_failure(corpus_id, query, service._integrity_error)
-    early = _pre_semantic_response(service, store, corpus_id, query, clarification_round)
+        return _integrity_failure(corpus_id, query, control.integrity_error)
+    early = _pre_semantic_response(control, store, corpus_id, query, clarification_round)
     if early is not None:
         return early
     context = _AskContext(
-        service=service,
+        control=control,
         corpus_id=corpus_id,
         query=query,
         limit=limit,
@@ -127,7 +406,7 @@ def execute_ask(
         summary_mode=summary_mode,
         clarification_round=clarification_round,
         store=store,
-        semantics=interpret_query(store, corpus_id, query, available_corpora=service.registry.corpus_ids()),
+        semantics=interpret_query(store, corpus_id, query, available_corpora=control.registry.corpus_ids()),
     )
     direct = _direct_response(context)
     if direct is not None:
@@ -143,7 +422,7 @@ def execute_ask(
 
 
 def _pre_semantic_response(
-    service: "LegalRuntimeService",
+    control: OrchestrationController,
     store: EvidenceStore,
     corpus_id: str,
     query: str,
@@ -151,7 +430,7 @@ def _pre_semantic_response(
 ) -> dict | None:
     anomaly_plan = source_anomaly_clarification(store, query)
     if anomaly_plan is not None and clarification_round == 0:
-        return service._clarification_response(corpus_id, query, anomaly_plan, clarification_round)
+        return control.clarification_response(corpus_id, query, anomaly_plan, clarification_round)
     if source_anomaly_comparison_query(store, query):
         anomaly = source_anomaly_response(store, corpus_id, query)
         if anomaly is not None:
@@ -187,7 +466,9 @@ def _direct_response(context: _AskContext) -> dict | None:
             context.query,
             context.store,
             context.semantics,
-            route_retrieval=context.service._route_retrieval,
+            route_retrieval=lambda cid, q, routed_store, **kwargs: _retrieve(
+                context, cid, q, routed_store, **kwargs
+            ),
         )
     if context.clarification_round or context.summary_mode:
         return None
@@ -212,7 +493,7 @@ def _compound_answer(context: _AskContext) -> dict | None:
     )
     if not parts:
         return None
-    responses = tuple(context.service._ask(context.corpus_id, part, context.limit, context.filters) for part in parts)
+    responses = tuple(execute_ask(context.control, context.corpus_id, part, context.limit, context.filters) for part in parts)
     return _compound_response(
         context.corpus_id,
         context.query,
@@ -238,7 +519,8 @@ def _summary_answer(context: _AskContext) -> dict | None:
         return None
     if context.semantics.operation == "summarize" and not instrument_summary:
         return None
-    result = context.service._ask(
+    result = execute_ask(
+        context.control,
         context.corpus_id,
         normalized,
         context.limit,
@@ -428,7 +710,7 @@ def _research_required(
     )
 
 
-def _semantic_plan(context: _AskContext, planner_request: bool) -> ResearchPlan:
+def _semantic_plan(context: _AskContext, planner_request: bool) -> TaskPlan:
     planning_intent = replace(
         research_intent_for_ask(context.store, context.semantics, context.query, ()),
         orchestrate=planner_request,
@@ -437,7 +719,7 @@ def _semantic_plan(context: _AskContext, planner_request: bool) -> ResearchPlan:
     return plan_research(
         context.query,
         planning_intent,
-        provider=context.service._planning_provider if planner_request else None,
+        provider=context.control.planning_provider if planner_request else None,
         required_entities=research_entities(
             context.store.config.setting("research", {}) or {},
             normalize_intent_text(context.query),
@@ -452,7 +734,7 @@ def _semantic_plan(context: _AskContext, planner_request: bool) -> ResearchPlan:
 
 def _planner_clarification(
     context: _AskContext,
-    semantic_plan: ResearchPlan | None,
+    semantic_plan: TaskPlan | None,
     requirements: tuple[EvidenceRequirement, ...],
 ) -> dict | None:
     if semantic_plan is None or not semantic_plan.clarification_question:
@@ -462,7 +744,7 @@ def _planner_clarification(
     )
     if requirements or useful_analysis:
         return None
-    return context.service._clarification_response(
+    return context.control.clarification_response(
         context.corpus_id,
         context.query,
         semantic_plan,
@@ -475,15 +757,15 @@ def _execute_research(
     planner_request: bool,
     research_intent,
     requirements: tuple[EvidenceRequirement, ...],
-    semantic_plan: ResearchPlan | None,
+    semantic_plan: TaskPlan | None,
     scope_loss: bool,
 ) -> dict | None:
-    result = context.service.research(
+    result = context.control.research(
         context.corpus_id,
         context.query,
         intent=research_intent,
         requirements=requirements,
-        planning_provider=context.service._planning_provider if planner_request else None,
+        planning_provider=context.control.planning_provider if planner_request else None,
         limit=_research_candidate_limit(context.store, context.query, context.limit),
         required_entities=tuple(
             dict.fromkeys(
@@ -548,6 +830,16 @@ def _grounded_answer(
     )
 
 
+def _retrieve(
+    context: _AskContext,
+    corpus_id: str,
+    query: str,
+    store: EvidenceStore,
+    **kwargs: Any,
+) -> dict:
+    return context.control.route_retrieval(corpus_id, query, store, **kwargs)
+
+
 def _scope_route(
     context: _AskContext,
     policy: _RoutePolicy,
@@ -560,7 +852,8 @@ def _scope_route(
     )
     if not scope:
         return None, None
-    routed = context.service._route_retrieval(
+    routed = _retrieve(
+        context,
         context.corpus_id,
         context.query,
         context.store,
@@ -597,7 +890,8 @@ def _typed_route(
     relation_routed = _relation_route(context, policy, candidate_limit)
     typed = scoped_routed or relation_routed or policy.source_occurrence_routed
     if typed is None:
-        deterministic = context.service._route_retrieval(
+        deterministic = _retrieve(
+            context,
             context.corpus_id,
             context.query,
             context.store,
@@ -645,7 +939,8 @@ def _relation_route(
     )
     if policy.amendment_target.get("mode") is None or policy.metadata_query or unresolved:
         return None
-    return context.service._route_retrieval(
+    return _retrieve(
+        context,
         context.corpus_id,
         context.query,
         context.store,

@@ -8,12 +8,12 @@ from tjipto.corpora.intent_config import normalize_intent_text
 from tjipto.corpora.parser_dispatch import parse_legal_reference
 from tjipto.corpora.source_arbitration import source_reference_mappings_for_query
 from tjipto.retrieval.answer import assemble_context_pack, empty_context_pack
-from tjipto.retrieval.research import QueryVariant, ResearchIntent, ResearchPlan
+from tjipto.retrieval.research import QueryVariant, ResearchIntent, TaskPlan
 from tjipto.runtime.answer_arbitration import _document_title
 from tjipto.runtime.viewer import _authority_policy, _citation_with_authority, _source_mapping_semantics
 
 
-def _source_anomaly_clarification(store, query: str) -> ResearchPlan | None:
+def _source_anomaly_clarification(store, query: str) -> TaskPlan | None:
     """Ask for the missing section when a source marker has two meanings."""
     if _source_anomaly_comparison_query(store, query):
         return None
@@ -41,7 +41,7 @@ def _source_anomaly_clarification(store, query: str) -> ResearchPlan | None:
         reference = next((anchor for anchor in anchors if anchor.startswith("pasal ")), "")
         options = " atau ".join(f"{section.title()} {reference.title()}" for section in sections)
         question = f"Apakah yang dimaksud {options}?"
-        plan = ResearchPlan(
+        plan = TaskPlan(
             query,
             ResearchIntent(),
             (QueryVariant(query),),

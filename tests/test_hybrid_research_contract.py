@@ -37,7 +37,7 @@ class HybridResearchContractTest(unittest.TestCase):
             "matches": (),
             "reason": "no_results",
         }
-        with patch.object(service, "_route_retrieval", return_value=routed) as retrieval:
+        with patch.object(service._orchestrator, "route_retrieval", return_value=routed) as retrieval:
             service.ask("uud", "hak konstitusional ketika sekolah melarang agama")
         self.assertEqual(retrieval.call_count, 1)
 

@@ -87,7 +87,7 @@ def _support_group(row: dict) -> str:
     return "trace_support"
 
 
-def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
+def candidate_eligibility(store, row: dict) -> tuple[bool, str]:
     if row.get("forced_rejection_reason"):
         return False, row["forced_rejection_reason"]
     if row.get("runtime_loadable") is False:
@@ -127,6 +127,11 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
             return False, "noncanonical_trace_not_answerable"
     if not (DIRECT_ROUTES & set(row.get("route_sources") or ())):
         return False, "graph_only"
+
+    return True, "candidate"
+
+
+def publication_eligibility(store, row: dict) -> tuple[bool, str]:
     if row.get("status") != "final":
         return False, "not_final"
     if row.get("metadata_grounding"):
@@ -140,6 +145,13 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
         if not row.get(field):
             return False, f"missing_{field}"
     return True, "answer_evidence"
+
+
+def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
+    accepted, reason = candidate_eligibility(store, row)
+    if not accepted:
+        return accepted, reason
+    return publication_eligibility(store, row)
 
 
 def _payload(store, row: dict) -> dict:
