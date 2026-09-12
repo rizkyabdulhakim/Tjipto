@@ -22,6 +22,9 @@ EVENT_ATTRIBUTES = {
     "ci_gate": frozenset({"gate", "status", "duration_ms"}),
     "release_validation": frozenset({"status", "forbidden_entry_count", "archive_sha256"}),
 }
+OPTIONAL_ATTRIBUTES = {
+    "retrieval_route": frozenset({"dense_configured", "hybrid_active"}),
+}
 SENSITIVE_ATTRIBUTES = frozenset({"query", "query_text", "text", "quote", "quoted_text", "token", "tokens", "credential", "password", "secret", "path", "file_path", "email", "user_id"})
 MAX_ATTRIBUTE_LENGTH = 96
 _REQUEST_ID = re.compile(r"[0-9a-f]{32}")
@@ -51,11 +54,15 @@ _HTTP_ROUTES = frozenset(
 _RETRIEVAL_ROUTES = frozenset(
     {
         "bm25",
+        "hybrid",
+        "hybrid_degraded_sparse",
+        "dense_unavailable",
         "citation_not_found",
         "exact",
         "metadata",
         "metadata_not_found",
         "metadata_scope_unresolved",
+        "document_relation",
         "no_results",
         "relation",
         "relation_not_found",
@@ -67,7 +74,7 @@ _RETRIEVAL_ROUTES = frozenset(
         "unsupported_corpus",
     }
 )
-_RETRIEVAL_STATUS = frozenset({"citation_not_found", "found", "invalid_filter", "no_results", "unsupported_corpus"})
+_RETRIEVAL_STATUS = frozenset({"citation_not_found", "dense_unavailable", "found", "invalid_filter", "no_results", "unsupported_corpus"})
 _INTEGRITY_REASONS = frozenset(
     {
         "artifact_contract_malformed", "artifact_contract_weakened", "artifact_malformed", "artifact_missing", "artifact_path_invalid",
@@ -81,21 +88,23 @@ _INTEGRITY_REASONS = frozenset(
         "trusted_manifest_mismatch", "trusted_manifest_missing", "unknown_corpus", "unknown_field", "unsupported_schema",
     }
 )
-_CI_GATES = frozenset(
+CI_GATES = frozenset(
     {
-        "compileall", "unittest", "pytest", "pytest_run_1", "pytest_run_2", "retrieval_evaluation", "answer_evaluation", "source_text_evaluation", "meaningful_support_evaluation", "support_reachability_evaluation", "artifact_validate", "artifact_rebuild", "ruff", "mypy",
+        "compileall", "unittest", "pytest", "pytest_run_1", "pytest_run_2", "retrieval_evaluation", "research_retrieval_evaluation", "semantic_generalization_evaluation", "answer_evaluation", "source_text_evaluation", "meaningful_support_evaluation", "support_reachability_evaluation", "artifact_validate", "artifact_rebuild", "ruff", "mypy",
         "bandit", "pip_check", "pip_audit", "clean_tree", "release_validation", "web_test", "web_lint", "web_typecheck",
-        "web_build", "web_smoke", "toolchain", "release_a", "release_b",
+        "web_build", "web_smoke", "toolchain", "package_origin", "release_a", "release_b", "dense_promotion_attestation",
+        "true_hybrid_activation", "live_planner_integration",
     }
 )
 
 
 def event_record(event: str, *, registry: CorpusRegistry | None = None, **attributes: Any) -> dict[str, Any]:
     """Return a bounded record containing only the event's approved fields."""
-    allowed = EVENT_ATTRIBUTES[event]
+    allowed = EVENT_ATTRIBUTES[event] | OPTIONAL_ATTRIBUTES.get(event, frozenset())
+    required = EVENT_ATTRIBUTES[event]
     values = {key: value for key, value in attributes.items() if key in allowed and key not in SENSITIVE_ATTRIBUTES and _safe_value(value)}
-    if set(values) != allowed:
-        missing = sorted(allowed - set(values))
+    if not required.issubset(values):
+        missing = sorted(required - set(values))
         raise ValueError(f"telemetry attributes missing or unsafe: {', '.join(missing)}")
     if not all(_valid_attribute(event, key, value, registry) for key, value in values.items()):
         raise ValueError("telemetry attributes are outside their approved values")
@@ -111,6 +120,8 @@ def _safe_value(value: Any) -> bool:
 
 
 def _valid_attribute(event: str, key: str, value: Any, registry: CorpusRegistry | None = None) -> bool:
+    if key in OPTIONAL_ATTRIBUTES.get(event, frozenset()):
+        return type(value) is bool
     if key == "corpus_id":
         from tjipto.corpora.registry import CorpusRegistry
 
@@ -130,7 +141,7 @@ def _valid_attribute(event: str, key: str, value: Any, registry: CorpusRegistry 
     if event == "integrity_failure":
         return value in _INTEGRITY_REASONS
     if event == "ci_gate":
-        return value in _CI_GATES if key == "gate" else value in {"passed", "failed"} if key == "status" else value >= 0
+        return value in CI_GATES if key == "gate" else value in {"passed", "failed"} if key == "status" else value >= 0
     return value in {"passed", "failed"} if key == "status" else value >= 0 if key == "forbidden_entry_count" else bool(_ARCHIVE_SHA256.fullmatch(value))
 
 

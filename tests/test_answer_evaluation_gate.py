@@ -26,7 +26,7 @@ class AnswerEvaluationGateTest(unittest.TestCase):
             {"exact_reference", "paraphrase", "concept_synonym", "person_institution", "date_metadata", "historical", "relation", "multi_support", "ambiguity_source_scope", "ambiguity_legal_target", "ambiguity_relation_operation", "ambiguity_concept", "ambiguity_entity", "typo_noise", "out_of_corpus", "source_annotation", "source_discrepancy", "proposition", "proposition_contradiction"},
             {row["category"] for row in rows},
         )
-        self.assertEqual({"answer", "clarify", "abstain"}, {row["behavior"] for row in rows})
+        self.assertEqual({"answer", "abstain"}, {row["behavior"] for row in rows})
 
     def test_answer_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

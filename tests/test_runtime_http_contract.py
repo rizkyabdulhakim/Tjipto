@@ -61,6 +61,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
 
     def test_regulation_catalog_filters_and_viewer_use_closed_public_payloads(self) -> None:
         facets = self._post("/legal/catalog/facets", {})
+        self.assertEqual(facets["default_corpus"], "uud")
         self.assertEqual({facet["name"] for facet in facets["facets"]}, {"document_role", "legal_status", "establishment_period"})
         result = self._post("/legal/catalog/search", {"query": "gaji pppk", "filters": {"legal_status": "applicable"}})
         self.assertEqual(result["kind"], "catalog")
@@ -70,6 +71,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
         viewer = self._post("/legal/catalog/viewer", {"target": target})
         self.assertEqual(viewer["kind"], "document")
         self.assertEqual(viewer["legal_status"], "Berlaku")
+        self.assertEqual(viewer["legal_status_scope"], "Record peraturan")
         self.assertRegex(viewer["publication"], r"Lembaran Negara Republik Indonesia Tahun \d{4} Nomor \d+")
         self._assert_public(viewer)
         body, headers = self._get_bytes(viewer["pdf"]["access_url"])
@@ -83,6 +85,14 @@ class RuntimeHttpContractTest(unittest.TestCase):
             self.assertTrue(result["supports"], query)
             self.assertTrue(result["supports"][0]["citation"]["text"], query)
             self.assertNotIn("document", result, query)
+
+    def test_research_context_is_public_without_internal_scope_identifiers(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "amandemen pertama vs kedua", "limit": 30})
+        self.assertEqual(result["operation"], "compare")
+        self.assertEqual(result["sufficiency"]["status"], "complete")
+        self.assertEqual(len(result["source_scopes"]), 2)
+        self.assertTrue(all(set(scope) == {"label"} for scope in result["source_scopes"]))
+        self._assert_public(result)
 
     def test_rc2_scenario_manifest_is_complete_and_versioned(self) -> None:
         manifest = json.loads((ROOT / "tests/scenarios/public_evidence_rc2.json").read_text(encoding="utf-8"))
@@ -175,6 +185,88 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertTrue(all(row["source_authority"] and row["source_reference"] for row in conflict["values"]))
         self._assert_public(document)
 
+        amendment = self._post("/legal/catalog/search", {"query": "perubahan pertama UUD 1945"})["results"][0]
+        self.assertEqual(amendment["establishment_place"], "Jakarta")
+        self.assertEqual(amendment["establishment_date"], "19 Oktober 1999")
+        self.assertEqual(amendment["issuer"], "Majelis Permusyawaratan Rakyat Republik Indonesia")
+        self.assertEqual(amendment["legal_status"], "Berlaku")
+        self.assertEqual(amendment["legal_status_scope"], "Record induk sumber")
+        self.assertTrue(amendment["official_url"].endswith(".pdf"))
+        self.assertTrue(amendment["signatories"])
+        self.assertTrue(amendment["relations"])
+        consolidated_relation = next(row for row in amendment["relations"] if row["label"] == "Digabungkan dalam")
+        self.assertTrue(consolidated_relation["source_reference"].endswith("UUD45_SatuNaskah.pdf"))
+        self.assertTrue(amendment["provision_effects"])
+        self.assertTrue(
+            all(not any(marker in effect["target"] for marker in ("Scope", "Clause")) for effect in amendment["provision_effects"])
+        )
+
+        consolidated = self._post("/legal/catalog/search", {"query": "naskah konsolidasi UUD 1945"})["results"][0]
+        self.assertEqual(
+            consolidated["title"],
+            "Undang-Undang Dasar Negara Republik Indonesia Tahun 1945 dalam Satu Naskah",
+        )
+        self.assertEqual(
+            consolidated["issuer"],
+            "Sekretariat Jenderal Majelis Permusyawaratan Rakyat Republik Indonesia",
+        )
+        self.assertIn("dalam Satu Naskah", consolidated["publication"])
+        self.assertIsNone(consolidated["establishment_date"])
+        self.assertIsNone(consolidated["effective_date"])
+        self.assertEqual(
+            {relation["label"] for relation in consolidated["relations"]},
+            {"Menggabungkan", "Berasal dari"},
+        )
+        self.assertFalse(consolidated["provision_effects"])
+
+        original = self._post("/legal/catalog/search", {"query": "naskah asli UUD 1945"})["results"][0]
+        self.assertEqual(original["document_role"], "Naskah Asli")
+        self.assertIsNone(original["issuer"])
+        self.assertIsNone(original["establishment_date"])
+        self.assertIsNone(original["establishment_place"])
+        self.assertIsNone(original["signatories"])
+        amended_by = [row for row in original["relations"] if row["label"] == "Diubah oleh"]
+        self.assertEqual(len(amended_by), 1)
+        self.assertEqual(
+            amended_by[0]["target"],
+            "Perubahan Pertama Undang-Undang Dasar Negara Republik Indonesia Tahun 1945",
+        )
+
+        expected_chain = (
+            ("perubahan pertama UUD 1945", "Perubahan Kedua Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", 10),
+            ("perubahan kedua UUD 1945", "Perubahan Ketiga Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", 26),
+            ("perubahan ketiga UUD 1945", "Perubahan Keempat Undang-Undang Dasar Negara Republik Indonesia Tahun 1945", 68),
+        )
+        for query, expected_target, expected_effects in expected_chain:
+            chained = self._post("/legal/catalog/search", {"query": query})["results"][0]
+            next_relation = next(row for row in chained["relations"] if row["label"] == "Diubah oleh")
+            self.assertEqual(next_relation["target"], expected_target)
+            self.assertEqual(len(chained["provision_effects"]), expected_effects)
+
+        renumbered = self._post("/legal/catalog/search", {"query": "perubahan keempat UUD 1945"})["results"][0]
+        self.assertIn(
+            {"label": "Penomoran menjadi", "target": "Pasal 25A"},
+            [{"label": effect["label"], "target": effect["target"]} for effect in renumbered["provision_effects"]],
+        )
+
+        deleted = renumbered
+        self.assertEqual(len(deleted["provision_effects"]), 26)
+        self.assertIn(
+            {"label": "Ketentuan yang ditambahkan", "target": "Pasal 37 ayat (5)"},
+            [{"label": effect["label"], "target": effect["target"]} for effect in deleted["provision_effects"]],
+        )
+        self.assertTrue(
+            all(
+                effect["verification_state"] == "Ruang lingkup naskah"
+                for effect in deleted["provision_effects"]
+                if effect["label"] == "Ketentuan yang diubah dan/atau ditambahkan"
+            )
+        )
+        self.assertIn(
+            {"label": "Ketentuan yang dihapus", "target": "Pasal 16"},
+            [{"label": effect["label"], "target": effect["target"]} for effect in deleted["provision_effects"]],
+        )
+
     def test_catalog_document_bookmark_uses_the_same_opaque_target_contract(self) -> None:
         result = self._post("/legal/catalog/search", {"query": "perpres 11 tahun 2024"})
         target = result["results"][0]["viewer_target"]["public_target_id"]
@@ -209,7 +301,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             ("Pasal 16 UUD konsolidasi", "legal_citation", True),
             ("kapan perubahan pertama ditetapkan", "metadata_source", False),
             ("Apa isi BAB XI agama?", "structural_context", False),
-            ("pasal yang dihapus", "instrument_provenance", False),
+            ("pasal yang dihapus", "instrument_provenance", True),
             ("Kenapa Amandemen 4 Aturan Tambahan ada Pasal III, tapi Satu Naskah Pasal II?", "source_anomaly", False),
         )
         for query, authority_kind, citation_final in cases:
@@ -229,6 +321,25 @@ class RuntimeHttpContractTest(unittest.TestCase):
         self.assertEqual(viewer["quoted_text"], support["text"])
         self.assertTrue(viewer["bbox_rectangles"])
         self._assert_public(viewer)
+
+    def test_every_first_amendment_relation_support_has_its_own_pdf_target(self) -> None:
+        result = self._post("/legal/uud/ask", {"query": "pasal apa saja yang diubah perubahan pertama"})
+        relation_supports = [row for row in result["supports"] if row["support_kind"] == "article_relation"]
+        self.assertGreater(len(relation_supports), 1)
+        targets = []
+        for support in relation_supports:
+            target = support["viewer_target"]["public_target_id"]
+            self.assertTrue(support["viewer_target"]["can_resolve"], support["label"])
+            self.assertIsNotNone(target, support["label"])
+            viewer = self._post("/legal/uud/viewer", {"target": target})
+            self.assertTrue(viewer["pdf_access_available"], support["label"])
+            self.assertTrue(viewer["rendering_available"], support["label"])
+            self.assertEqual(viewer["page_numbers"], support["page_numbers"], support["label"])
+            self.assertTrue(viewer["bbox_rectangles"], support["label"])
+            targets.append(target)
+        self.assertEqual(len(targets), len(set(targets)))
+        groups = [row for row in result["support_groups"] if row["group_kind"] == "article_relation_members"]
+        self.assertEqual(sum(row["member_count"] for row in groups), len(relation_supports))
 
     def test_groups_preserve_members_and_keep_nonlegal_sections_out_of_quotes(self) -> None:
         result = self._post("/legal/uud/ask", {"query": "siapa wakil ketua yang tercantum dalam Perubahan Pertama?"})
@@ -265,6 +376,7 @@ class RuntimeHttpContractTest(unittest.TestCase):
             ("/legal/uud/viewer", {"target": "bad", "evidence_id": "forged"}),
             ("/legal/uud/bookmarks", {"evidence_id": "forged"}),
             ("/legal/uud/ask", {"query": "Pasal 1", "context_pack": {}}),
+            ("/legal/uud/ask", {"query": "Pasal 1", "clarification_context": "retired"}),
         ):
             with self.assertRaises(HTTPError) as error:
                 self._post(path, payload)

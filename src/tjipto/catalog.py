@@ -45,6 +45,8 @@ class CatalogDocument:
     permissions: frozenset[str]
     corpus_id: str | None = None
     source_annotations: tuple[SourceAnnotation, ...] = ()
+    establishment_place: VerifiedValue | None = None
+    signatories: VerifiedValue | None = None
 
     @property
     def stable_id(self) -> str:
@@ -226,7 +228,7 @@ class CatalogRepository:
         lexical = sum(1 for token in query_tokens if token in title.split())
         lexical_match = lexical >= (1 if len(query_tokens) == 1 else max(2, (len(query_tokens) + 1) // 2))
         typo = SequenceMatcher(None, query, title).ratio() if len(query) >= 5 else 0.0
-        relevance = 6 if exact_identity else 5 if exact_alias else 4 if structured else 3 if lexical_match else 2 if typo >= 0.82 else 0
+        relevance = 6 if exact_identity or exact_alias else 4 if structured else 3 if lexical_match else 2 if typo >= 0.82 else 0
         preferred = int(document.preferred and not explicit_history)
         return (relevance, preferred, int(document.identity.year.normalized_value or 0), typo)
 

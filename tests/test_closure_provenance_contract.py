@@ -24,6 +24,8 @@ class ClosureProvenanceContractTests(unittest.TestCase):
             "commit_sha": "b" * 40,
             "tree_sha": "c" * 40,
             "parent_sha": "d" * 40,
+            "python_lock_sha256": "f" * 64,
+            "dense_lock_sha256": "0" * 64,
             "ref": "refs/heads/main",
             "run_id": "123",
             "run_attempt": "1",
@@ -57,7 +59,13 @@ class ClosureProvenanceContractTests(unittest.TestCase):
         }
         for name in ("release-one.json", "release-two.json"):
             self._write(backend / name, release)
-        sidecar = {"corpora": {"uud_1945": {"artifact_set_digest": "f" * 64}}}
+        sidecar = {
+            "corpora": {"uud_1945": {"artifact_set_digest": "f" * 64}},
+            "dense_promotion_attestation": {
+                "status": "valid",
+                "runtime_identity": {"commit": backend_identity["commit_sha"], "tree": backend_identity["tree_sha"]},
+            },
+        }
         self._write(backend / "release-one.sidecar.json", sidecar)
         self._write(backend / "release-two.sidecar.json", sidecar)
         self._write(backend / "release-comparison.json", {"run_identity_id": backend_identity["run_identity_id"], "archive_sha256_equal": True, "corpora_equal": True, "sidecars_equal": True, "forbidden_entry_count": 0})
@@ -70,6 +78,36 @@ class ClosureProvenanceContractTests(unittest.TestCase):
                 path.write_text("", encoding="utf-8")
             elif name == "pytest-resource-comparison.json":
                 self._write(path, closure.compare_pytest_resources(command, command, backend_identity))
+            elif name == "semantic-generalization.json":
+                self._write(path, {
+                    "status": "valid",
+                    "runtime_identity": {"commit": backend_identity["commit_sha"], "tree": backend_identity["tree_sha"]},
+                    "failures": [],
+                    "metrics": {"hard_negative_fp": 0, "query_drift_rate": 0},
+                })
+            elif name == "live-planner-integration.json":
+                self._write(path, {
+                    "status": "valid",
+                    "runtime_identity": {"commit": backend_identity["commit_sha"], "tree": backend_identity["tree_sha"]},
+                })
+            elif name == "dense-promotion-attestation.json":
+                self._write(path, {
+                    "schema_version": 1,
+                    "kind": "post_build_dense_runtime_attestation",
+                    "status": "valid",
+                    "runtime_identity": {"commit": backend_identity["commit_sha"], "tree": backend_identity["tree_sha"]},
+                    "activation": {
+                        "dense_configured": True,
+                        "dense_runtime_available": True,
+                        "hybrid_active": True,
+                        "route": "hybrid",
+                        "contributing_lanes": ["bm25", "dense"],
+                        "fusion": {
+                            "algorithm": "rrf_rank_only",
+                            "lane_candidate_counts": {"bm25": 1, "dense": 1},
+                        },
+                    },
+                })
             else:
                 self._write(path, command)
         for name in closure.WEB_EVIDENCE:
@@ -118,4 +156,25 @@ class ClosureProvenanceContractTests(unittest.TestCase):
             duplicate = self._identity("web", "101")
             self._write(web / "run-identity.json", duplicate)
             with self.assertRaisesRegex(closure.ClosureError, "duplicate backend/web"):
+                closure.assemble(backend, web, artifact_uploads=self.uploads)
+
+    def test_dense_attestation_schema_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            backend, web = self._evidence(Path(temporary))
+            attestation_path = backend / "dense-promotion-attestation.json"
+            attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+            attestation["kind"] = "untrusted"
+            self._write(attestation_path, attestation)
+            with self.assertRaisesRegex(closure.ClosureError, "dense promotion attestation invalid or stale"):
+                closure.assemble(backend, web, artifact_uploads=self.uploads)
+
+    def test_mixed_run_attempts_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            backend, web = self._evidence(Path(temporary))
+            mixed = self._identity("web", "102")
+            mixed["run_attempt"] = "2"
+            mixed["run_identity_id"] = "f" * 64
+            mixed["job_identity_id"] = closure._job_identity(mixed)
+            self._write(web / "run-identity.json", mixed)
+            with self.assertRaisesRegex(closure.ClosureError, "backend and web run identities differ"):
                 closure.assemble(backend, web, artifact_uploads=self.uploads)

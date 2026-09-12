@@ -211,7 +211,7 @@ def _segment_bbox_refs(
     characters_by_page: dict[tuple[str, int], dict[tuple[object, ...], list[dict]]],
 ) -> list[str]:
     refs: list[str] = []
-    for span, raw in zip(spans, raw_rows):
+    for span, raw in zip(spans, raw_rows, strict=True):
         selected = _selected_character_refs(span, raw, characters_by_page)
         if not selected:
             return []
@@ -227,7 +227,11 @@ def _selected_character_refs(
         return []
     raw_characters = [
         (str(text), bbox)
-        for text, bbox in zip(raw.get("character_texts") or (), raw.get("character_bboxes") or ())
+        for text, bbox in zip(
+            raw.get("character_texts") or (),
+            raw.get("character_bboxes") or (),
+            strict=True,
+        )
         if _visible(str(text))
     ]
     candidates = characters_by_page.get((span["source_document_id"], span["page_number"]), {})

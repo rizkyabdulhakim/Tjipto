@@ -1,0 +1,56 @@
+{
+  "contract_version": "P0-0-evaluation-contract-1",
+  "frozen_identity": {
+    "branch": "codex/hybrid-research",
+    "case_set_path": "tests/fixtures/uud/p0_pre_fix_fixtures.jsonl",
+    "case_set_sha256": "b03a4bfc71d6dcec367e96d36d3306214a53ad38dba78e0896c636e8ee57040a",
+    "commit_sha": "0097802d8330f2ff9c578f408e40fff291e411a9",
+    "evaluator_path": "scripts/evaluate_p0_contract.py",
+    "evaluator_sha256": "f38d47f59044e597e95926a6d9d0ac41ec9f7d2481deb13d49776107cdbdf651",
+    "manifest_path": "data/final/uud/manifest.json",
+    "manifest_sha256": "7e51fb55c716000a5a577430b17bf12ece98afb942fe26126bb37e46bb3106f1",
+    "repository": "rizkyabdulhakim/Tjipto",
+    "tree_sha": "6b0692c7c247745765a180731c400574efacf25b",
+    "validation_path": "data/final/uud/validation_report.json",
+    "validation_sha256": "7063eb569fdbc2a9d829a8343b3d99556aa8681c2182728be278751bc3af52d9"
+  },
+  "historical_baselines": [
+    {
+      "catalog_digest": "8f0cdb28a93330a2e3eb96c7baa075442d4f0c5c1eab9e739f4c7edf10dd8962",
+      "classification_counts": {
+        "EXPECTED_CORPUS_GAP": 25,
+        "FAIL": 18,
+        "PARTIAL": 86,
+        "PASS": 21
+      },
+      "path": "tests/fixtures/uud/p0_historical_150q_baseline.json",
+      "role": "historical_baseline_not_gold",
+      "row_count": 150,
+      "sha256": "34306c972e91fcb491f8535c4e7342945dbfe81c2e156f2c68eb1db9a4260632"
+    },
+    {
+      "path": "tests/fixtures/uud/answer_baseline.json",
+      "role": "historical_evaluator_baseline_not_gold",
+      "row_count": 24,
+      "sha256": "043255fd22684f387491daec2426d9baf9b8e3b8c88812f03f7424d4ba387c35"
+    },
+    {
+      "path": "tests/fixtures/uud/semantic_generalization_baseline.json",
+      "role": "historical_evaluator_baseline_not_gold",
+      "row_count": 8,
+      "sha256": "0ad97cb183a3e0aa2c496e5c06f2c5ade1647e64d19445ff8d065fd98aca9203"
+    },
+    {
+      "path": "tests/fixtures/uud/orchestrator_eval_summary.json",
+      "role": "historical_evaluator_baseline_not_gold",
+      "row_count": 175,
+      "sha256": "658d6dd75c4d355dbbefbdeee20a5abd24120410709eeea79e91dd0dfd9aebaf"
+    }
+  ],
+  "source_policy": {
+    "150_query_evidence_source": "reports/exact-head-audit-0097802-2026-09-09.md",
+    "150_query_preservation_artifact": "tests/fixtures/uud/p0_historical_150q_baseline.json",
+    "existing_catalogs_are_unchanged": true,
+    "literal_150_query_file_in_checkout": "not_found"
+  }
+}

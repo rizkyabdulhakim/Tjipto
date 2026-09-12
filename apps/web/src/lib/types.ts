@@ -9,7 +9,8 @@ export type AuthorityKind =
   | "structural_context"
   | "instrument_provenance"
   | "source_annotation"
-  | "source_text";
+  | "source_text"
+  | "document_source";
 
 export interface Citation {
   id: number;
@@ -48,8 +49,12 @@ export interface ChatMessage {
   content: string;
   citations?: Citation[];
   supportGroups?: SupportGroup[];
-  clarificationOptions?: { contextTarget: string; label: string }[];
-  clarificationQuery?: string;
+  documentCollection?: Citation[];
+  researchContext?: {
+    operation?: string;
+    sourceScopes: { label: string }[];
+    sufficiency?: "complete" | "partial" | "insufficient";
+  };
   status?: "streaming" | "complete";
 }
 

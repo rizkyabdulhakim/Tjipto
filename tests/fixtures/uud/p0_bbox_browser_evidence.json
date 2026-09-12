@@ -1,0 +1,27 @@
+{
+  "evidence_type": "machine_verifiable_pre_fix_browser_observation",
+  "runtime_identity": {
+    "commit_sha": "0097802d8330f2ff9c578f408e40fff291e411a9",
+    "tree_sha": "6b0692c7c247745765a180731c400574efacf25b"
+  },
+  "ci_run": {
+    "repository": "rizkyabdulhakim/Tjipto",
+    "run_id": 34034843504,
+    "job_id": 101491018734,
+    "head_sha": "0097802d8330f2ff9c578f408e40fff291e411a9",
+    "job": "web",
+    "step": "Smoke test",
+    "conclusion": "FAILURE",
+    "node_version": "v24.14.0"
+  },
+  "failure": {
+    "signature": "expanded active-BBox locator timeout",
+    "source_path": "apps/web/smoke.mjs",
+    "source_line": 173,
+    "assertion": "await expandedHighlight.first().waitFor();"
+  },
+  "source_hashes": {
+    "apps/web/smoke.mjs": "1903dee0d63576247dd93e9f469501532550aca5be726fbcd40a30c2fec3d684",
+    "tests/scenarios/public_evidence_rc2.json": "662251a142184d345a33bae693f14bc465e3007993c6773cfd40b8c232853df3"
+  }
+}

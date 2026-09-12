@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from hashlib import sha256
+import gc
 import json
 import sys
 
@@ -9,7 +10,7 @@ from tjipto.corpora.uud.bbox_builder import extract_pdf
 from tjipto.corpora.uud.chunk_builder import build_chunks_from_legal_units
 from tjipto.corpora.uud.evidence_bbox_builder import build_evidence_and_bboxes
 from tjipto.corpora.uud.graph_builder import build_graph_artifacts
-from tjipto.artifacts.writer import write_json, write_jsonl
+from tjipto.artifacts.writer import write_json, write_json_in_place, write_jsonl
 from tjipto.corpora.uud.legal_unit_builder import build_legal_units_from_sources
 from tjipto.corpora.uud.meaningful_support_builder import build_meaningful_support_units
 from tjipto.contracts.structure import apply_chunk_structural_contract
@@ -39,16 +40,30 @@ from tjipto.corpora.uud.source_conflict_builder import apply_source_conflict_gro
 from tjipto.corpora.uud.source_documents_builder import build_source_documents
 from tjipto.corpora.uud.text_span_builder import build_page_text_spans
 from tjipto.corpora.uud.validation import build_validation_report, validate_uud_artifact_dir
+from tjipto.core.manifest import artifact_set_digest
 from tjipto.corpora.uud.policy.authority import apply_authority_contract, apply_retrieval_semantics
 from tjipto.corpora.uud.policy.relations import apply_graph_relation_policy
 from tjipto.contracts.relations import materialize_inverse_edges
-from tjipto.corpora.intent_config import intent_config_for
+from tjipto.corpora.intent_config import validation_intent_config_for
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.corpora.verified import CorpusIntegrityError, require_canonical_build_environment
 from tjipto.grounding.promotion import build_promotion_decisions
 from tjipto.ingestion.pdf.health import build_pdf_health_report
 from tjipto.ingestion.pdf.source_objects import build_source_object_inventory
 from tjipto.ingestion.pdf.words import build_word_bbox_rows
+
+
+def _release_build_memory() -> None:
+    """Return released builder arenas before the RSS-gated runtime projection."""
+    gc.collect()
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        import ctypes
+
+        ctypes.CDLL(None).malloc_trim(0)
+    except (AttributeError, OSError):
+        return
 
 
 def rebuild_uud_artifact_baseline(repo_root: Path) -> dict:
@@ -81,6 +96,7 @@ def _refresh_trusted_manifest_digest(repo_root: Path, final_dir: Path) -> None:
 
 
 def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
+    _release_build_memory()
     try:
         import fitz
     except ImportError as error:  # pragma: no cover
@@ -93,23 +109,29 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     pages = build_pages(repo_root, source_documents)
     pages_by_source = {(row["source_document_id"], row["page_number"]): row["text"] for row in pages}
     docs = {source_id: fitz.open(repo_root / meta["path"]) for source_id, meta in source_documents.items()}
+    pdf_lines_by_source: dict[str, object] = {}
+    extracted_source_objects: list[dict] = []
+    word_bboxes: list[dict] = []
     try:
-        extracted_pdfs = {source_id: extract_pdf(doc, source_id) for source_id, doc in docs.items()}
-        pdf_lines_by_source = {source_id: extraction.lines for source_id, extraction in extracted_pdfs.items()}
-        word_bboxes = [
-            row
-            for source_id, doc in docs.items()
-            for row in build_word_bbox_rows(
+        for source_id, doc in docs.items():
+            extraction = extract_pdf(doc, source_id)
+            pdf_lines_by_source[source_id] = extraction.lines
+            extracted_source_objects.extend(extraction.source_objects)
+            word_bboxes.extend(
+                build_word_bbox_rows(
                 doc=doc,
                 corpus_id="uud",
                 source_document_id=source_id,
                 source_meta=source_documents[source_id],
                 bbox_id_prefix="uud_word_bbox",
+                )
             )
-        ]
+            del extraction
     finally:
         for doc in docs.values():
             doc.close()
+    del docs
+    _release_build_memory()
     raw_source_spans: list[dict] = []
     page_text_spans = build_page_text_spans(
         source_documents=source_documents,
@@ -124,6 +146,7 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_documents=source_documents,
     )
     chunks = build_chunks_from_legal_units(legal_units)
+    _release_build_memory()
     evidence, bbox_rows = build_evidence_and_bboxes(
         legal_units=legal_units,
         chunks=chunks,
@@ -131,6 +154,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         pdf_lines_by_source=pdf_lines_by_source,
         word_bboxes=word_bboxes,
     )
+    # Release the line cache before metadata and graph construction to keep
+    # rebuild RSS bounded; source-object rows remain for the inventory stage.
+    del pdf_lines_by_source
     metadata_grounding = build_metadata_block_grounding(
         pages_by_source=pages_by_source,
         source_documents=source_documents,
@@ -193,15 +219,12 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         source_conflicts=source_conflicts,
     )
     source_objects = build_source_object_inventory(
-        source_objects=tuple(item for extraction in extracted_pdfs.values() for item in extraction.source_objects),
+        source_objects=extracted_source_objects,
         page_text_spans=page_text_spans,
         raw_source_spans=raw_source_spans,
         source_documents=source_documents,
     )
-    # Extraction rows are fully represented by the persisted source objects,
-    # page spans, and BBox rows below.  Do not retain the duplicate PDF
-    # extraction graph while assembling and validating the remaining artifacts.
-    del extracted_pdfs, pdf_lines_by_source
+    del extracted_source_objects
     propositions = build_propositions(
         legal_units=legal_units,
         evidence=evidence,
@@ -324,30 +347,9 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
     )
     write_jsonl(final_dir / "meaningful_support_units.jsonl", meaningful_support_units)
     write_jsonl(final_dir / "propositions.jsonl", propositions)
-    write_json(final_dir / "runtime_projection.json", build_runtime_projection(
-        evidence_registry=evidence,
-        bbox_registry=bbox_rows,
-        legal_units=legal_units,
-        chunks=chunks,
-        retrieval_units=retrieval_units,
-        graph_edges=graph_edges,
-        source_documents=list(source_documents.values()),
-        page_text_spans=page_text_spans,
-        document_metadata=document_metadata,
-        metadata_grounding=metadata_grounding,
-        metadata_grounding_registry=metadata_grounding_registry,
-        document_relations=document_relations,
-        article_amendment_relations=article_amendment_relations,
-        source_conflicts=source_conflicts,
-        meaningful_support_units=meaningful_support_units,
-        raw_source_spans=raw_source_spans,
-        word_bboxes=word_bboxes,
-    ))
     write_jsonl(final_dir / "promotion_decisions.jsonl", promotion_decisions)
     write_jsonl(final_dir / "validation_exceptions.jsonl", validation_exceptions)
     write_json(final_dir / "pdf_health_report.json", pdf_health_report)
-    refresh_manifest(final_dir, manifest)
-
     corpus_config = CorpusRegistry(repo_root).resolve("uud")
     validation_report = build_validation_report(
         chunks=chunks,
@@ -372,12 +374,12 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         word_bboxes=word_bboxes,
         pdf_health_report=pdf_health_report,
         pages=pages,
-        intent_config=intent_config_for(getattr(corpus_config, "structured_strategy", "generic"), corpus_config),
+        intent_config=validation_intent_config_for(
+            getattr(corpus_config, "structured_strategy", "generic"), corpus_config
+        ),
     )
     write_json(final_dir / "validation_report.json", validation_report)
-
-    refresh_manifest(final_dir, manifest)
-    return {
+    build_counts = {
         "legal_units": len(legal_units),
         "chunks": len(chunks),
         "evidence": len(evidence),
@@ -388,6 +390,49 @@ def _rebuild_uud_artifact_baseline_at(repo_root: Path, final_dir: Path) -> dict:
         "source_objects": len(source_objects),
         "meaningful_support_units": len(meaningful_support_units),
     }
+    del (
+        corpus_config,
+        excluded_records,
+        graph_nodes,
+        pages,
+        metadata_assertions,
+        metadata_graph_edges,
+        promotion_decisions,
+        propositions,
+        pdf_health_report,
+        validation_exceptions,
+        source_objects,
+    )
+    _release_build_memory()
+
+    write_json_in_place(final_dir / "runtime_projection.json", build_runtime_projection(
+        evidence_registry=evidence,
+        bbox_registry=bbox_rows,
+        legal_units=legal_units,
+        chunks=chunks,
+        retrieval_units=retrieval_units,
+        graph_edges=graph_edges,
+        source_documents=list(source_documents.values()),
+        page_text_spans=page_text_spans,
+        document_metadata=document_metadata,
+        metadata_grounding=metadata_grounding,
+        metadata_grounding_registry=metadata_grounding_registry,
+        document_relations=document_relations,
+        article_amendment_relations=article_amendment_relations,
+        source_conflicts=source_conflicts,
+        meaningful_support_units=meaningful_support_units,
+        raw_source_spans=raw_source_spans,
+        word_bboxes=word_bboxes,
+    ))
+
+    refresh_manifest(final_dir, manifest)
+    validation_report["validated_artifact_set_digest"] = artifact_set_digest(
+        {"files": manifest["files"]}, exclude=("validation_report.json",)
+    )
+    write_json(final_dir / "validation_report.json", validation_report)
+    refresh_manifest(final_dir, manifest)
+    del validation_report
+    return build_counts
 
 
 def validate_uud_artifact_baseline(repo_root: Path) -> tuple[str, ...]:

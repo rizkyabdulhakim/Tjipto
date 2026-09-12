@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import re
-import unicodedata
 from hashlib import sha256
 import json
 from dataclasses import dataclass
 from typing import Any, cast
 
 from tjipto.contracts.coordinates import coordinate_metadata
+from tjipto.contracts.evidence import compact_source_text
 
 
 def build_text_bbox_rows(
@@ -31,7 +30,7 @@ def build_text_bbox_rows(
         text,
     )
     if not matched:
-        expected = [_compact(line) for line in text.splitlines() if line.strip()]
+        expected = [compact_source_text(line) for line in text.splitlines() if line.strip()]
         target_index = 0
         matched = []
         for page_number in range(page_start, page_end + 1):
@@ -39,7 +38,7 @@ def build_text_bbox_rows(
             for candidate in candidates:
                 if target_index >= len(expected):
                     break
-                if _compact(candidate["text"]) != expected[target_index]:
+                if compact_source_text(candidate["text"]) != expected[target_index]:
                     continue
                 matched.append(
                     {
@@ -94,7 +93,7 @@ def build_text_bbox_rows(
 
 
 def _matching_sequence(rows: list[dict], text: str) -> list[dict]:
-    target = _compact(text)
+    target = compact_source_text(text)
     if not target:
         return []
     for start in range(len(rows)):
@@ -102,7 +101,7 @@ def _matching_sequence(rows: list[dict], text: str) -> list[dict]:
         joined = ""
         for row in rows[start:]:
             selected.append(row)
-            joined = _compact(f"{joined} {row.get('text', '')}")
+            joined = compact_source_text(f"{joined} {row.get('text', '')}")
             if joined == target:
                 return selected
             if len(joined) > len(target) + 80 or not target.startswith(joined):
@@ -333,8 +332,3 @@ def _geometry_id(*, source_id: str, source_sha256: str, page_number: int, text: 
     }
     digest = sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     return f"uud_geometry::{digest}"
-
-
-def _compact(text: str) -> str:
-    text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "").replace("\u00c2", "")
-    return re.sub(r"\s+", " ", text).strip().casefold()

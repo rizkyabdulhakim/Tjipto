@@ -8,27 +8,32 @@ import sys
 
 try:
     from scripts.measure_command import compare_pytest_resources
+    from scripts.attest_dense_runtime import _hybrid_activation_valid
 except ModuleNotFoundError:  # Direct script execution places scripts/ on sys.path.
     from measure_command import compare_pytest_resources
+    from attest_dense_runtime import _hybrid_activation_valid
 
 
 BACKEND_GATES = frozenset((
-    "toolchain", "compileall", "unittest", "pytest_run_1", "retrieval_evaluation", "answer_evaluation",
+    "toolchain", "compileall", "unittest", "pytest_run_1", "retrieval_evaluation", "research_retrieval_evaluation", "semantic_generalization_evaluation", "answer_evaluation",
     "source_text_evaluation", "meaningful_support_evaluation", "support_reachability_evaluation",
     "artifact_validate", "clean_tree", "artifact_rebuild",
-    "ruff", "mypy", "bandit", "pip_check", "pip_audit", "pytest_run_2", "release_a", "release_b",
+    "ruff", "mypy", "bandit", "pip_check", "pip_audit", "pytest_run_2",
+    "live_planner_integration", "dense_promotion_attestation", "true_hybrid_activation", "package_origin",
+    "release_a", "release_b",
 ))
 WEB_GATES = frozenset(("toolchain", "web_test", "web_lint", "web_typecheck", "web_build", "web_smoke"))
 SHARED_FIELDS = (
     "repository", "workflow_ref", "workflow_sha", "workflow_repository", "workflow_file_path",
-    "commit_sha", "tree_sha", "parent_sha", "ref", "run_id", "run_attempt", "run_identity_id",
+    "commit_sha", "tree_sha", "parent_sha", "python_lock_sha256", "dense_lock_sha256", "ref", "run_id", "run_attempt", "run_identity_id",
 )
 JOB_FIELDS = ("job_key", "job_check_run_id", "job_identity_id")
 BACKEND_EVIDENCE = frozenset((
     "unittest.json", "pytest-run-1.json", "pytest-run-2.json", "pytest-resource-comparison.json",
-    "retrieval-evaluation.json", "retrieval-evaluation-command.json", "answer-evaluation.json", "answer-evaluation-command.json",
+    "retrieval-evaluation.json", "retrieval-evaluation-command.json", "research-retrieval.json", "research-retrieval-command.json", "semantic-generalization.json", "semantic-generalization-command.json", "answer-evaluation.json", "answer-evaluation-command.json",
     "source-text-evaluation.json", "meaningful-support-evaluation.json",
     "support-reachability-evaluation.json",
+    "live-planner-integration.json", "dense-promotion-attestation.json",
     "artifact-validation.json", "artifact-rebuild.json", "pip-audit.json", "pip-inspect.json", "clean-tree.txt",
 ))
 WEB_EVIDENCE = frozenset(("npm-audit.json", "browser.json"))
@@ -122,6 +127,41 @@ def _validate_resource(backend: Path, identity: dict) -> dict:
     return {"run_1": first, "run_2": second, "comparison": comparison}
 
 
+def _validate_stage_evidence(backend: Path, identity: dict) -> dict:
+    semantic = _load(backend / "semantic-generalization.json")
+    planner = _load(backend / "live-planner-integration.json")
+    dense = _load(backend / "dense-promotion-attestation.json")
+    semantic_identity = semantic.get("runtime_identity") or {}
+    planner_identity = planner.get("runtime_identity") or {}
+    dense_identity = dense.get("runtime_identity") or {}
+    expected_identity = {"commit": identity["commit_sha"], "tree": identity["tree_sha"]}
+    if semantic.get("status") != "valid" or semantic_identity != expected_identity:
+        raise ClosureError("semantic end-to-end evidence invalid or stale")
+    if (
+        semantic.get("failures")
+        or (semantic.get("metrics") or {}).get("hard_negative_fp") != 0
+        or (semantic.get("metrics") or {}).get("query_drift_rate") != 0
+    ):
+        raise ClosureError("semantic end-to-end contract failed")
+    if planner.get("status") != "valid" or planner_identity != expected_identity:
+        raise ClosureError("live planner evidence invalid or stale")
+    if (
+        dense.get("schema_version") != 1
+        or dense.get("kind") != "post_build_dense_runtime_attestation"
+        or dense.get("status") != "valid"
+        or dense_identity != expected_identity
+    ):
+        raise ClosureError("dense promotion attestation invalid or stale")
+    activation = dense.get("activation") or {}
+    if not _hybrid_activation_valid(activation):
+        raise ClosureError("true hybrid activation evidence failed")
+    return {
+        "semantic_end_to_end": semantic,
+        "live_planner": planner,
+        "dense_promotion": dense,
+    }
+
+
 def _validate_uploads(uploads: dict[str, dict[str, str]]) -> None:
     for job_key in ("backend", "web"):
         upload = uploads.get(job_key, {})
@@ -147,6 +187,11 @@ def _release(backend: Path, identity: dict) -> dict:
         raise ClosureError("release comparison provenance mismatch")
     if first_sidecar.get("corpora") != second_sidecar.get("corpora"):
         raise ClosureError("release corpus identity mismatch")
+    expected_identity = {"commit": identity["commit_sha"], "tree": identity["tree_sha"]}
+    for sidecar in (first_sidecar, second_sidecar):
+        attestation = sidecar.get("dense_promotion_attestation") or {}
+        if attestation.get("status") != "valid" or attestation.get("runtime_identity") != expected_identity:
+            raise ClosureError("release dense attestation missing or stale")
     return {"a": first, "b": second, "a_sidecar": first_sidecar, "b_sidecar": second_sidecar, "comparison": comparison}
 
 
@@ -203,6 +248,7 @@ def assemble(
         if closure_identity["job_check_run_id"] in {backend_identity["job_check_run_id"], web_identity["job_check_run_id"]}:
             raise ClosureError("duplicate closure job identity")
         jobs["closure"] = closure_identity
+    stage_evidence = _validate_stage_evidence(backend, backend_identity)
     return {
         "schema_version": 1,
         "status": "complete",
@@ -211,6 +257,7 @@ def assemble(
         "jobs": jobs,
         "gates": {"backend": backend_gates, "web": web_gates},
         "resource": _validate_resource(backend, backend_identity),
+        "stage_6_11": stage_evidence,
         "artifact_uploads": uploads,
         "evidence": {"backend": _evidence_manifest(backend), "web": _evidence_manifest(web)},
         "release": _release(backend, backend_identity),

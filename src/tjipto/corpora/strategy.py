@@ -45,10 +45,12 @@ class CorpusStrategy:
     capability_resolver: Callable[..., object] | None = None
     contract: CorpusContract | None = None
     provenance_adapter: object | None = None
+    source_conflict_adapter: object | None = None
     semantic_validator: Callable[[object, dict[str, object]], tuple[str, ...]] | None = None
     citation_unit_factory: Callable[[object, dict[str, object]], object] | None = None
     source_text_query: Callable[[object, str], object | None] | None = None
     source_text_health: Callable[[object], dict[str, int]] | None = None
+    embedding_text_normalizer: Callable[[str], str] | None = None
 
 
 @dataclass(frozen=True)

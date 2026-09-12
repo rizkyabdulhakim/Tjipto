@@ -11,6 +11,7 @@ import {
   askLegal,
   mapAskResponseToCitations,
   mapAskResponseToDocumentSource,
+  mapAskResponseToDocumentSources,
   mapAskResponseToSupportGroups,
 } from "./lib/api";
 import { Menu, SquarePen } from "lucide-react";
@@ -29,6 +30,7 @@ export default function App() {
   const [hasChat, setHasChat] = useState(conversation.length > 0);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [clarification, setClarification] = useState<{ id: string } | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCompactNav, setPanelCompactNav] = useState(false);
@@ -68,17 +70,18 @@ export default function App() {
     setHasChat(false);
     setRoute("chat");
     setActiveCitation(null);
+    setClarification(null);
     setMobileNavOpen(false);
   };
 
-  const submit = async (value: string, clarificationContext?: string, displayValue = value) => {
+  const submit = async (value: string) => {
     if (!hasChat) setHasChat(true);
     setRoute("chat");
-    setActiveCitation(null);
+    if (window.innerWidth < 768) setActiveCitation(null);
     const userMsg: TMessage = {
       id: "u_" + Date.now(),
       role: "user",
-      content: displayValue,
+      content: value,
     };
     const asstId = "a_" + Date.now();
     setMessages((prev) => [
@@ -94,14 +97,18 @@ export default function App() {
     setIsStreaming(true);
 
     try {
-      const response = await askLegal(value, clarificationContext);
+      const response = await askLegal(value, clarification ?? undefined);
+      setClarification(response.clarification ? { id: response.clarification.id } : null);
       const citations = mapAskResponseToCitations(response);
       const documentSource = mapAskResponseToDocumentSource(response);
+      const documentCollection = mapAskResponseToDocumentSources(response);
       const supportGroups = mapAskResponseToSupportGroups(response);
+      const messageCitations = [...citations, ...documentCollection, ...(documentSource ? [documentSource] : [])];
       const content = response.kind === "document"
         ? response.document?.label ?? "Dokumen sumber tersedia."
+        : response.kind === "documents"
+          ? `${response.documents?.length ?? 0} dokumen sumber terverifikasi tersedia.`
         : answerTextOrFallback(response);
-      setActiveCitation(documentSource);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === asstId
@@ -109,12 +116,16 @@ export default function App() {
                 ...m,
                 content,
                 status: "complete",
-                citations: citations.length ? citations : undefined,
+                citations: messageCitations.length ? messageCitations : undefined,
+                documentCollection: documentCollection.length ? documentCollection : undefined,
                 supportGroups: supportGroups.length ? supportGroups : undefined,
-                clarificationOptions: (response.clarification_options ?? [])
-                  .filter((option) => option.label && option.context_target)
-                  .map((option) => ({ contextTarget: option.context_target as string, label: option.label as string })),
-                clarificationQuery: response.status === "clarification_required" ? value : undefined,
+                researchContext: response.operation || response.source_scopes?.length || response.sufficiency
+                  ? {
+                      operation: response.operation,
+                      sourceScopes: response.source_scopes ?? [],
+                      sufficiency: response.sufficiency?.status,
+                    }
+                  : undefined,
               }
             : m,
         ),
@@ -135,9 +146,6 @@ export default function App() {
       setIsStreaming(false);
     }
   };
-
-  const clarify = (query: string, contextTarget: string, label: string) =>
-    submit(query, contextTarget, `${query}\nKonteks sumber: ${label}`);
 
   const stop = () => setIsStreaming(false);
   const allCitations = messages.flatMap((message) => message.citations ?? []);
@@ -259,7 +267,6 @@ export default function App() {
                 <ChatView
                   messages={messages}
                   onSubmit={submit}
-                  onClarify={clarify}
                   isStreaming={isStreaming}
                   onStop={stop}
                   onCitationClick={setActiveCitation}

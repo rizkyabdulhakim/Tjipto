@@ -20,10 +20,10 @@ def _intent_cases() -> tuple[dict, ...]:
 
 
 class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
-    def test_generic_clarification_contains_no_corpus_vocabulary(self) -> None:
-        source = (ROOT / "src/tjipto/runtime/clarification.py").read_text(encoding="utf-8").casefold()
-        for term in ("atau", "pasal", "bab", "penandatangan", "wakil ketua"):
-            self.assertNotIn(term, source)
+    def test_removed_clarification_policy_has_no_runtime_or_corpus_owner(self) -> None:
+        self.assertFalse((ROOT / "src/tjipto/runtime/clarification.py").exists())
+        config = CorpusRegistry(ROOT).resolve("uud")
+        self.assertNotIn("clarification", config.settings)
 
     def test_uud_intent_terms_require_corpus_config(self) -> None:
         generic = intent_config_for("uud_1945")
@@ -35,6 +35,7 @@ class RuntimeNoHardcodedIntentContractTest(unittest.TestCase):
 
         config = CorpusRegistry(ROOT).resolve("uud")
         configured = intent_config_for(config.query_strategy, config)
+        self.assertNotIn("clarification", configured)
         self.assertIn("penetapan", configured["metadata_fields"])
         self.assertIn("relasi", configured["relation_words"])
         self.assertTrue(configured["structured_lookup_enabled"])

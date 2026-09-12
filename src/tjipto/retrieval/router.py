@@ -1,20 +1,67 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from tjipto.evidence.store import EvidenceStore
 from tjipto.retrieval.candidates import merge_ranked
-from tjipto.retrieval.dense import dense_search
+from tjipto.retrieval.dense import DenseEmbeddingProvider, dense_configured, dense_runtime_available, dense_search
 from tjipto.retrieval.metadata import (
     filter_evidence,
     has_metadata_target,
+    has_named_signatory,
     metadata_lookup,
     normalize_filters,
     public_filters,
 )
-from tjipto.corpora.source_arbitration import resolve_source_scope
+from tjipto.corpora.source_arbitration import resolve_source_scope, source_roles_for_query
+from tjipto.corpora.parser_dispatch import parse_legal_references
 from tjipto.retrieval.query import classify_intent, normalize_query
 from tjipto.retrieval.relations import amendment_relation_lookup, has_relation_target, relation_lookup
 from tjipto.retrieval.service import RetrievalService
+from tjipto.retrieval.hybrid import hybrid_search
 from tjipto.retrieval.structured import has_instrument_target, has_structured_target, structured_failure_reason, structured_lookup
+
+
+@dataclass(frozen=True)
+class RetrievalPlan:
+    reference_scope: tuple[str, ...]
+    document_scope: tuple[str, ...]
+    temporal_scope: str | None
+    requested_result: str
+    complexity: str
+    required_evidence_kind: str
+
+
+def _retrieval_plan(
+    corpus_id: str, query: str, intent: dict, scope, named_roles: tuple[str, ...], *, strategy: str, config, store
+) -> RetrievalPlan:
+    structured = has_structured_target(query, strategy=strategy, config=config)
+    relation = has_relation_target(query, strategy=getattr(config, "query_strategy", "generic"), config=config)
+    metadata = has_metadata_target(query, strategy=getattr(config, "query_strategy", "generic"), config=config, store=store)
+    evidence_kind = (
+        "relation"
+        if relation
+        else "metadata"
+        if metadata
+        else "structured"
+        if structured
+        else "citation"
+        if intent["intent"] == "exact_citation"
+        else "lexical"
+    )
+    roles = tuple(named_roles or scope.roles or ((scope.role,) if scope.role else ()))
+    try:
+        references = tuple(str(row["reference"]) for row in parse_legal_references(corpus_id, query, config=config))
+    except ValueError:
+        references = ()
+    return RetrievalPlan(
+        reference_scope=references,
+        document_scope=roles,
+        temporal_scope=scope.temporal,
+        requested_result=str(intent["intent"]),
+        complexity="multi_document" if len(roles) > 1 else "single_document",
+        required_evidence_kind=evidence_kind,
+    )
 
 
 def route_retrieval(
@@ -29,15 +76,18 @@ def route_retrieval(
     route: str = "auto",
     metadata_filters: dict | None = None,
     relation_family: str | None = None,
+    allow_structured_fallback: bool = False,
+    dense_provider: DenseEmbeddingProvider | None = None,
 ) -> dict:
     config = getattr(store, "config", None)
     query_strategy = getattr(config, "query_strategy", "generic")
     structured_strategy = getattr(config, "structured_strategy", "generic")
     normalized = normalize_query(query, strategy=query_strategy, config=config)
     scope = resolve_source_scope(normalized["normalized_query"], strategy=query_strategy, config=config)
+    named_roles = source_roles_for_query(normalized["normalized_query"], strategy=query_strategy, config=config)
     filters = normalize_filters(metadata_filters, config=config)
     if "source_role" not in filters:
-        if scope.explicit:
+        if scope.explicit and len(named_roles) <= 1:
             filters = dict(filters) | {"source_role": scope.role}
     applied_filters = public_filters(filters)
     corpus_supported = store is not None
@@ -48,13 +98,21 @@ def route_retrieval(
         strategy=query_strategy,
         config=config,
     )
+    plan = _retrieval_plan(
+        corpus_id,
+        normalized["normalized_query"],
+        intent,
+        scope,
+        named_roles,
+        strategy=structured_strategy,
+        config=config,
+        store=store,
+    )
     if (
         "source_role" not in filters
         and not scope.unresolved
         and scope.role
-        and (intent["intent"] == "exact_citation" or has_structured_target(
-            normalized["normalized_query"], strategy=structured_strategy, config=config
-        ))
+        and plan.required_evidence_kind in {"citation", "structured"}
         and not has_instrument_target(normalized["normalized_query"], strategy=structured_strategy, config=config)
     ):
         filters = dict(filters) | {"source_role": scope.role}
@@ -78,6 +136,7 @@ def route_retrieval(
             "route": "unsupported_corpus",
             "reason": "unsupported_corpus",
         }
+    dense_enabled = dense_configured(store)
     if filters.get("_error"):
         return envelope | {
             "status": "invalid_filter",
@@ -85,13 +144,14 @@ def route_retrieval(
             "reason": filters["_error"],
             "invalid_filters": filters.get("_invalid_filters", ()),
         }
-    if scope.unresolved and "source_role" not in filters and not has_relation_target(
-        normalized["normalized_query"], strategy=structured_strategy, config=config
+    if (
+        scope.unresolved
+        and "source_role" not in filters
+        and plan.required_evidence_kind != "relation"
+        and not has_named_signatory(store, normalized["normalized_query"])
     ):
-        if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config, store=store):
-            source_roles = tuple(
-                sorted({row.get("source_role") for row in store.document_metadata if row.get("source_role")})
-            )
+        if plan.required_evidence_kind == "metadata":
+            source_roles = tuple(sorted({row.get("source_role") for row in store.document_metadata if row.get("source_role")}))
             return envelope | {
                 "status": "no_results",
                 "route": "metadata_scope_unresolved",
@@ -105,12 +165,28 @@ def route_retrieval(
             "reason": "unresolved_source_scope",
         }
     if route == "dense":
-        return envelope | dense_search(store, normalized["normalized_query"], limit)
+        dense_limit = len(store.evidence) if filters or scope.role else limit
+        dense = dense_search(store, normalized["normalized_query"], dense_limit)
+        dense_matches = filter_evidence(dense.get("matches", ()), filters)
+        dense_matches = tuple(
+            row | {"route_sources": tuple(dict.fromkeys(("dense", *(row.get("route_sources") or ()))))} for row in dense_matches
+        )
+        if "source_role" not in filters:
+            preferred = tuple(row for row in dense_matches if row.get("source_role") == scope.role)
+            if preferred:
+                dense_matches = preferred
+        return (
+            envelope
+            | dense
+            | {
+                "status": dense.get("status") if dense.get("status") != "found" else "found" if dense_matches else "no_results",
+                "matches": tuple(dense_matches[:limit]),
+                "reason": None if dense_matches else dense.get("reason", "no_results"),
+            }
+        )
 
     service = RetrievalService(store)
-    amendment_target, amendment_edges = amendment_relation_lookup(
-        store, normalized["normalized_query"], relation_family=relation_family
-    )
+    amendment_target, amendment_edges = amendment_relation_lookup(store, normalized["normalized_query"], relation_family=relation_family)
     if amendment_target.get("mode") is not None and allow_relation:
         return envelope | {
             "status": "found",
@@ -142,8 +218,10 @@ def route_retrieval(
     # relation-shaped query (for example a deleted chapter).  Only fail the
     # generic legal-relation route after that configured structured operation
     # has had a chance to resolve it.
-    if allow_relation and has_relation_target(normalized["normalized_query"], strategy=query_strategy, config=config) and not has_instrument_target(
-        normalized["normalized_query"], strategy=structured_strategy, config=config
+    if (
+        allow_relation
+        and plan.required_evidence_kind == "relation"
+        and not has_instrument_target(normalized["normalized_query"], strategy=structured_strategy, config=config)
     ):
         return envelope | {
             "status": "no_results",
@@ -181,9 +259,7 @@ def route_retrieval(
             "reason": "filters_removed_all",
         }
 
-    if intent["intent"] == "exact_citation" and not structured_all and not has_structured_target(
-        normalized["normalized_query"], strategy=structured_strategy, config=config
-    ):
+    if plan.required_evidence_kind == "citation" and not structured_all:
         matches = tuple(service.citation(normalized["normalized_query"]))
         filtered = filter_evidence(matches, filters)
         if filtered:
@@ -235,7 +311,7 @@ def route_retrieval(
             "intent": "metadata_lookup",
             "reason": "filters_removed_all",
         }
-    if has_metadata_target(normalized["normalized_query"], strategy=query_strategy, config=config, store=store):
+    if plan.required_evidence_kind == "metadata":
         return envelope | {
             "status": "no_results",
             "route": "metadata_not_found",
@@ -301,7 +377,7 @@ def route_retrieval(
             "intent": "no_results",
             "reason": "filters_removed_all",
         }
-    if has_structured_target(normalized["normalized_query"], strategy=structured_strategy, config=config):
+    if plan.required_evidence_kind == "structured" and not allow_structured_fallback:
         return envelope | {
             "status": "no_results",
             "route": "structured_not_found",
@@ -310,12 +386,58 @@ def route_retrieval(
             or "structured_not_found",
         }
 
-    matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))
-    filtered = filter_evidence(matches, filters)
+    retrieval_settings: dict = getattr(config, "setting", lambda *_: {})("retrieval", {}) or {}
+    sparse_matches = tuple(service.search(normalized["normalized_query"], len(store.evidence)))
+    sparse_filtered = filter_evidence(sparse_matches, filters)
     if "source_role" not in filters:
-        preferred = tuple(row for row in filtered if row.get("source_role") == scope.role)
+        preferred = tuple(row for row in sparse_filtered if row.get("source_role") == scope.role)
         if preferred:
-            filtered = preferred
+            sparse_filtered = preferred
+    lexical_complete = bool(sparse_filtered and sparse_filtered[0].get("lexical_complete_coverage") is True)
+    if route == "auto" and lexical_complete:
+        ranked, trace = merge_ranked(store, {"bm25": sparse_filtered}, filters, expand_graph=False)
+        return envelope | {
+            "status": "found",
+            "route": "bm25",
+            "intent": "natural_language",
+            "matches": ranked[:limit],
+            "expansion_trace": trace,
+            "dense_configured": dense_enabled,
+            "hybrid_active": False,
+        }
+    dense_ready = dense_runtime_available(store)
+    hybrid_enabled = route == "hybrid" or (route == "auto" and retrieval_settings.get("mode") == "hybrid" and dense_ready)
+    if hybrid_enabled:
+        fused = hybrid_search(
+            store,
+            normalized["normalized_query"],
+            limit,
+            candidate_limit=retrieval_settings.get("hybrid_candidate_limit"),
+            rrf_k=int(retrieval_settings.get("rrf_k", 60)),
+            filters=filters,
+            preferred_source_role=scope.role,
+            provider=dense_provider,
+        )
+        filtered = filter_evidence(fused.get("matches", ()), filters)
+        if "source_role" not in filters:
+            preferred = tuple(row for row in filtered if row.get("source_role") == scope.role)
+            if preferred:
+                filtered = preferred
+        return (
+            envelope
+            | fused
+            | {
+                "status": "found" if filtered else "no_results",
+                "matches": tuple(filtered[:limit]),
+                "reason": None if filtered else ("filters_removed_all" if fused.get("matches") else fused.get("reason", "no_results")),
+                "intent": "natural_language",
+                "dense_configured": dense_enabled,
+                "hybrid_active": fused.get("route") == "hybrid",
+            }
+        )
+
+    matches = sparse_matches
+    filtered = sparse_filtered
     if filtered:
         # Lexical rows are candidates only; graph proximity cannot turn a
         # neighbouring provision into answer support.
@@ -326,6 +448,8 @@ def route_retrieval(
             "intent": "natural_language",
             "matches": ranked[:limit],
             "expansion_trace": trace,
+            "dense_configured": dense_enabled,
+            "hybrid_active": False,
         }
     if matches:
         return envelope | {
@@ -334,4 +458,11 @@ def route_retrieval(
             "intent": "no_results",
             "reason": "filters_removed_all",
         }
-    return envelope | {"status": "no_results", "route": "no_results", "intent": "no_results", "reason": "no_results"}
+    return envelope | {
+        "status": "no_results",
+        "route": "no_results",
+        "intent": "no_results",
+        "reason": "no_results",
+        "dense_configured": dense_enabled,
+        "hybrid_active": False,
+    }

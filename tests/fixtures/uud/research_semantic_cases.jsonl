@@ -1,0 +1,12 @@
+{"case_id":"comparison_beda","query":"beda kewenangan DPR dan DPD","required_ids":["entity_1","entity_2"]}
+{"case_id":"comparison_bedakan","query":"bedakan kewenangan DPR dan DPD","required_ids":["entity_1","entity_2"]}
+{"case_id":"comparison_komparasikan","query":"komparasikan kewenangan DPR versus DPD","required_ids":["entity_1","entity_2"]}
+{"case_id":"procedure_alur","query":"alur pemberhentian Presiden","required_ids":["grounds","procedure_basis","constitutional_review","assembly_decision"]}
+{"case_id":"procedure_mekanisme","query":"mekanisme pemakzulan Presiden","required_ids":["grounds","procedure_basis","constitutional_review","assembly_decision"]}
+{"case_id":"procedure_langkah","query":"langkah pemberhentian Presiden","required_ids":["grounds","procedure_basis","constitutional_review","assembly_decision"]}
+{"case_id":"multi_serta","query":"lingkungan hidup serta pendidikan","required_ids":["dimension_1","dimension_2"]}
+{"case_id":"multi_maupun","query":"lingkungan hidup maupun pendidikan","required_ids":["dimension_1","dimension_2"]}
+{"case_id":"multi_sekaligus","query":"lingkungan hidup sekaligus pendidikan","required_ids":["dimension_1","dimension_2"]}
+{"case_id":"relation_kaitan","query":"kaitan DPR dan MK dalam pemakzulan","required_ids":["relation_1","relation_2"]}
+{"case_id":"relation_peran","query":"peran MK dan DPR dalam pemberhentian Presiden","required_ids":["relation_1","relation_2","relation_3"]}
+{"case_id":"authority_morphology","query":"wewenang Presiden menurut UUD","required_ids":["authority"]}

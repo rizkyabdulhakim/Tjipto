@@ -21,7 +21,9 @@ def main(argv: list[str] | None = None) -> int:
     cases = _read_jsonl(args.cases)
     repo_root = args.repo_root.resolve()
     service_type, request_handler = _runtime(repo_root)
-    service = service_type(repo_root)
+    # Evaluate evidence-bounded publication independently of external wording
+    # and planning providers. Their live contract is covered separately.
+    service = service_type(repo_root, answer_provider=None, planning_provider=None)
     results = [_evaluate(case, service, request_handler) for case in cases]
     report = {
         "status": "pass" if all(row["passed"] for row in results) else "fail",
@@ -72,8 +74,6 @@ def _evaluate(case: dict[str, Any], service, request_handler) -> dict[str, Any]:
     _expect(errors, "status", case["expected_status"], response.get("status"))
     _expect(errors, "route", case["expected_route"], response.get("route"))
     _expect(errors, "behavior", case["behavior"], _behavior(response.get("status")))
-    if case.get("expected_clarification_kind"):
-        _expect(errors, "clarification_kind", case["expected_clarification_kind"], response.get("clarification_kind"))
     for item in case["required_support_ids"]:
         if item not in support_ids:
             errors.append(f"missing_support:{item}")
@@ -158,8 +158,6 @@ def _ratio(numerator: int, denominator: int) -> float | None:
 
 
 def _behavior(status: object) -> str:
-    if status == "clarification_required":
-        return "clarify"
     if status == "insufficient_evidence":
         return "abstain"
     return "answer"

@@ -294,10 +294,12 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "old_reference_range", "old_reference_range_kind", "page_number", "quoted_text", "recovery_capability",
         "recovery_status", "relation_id", "relation_type", "runtime_loadable", "source_document_id", "source_label",
         "source_legal_unit_document_id", "source_legal_unit_id", "source_legal_unit_role", "source_pdf_sha256",
-        "source_role", "source_support_exact", "substantive_change", "source_conflict", "anomaly",
+        "source_role", "source_support_exact", "substantive_change", "source_conflict", "anomaly", "operation_candidates",
         "support_class", "target_bbox_refs", "target_citation", "target_geometry_method", "target_geometry_source_ids",
         "target_document_id", "target_label", "target_legal_unit_id", "target_precision", "target_source_role", "target_text_span_ids",
         "text_span_ids", "trace_only_reason", "validator_status", "viewer_highlightable",
+        "predecessor_legal_unit_id", "successor_legal_unit_id", "predecessor_text_span_ids", "successor_text_span_ids",
+        "predecessor_bbox_refs", "successor_bbox_refs", "predecessor_pdf_sha256", "successor_pdf_sha256", "comparison_basis",
     }),
     "bbox_registry": frozenset({
         "bbox_id", "bbox_precision", "coordinate_origin", "coordinate_space", "corpus_id", "evidence_exists",
@@ -357,7 +359,8 @@ ARTIFACT_ALLOWED_FIELDS: dict[str, frozenset[str]] = {
         "artifact_status", "confidence_policy", "derivation_basis", "derivation_method", "derivation_reason", "edge_id", "edge_type",
         "object_role", "provenance_ref", "provenance_ref_kind", "provenance_support", "reason_code", "relation_id", "relation_type", "derived_from_edge_id",
         "runtime_loadable", "source_document_id", "source_id", "source_node_type", "source_role", "support_evidence_ids", "relation_projection",
-        "support_exception_ids", "support_kind", "support_relation_ids", "target_id", "target_node_type", "temporal_context", "validation_status",
+        "support_exception_ids", "support_kind", "support_relation_ids", "target_id", "target_node_type", "temporal_context", "validation_status", "operation_candidates",
+        "source_legal_unit_id", "target_legal_unit_id", "target_citation", "article_relation_ref",
     }),
     "graph_nodes": frozenset({
         "artifact_status", "bbox_id", "bbox_precision", "bbox_status", "citation", "classification", "conflict_type", "final_evidence_id",

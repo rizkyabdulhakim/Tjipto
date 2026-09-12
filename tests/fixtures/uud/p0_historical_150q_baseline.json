@@ -1,0 +1,1379 @@
+{
+  "artifact_type": "historical_evaluation_catalog",
+  "catalog_digest": "8f0cdb28a93330a2e3eb96c7baa075442d4f0c5c1eab9e739f4c7edf10dd8962",
+  "classification_counts": {
+    "EXPECTED_CORPUS_GAP": 25,
+    "FAIL": 18,
+    "PARTIAL": 86,
+    "PASS": 21
+  },
+  "contract_role": "historical_baseline_not_gold",
+  "row_count": 150,
+  "rows": [
+    {
+      "index": 1,
+      "query": "halo",
+      "classification": "FAIL",
+      "status": "no_results",
+      "route": "no_results",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 2,
+      "query": "hai",
+      "classification": "FAIL",
+      "status": "no_results",
+      "route": "no_results",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 3,
+      "query": "bisa bantu?",
+      "classification": "FAIL",
+      "status": "no_results",
+      "route": "no_results",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 4,
+      "query": "terima kasih",
+      "classification": "FAIL",
+      "status": "no_results",
+      "route": "no_results",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 5,
+      "query": "jelaskan lagi jawaban sebelumnya",
+      "classification": "FAIL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 6,
+      "query": "selamat pagi",
+      "classification": "FAIL",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 7,
+      "query": "jumlah dokumen",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "current_fact_unsupported",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 8,
+      "query": "jumlah PDF/halaman",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "current_fact_unsupported",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 9,
+      "query": "jumlah pasal",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "structure_count",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 10,
+      "query": "jumlah hubungan",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "current_fact_unsupported",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 11,
+      "query": "jumlah amandemen",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "structure_count",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 12,
+      "query": "Pasal 28E ayat (3) isinya apa?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 13,
+      "query": "Pasal 29 ayat (1) isinya apa?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 14,
+      "query": "Pasal 28 isinya apa?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 15,
+      "query": "Pasal 29 isinya apa?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 16,
+      "query": "bab setelah Bab X apa?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "structural_navigation",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 17,
+      "query": "bab sebelum Bab XI apa?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "structural_navigation",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 18,
+      "query": "hubungan Bab X dan Bab XI",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "legal_relation",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 19,
+      "query": "pasal setelah Pasal 28E apa?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "structural_navigation",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 20,
+      "query": "pasal sebelum Pasal 29 apa?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "structural_navigation",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 21,
+      "query": "hubungan Pasal 29 ayat (1) dan ayat (2)",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "legal_reference",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 22,
+      "query": "hubungan Pasal 28 dan Pasal 29",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 23,
+      "query": "apakah Pasal 29 ayat (2) menjelaskan ayat (1)?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 24,
+      "query": "hubungan Pasal 28E dan Pasal 29",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 7,
+      "viewer_count": 7
+    },
+    {
+      "index": 25,
+      "query": "hubungan Pasal 27 dan Pasal 28",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 5,
+      "viewer_count": 5
+    },
+    {
+      "index": 26,
+      "query": "hubungan Pasal 28 dan Pasal 28E",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 5,
+      "viewer_count": 5
+    },
+    {
+      "index": 27,
+      "query": "hubungan Pasal 30 dan Pasal 31",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 12,
+      "viewer_count": 12
+    },
+    {
+      "index": 28,
+      "query": "hubungan Pasal 31 dan Pasal 32",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 9,
+      "viewer_count": 9
+    },
+    {
+      "index": 29,
+      "query": "hubungan Pasal 33 dan Pasal 34",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 11,
+      "viewer_count": 11
+    },
+    {
+      "index": 30,
+      "query": "hubungan Pasal 1 dan Pasal 2",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 8,
+      "viewer_count": 8
+    },
+    {
+      "index": 31,
+      "query": "hubungan UUD amandemen pertama dan naskah konsolidasi",
+      "classification": "FAIL",
+      "status": "limited_answer",
+      "route": "document_relation",
+      "supports_count": 1,
+      "viewer_count": 0
+    },
+    {
+      "index": 32,
+      "query": "hubungan UUD sebelum amandemen dan setelah amandemen",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 345,
+      "viewer_count": 345
+    },
+    {
+      "index": 33,
+      "query": "perbedaan UUD sebelum amandemen dan setelah amandemen",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 345,
+      "viewer_count": 345
+    },
+    {
+      "index": 34,
+      "query": "perbedaan UUD amandemen pertama dan ketiga",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 111,
+      "viewer_count": 111
+    },
+    {
+      "index": 35,
+      "query": "apa perubahan pada amandemen pertama?",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "instrument_unresolved",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 36,
+      "query": "kapan amandemen ketiga ditetapkan?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "metadata_fact",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 37,
+      "query": "kapan amandemen pertama ditetapkan?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "metadata_fact",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 38,
+      "query": "di mana UUD amandemen ketiga ditetapkan?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "metadata_fact",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 39,
+      "query": "kota mana penetapan UUD amandemen pertama?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "metadata_fact",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 40,
+      "query": "siapa yang menandatangani UUD amandemen pertama?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "metadata_fact",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 41,
+      "query": "bandingkan UUD sebelum dan sesudah amandemen",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 345,
+      "viewer_count": 345
+    },
+    {
+      "index": 42,
+      "query": "bandingkan Pasal 28 dan Pasal 29",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 43,
+      "query": "bandingkan Bab X dan Bab XI",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "legal_reference",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 44,
+      "query": "bandingkan Pasal 29 ayat (1) dan ayat (2)",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "legal_reference",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 45,
+      "query": "bandingkan Pasal 28E dan Pasal 29",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 7,
+      "viewer_count": 7
+    },
+    {
+      "index": 46,
+      "query": "bandingkan naskah asli dan naskah konsolidasi",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 345,
+      "viewer_count": 345
+    },
+    {
+      "index": 47,
+      "query": "bandingkan naskah asli dan amandemen keempat",
+      "classification": "FAIL",
+      "status": "limited_answer",
+      "route": "document_relation",
+      "supports_count": 135,
+      "viewer_count": 134
+    },
+    {
+      "index": 48,
+      "query": "bandingkan Pasal 28 dan 28E",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "legal_reference",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 49,
+      "query": "bandingkan aturan agama dan kebebasan berpendapat",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 50,
+      "query": "bandingkan Pasal 7 sebelum dan sesudah amandemen",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 6,
+      "viewer_count": 6
+    },
+    {
+      "index": 51,
+      "query": "berikan legal opinion tentang kebebasan berpendapat di UUD",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 52,
+      "query": "berikan legal opinion tentang kebebasan beragama",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 39,
+      "viewer_count": 39
+    },
+    {
+      "index": 53,
+      "query": "berikan legal opinion hubungan Pasal 28 dan Pasal 29",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 54,
+      "query": "anak saya dilarang ke sekolah karena agamanya berbeda, pasal berapa yang cocok?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 55,
+      "query": "berikan legal opinion tentang hak pendidikan",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 9,
+      "viewer_count": 9
+    },
+    {
+      "index": 56,
+      "query": "apa batas kebebasan berpendapat?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 57,
+      "query": "berikan legal opinion 4 paragraf tentang kebebasan berpendapat",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 58,
+      "query": "berikan legal opinion tentang Pasal 29 ayat (2)",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 2,
+      "viewer_count": 2
+    },
+    {
+      "index": 59,
+      "query": "analisis perlindungan kebebasan beragama",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 39,
+      "viewer_count": 39
+    },
+    {
+      "index": 60,
+      "query": "jelaskan Pasal 29 dengan bahasa bayi",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 61,
+      "query": "jelaskan kebebasan berpendapat di Pasal 28 dengan bahasa bayi",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 62,
+      "query": "jelaskan Pasal 29 dalam bahasa mudah",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 63,
+      "query": "jawab dalam 2 paragraf tentang Pasal 28",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 64,
+      "query": "jawab dalam 4 paragraf",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 65,
+      "query": "buat 3 poin tentang Pasal 29",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 66,
+      "query": "jelaskan Pasal 28E dengan sederhana",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 67,
+      "query": "jelaskan Pasal 1 dalam satu kalimat",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 68,
+      "query": "buat tabel perbandingan Pasal 28 dan Pasal 29",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 69,
+      "query": "jawab singkat tentang Pasal 28",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 70,
+      "query": "jelaskan Pasal 29 untuk anak",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 71,
+      "query": "jelaskan lalu bandingkan Pasal 28 dan Pasal 29",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 72,
+      "query": "siapa Amien Rais dan apa perannya dalam amandemen?",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "metadata_fact",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 73,
+      "query": "jelaskan Pasal 28E lalu berikan opini",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 74,
+      "query": "jelaskan Pasal 28 dengan nomor halaman dan hubungan Pasal 29",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 75,
+      "query": "jelaskan dampak perubahan sebelum dan sesudah amandemen",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 345,
+      "viewer_count": 345
+    },
+    {
+      "index": 76,
+      "query": "apa itu aturan tambahan dan aturan peralihan?",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "legal_reference",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 77,
+      "query": "jelaskan hubungan ayat-ayat Pasal 29",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "legal_relation",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 78,
+      "query": "anak dilarang sekolah karena keyakinan, analisis dan sumbernya",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 2,
+      "viewer_count": 2
+    },
+    {
+      "index": 79,
+      "query": "siapa Amien Rais dan kapan perubahan dilakukan?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "metadata_fact",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 80,
+      "query": "bandingkan naskah asli dan naskah konsolidasi",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 345,
+      "viewer_count": 345
+    },
+    {
+      "index": 81,
+      "query": "apa arti hierarki peraturan perundang-undangan?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 82,
+      "query": "berikan dokumen UUD sebelum amandemen",
+      "classification": "FAIL",
+      "status": "answer_ready",
+      "route": "source_document",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 83,
+      "query": "apa aturan peralihan?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 84,
+      "query": "apa perlindungan pendidikan dalam UUD?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 85,
+      "query": "di mana perlindungan agama diatur?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 86,
+      "query": "di mana kebebasan berpendapat diatur?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 87,
+      "query": "dokumen UUD yang mana yang tersedia?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 88,
+      "query": "berikan naskah asli UUD",
+      "classification": "FAIL",
+      "status": "answer_ready",
+      "route": "source_document",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 89,
+      "query": "apa isi Pasal 30 ayat (2)?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 90,
+      "query": "apa isi Pasal 31 ayat (2)?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 91,
+      "query": "apa hubungan Pembukaan dan Pasal 29?",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "legal_relation",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 92,
+      "query": "hubungan Pasal 28E dan Pasal 29",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 7,
+      "viewer_count": 7
+    },
+    {
+      "index": 93,
+      "query": "jelaskan aturan peralihan dan aturan tambahan",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "legal_reference",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 94,
+      "query": "jelaskan Pasal 29 ayat (1) secara ringkas",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 22,
+      "viewer_count": 22
+    },
+    {
+      "index": 95,
+      "query": "apa isi Pasal 28J?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 96,
+      "query": "di bab mana hak asasi manusia dibahas?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "structural_navigation",
+      "supports_count": 21,
+      "viewer_count": 21
+    },
+    {
+      "index": 97,
+      "query": "berapa jumlah bab dalam naskah konsolidasi",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "structure_count",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 98,
+      "query": "apa sumber resmi UUD yang digunakan?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 99,
+      "query": "tampilkan halaman untuk Pasal 29",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 100,
+      "query": "apa perbedaan naskah asli dan naskah perubahan?",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 101,
+      "query": "halo",
+      "classification": "FAIL",
+      "status": "no_results",
+      "route": "no_results",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 102,
+      "query": "apa kabar?",
+      "classification": "FAIL",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 103,
+      "query": "selamat pagi",
+      "classification": "FAIL",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 104,
+      "query": "terima kasih",
+      "classification": "FAIL",
+      "status": "no_results",
+      "route": "no_results",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 105,
+      "query": "bisa bantu saya?",
+      "classification": "FAIL",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 106,
+      "query": "buatkan draft surat permohonan keberatan kepada sekolah karena diskriminasi agama",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 107,
+      "query": "buat draft surat kuasa untuk pengacara",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 108,
+      "query": "buat draft akta notaris untuk pendirian perseroan, dengan catatan perlu pemeriksaan notaris",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 109,
+      "query": "buat draft legal notice untuk pelanggaran kontrak",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 110,
+      "query": "buat draft kronologi perkara untuk konsultasi hukum",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 111,
+      "query": "buat memo hukum tentang Pasal 28J UUD",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 112,
+      "query": "buat memo perbandingan UUD sebelum dan sesudah amandemen",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 345,
+      "viewer_count": 345
+    },
+    {
+      "index": 113,
+      "query": "buat memo singkat untuk klien tentang kebebasan beragama",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 114,
+      "query": "buat memo risiko klausul pembatasan kebebasan berpendapat",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 115,
+      "query": "buat memo isu kewenangan lembaga negara berdasarkan UUD",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "metadata_fact",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 116,
+      "query": "apa langkah pengacara untuk kasus diskriminasi agama di sekolah?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 117,
+      "query": "susun analisis issue rule application conclusion tentang Pasal 29 ayat (2)",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 2,
+      "viewer_count": 2
+    },
+    {
+      "index": 118,
+      "query": "buat checklist bukti untuk perkara larangan sekolah karena agama",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 119,
+      "query": "susun strategi legal research untuk kebebasan berpendapat",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 120,
+      "query": "pertanyaan apa yang perlu ditanyakan pengacara kepada klien?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 121,
+      "query": "apa tugas notaris dalam pendirian badan hukum?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 122,
+      "query": "dokumen apa yang diperlukan untuk pendirian PT di hadapan notaris?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 123,
+      "query": "buat checklist pemeriksaan akta notaris",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 124,
+      "query": "apa perbedaan notaris dan PPAT?",
+      "classification": "PARTIAL",
+      "status": "no_results",
+      "route": "no_results",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 125,
+      "query": "periksa klausul akta ini secara konseptual dan sebutkan hal yang perlu diverifikasi notaris",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 126,
+      "query": "apa peran jaksa dalam perkara pidana?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 127,
+      "query": "bukti apa yang perlu diperhatikan jaksa dalam menyusun perkara?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 128,
+      "query": "apa perbedaan surat dakwaan dan tuntutan?",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "no_results",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 129,
+      "query": "buat analisis kronologi perkara dari sudut pandang penuntut umum",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "research",
+      "supports_count": 21,
+      "viewer_count": 21
+    },
+    {
+      "index": 130,
+      "query": "apa batas etis bantuan AI untuk jaksa?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 131,
+      "query": "bagaimana hakim menilai isu konstitusional secara netral?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 132,
+      "query": "susun unsur-unsur yang perlu dibuktikan dalam perkara ini",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 133,
+      "query": "buat ringkasan netral argumen pihak pemohon dan termohon",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 134,
+      "query": "apa beban pembuktian dalam perkara hukum?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 135,
+      "query": "buat alternatif argumen untuk kedua pihak tanpa memihak",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "legal_reference",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 136,
+      "query": "ada berapa pasal di UUD ini?",
+      "classification": "FAIL",
+      "status": "answer_ready",
+      "route": "structure_count",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 137,
+      "query": "pasal tentang kebebasan ada di mana saja?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 18,
+      "viewer_count": 18
+    },
+    {
+      "index": 138,
+      "query": "pasal HAM ada di mana?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 139,
+      "query": "bab yang membahas HAM apa?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "structural_navigation",
+      "supports_count": 21,
+      "viewer_count": 21
+    },
+    {
+      "index": 140,
+      "query": "ada berapa bab dalam UUD ini?",
+      "classification": "FAIL",
+      "status": "answer_ready",
+      "route": "structure_count",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 141,
+      "query": "hubungan Pasal 28 dan Pasal 29 apa?",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 4,
+      "viewer_count": 4
+    },
+    {
+      "index": 142,
+      "query": "apa sumber resmi yang mendukung jawaban tentang Pasal 29?",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 143,
+      "query": "bandingkan Pasal 28 sebelum dan sesudah amandemen",
+      "classification": "PARTIAL",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 6,
+      "viewer_count": 6
+    },
+    {
+      "index": 144,
+      "query": "tampilkan sitasi exact untuk Pasal 29 ayat (2) dan halaman PDF-nya",
+      "classification": "PASS",
+      "status": "answer_ready",
+      "route": "legal_reference",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 145,
+      "query": "apa hubungan dokumen perubahan pertama dan naskah konsolidasi?",
+      "classification": "FAIL",
+      "status": "limited_answer",
+      "route": "document_relation",
+      "supports_count": 1,
+      "viewer_count": 0
+    },
+    {
+      "index": 146,
+      "query": "saya mengunggah kontrak, bagaimana cara sistem memeriksa pasal berisiko?",
+      "classification": "PARTIAL",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 147,
+      "query": "bagaimana panel PDF menampilkan halaman dan highlight BBox?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "no_results",
+      "route": "no_results",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 148,
+      "query": "saya punya foto dokumen hukum, apa yang harus diverifikasi?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    },
+    {
+      "index": 149,
+      "query": "bagaimana audio persidangan dianalisis dan diberi provenance?",
+      "classification": "EXPECTED_CORPUS_GAP",
+      "status": "insufficient_evidence",
+      "route": "lexical_fallback",
+      "supports_count": 0,
+      "viewer_count": 0
+    },
+    {
+      "index": 150,
+      "query": "jika pertanyaan di luar korpus, apa respons aman sistem?",
+      "classification": "PARTIAL",
+      "status": "limited_answer",
+      "route": "lexical_fallback",
+      "supports_count": 1,
+      "viewer_count": 1
+    }
+  ],
+  "schema": {
+    "source_columns": [
+      "Query",
+      "Decision",
+      "Status / route",
+      "Supports",
+      "Viewer"
+    ],
+    "supports_field": "supports_count",
+    "supports_semantics": "broader_public_support_count",
+    "viewer_field": "viewer_count",
+    "viewer_semantics": "viewer_resolvable_support_count"
+  },
+  "source_report_path": "reports/exact-head-audit-0097802-2026-09-09.md",
+  "source_report_sha256": "848e10ac1cdf2b953daa21591abd5b01ccb9d8138074f2a590bbd940d625907c"
+}

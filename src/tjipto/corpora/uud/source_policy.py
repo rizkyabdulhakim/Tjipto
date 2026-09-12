@@ -14,11 +14,26 @@ def normalize_semantic_text(value: str) -> str:
     return value if not value.startswith("Dihapus.") else value.split("****", 1)[0].strip()
 
 
+def normalize_retrieval_text(value: str) -> str:
+    """Restore lexical soft-hyphen evidence without changing source artifacts."""
+    value = unicodedata.normalize("NFKC", value or "").replace("\xa0", " ")
+    output: list[str] = []
+    for index, character in enumerate(value):
+        if character != "\u00ad":
+            output.append(character)
+            continue
+        previous = value[index - 1] if index else ""
+        following = value[index + 1] if index + 1 < len(value) else ""
+        if previous.isalnum() and following.isalnum():
+            output.append("-")
+    return re.sub(r"\s+", " ", "".join(output)).strip()
+
+
 def segment_source_line(raw_text: str) -> list[dict]:
     matches = list(SOURCE_MARKER_RE.finditer(raw_text))
     boundaries = [0] + [point for match in matches for point in (match.start(), match.end())] + [len(raw_text)]
     segments = []
-    for start, end in zip(boundaries, boundaries[1:]):
+    for start, end in zip(boundaries, boundaries[1:], strict=False):
         if start == end:
             continue
         marker = bool(SOURCE_MARKER_RE.fullmatch(raw_text[start:end]))

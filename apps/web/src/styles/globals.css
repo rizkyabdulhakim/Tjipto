@@ -215,7 +215,6 @@
 .tj-root .tj-r-sq-xl { border-radius: 34px; }
 
 /* Thinner lucide-react icon strokes for iOS feel */
-/* Thinner lucide-react icon strokes for iOS feel */
 .tj-root .lucide,
 .tj-root svg.lucide {
   stroke-width: 1.6;
@@ -225,27 +224,6 @@
 .tj-root.tj-dark .lucide,
 .tj-root.tj-dark svg.lucide {
   color: #ffffff;
-}
-
-/* Custom scrollbar for glass surfaces */
-.tj-root .tj-scroll::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-.tj-root .tj-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.tj-root .tj-scroll::-webkit-scrollbar-thumb {
-  background: var(--tj-border);
-  border-radius: 10px;
-}
-.tj-root .tj-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--tj-text-muted);
-}
-
-.tj-root .tj-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--tj-border) transparent;
 }
 
 /* Icon tile — rounded squircle with subtle gradient (iOS app icon vibe) */
@@ -303,6 +281,7 @@
 }
 
 /* Refined scrollbar */
+.tj-root .tj-scroll { scrollbar-width: thin; scrollbar-color: var(--tj-border) transparent; }
 .tj-root .tj-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
 .tj-root .tj-scroll::-webkit-scrollbar-track { background: transparent; }
 .tj-root .tj-scroll::-webkit-scrollbar-thumb {
@@ -415,5 +394,64 @@
   .tj-legal-status-card {
     background: color-mix(in srgb, var(--tj-surface) 88%, transparent);
     backdrop-filter: blur(18px) saturate(125%);
+  }
+}
+
+.tj-root .tj-pdf-scroll,
+.tj-root .tj-info-scroll {
+  --tj-evidence-scroll-thumb: color-mix(in srgb, var(--tj-text-primary) 26%, var(--tj-bg));
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: var(--tj-evidence-scroll-thumb) transparent;
+}
+
+.tj-root .tj-pdf-scroll::-webkit-scrollbar,
+.tj-root .tj-info-scroll::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.tj-root .tj-pdf-scroll::-webkit-scrollbar-track,
+.tj-root .tj-info-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tj-root .tj-pdf-scroll::-webkit-scrollbar-thumb,
+.tj-root .tj-info-scroll::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  background: var(--tj-evidence-scroll-thumb);
+  border: 3px solid var(--tj-surface);
+  border-radius: 999px;
+}
+
+.tj-root .tj-pdf-scroll::-webkit-scrollbar-thumb:hover,
+.tj-root .tj-info-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--tj-evidence-scroll-thumb);
+}
+
+.tj-root .tj-pdf-scroll:hover::-webkit-scrollbar-thumb,
+.tj-root .tj-info-scroll:hover::-webkit-scrollbar-thumb,
+.tj-root.tj-dark .tj-pdf-scroll:hover::-webkit-scrollbar-thumb,
+.tj-root.tj-dark .tj-info-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--tj-evidence-scroll-thumb);
+}
+
+@media (max-width: 767px) {
+  .tj-root .tj-pdf-scroll,
+  .tj-root .tj-info-scroll {
+    scrollbar-width: none;
+  }
+
+  .tj-root .tj-pdf-scroll::-webkit-scrollbar,
+  .tj-root .tj-info-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .tj-root .tj-pdf-scroll::-webkit-scrollbar,
+  .tj-root .tj-info-scroll::-webkit-scrollbar {
+    width: 16px;
+    height: 16px;
   }
 }

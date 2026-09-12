@@ -285,8 +285,3 @@ def _retrieval_unit_text(row: dict) -> str:
     prefix = " ".join([item for item in [row.get("citation"), *hierarchy] if item])
     separator = "\n" if row["source_role"] == "current_consolidated" and "\u00a0" in first_line else " "
     return f"{prefix}{separator}{row['quoted_text']}".strip()
-
-
-def _bbox_sample_refs(row: dict) -> list[str]:
-    refs = row.get("bbox_refs", [])
-    return [next((ref for ref in refs if ref.endswith("::0000")), refs[0])] if refs else []

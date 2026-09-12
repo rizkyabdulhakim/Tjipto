@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from urllib.request import Request, urlopen
 
-from tjipto.runtime.wording import valid_proposal
+from tjipto.runtime.wording import answer_prompt, valid_proposal
 
 
 class GeminiAnswerProvider:
@@ -15,16 +15,11 @@ class GeminiAnswerProvider:
         self._endpoint = endpoint.format(model=model)
         self._timeout = timeout
 
-    def propose(self, deterministic_answer: str) -> dict[str, object] | None:
-        if not deterministic_answer:
+    def propose(self, verified_context: str) -> dict[str, object] | None:
+        if not verified_context:
             return None
-        prompt = (
-            "Kembalikan JSON saja. Anda tidak boleh menulis fakta atau prosa. Pilih presentation 'direct' atau "
-            "'grounded' dan referenced_fact_ids ['deterministic_answer'].\n\n"
-            + json.dumps({"deterministic_answer": deterministic_answer}, ensure_ascii=False)
-        )
         payload = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "contents": [{"role": "user", "parts": [{"text": answer_prompt(verified_context)}]}],
             "generationConfig": {
                 "candidateCount": 1,
                 "temperature": 0,
@@ -32,10 +27,27 @@ class GeminiAnswerProvider:
                 "responseSchema": {
                     "type": "OBJECT",
                     "properties": {
-                        "presentation": {"type": "STRING", "enum": ["direct", "grounded"]},
-                        "referenced_fact_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "sentences": {
+                            "type": "ARRAY",
+                            "maxItems": 4,
+                            "items": {
+                                "type": "OBJECT",
+                                "properties": {
+                                    "text": {
+                                        "type": "STRING",
+                                        "description": "Concise Indonesian prose preserving at least two distinctive terms from every listed claim.",
+                                    },
+                                    "claim_ids": {
+                                        "type": "ARRAY",
+                                        "items": {"type": "STRING"},
+                                        "description": "Exact verified claim IDs supporting every fact in this sentence.",
+                                    },
+                                },
+                                "required": ["text", "claim_ids"],
+                            },
+                        },
                     },
-                    "required": ["presentation", "referenced_fact_ids"],
+                    "required": ["sentences"],
                 },
             },
         }

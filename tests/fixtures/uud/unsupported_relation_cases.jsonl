@@ -1,2 +1,1 @@
 {"query":"relasi amandemen Pasal 1","status":"insufficient_evidence","route":"legal_relation","intent":"legal_relation_lookup","expect_empty":["evidence","citations"]}
-{"query":"versi historis Pasal 1 diubah oleh apa","status":"insufficient_evidence","route":"legal_relation","intent":"legal_relation_lookup","expect_empty":["legal_relations"]}

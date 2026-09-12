@@ -24,6 +24,29 @@ def normalize_source_text(text: object) -> str:
     return normalized.strip().casefold()
 
 
+def compact_source_text(text: object) -> str:
+    """Normalize source text while preserving punctuation."""
+    normalized = unicodedata.normalize("NFKC", str(text or "")).replace("\xad", "").replace("\u00c2", "")
+    return re.sub(r"\s+", " ", normalized).strip().casefold()
+
+
+def compact_source_words(text: object) -> str:
+    """Normalize source text for punctuation-insensitive identity checks."""
+    normalized = unicodedata.normalize("NFKC", str(text or "")).replace("\xad", "")
+    return "".join(re.findall(r"\w+", normalized.casefold()))
+
+
+def valid_text_range(value: object, length: int) -> tuple[int, int] | None:
+    """Return a bounded half-open source-text range."""
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    try:
+        start, end = int(value[0]), int(value[1])
+    except (TypeError, ValueError):
+        return None
+    return (start, end) if 0 <= start < end <= length else None
+
+
 def exact_quote_support_reason(
     *,
     quoted_text: object,

@@ -6,12 +6,13 @@ import math
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import unittest
 
 from tjipto.corpora.registry import CorpusRegistry
 from tjipto.runtime.service import LegalRuntimeService
-from tjipto.telemetry import EVENT_ATTRIBUTES, Telemetry, event_record
+from tjipto.telemetry import CI_GATES, EVENT_ATTRIBUTES, Telemetry, event_record
 
 
 class TelemetryContractTest(unittest.TestCase):
@@ -60,8 +61,62 @@ class TelemetryContractTest(unittest.TestCase):
             Telemetry(fail, strict=True).emit("corpus_load", corpus_id="uud", status="loaded")
 
     def test_measured_pytest_gates_are_closed_ci_values(self) -> None:
-        for gate in ("pytest_run_1", "pytest_run_2", "answer_evaluation"):
+        for gate in ("pytest_run_1", "pytest_run_2", "answer_evaluation", "research_retrieval_evaluation", "semantic_generalization_evaluation"):
             self.assertEqual(event_record("ci_gate", gate=gate, status="passed", duration_ms=1)["attributes"]["gate"], gate)
+
+    def test_workflow_gates_are_approved_telemetry_values(self) -> None:
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow_gates = set(re.findall(r"--gate\s+([a-z0-9_]+)", workflow))
+        self.assertTrue(workflow_gates <= CI_GATES, sorted(workflow_gates - CI_GATES))
+
+    def test_gate_a_preflight_order_is_fail_fast(self) -> None:
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn(
+            "--require-hashes --no-deps --upgrade --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-dense.lock",
+            workflow,
+        )
+        positions = {
+            gate: workflow.index(f"--gate {gate}")
+            for gate in (
+                "dense_promotion_attestation",
+                "true_hybrid_activation",
+                "package_origin",
+                "pip_audit",
+                "toolchain",
+                "pytest_run_1",
+            )
+        }
+        self.assertEqual([positions[gate] for gate in positions], sorted(positions.values()))
+
+    def test_ci_cancels_superseded_runs_without_dropping_release_suites(self) -> None:
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("cancel-in-progress: true", workflow)
+        self.assertNotIn("Profile suspected memory owners", workflow)
+        self.assertNotIn("Profile per-test RSS", workflow)
+        self.assertNotIn("Profile Python allocations", workflow)
+        self.assertEqual(workflow.count("ref: ${{ env.TJIPTO_EXACT_HEAD_SHA }}"), 4)
+        self.assertNotIn('"$GITHUB_SHA"', workflow)
+        self.assertIn('TJIPTO_RESEARCH_PLANNING_TIMEOUT_SECONDS: "30"', workflow)
+        for variable in (
+            "TJIPTO_FALLBACK_LLM_PROVIDER",
+            "TJIPTO_FALLBACK_LLM_API_KEY",
+            "TJIPTO_FALLBACK_LLM_MODEL",
+            "TJIPTO_FALLBACK_LLM_BASE_URL",
+            "TJIPTO_FALLBACK_LLM_TIMEOUT_SECONDS",
+        ):
+            self.assertIn(f"{variable}: ${{{{ secrets.{variable} }}}}", workflow)
+        self.assertEqual(workflow.count('PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"'), 1)
+        for gate in ("unittest", "pytest_run_1", "pytest_run_2"):
+            self.assertEqual(workflow.count(f"--gate {gate}"), 1)
+
+    def test_all_runtime_hybrid_and_relation_routes_are_telemetry_safe(self) -> None:
+        for route, status in (
+            ("hybrid", "found"),
+            ("hybrid_degraded_sparse", "found"),
+            ("dense_unavailable", "dense_unavailable"),
+            ("document_relation", "found"),
+        ):
+            self.assertEqual(event_record("retrieval_route", corpus_id="uud", route=route, status=status)["attributes"]["route"], route)
 
     def test_registered_custom_root_corpus_is_retained(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

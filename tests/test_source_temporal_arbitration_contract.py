@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 
 from tjipto.corpora.verified import VerifiedCorpusRepository
+from tjipto.corpora.source_arbitration import source_roles_for_query
 from tjipto.evidence.store import EvidenceStore
 from tjipto.runtime.query_semantics import interpret_query
 from tjipto.runtime.service import LegalRuntimeService
@@ -29,6 +30,15 @@ class SourceTemporalArbitrationContractTest(unittest.TestCase):
     def test_named_source_precedes_generic_post_amendment_wording(self) -> None:
         result = self.service.ask("uud", "Apa isi Pasal 7 setelah Perubahan Pertama?")
         self.assertEqual(result["citations"][0]["source_role"], "amendment_1_historical")
+
+    def test_coordinated_role_alias_requires_an_explicit_instrument_anchor(self) -> None:
+        config = self.store.config
+        roles = source_roles_for_query("pilihan pertama dan pendidikan", strategy=config.query_strategy, config=config)
+        self.assertEqual(roles, ())
+        for query in ("amandemen pertama, kedua", "amandemen kedua/pertama"):
+            with self.subTest(query=query):
+                roles = source_roles_for_query(query, strategy=config.query_strategy, config=config)
+                self.assertEqual(set(roles), {"amendment_1_historical", "amendment_2_historical"})
 
     def test_temporal_language_never_activates_navigation(self) -> None:
         for suffix in (

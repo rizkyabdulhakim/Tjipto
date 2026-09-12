@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from tjipto.contracts.coordinates import bbox_record_key
+from tjipto.evidence.bbox import positive_area_intersection
 from tjipto.ingestion.pdf.words import align_text_to_word_bboxes, word_rows_by_page
 from tjipto.corpora.uud.span_disposition_policy import (
     classification_for_role,
@@ -236,7 +238,7 @@ def _apply_bbox_registry_coverage(
     word_bboxes: list[dict],
     metadata_grounding: list[dict],
 ) -> None:
-    bbox_keys = {_bbox_registry_key(row) for row in bbox_rows}
+    bbox_keys = {bbox_record_key(row) for row in bbox_rows}
     bbox_by_id = {row["bbox_id"]: row for row in bbox_rows}
     metadata_context = _rows_by_span(metadata_grounding)
     words_by_page = word_rows_by_page(word_bboxes)
@@ -244,9 +246,9 @@ def _apply_bbox_registry_coverage(
         span["span_bbox_ids"] = [
             bbox_id
             for bbox_id in span.get("span_bbox_ids") or ()
-            if bbox_id in bbox_by_id and _intersects(span, bbox_by_id[bbox_id])
+            if bbox_id in bbox_by_id and positive_area_intersection(span, bbox_by_id[bbox_id])
         ]
-        if _bbox_registry_key(span) in bbox_keys:
+        if bbox_record_key(span) in bbox_keys:
             span["bbox_registry_coverage_status"] = "bbox_key_present"
             if span.get("promotion_status") == "promoted_legal_unit":
                 span["bbox_registry_coverage_reason"] = "blocked_by_no_word_level_bbox_artifact"
@@ -314,19 +316,6 @@ def _field_bbox_feasibility(reason: str) -> str:
     return "page_level_only"
 
 
-def _bbox_registry_key(row: dict) -> tuple[object, ...]:
-    return (
-        row.get("source_document_id"),
-        row.get("source_sha256"),
-        row.get("page_number"),
-        row.get("text"),
-        row.get("x0"),
-        row.get("y0"),
-        row.get("x1"),
-        row.get("y1"),
-    )
-
-
 def _apply_word_bbox_promotion(
     span: dict,
     words_by_page: dict[tuple[str, int], list[dict]],
@@ -352,7 +341,7 @@ def _apply_word_bbox_promotion(
         bbox_id
         for bbox_id in match["matched_word_bbox_ids"]
         if any(
-            row.get("word_bbox_id") == bbox_id and _intersects(span, row)
+            row.get("word_bbox_id") == bbox_id and positive_area_intersection(span, row)
             for row in words_by_page[(span["source_document_id"], span["page_number"])]
         )
     ]
@@ -361,10 +350,6 @@ def _apply_word_bbox_promotion(
     span["word_bbox_candidate_count"] = match["candidate_count"]
     span["word_bbox_distance_to_existing_span_bbox"] = match["distance_to_existing_span_bbox"]
     span["bbox_registry_coverage_reason"] = "exact_word_bbox_available"
-
-
-def _intersects(left: dict, right: dict) -> bool:
-    return min(left["x1"], right["x1"]) > max(left["x0"], right["x0"]) and min(left["y1"], right["y1"]) > max(left["y0"], right["y0"])
 
 
 def _is_marker_only_text(text: str | None) -> bool:

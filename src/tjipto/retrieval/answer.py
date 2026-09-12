@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-DIRECT_ROUTES = {"exact", "metadata", "relation", "structured", "bm25"}
+DIRECT_ROUTES = {"exact", "metadata", "relation", "structured", "dense", "bm25", "hybrid", "hybrid_degraded_sparse"}
 REQUIRED_FIELDS = (
     "citation",
     "quoted_text",
@@ -87,7 +87,7 @@ def _support_group(row: dict) -> str:
     return "trace_support"
 
 
-def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
+def candidate_eligibility(store, row: dict) -> tuple[bool, str]:
     if row.get("forced_rejection_reason"):
         return False, row["forced_rejection_reason"]
     if row.get("runtime_loadable") is False:
@@ -127,8 +127,11 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
             return False, "noncanonical_trace_not_answerable"
     if not (DIRECT_ROUTES & set(row.get("route_sources") or ())):
         return False, "graph_only"
-    if "bm25" in set(row.get("route_sources") or ()) and row.get("lexical_relevance_ok") is False:
-        return False, row.get("lexical_relevance_reason") or "weak_lexical_match"
+
+    return True, "candidate"
+
+
+def publication_eligibility(store, row: dict) -> tuple[bool, str]:
     if row.get("status") != "final":
         return False, "not_final"
     if row.get("metadata_grounding"):
@@ -142,6 +145,13 @@ def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
         if not row.get(field):
             return False, f"missing_{field}"
     return True, "answer_evidence"
+
+
+def validate_answer_candidate(store, row: dict) -> tuple[bool, str]:
+    accepted, reason = candidate_eligibility(store, row)
+    if not accepted:
+        return accepted, reason
+    return publication_eligibility(store, row)
 
 
 def _payload(store, row: dict) -> dict:
@@ -164,6 +174,7 @@ def _payload(store, row: dict) -> dict:
         "source_pdf_path": row.get("source_pdf_path"),
         "source_sha256": row.get("source_sha256"),
         "page_numbers": tuple(row.get("page_numbers") or ()),
+        "page_query": row.get("page_query") is True,
         "bbox_count": len(bboxes),
         "quoted_text": row.get("quoted_text"),
         "display_text": row.get("display_text"),
@@ -233,6 +244,7 @@ def _citation_payload(row: dict) -> dict:
         "source_pdf_path": row.get("source_pdf_path"),
         "source_sha256": row.get("source_sha256"),
         "page_numbers": row.get("page_numbers"),
+        "page_query": row.get("page_query") is True,
         "bbox_count": row.get("bbox_count"),
         "viewer_ref": row.get("viewer_ref"),
         "evidence_status": row.get("evidence_status"),

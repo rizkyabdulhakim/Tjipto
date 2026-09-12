@@ -33,7 +33,19 @@ _SUPPORT_RECTANGLE_FIELDS = (
 _GRAPH_EDGE_FIELDS = (
     "edge_id", "source_id", "target_id", "edge_type", "relation_type", "relation_id",
     "runtime_loadable", "support_kind", "support_relation_ids", "support_evidence_ids", "derived_from_edge_id",
-    "text_span_ids", "bbox_refs", "source_role", "temporal_context", "relation_projection",
+    "text_span_ids", "bbox_refs", "source_role", "temporal_context", "relation_projection", "operation_candidates",
+)
+
+_AMBIGUOUS_PROJECTION_FIELDS = frozenset(
+    {
+        "relation_id", "corpus_id", "source_document_id", "source_role", "source_legal_unit_id",
+        "source_legal_unit_document_id", "source_legal_unit_role", "source_label", "target_document_id",
+        "target_source_role", "target_legal_unit_id", "target_citation", "target_label", "evidence_id",
+        "relation_type", "operation_candidates", "support_class", "grounding_level", "authority_kind",
+        "runtime_loadable", "citation_final", "recovery_capability", "recovery_status", "citation_available", "viewer_highlightable",
+        "trace_only_reason", "source_support_exact", "target_precision", "projection_direction",
+        "text_span_ids", "target_text_span_ids", "page_number", "page_numbers",
+    }
 )
 
 _SOURCE_SPAN_FIELDS = (
@@ -97,9 +109,10 @@ def build_runtime_projection(**artifacts: list[dict]) -> dict:
         for row in artifacts.get("page_text_spans", ())
     ]
     rows["graph_edges"] = [
-        {key: row[key] for key in _GRAPH_EDGE_FIELDS if key in row}
+        _project_graph_edge(row)
         for row in artifacts.get("graph_edges", ())
         if row.get("edge_type") in {"HAS_FINAL_EVIDENCE", "PAGE_GROUNDED_AT"}
+        or row.get("edge_type") == "AMBIGUOUS_OPERATION"
         or (
             row.get("runtime_loadable") is True
             and (is_relevance_relation(row.get("edge_type")) or is_query_relation(row.get("edge_type")))
@@ -129,6 +142,17 @@ def build_runtime_projection(**artifacts: list[dict]) -> dict:
         for row in source_rows
     ]
     return {"schema": 2, "artifacts": rows}
+
+
+def _project_graph_edge(row: dict) -> dict:
+    projected = {key: row[key] for key in _GRAPH_EDGE_FIELDS if key in row}
+    if row.get("edge_type") == "AMBIGUOUS_OPERATION" and projected.get("relation_projection"):
+        projected["relation_projection"] = {
+            key: value
+            for key, value in projected["relation_projection"].items()
+            if key in _AMBIGUOUS_PROJECTION_FIELDS
+        }
+    return projected
 
 
 def _meaningful_support_projection(supports: list[dict], words: list[dict]) -> list[dict]:

@@ -26,7 +26,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cases = _read_jsonl(args.cases)
-    service = LegalRuntimeService(ROOT)
+    # Permanent evaluation must not depend on live provider availability or
+    # wording. Live planning has its own integration gate.
+    service = LegalRuntimeService(ROOT, answer_provider=None, planning_provider=None)
     results = [_evaluate(row, service) for row in cases]
     counts = {
         "pass": sum(row["outcome"] == "PASS" for row in results),
@@ -48,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
             "case_count": len(cases),
             "behavior_counts": {
                 behavior: sum(row["expected_behavior"] == behavior for row in cases)
-                for behavior in ("retrieve", "abstain", "clarify")
+                for behavior in ("retrieve", "abstain")
             },
             "cutoff": EVALUATION_CUTOFF,
         },
@@ -283,7 +285,6 @@ def _retrieval_metrics(cases: list[dict[str, Any]], results: list[dict[str, Any]
     negatives = [row for row in cases if row["expected_behavior"] == "abstain"]
     predicted_abstain = {row["id"] for row in results if row["actual"]["status"] in {"insufficient_evidence", "citation_not_found", "no_results"}}
     expected_abstain = {row["id"] for row in negatives}
-    clarify = [row for row in cases if row["expected_behavior"] == "clarify"]
     span_hits = expected_spans & actual_spans
     denominators = {
         "recall": relevant_total,
@@ -300,7 +301,6 @@ def _retrieval_metrics(cases: list[dict[str, Any]], results: list[dict[str, Any]
         "hard_negative_false_positive_rate": len(negatives),
         "abstention_precision": len(predicted_abstain),
         "abstention_recall": len(expected_abstain),
-        "clarification_accuracy": len(clarify),
     }
     return {
         "recall": _ratio(retrieved_relevant, relevant_total),
@@ -317,7 +317,6 @@ def _retrieval_metrics(cases: list[dict[str, Any]], results: list[dict[str, Any]
         "hard_negative_false_positive_rate": _ratio(sum(bool(by_id[row["id"]]["actual"]["support_ids"]) for row in negatives), len(negatives)),
         "abstention_precision": _ratio(len(predicted_abstain & expected_abstain), len(predicted_abstain)),
         "abstention_recall": _ratio(len(predicted_abstain & expected_abstain), len(expected_abstain)),
-        "clarification_accuracy": _ratio(sum(by_id[row["id"]]["actual"]["status"] == "clarification_required" for row in clarify), len(clarify)),
         "denominators": denominators,
     }
 

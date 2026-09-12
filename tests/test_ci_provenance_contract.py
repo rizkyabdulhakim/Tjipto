@@ -17,6 +17,7 @@ class CiProvenanceContractTests(unittest.TestCase):
             "GITHUB_ACTIONS": "true",
             "GITHUB_REPOSITORY": "rizkyabdulhakim/Tjipto",
             "GITHUB_SHA": "b" * 40,
+            "TJIPTO_EXACT_HEAD_SHA": "d" * 40,
             "GITHUB_REF": "refs/heads/codex/p0-p1-source-text-closure",
             "GITHUB_REF_NAME": "codex/p0-p1-source-text-closure",
             "GITHUB_RUN_ID": "30730010658",
@@ -40,6 +41,7 @@ class CiProvenanceContractTests(unittest.TestCase):
         self.assertEqual(backend["run_identity_id"], web["run_identity_id"])
         self.assertNotEqual(backend["job_identity_id"], web["job_identity_id"])
         self.assertEqual(backend["job_check_run_id"], "1001")
+        self.assertEqual(backend["commit_sha"], "d" * 40)
 
     def test_missing_or_invalid_typed_identity_fails_closed(self) -> None:
         missing = self._environment("backend", "1001")

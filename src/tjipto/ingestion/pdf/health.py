@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import re
-import unicodedata
 from collections.abc import Callable
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Protocol
 
 from tjipto.core.manifest import file_sha256
+from tjipto.contracts.evidence import compact_source_words
 
 
 class PdfPage(Protocol):
@@ -71,8 +70,8 @@ def build_pdf_health_report(
                     for page_number in range(1, doc.page_count + 1):
                         native_text = doc[page_number - 1].get_text("text")
                         page = pages_by_key.get((source_id, page_number), {})
-                        native_text_ok = bool(_compact(native_text))
-                        page_text_match = _compact(page.get("text")) == _compact(native_text)
+                        native_text_ok = bool(compact_source_words(native_text))
+                        page_text_match = compact_source_words(page.get("text")) == compact_source_words(native_text)
                         has_spans = span_counts.get((source_id, page_number), 0) > 0
                         if native_text_ok and page_text_match and has_spans:
                             decision = "native_text_ok"
@@ -134,8 +133,3 @@ def build_pdf_health_report(
         "source_documents": source_rows,
         "pages": page_rows,
     }
-
-
-def _compact(text: object) -> str:
-    normalized = unicodedata.normalize("NFKC", str(text or "")).replace("\u00ad", "")
-    return "".join(re.findall(r"\w+", normalized.casefold()))

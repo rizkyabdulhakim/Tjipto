@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 
+from tjipto.contracts.evidence import compact_source_text
 from tjipto.corpora.uud.anomaly_builder import append_amendment_instrument_units
 from tjipto.corpora.uud.parser import UUD_LEGAL_TOKEN_RE
 from tjipto.corpora.uud.specs import (
@@ -40,7 +40,11 @@ def build_legal_units_from_sources(
     _append_instrument_units(pages_by_source, source_documents, rows)
     _split_deleted_bab_iv(rows)
     apply_uud_parent_policy(rows)
-    apply_structural_contract(rows, role_by_unit_type=UUD_STRUCTURAL_ROLE_BY_UNIT_TYPE)
+    apply_structural_contract(
+        rows,
+        role_by_unit_type=UUD_STRUCTURAL_ROLE_BY_UNIT_TYPE,
+        current_source_role="current_consolidated",
+    )
     rows.sort(key=lambda row: row["legal_unit_id"])
     return rows
 
@@ -389,17 +393,12 @@ def _parent_ids(unit_type: str, current_bab: dict | None, current_pasal: dict | 
 def _find_unit(rows: list[dict], source_document_id: str, unit_label: str, hierarchy_suffix: tuple[str, ...] | None) -> dict:
     candidates = [row for row in rows if row["source_document_id"] == source_document_id and row.get("unit_label") == unit_label]
     if hierarchy_suffix:
-        suffix = tuple(_compact(part) for part in hierarchy_suffix)
+        suffix = tuple(compact_source_text(part) for part in hierarchy_suffix)
         candidates = [
             row
             for row in candidates
-            if tuple(_compact(part) for part in [*(row.get("hierarchy") or []), row.get("unit_label")])[-len(suffix) :] == suffix
+            if tuple(compact_source_text(part) for part in [*(row.get("hierarchy") or []), row.get("unit_label")])[-len(suffix) :] == suffix
         ]
     if len(candidates) != 1:
         raise KeyError(f"unable_to_resolve_unit:{source_document_id}:{unit_label}:{hierarchy_suffix}")
     return candidates[0]
-
-
-def _compact(text: str) -> str:
-    text = unicodedata.normalize("NFKC", text or "").replace("\u00ad", "").replace("\u00c2", "")
-    return re.sub(r"\s+", " ", text).strip().casefold()
